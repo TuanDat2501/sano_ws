@@ -11,15 +11,15 @@ export const authOptions: NextAuthOptions = {
     CredentialsProvider({
       name: "Credentials",
       credentials: {
-        username: { label: "Tài khoản", type: "text" },
+        email: { label: "Tài khoản", type: "text" },
         password: { label: "Mật khẩu", type: "password" }
       },
       async authorize(credentials) {
-        if (!credentials?.username || !credentials?.password) return null;
+        if (!credentials?.email || !credentials?.password) return null;
 
         // 1. Tìm user trong DB theo email
         const user = await prisma.user.findFirst({
-          where: { username: credentials.username },
+          where: { email: credentials.email },
           include: { team: true } // Lấy luôn thông tin team
         });
 
