@@ -7,7 +7,8 @@ import { Plus, FileText, CheckCircle, Clock, XCircle, Search, Filter } from "luc
 import CreateRequestModal from "./CreateRequestModal";
 import RequestDetailModal from "./RequestDetailModal";
 import { useSearchParams } from "next/navigation";
-
+import { Suspense } from "react";
+import { connection } from 'next/server'
 // 🚀 TỪ ĐIỂN PHÂN QUYỀN HIỂN THỊ LOẠI ĐƠN
 const REQUEST_TYPES_CONFIG = [
     // --- NHÓM HR (AI CŨNG THẤY) ---
@@ -49,7 +50,7 @@ export default function RequestsPage() {
     const [selectedRequest, setSelectedRequest] = useState<any>(null);
     const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
 
-    const [dbTeams, setDbTeams] = useState([]);
+    const [dbTeams, setDbTeams] = useState<any[]>([]);
 
     const renderStatusBadge = (status: string) => {
         switch (status) {
@@ -105,11 +106,12 @@ export default function RequestsPage() {
         // 1. Lấy danh sách Team
         fetch("/api/teams")
             .then(res => res.json())
-            .then(data => { if (Array.isArray(data)) setDbTeams(data); });
+            .then((data:any) => { if (Array.isArray(data)) setDbTeams(data); });
 
     }, []);
-
+    
     return (
+        <Suspense fallback={<div className="p-8 text-center text-slate-500">Đang tải URL...</div>}>
         <div className="h-full p-6 animate-fade-in flex flex-col bg-slate-50">
             {/* ================= HEADER ================= */}
             <div className="flex justify-between items-center mb-6">
@@ -225,5 +227,6 @@ export default function RequestsPage() {
                 onRefresh={fetchRequests} // Truyền cái hàm để nó tải lại bảng khi duyệt xong
             />
         </div>
+        </Suspense>
     );
 }

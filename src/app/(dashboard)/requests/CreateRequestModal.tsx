@@ -25,7 +25,7 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
     const [isLoadingApprovers, setIsLoadingApprovers] = useState(false);
     const { data: session } = useSession();
     const currentUser = session?.user as any;
-    const [socket, setSocket] = useState<Socket | null>(null);
+
     // Reset lại form data mỗi khi đổi loại đơn
     useEffect(() => {
         setContentData({});

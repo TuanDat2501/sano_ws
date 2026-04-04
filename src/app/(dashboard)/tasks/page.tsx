@@ -64,7 +64,7 @@ export default function KanbanBoard() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const [tasks, setTasks] = useState<any>({ TODO: [], DOING: [], REVIEW: [], DONE: [] });
+  const [tasks, setTasks] = useState<{ [key: string]: any[] }>({ TODO: [], DOING: [], REVIEW: [], DONE: [] });
   const [rawTasks, setRawTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -468,7 +468,7 @@ export default function KanbanBoard() {
         .then(res => res.json())
         .then(history => {
           if (Array.isArray(history)) {
-            const formattedMessages = history.map((c: any) => ({
+            const formattedMessages: any[] = history.map((c: any) => ({
               id: c.id,
               taskId: c.taskId,
               sender: c.user?.fullName || c.user?.name || "Ai đó",

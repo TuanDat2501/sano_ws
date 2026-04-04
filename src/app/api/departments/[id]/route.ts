@@ -34,7 +34,7 @@ export async function PUT(req: Request, context: any) {
 }
 
 // [DELETE] XÓA PHÒNG BAN
-export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
     try {
         const session = await getServerSession(authOptions);
         const currentUser = session?.user as any;
@@ -46,13 +46,13 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
         // Trước khi xóa Phòng, phải thả các Team bên trong ra ngoài (thành Team Độc lập)
         // để không bị lỗi khóa ngoại (Foreign Key Constraint) của Database
         await prisma.team.updateMany({
-            where: { departmentId: params.id },
+            where: { departmentId: (await params).id },
             data: { departmentId: null }
         });
 
         // Giờ thì an tâm Xóa phòng ban
         await prisma.department.delete({
-            where: { id: params.id }
+            where: { id: (await params).id }
         });
 
         return NextResponse.json({ message: "Đã xóa Phòng ban thành công!" });

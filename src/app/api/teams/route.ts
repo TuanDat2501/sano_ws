@@ -36,7 +36,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Bạn không có quyền tạo Team mới!" }, { status: 403 });
     }
 
-    const { name, description } = await req.json();
+    const { name, description, departmentId } = await req.json();
 
     if (!name) {
       return NextResponse.json({ error: "Tên Team không được để trống" }, { status: 400 });

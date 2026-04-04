@@ -75,9 +75,9 @@ export async function GET(req: Request) {
                         ...taskFilter,
                         isClosed: false,
                         OR: [
-                            { scriptLink: { not: null, not: "" } },
-                            { videoLink: { not: null, not: "" } },
-                            { publishLink: { not: null, not: "" } }
+                            { scriptLink: { not: null } },
+                            { videoLink: { not: null } },
+                            { publishLink: { not: null } }
                         ]
                     }
                 }),

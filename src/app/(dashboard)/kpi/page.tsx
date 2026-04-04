@@ -174,7 +174,7 @@ export default function KpiDashboard() {
                             <KpiTeamTable 
                                 kpiList={paginatedKpiList} // Truyền data đã cắt qua cho Component
                                 handleUpdateTarget={handleUpdateTarget} 
-                                onRowClick={(id) => { setViewingUserId(id); setIsDrawerOpen(true); }} 
+                                onRowClick={(id:any) => { setViewingUserId(id); setIsDrawerOpen(true); }} 
                                 isLoading={isLoading} 
                                 teamId={queryTeamId} 
                                 year={selectedYear} 

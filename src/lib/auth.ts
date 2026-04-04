@@ -11,28 +11,28 @@ export const authOptions: NextAuthOptions = {
     CredentialsProvider({
       name: "Credentials",
       credentials: {
-        email: { label: "Email", type: "text" },
-        password: { label: "Password", type: "password" }
+        username: { label: "Tài khoản", type: "text" },
+        password: { label: "Mật khẩu", type: "password" }
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) return null;
+        if (!credentials?.username || !credentials?.password) return null;
 
         // 1. Tìm user trong DB theo email
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email },
+        const user = await prisma.user.findFirst({
+          where: { username: credentials.username },
           include: { team: true } // Lấy luôn thông tin team
         });
 
-        if (!user || !user.password) return null;
+        if (!user || !user.passwordHash) return null;
 
         // 2. So sánh mật khẩu (Dùng bcrypt)
-        const isPasswordValid = await bcrypt.compare(credentials.password, user.password);
+        const isPasswordValid = await bcrypt.compare(credentials.password, user.passwordHash);
         if (!isPasswordValid) return null;
 
         // 3. Trả về thông tin user để lưu vào JWT
         return {
           id: user.id,
-          email: user.email,
+          username: user.username,
           fullName: user.fullName,
           role: user.role,
           teamId: user.teamId,

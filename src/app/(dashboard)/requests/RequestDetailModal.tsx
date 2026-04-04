@@ -9,7 +9,7 @@ export default function RequestDetailModal({ isOpen, onClose, request, currentUs
     const { showToast } = useToast();
     const [comment, setComment] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
-    const [socket, setSocket] = useState<Socket | null>(null);
+
     if (!isOpen || !request) return null;
 
     // 🚀 ĐOÁN XEM MÌNH CÓ QUYỀN DUYỆT ĐƠN NÀY LÚC NÀY KHÔNG?
