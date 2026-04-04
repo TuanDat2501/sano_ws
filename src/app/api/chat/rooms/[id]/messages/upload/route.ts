@@ -7,7 +7,7 @@ import path from "path";
 
 // SỬA LẠI TYPE CỦA PARAMS THÀNH PROMISE
 type Params = Promise<{ id: string }>;
-
+export const dynamic = "force-dynamic";
 export async function POST(req: Request, { params }: { params: Params }) {
   try {
     const session = await getServerSession(authOptions);
