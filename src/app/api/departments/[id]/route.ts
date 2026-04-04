@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
 
-
+export const dynamic = "force-dynamic";
 // [PUT] CẬP NHẬT TÊN / MÔ TẢ PHÒNG BAN
 export async function PUT(req: Request, context: any) {
     try {

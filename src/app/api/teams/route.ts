@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma"; // 🚀 Dùng alias @/ cho sạch code s�
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 
-
+export const dynamic = "force-dynamic";
 // 1. LẤY DANH SÁCH TEAM
 export async function GET() {
   try {

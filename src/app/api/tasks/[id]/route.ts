@@ -18,7 +18,7 @@ const getBaseUrl = (rawUrl: string) => {
     return rawUrl.trim().split('?')[0];
   }
 };
-
+export const dynamic = "force-dynamic";
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getServerSession(authOptions);

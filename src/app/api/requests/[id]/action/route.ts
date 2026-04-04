@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
 
-
+export const dynamic = "force-dynamic";
 export async function POST(req: Request,context: { params: Promise<{ id: string }> }) {
     try {
         const resolvedParams = await context.params;

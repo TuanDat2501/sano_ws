@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma"; // 🚀 Dùng alias @/ cho sạch code sếp nhé
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 
-
+import { prisma } from "@/lib/prisma"; // 🚀 Dùng alias @/ cho sạch code sếp nhé
 // 1. LẤY DANH SÁCH TEAM
+export const dynamic = "force-dynamic";
 export async function GET() {
     try {
         const session = await getServerSession(authOptions);

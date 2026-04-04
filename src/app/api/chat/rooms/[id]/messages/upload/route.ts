@@ -4,10 +4,10 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { writeFile } from "fs/promises";
 import path from "path";
+export const dynamic = "force-dynamic";
 
 // SỬA LẠI TYPE CỦA PARAMS THÀNH PROMISE
 type Params = Promise<{ id: string }>;
-export const dynamic = "force-dynamic";
 export async function POST(req: Request, { params }: { params: Params }) {
   try {
     const session = await getServerSession(authOptions);

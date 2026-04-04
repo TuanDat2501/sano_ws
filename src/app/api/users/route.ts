@@ -19,7 +19,7 @@ function getYearMonthWeek(d: Date) {
     
     return { year, month, weekNumber };
 }
-
+export const dynamic = "force-dynamic";
 export async function GET() {
     try {
         const session = await getServerSession(authOptions);
