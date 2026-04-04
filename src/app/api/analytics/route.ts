@@ -83,19 +83,19 @@ export async function GET(req: Request) {
 
         // Tính KPI (Sử dụng Set để chống đúp điểm cho nhân viên)
         const userKpiMap: Record<string, { target: number, actualTasks: Set<string> }> = {};
-        kpisThisMonth.forEach(kpi => {
+        kpisThisMonth.forEach((kpi:any) => {
             if (!userKpiMap[kpi.userId]) userKpiMap[kpi.userId] = { target: 0, actualTasks: new Set() };
             userKpiMap[kpi.userId].target += kpi.targetValue;
         });
         
-        taskLogsThisMonth.forEach(log => {
+        taskLogsThisMonth.forEach((log:any) => {
             if (isDoneLog(log) && userKpiMap[log.userId]) {
                 userKpiMap[log.userId].actualTasks.add(log.taskId); // Thêm ID task vào mảng lưới lọc
             }
         });
 
         let hrHealth = { excellent: 0, good: 0, pip: 0 };
-        Object.values(userKpiMap).forEach(d => {
+        Object.values(userKpiMap).forEach((d:any) => {
             const actual = d.actualTasks.size; // Lấy số lượng thực tế sau khi đã lọc trùng
             const p = d.target > 0 ? (actual / d.target) * 100 : 0;
             if (p >= 100) hrHealth.excellent++;
