@@ -8,7 +8,8 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
     const session = await getServerSession(authOptions);
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     
-    const roomId = (await params).id;
+    const resolvedParams = await params;
+    const roomId = resolvedParams.id;
 
     // Lấy toàn bộ tin nhắn của Phòng này
     const messages = await prisma.message.findMany({
