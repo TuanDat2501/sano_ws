@@ -74,12 +74,12 @@ export async function GET(req: Request) {
         };
 
         // 🚀 FIX LỖI 1: Dùng Set() gom nhóm theo taskId. Đảm bảo 1 task có 3 log DONE cũng chỉ đếm là 1.
-        let totalOutput = new Set(taskLogsThisMonth.filter(isDoneLog).map(l => l.taskId)).size;
+        let totalOutput = new Set(taskLogsThisMonth.filter(isDoneLog).map((l:any) => l.taskId)).size;
         
         // 🚀 FIX LỖI 2: Phân bổ tác vụ đếm trực tiếp bằng chữ "SUBMIT_...", không quan tâm ai là người bấm.
-        let scriptCount = new Set(taskLogsThisMonth.filter(l => l.action === "SUBMIT_SCRIPT").map(l => l.taskId)).size;
-        let videoCount = new Set(taskLogsThisMonth.filter(l => l.action === "SUBMIT_VIDEO").map(l => l.taskId)).size;
-        let publishCount = new Set(taskLogsThisMonth.filter(l => l.action === "PUBLISH_VIDEO" ).map(l => l.taskId)).size;
+        let scriptCount = new Set(taskLogsThisMonth.filter(l => l.action === "SUBMIT_SCRIPT").map((l:any) => l.taskId)).size;
+        let videoCount = new Set(taskLogsThisMonth.filter(l => l.action === "SUBMIT_VIDEO").map((l:any) => l.taskId)).size;
+        let publishCount = new Set(taskLogsThisMonth.filter(l => l.action === "PUBLISH_VIDEO" ).map((l:any) => l.taskId)).size;
 
         // Tính KPI (Sử dụng Set để chống đúp điểm cho nhân viên)
         const userKpiMap: Record<string, { target: number, actualTasks: Set<string> }> = {};
