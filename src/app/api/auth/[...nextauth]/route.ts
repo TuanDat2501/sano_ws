@@ -2,7 +2,7 @@ import NextAuth from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
-
+export const dynamic = "force-dynamic";
 // PHẢI IMPORT TỪ LIB CỦA MÌNH
 const handler = NextAuth({
   providers: [
