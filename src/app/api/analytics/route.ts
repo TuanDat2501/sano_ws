@@ -156,7 +156,7 @@ export async function GET(req: Request) {
                     })
                 ]).then(([kpis, actualCount]) => ({
                     name: `T${m < 10 ? '0' + m : m}`,
-                    Target: kpis.reduce((sum, k) => sum + k.targetValue, 0),
+                    Target: kpis.reduce((sum:any, k:any) => sum + k.targetValue, 0),
                     Actual: actualCount // <-- Trả về số lượng Task thực tế hoàn thành
                 }))
             );
