@@ -7,7 +7,7 @@ import "reactflow/dist/style.css"; // Bắt buộc phải có để React Flow h
 import dagre from "dagre";
 import CustomNode from "./CustomNode";
 import { useToast } from "@/app/component/ToastProvider";
-
+import OrgNodeDrawer from "./OrgNodeDrawer";
 // Đăng ký Custom Node vừa tạo
 const nodeTypes = {
     custom: CustomNode,
@@ -48,9 +48,17 @@ export default function OrgChartPage() {
     const { showToast } = useToast();
     const [loading, setLoading] = useState(true);
     
+    const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+    const [selectedNodeData, setSelectedNodeData] = useState<any>(null);
+
     // Các State của React Flow
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+
+    const onNodeClick = useCallback((event: React.MouseEvent, node: any) => {
+        setSelectedNodeData(node.data);
+        setIsDrawerOpen(true);
+    }, []);
 
     useEffect(() => {
         Promise.all([
@@ -58,107 +66,73 @@ export default function OrgChartPage() {
             fetch("/api/departments").then(res => res.ok ? res.json() : []),
             fetch("/api/users").then(res => res.ok ? res.json() : [])
         ]).then(([teamsData, deptsData, usersData]) => {
-            
             const initialNodes: any[] = [];
             const initialEdges: any[] = [];
-
-            // 🚀 BƯỚC 1: NHẬN DIỆN BAN GIÁM ĐỐC
-            // Lấy ra các user là sếp
-            const bgdUsers = usersData.filter((u: any) => u.role === "BAN_GIAM_DOC");
-            // Lấy ra ID của Team và Phòng Ban chứa các sếp này để lát nữa "giấu" đi khỏi sơ đồ
+            const bgdUsers = usersData.filter((u: any) => u.role === "BAN_GIAM_DOC" );
             const bgdTeamIds = bgdUsers.map((u: any) => u.teamId).filter(Boolean);
             const bgdDeptIds = bgdTeamIds.map((tid: string) => teamsData.find((t:any) => t.id === tid)?.departmentId).filter(Boolean);
 
-            // 🚀 BƯỚC 2: TẠO NODE GỐC (ROOT)
             const rootId = "root_bgd";
             initialNodes.push({
-                id: rootId,
-                type: 'custom',
-                data: { label: "Ban Giám Đốc", role: "Điều hành", borderColor: "border-red-500", textColor: "text-red-500" },
-                position: { x: 0, y: 0 } 
+                id: rootId, type: 'custom', position: { x: 0, y: 0 },
+                data: { label: "Ban Giám Đốc", role: "Điều hành", borderColor: "border-red-500", textColor: "text-red-500", isSystemNode: true }
             });
 
-            // 🚀 BƯỚC 3: MÓC TRỰC TIẾP CÁC SẾP VÀO NODE GỐC
             bgdUsers.forEach((user: any) => {
                 const userNodeId = `user_${user.id}`;
                 initialNodes.push({
-                    id: userNodeId,
-                    type: 'custom',
+                    id: userNodeId, type: 'custom', position: { x: 0, y: 0 },
                     data: { 
-                        label: user.fullName, 
-                        role: user.role === "ADMIN" ? "Giám Đốc" : "Phó Giám Đốc", 
-                        borderColor: 'border-red-300', 
-                        textColor: 'text-red-600',
-                        // Cố ý không để target cho các sếp
-                    },
-                    position: { x: 0, y: 0 }
+                        label: user.fullName, role: user.role === "ADMIN" ? "Giám Đốc" : "Phó Giám Đốc", 
+                        borderColor: 'border-red-300', textColor: 'text-red-600',
+                        fullUserObj: user // 🚀 NHÉT FULL DATA VÀO ĐÂY ĐỂ LÁT DRAW LẤY RA DÙNG
+                    }
                 });
                 initialEdges.push({ id: `e_${rootId}-${userNodeId}`, source: rootId, target: userNodeId, type: 'smoothstep', animated: true });
             });
 
-            // 🚀 BƯỚC 4: VẼ CÁC PHÒNG BAN (Bỏ qua Phòng của Ban Giám Đốc)
             deptsData.filter((d: any) => !bgdDeptIds.includes(d.id)).forEach((dept: any) => {
                 const deptNodeId = `dept_${dept.id}`;
                 initialNodes.push({
-                    id: deptNodeId,
-                    type: 'custom',
-                    data: { label: dept.name, role: "Phòng Ban", borderColor: "border-slate-800", textColor: "text-slate-800" }, // Đổi màu xám đen cho giống mockup
-                    position: { x: 0, y: 0 }
+                    id: deptNodeId, type: 'custom', position: { x: 0, y: 0 },
+                    data: { label: dept.name, role: "Phòng Ban", borderColor: "border-slate-800", textColor: "text-slate-800", isSystemNode: true, desc: dept.description }
                 });
                 initialEdges.push({ id: `e_${rootId}-${deptNodeId}`, source: rootId, target: deptNodeId, type: 'smoothstep' });
             });
 
-            // 🚀 BƯỚC 5: VẼ CÁC TEAM (Bỏ qua Team của Ban Giám Đốc)
             teamsData.filter((t: any) => !bgdTeamIds.includes(t.id)).forEach((team: any) => {
                 const teamNodeId = `team_${team.id}`;
-                const parentId = team.departmentId && !bgdDeptIds.includes(team.departmentId) 
-                                 ? `dept_${team.departmentId}` 
-                                 : rootId; // Nếu không có phòng ban thì móc thẳng lên Root
-                
+                const parentId = team.departmentId && !bgdDeptIds.includes(team.departmentId) ? `dept_${team.departmentId}` : rootId; 
                 initialNodes.push({
-                    id: teamNodeId,
-                    type: 'custom',
-                    data: { label: team.name, role: "Team", borderColor: "border-slate-800", textColor: "text-red-500" },
-                    position: { x: 0, y: 0 }
+                    id: teamNodeId, type: 'custom', position: { x: 0, y: 0 },
+                    data: { label: team.name, role: "Team", borderColor: "border-slate-800", textColor: "text-slate-800", isSystemNode: true, desc: team.description }
                 });
                 initialEdges.push({ id: `e_${parentId}-${teamNodeId}`, source: parentId, target: teamNodeId, type: 'smoothstep' });
             });
 
-            // 🚀 BƯỚC 6: VẼ NHÂN SỰ BÊN DƯỚI (Trừ các sếp đã vẽ ở bước 3)
             usersData.filter((u: any) => u.role !== "BAN_GIAM_DOC" && u.role !== "ADMIN").forEach((user: any) => {
                 const userNodeId = `user_${user.id}`;
                 const parentId = user.teamId && !bgdTeamIds.includes(user.teamId) ? `team_${user.teamId}` : rootId;
-                                 
-                // 🚀 Lấy số liệu từ cục stats mới ở Backend
                 const actual = user.currentWeekStats?.actual || 0;
                 const target = user.currentWeekStats?.target || 0;
 
                 initialNodes.push({
-                    id: userNodeId,
-                    type: 'custom',
+                    id: userNodeId, type: 'custom', position: { x: 0, y: 0 },
                     data: { 
-                        label: user.fullName, 
-                        role: user.role, 
-                        // Hiển thị dạng: Thực tế / Chỉ tiêu
-                        target: `${actual} / ${target} bài`, 
-                        borderColor: user.role === 'LEADER' ? 'border-blue-300' : 'border-slate-800', 
-                        textColor: user.role === 'LEADER' ? 'text-blue-600' : 'text-slate-800' 
-                    },
-                    position: { x: 0, y: 0 }
+                        label: user.fullName, role: user.role, actual: actual, target: target,
+                        avatar: user.avatar || null,
+                        borderColor: user.role === 'LEADER' ? 'border-blue-300' : 'border-slate-200', 
+                        textColor: user.role === 'LEADER' ? 'text-blue-600' : 'text-slate-500',
+                        fullUserObj: user // 🚀 NHÉT FULL DATA VÀO ĐÂY
+                    }
                 });
                 initialEdges.push({ id: `e_${parentId}-${userNodeId}`, source: parentId, target: userNodeId, type: 'smoothstep' });
             });
 
-            // GỌI DAGRE TÍNH TOẠ ĐỘ
             const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(initialNodes, initialEdges);
-            
-            setNodes(layoutedNodes);
-            setEdges(layoutedEdges);
-            setLoading(false);
-
+            setNodes(layoutedNodes); setEdges(layoutedEdges); setLoading(false);
         }).catch(() => {
-            showToast("error", "Lỗi tải dữ liệu Sơ đồ");
-            setLoading(false);
+            showToast("error", "Lỗi tải dữ liệu Sơ đồ"); setLoading(false);
         });
     }, []);
 
@@ -195,6 +169,7 @@ export default function OrgChartPage() {
                         fitView // Tự động Zoom vừa vặn màn hình lúc mới load
                         attributionPosition="bottom-right"
                         className="bg-slate-50/50"
+                        onNodeClick={onNodeClick}
                     >
                         {/* Background chấm bi */}
                         <Background color="#cbd5e1" gap={20} size={1} />
@@ -205,6 +180,12 @@ export default function OrgChartPage() {
                     </ReactFlow>
                 )}
             </div>
+            {/* ================= DRAWER COMPONENT ================= */}
+            <OrgNodeDrawer 
+                isOpen={isDrawerOpen} 
+                onClose={() => setIsDrawerOpen(false)} 
+                nodeData={selectedNodeData} 
+            />
         </div>
     );
 }

@@ -1,143 +1,116 @@
-"use client";
+import { Users, FileSpreadsheet, Loader2 } from "lucide-react";
 
-import { Users, MousePointerClick, FileDown, Loader2 } from "lucide-react";
-import { getProgressColor, InlineLoading } from "../utils";
-import { useState } from "react";
-import { exportKpiToExcel } from "../utils";
-
-export default function KpiTeamTable({ kpiList, handleUpdateTarget, onRowClick, isLoading, teamId, year, month }: any) {
-    const [isExporting, setIsExporting] = useState(false);
-
-    const handleMonthlyExport = async () => {
-        setIsExporting(true);
-        try {
-            const res = await fetch(`/api/kpi/monthly?teamId=${teamId}&year=${year}&month=${month}`);
-            const data = await res.json();
-            if (res.ok) exportKpiToExcel(data, `Bao-cao-KPI-Thang-${month}-${year}`);
-        } catch (error) { console.error(error); } finally { setIsExporting(false); }
+export default function KpiTeamTable({ kpiList, handleUpdateTarget, onRowClick, isLoading, month }: any) {
+    
+    // Hàm xử lý xuất Excel (Sếp có thể gắn API xuất file thật vào đây sau)
+    const handleExportReport = () => {
+        alert(`Đang xuất báo cáo KPI Tháng ${month}...`);
     };
 
     return (
-        <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden min-h-[400px]">
-            <div className="p-4 md:p-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between bg-slate-50/50 gap-4">
-                <h2 className="text-lg font-black text-slate-800 flex items-center gap-2">
-                    <Users size={20} className="text-blue-600" /> Thành Tích Team
+        <div className="flex flex-col h-full min-h-0">
+            
+            {/* ================= PHẦN HEADER CỐ ĐỊNH ================= */}
+            <div className="p-6 md:p-8 border-b border-slate-100 shrink-0 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white z-20">
+                <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
+                    <Users className="text-blue-600" size={24} /> Thành Tích Team
                 </h2>
-                <button
-                    onClick={handleMonthlyExport}
-                    disabled={isExporting}
-                    className="w-full md:w-auto flex items-center justify-center gap-2 bg-green-600 text-white px-4 py-2.5 rounded-xl text-sm font-bold shadow-lg shadow-green-600/20"
+                <button 
+                    onClick={handleExportReport}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all shadow-sm shadow-emerald-600/20 active:scale-95 text-sm"
                 >
-                    {isExporting ? <Loader2 className="animate-spin" size={18} /> : <FileDown size={18} />}
-                    Xuất báo cáo tháng {month}
+                    <FileSpreadsheet size={18} /> Xuất báo cáo tháng {month}
                 </button>
             </div>
 
-            {isLoading ? <InlineLoading className="h-[300px]" /> : (
-                <div className="h-full">
-                    {/* MOBILE LIST VIEW */}
-                    <div className="md:hidden p-4 space-y-4">
-                        {kpiList.map((kpi: any) => (
-                            <div
-                                key={kpi.userId}
-                                onClick={() => onRowClick(kpi.userId)}
-                                className="p-4 bg-slate-50 border border-slate-100 rounded-2xl active:scale-[0.98] transition-transform"
-                            >
-                                <div className="flex justify-between items-start mb-3">
-                                    <div>
-                                        <p className="font-bold text-slate-900 text-base">{kpi.fullName}</p>
-                                        <p className="text-[10px] font-black text-slate-400 uppercase">{kpi.role}</p>
-                                    </div>
-                                    <div className="text-right">
-                                        <p className="text-xl font-black text-slate-800">{kpi.actualValue}</p>
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase">Thực đạt</p>
-                                    </div>
-                                </div>
-                                <div className="space-y-2">
-                                    <div className="flex justify-between text-xs font-bold">
-                                        <span className="text-slate-500">Tiến độ: {kpi.percent}%</span>
-                                        <span className="text-slate-800">Target: {kpi.targetValue}</span>
-                                    </div>
-                                    <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-                                        <div className={`h-full ${getProgressColor(kpi.percent).split(' ')[0]}`} style={{ width: `${Math.min(kpi.percent, 100)}%` }}></div>
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
+            {/* ================= PHẦN BẢNG CÓ THANH CUỘN ================= */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar relative bg-white">
+                {isLoading ? (
+                    <div className="h-full flex flex-col items-center justify-center text-slate-400 py-12 gap-3">
+                        <Loader2 size={32} className="animate-spin text-blue-500" />
+                        <p className="font-medium">Đang tải dữ liệu KPI...</p>
                     </div>
-
-                    {/* DESKTOP TABLE VIEW (Giữ nguyên logic table cũ) */}
-                    <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden min-h-[500px]">
-                        {/* <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                            <h2 className="text-lg font-black text-slate-800 flex items-center gap-2">
-                                <Users size={20} className="text-blue-600" /> Bảng Thành Tích Team
-                            </h2>
-                            <button
-                                onClick={handleMonthlyExport}
-                                disabled={isExporting}
-                                className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl text-sm font-bold transition-all shadow-lg shadow-green-600/20 disabled:opacity-50"
-                            >
-                                {isExporting ? <Loader2 className="animate-spin" size={18} /> : <FileDown size={18} />}
-                                Xuất báo cáo tháng {month}
-                            </button>
-                        </div> */}
-
-                        {/* 🚀 Ô 3: LOADING XOAY TRÒN Ở ĐÂY (PHỦ LÊN CẢ BẢNG) */}
-                        {isLoading ? (
-                            <InlineLoading className="h-[400px]" />
-                        ) : (
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-left text-sm text-slate-600 sticky-header">
-                                    <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[11px] tracking-wider border-b border-slate-200 sticky top-0 z-10">
-                                        <tr>
-                                            <th className="px-6 py-5">Nhân sự</th>
-                                            <th className="px-6 py-5 text-center w-32">Target (Bài)</th>
-                                            <th className="px-6 py-5 text-center w-32">Thực đạt</th>
-                                            <th className="px-6 py-5 w-64">Tiến độ (%)</th>
-                                            <th className="px-6 py-5 w-16"></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-100">
-                                        {kpiList.map((kpi) => (
-                                            <tr
-                                                key={kpi.userId}
-                                                onClick={() => onRowClick(kpi.userId)}
-                                                className="cursor-pointer transition-colors hover:bg-blue-50/50"
-                                            >
-                                                <td className="px-6 py-4">
-                                                    <p className="font-bold text-slate-900 text-base">{kpi.fullName}</p>
-                                                    <p className="text-xs font-black text-slate-400 mt-0.5">{kpi.role}</p>
-                                                </td>
-                                                <td className="px-6 py-4 text-center" onClick={(e) => e.stopPropagation()}>
-                                                    <input
-                                                        type="number" defaultValue={kpi.targetValue}
-                                                        onBlur={(e) => handleUpdateTarget(kpi.userId, e.target.value)}
-                                                        className="w-20 text-center text-lg font-black text-slate-800 bg-white border border-slate-200 rounded-lg py-2 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none"
-                                                    />
-                                                </td>
-                                                <td className="px-6 py-4 text-center">
-                                                    <span className="text-2xl font-black text-slate-800">{kpi.actualValue}</span>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="flex-1 bg-slate-200/50 rounded-full h-2.5 overflow-hidden">
-                                                            <div className={`h-2.5 rounded-full ${getProgressColor(kpi.percent).split(' ')[0]}`} style={{ width: `${Math.min(kpi.percent, 100)}%` }}></div>
-                                                        </div>
-                                                        <span className="font-black text-sm w-12 text-right" style={{ color: kpi.percent >= 100 ? '#16a34a' : kpi.percent >= 50 ? '#d97706' : '#ef4444' }}>{kpi.percent}%</span>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 text-right">
-                                                    <MousePointerClick size={18} className="text-slate-300 group-hover:text-blue-500 transition-colors" />
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
+                ) : kpiList.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center text-slate-400 py-12 gap-3">
+                        <div className="bg-slate-100 p-6 rounded-full"><Users size={32} className="text-slate-300" /></div>
+                        <p className="font-medium">Không có dữ liệu nhân sự.</p>
                     </div>
-                </div>
-            )}
+                ) : (
+                    <table className="w-full text-left border-collapse min-w-[800px]">
+                        {/* 🚀 THEAD STICKY GIỮ CỐ ĐỊNH */}
+                        <thead className="bg-slate-50 sticky top-0 z-10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+                            <tr>
+                                <th className="px-6 py-4 text-xs font-black text-slate-400 uppercase tracking-widest">Nhân sự</th>
+                                <th className="px-6 py-4 text-xs font-black text-slate-400 uppercase tracking-widest text-center w-32">Target (Bài)</th>
+                                <th className="px-6 py-4 text-xs font-black text-slate-400 uppercase tracking-widest text-center w-32">Thực đạt</th>
+                                <th className="px-6 py-4 text-xs font-black text-slate-400 uppercase tracking-widest text-right w-48">Tiến độ (%)</th>
+                            </tr>
+                        </thead>
+                        
+                        <tbody className="divide-y divide-slate-100">
+                            {kpiList.map((user: any) => {
+                                const isCompleted = user.actualValue >= user.targetValue && user.targetValue > 0;
+                                
+                                return (
+                                    <tr 
+                                        key={user.userId} 
+                                        onClick={() => onRowClick(user.userId)}
+                                        className="hover:bg-blue-50/50 transition-colors group cursor-pointer"
+                                    >
+                                        {/* Cột Nhân sự */}
+                                        <td className="px-6 py-4">
+                                            <div className="flex items-center gap-3">
+                                                <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center font-black text-slate-600 shrink-0">
+                                                    {user.fullName.charAt(0).toUpperCase()}
+                                                </div>
+                                                <div>
+                                                    <p className="font-bold text-slate-900 group-hover:text-blue-700 transition-colors">{user.fullName}</p>
+                                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">{user.role}</p>
+                                                </div>
+                                            </div>
+                                        </td>
+
+                                        {/* Cột Nhập Target */}
+                                        <td className="px-6 py-4 text-center" onClick={(e) => e.stopPropagation()}>
+                                            <input 
+                                                type="number"
+                                                defaultValue={user.targetValue}
+                                                onBlur={(e) => {
+                                                    if (e.target.value !== String(user.targetValue)) {
+                                                        handleUpdateTarget(user.userId, e.target.value);
+                                                    }
+                                                }}
+                                                className="w-20 text-center bg-slate-50 border border-slate-200 rounded-xl py-2 font-bold text-slate-800 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all hover:bg-white"
+                                                title="Sửa số và click ra ngoài để lưu"
+                                            />
+                                        </td>
+
+                                        {/* Cột Thực đạt */}
+                                        <td className="px-6 py-4 text-center">
+                                            <span className="text-lg font-black text-slate-800">{user.actualValue}</span>
+                                        </td>
+
+                                        {/* Cột Tiến độ (Progress Bar) */}
+                                        <td className="px-6 py-4 text-right">
+                                            <div className="flex items-center justify-end gap-3">
+                                                <span className={`font-black ${isCompleted ? 'text-emerald-600' : 'text-slate-700'}`}>
+                                                    {user.percent}%
+                                                </span>
+                                                <div className="w-24 h-2 bg-slate-200 rounded-full overflow-hidden shrink-0">
+                                                    <div 
+                                                        className={`h-full rounded-full transition-all duration-700 ${isCompleted ? 'bg-emerald-500' : 'bg-blue-500'}`}
+                                                        style={{ width: `${Math.min(user.percent, 100)}%` }}
+                                                    ></div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                )}
+            </div>
         </div>
     );
 }

@@ -24,6 +24,9 @@ export async function GET(req: Request) {
         const session = await getServerSession(authOptions);
         if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+        // 🚀 Lấy Role của người đang truy cập
+        const currentUserRole = (session.user as any)?.role;
+
         const { searchParams } = new URL(req.url);
         const teamId = searchParams.get("teamId");
         
@@ -31,10 +34,28 @@ export async function GET(req: Request) {
         const month = parseInt(searchParams.get("month") || String(new Date().getMonth() + 1));
         const weekIndex = parseInt(searchParams.get("week") || "1");
 
-        if (!teamId) return NextResponse.json({ error: "Thiếu Team ID" }, { status: 400 });
+        // 🚀 TẠO ĐIỀU KIỆN LỌC NHÂN SỰ DỰA TRÊN ROLE
+        let userWhere: any = { isActive: true };
+
+        if (currentUserRole === "ADMIN") {
+            // 1. ADMIN: Thấy tất cả mọi người. Nếu có chọn team thì lọc theo team.
+            if (teamId && teamId !== "ALL") userWhere.teamId = teamId;
+        } 
+        else if (currentUserRole === "BAN_GIAM_DOC" || currentUserRole === "HR") {
+            // 2. BGD & HR: Thấy tất cả mọi người NHƯNG TRỪ ADMIN. Có chọn team thì lọc theo team.
+            userWhere.role = { not: "ADMIN" };
+            if (teamId && teamId !== "ALL") userWhere.teamId = teamId;
+        } 
+        else {
+            // 3. CÁC ROLE CÒN LẠI (Leader, Editor...): Bắt buộc phải có TeamId mới cho xem
+            if (!teamId || teamId === "ALL") {
+                return NextResponse.json({ error: "Thiếu Team ID" }, { status: 400 });
+            }
+            userWhere.teamId = teamId;
+        }
 
         const users = await prisma.user.findMany({
-            where: { teamId: teamId, isActive: true },
+            where: userWhere,
             select: { id: true, fullName: true, role: true }
         });
 
@@ -67,7 +88,7 @@ export async function GET(req: Request) {
                 return { ...log, typeStr }; 
             });
 
-            // 🚀 2. LẤY CÁC CÔNG VIỆC ĐANG LÀM (CHỈ LỌC NHỮNG TASK ĐƯỢC GIAO TRONG TUẦN ĐÓ)
+            // 2. LẤY CÁC CÔNG VIỆC ĐANG LÀM (CHỈ LỌC NHỮNG TASK ĐƯỢC GIAO TRONG TUẦN ĐÓ)
             const activeTasks = await prisma.task.findMany({
                 where: {
                     OR: [
@@ -76,7 +97,6 @@ export async function GET(req: Request) {
                         { publisherId: user.id }
                     ],
                     isClosed: false,
-                    // 🚀 DÒNG BỔ SUNG: Ép nó chỉ lấy Task tạo ra trong khoảng thời gian của Tuần đang chọn
                     createdAt: { gte: start, lte: end }
                 },
                 select: { 
@@ -140,7 +160,6 @@ export async function POST(req: Request) {
         const body = await req.json();
         const { userId, year, month, weekNumber, targetValue } = body;
         
-        // Cẩn thận convert sang kiểu Int hết cho chắc cốp
         const pYear = parseInt(year);
         const pMonth = parseInt(month);
         const pWeek = parseInt(weekNumber);
@@ -152,7 +171,6 @@ export async function POST(req: Request) {
 
         const kpiRecord = await prisma.weeklyKPI.upsert({
             where: { 
-                // 🚀 GỌI ĐÚNG CÁI TÊN MÌNH VỪA ĐẶT Ở BƯỚC 1
                 user_time_unique: { 
                     userId: userId, 
                     year: pYear, 
@@ -166,7 +184,7 @@ export async function POST(req: Request) {
         
         return NextResponse.json({ message: "Giao KPI thành công", data: kpiRecord }, { status: 200 });
     } catch (error) {
-        console.error("LỖI API POST KPI:", error); // Log ra để xem lỗi thật sự là gì nếu vẫn xịt
+        console.error("LỖI API POST KPI:", error); 
         return NextResponse.json({ error: "Lỗi hệ thống" }, { status: 500 });
     }
 }
