@@ -110,7 +110,7 @@ export async function GET(req: Request) {
         const requestTypes = { hr: 0, finance: 0, equipment: 0, ads: 0 };
         const userPendingReqMap: Record<string, number> = {};
 
-        requestsThisMonth.forEach(req => {
+        requestsThisMonth.forEach((req:any) => {
             // Đếm số đơn chờ duyệt
             if (req.status === "PENDING_1" || req.status === "PENDING_2") {
                 pendingRequestsCount++;
@@ -174,7 +174,7 @@ export async function GET(req: Request) {
         });
 
         const logsByTask: Record<string, any[]> = {};
-        fullTaskLogs.forEach(log => {
+        fullTaskLogs.forEach((log:any) => {
             if (!logsByTask[log.taskId]) logsByTask[log.taskId] = [];
             logsByTask[log.taskId].push(log);
         });
@@ -183,12 +183,12 @@ export async function GET(req: Request) {
         let videoTimeTotal = 0, videoCountLT = 0;
         let publishTimeTotal = 0, publishCountLT = 0;
 
-        Object.values(logsByTask).forEach(logs => {
+        Object.values(logsByTask).forEach((logs:any) => {
             // Tìm thời điểm xảy ra các hành động (Lấy mốc đầu tiên nếu bị bấm nhiều lần)
-            const createTime = logs.find(l => l.action === "CREATE_TASK")?.createdAt?.getTime() || logs[0]?.createdAt?.getTime(); 
-            const scriptTime = logs.find(l => l.action === "SUBMIT_SCRIPT")?.createdAt?.getTime();
-            const videoTime = logs.find(l => l.action === "SUBMIT_VIDEO")?.createdAt?.getTime();
-            const publishTime = logs.find(l => l.action === "PUBLISH_VIDEO" || l.action === "COMPLETE_TASK")?.createdAt?.getTime();
+            const createTime = logs.find((l:any) => l.action === "CREATE_TASK")?.createdAt?.getTime() || logs[0]?.createdAt?.getTime(); 
+            const scriptTime = logs.find((l:any) => l.action === "SUBMIT_SCRIPT")?.createdAt?.getTime();
+            const videoTime = logs.find((l:any) => l.action === "SUBMIT_VIDEO")?.createdAt?.getTime();
+            const publishTime = logs.find((l:any) => l.action === "PUBLISH_VIDEO" || l.action === "COMPLETE_TASK")?.createdAt?.getTime();
 
             // Tính số ngày (1 ngày = 1000 * 60 * 60 * 24 milliseconds)
             if (createTime && scriptTime && scriptTime > createTime) {
