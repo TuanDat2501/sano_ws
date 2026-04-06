@@ -1,47 +1,58 @@
-
-import { PrismaAdapter } from "@next-auth/prisma-adapter";
+// File: src/lib/auth.ts (hoặc đường dẫn tương ứng của sếp)
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
+import bcrypt from "bcryptjs"; // Bắt buộc dùng bcryptjs để không văng lỗi trên Vercel
 import { prisma } from "@/lib/prisma";
-import bcrypt from "bcrypt"; // Đảm bảo bạn đã cài thư viện này để check pass
 
 export const authOptions: NextAuthOptions = {
-  adapter: PrismaAdapter(prisma),
+  // KHÔNG CẦN PrismaAdapter khi dùng Credentials
   providers: [
     CredentialsProvider({
       name: "Credentials",
       credentials: {
-        email: { label: "Tài khoản", type: "text" },
+        username: { label: "Tài khoản", type: "text" },
         password: { label: "Mật khẩu", type: "password" }
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) return null;
+        // 1. Kiểm tra xem người dùng có nhập đủ không
+        if (!credentials?.username || !credentials?.password) {
+            console.log(">>> [AUTH] Thiếu username hoặc password");
+            return null;
+        }
 
-        // 1. Tìm user trong DB theo email
-        const user = await prisma.user.findFirst({
-          where: { email: credentials.email },
-          include: { team: true } // Lấy luôn thông tin team
-        });
+        try {
+          // 2. Tìm user trong DB theo USERNAME
+          const user = await prisma.user.findUnique({
+            where: { username: credentials.username },
+            include: { team: true } 
+          });
 
-        if (!user || !user.passwordHash) return null;
+          console.log(">>> [AUTH] Tìm thấy User trong DB:", user ? user.username : "KHÔNG");
 
-        // 2. So sánh mật khẩu (Dùng bcrypt)
-        const isPasswordValid = await bcrypt.compare(credentials.password, user.passwordHash);
-        if (!isPasswordValid) return null;
+          if (!user || !user.passwordHash) return null;
 
-        // 3. Trả về thông tin user để lưu vào JWT
-        return {
-          id: user.id,
-          username: user.username,
-          fullName: user.fullName,
-          role: user.role,
-          teamId: user.teamId,
-        };
+          // 3. So sánh mật khẩu bằng bcryptjs
+          const isPasswordValid = await bcrypt.compare(credentials.password, user.passwordHash);
+          console.log(">>> [AUTH] Mật khẩu đúng không?:", isPasswordValid);
+
+          if (!isPasswordValid) return null;
+
+          // 4. Trả về thông tin
+          return {
+            id: user.id,
+            name: user.fullName,
+            username: user.username,
+            role: user.role,
+            teamId: user.teamId,
+          };
+        } catch (error) {
+          console.error(">>> [AUTH ERROR]:", error);
+          return null;
+        }
       }
     })
   ],
   callbacks: {
-    // Đưa thông tin Role và TeamId từ Database vào Token
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
@@ -50,21 +61,18 @@ export const authOptions: NextAuthOptions = {
       }
       return token;
     },
-    // Đưa thông tin từ Token ra Session để dùng ở Frontend/API
     async session({ session, token }) {
-      if (session.user) {
+      if (token && session.user) {
+        (session.user as any).id = token.id;
         (session.user as any).role = token.role;
         (session.user as any).teamId = token.teamId;
-        (session.user as any).id = token.id;
       }
       return session;
     }
   },
   pages: {
-    signIn: "/login", // Đường dẫn trang login của bạn
+    signIn: "/login",
   },
-  session: {
-    strategy: "jwt",
-  },
+  session: { strategy: "jwt" },
   secret: process.env.NEXTAUTH_SECRET,
 };
