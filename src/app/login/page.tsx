@@ -154,7 +154,7 @@ export default function LoginPage() {
             {/* Khung kính mờ và ảnh */}
             <div className="w-full max-w-md bg-white/10 backdrop-blur-lg rounded-[2.5rem] border border-white/10 p-4 shadow-2xl relative z-10">
               <img 
-                src="https://i.ibb.co/39FCHZsV/Untitled-1.png" 
+                src="/images/logo.png" 
                 alt="Sano Workspace Dashboard" 
                 className="w-full h-auto rounded-[2rem]" 
               />

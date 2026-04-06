@@ -8,5 +8,5 @@ export default withAuth({
 
 export const config = {
   // Chặn tất cả trừ các file tĩnh, favicon, và trang login
-  matcher: ["/((?!api/auth|_next/static|_next/image|favicon.ico|login).*)"],
+  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|images).*)"],
 };
