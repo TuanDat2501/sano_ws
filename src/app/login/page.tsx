@@ -61,6 +61,7 @@ export default function LoginPage() {
             <div className="flex flex-col items-center gap-3">
               <div className="bg-red-600 p-3 rounded-2xl shadow-lg shadow-red-500/20">
                 <Zap className="h-8 w-8 text-white" />
+               
               </div>
               <h1 className="text-4xl font-extrabold text-black tracking-tight">
                 Sano <span className="text-red-600">Workspace</span>
@@ -119,14 +120,14 @@ export default function LoginPage() {
             </form>
             
             {/* Phân tách */}
-            <div className="w-full max-w-sm flex items-center gap-3">
+            {/* <div className="w-full max-w-sm flex items-center gap-3">
               <div className="flex-grow h-px bg-slate-200"></div>
               <p className="text-sm text-slate-500 whitespace-nowrap">Hoặc đăng nhập bằng</p>
               <div className="flex-grow h-px bg-slate-200"></div>
-            </div>
+            </div> */}
             
             {/* Đăng nhập mạng xã hội */}
-            <div className="w-full max-w-sm space-y-4">
+            {/* <div className="w-full max-w-sm space-y-4">
               <button className="w-full bg-white border border-slate-200 text-black font-semibold py-3.5 rounded-xl shadow-sm flex items-center justify-center gap-3 hover:bg-slate-50 transition-all active:scale-[0.98]">
                 <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" className="h-5 w-5" />
                 Đăng nhập với Google
@@ -135,7 +136,7 @@ export default function LoginPage() {
                 <img src="https://www.svgrepo.com/show/475647/facebook-color.svg" alt="Facebook" className="h-5 w-5" />
                 Đăng nhập với Facebook
               </button>
-            </div>
+            </div> */}
           </div>
 
           {/* ---------- PHẦN PHẢI: HÌNH ẢNH HỆ THỐNG ---------- */}
@@ -153,7 +154,7 @@ export default function LoginPage() {
             {/* Khung kính mờ và ảnh */}
             <div className="w-full max-w-md bg-white/10 backdrop-blur-lg rounded-[2.5rem] border border-white/10 p-4 shadow-2xl relative z-10">
               <img 
-                src="https://images.unsplash.com/photo-1611162617474-5b21e879e113?q=80&w=1000&auto=format&fit=crop" 
+                src="https://i.ibb.co/39FCHZsV/Untitled-1.png" 
                 alt="Sano Workspace Dashboard" 
                 className="w-full h-auto rounded-[2rem]" 
               />

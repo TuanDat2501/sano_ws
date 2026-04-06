@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
-
+import bcrypt from "bcryptjs";
 // 🧠 HÀM PHỤ TRỢ: Tính Năm, Tháng và Tuần thứ mấy TRONG THÁNG (1, 2, 3, 4, 5)
 function getYearMonthWeek(d: Date) {
     const year = d.getFullYear();
@@ -94,5 +94,53 @@ export async function GET() {
     } catch (error) {
         console.error("GET Users Error:", error);
         return NextResponse.json({ error: "Lỗi hệ thống" }, { status: 500 });
+    }
+}
+
+export async function POST(req: Request) {
+    try {
+        // 1. Lấy dữ liệu từ Frontend gửi lên (từ form tạo user)
+        const body = await req.json();
+        const { username, password, fullName, role, teamId } = body;
+
+        // 2. Kiểm tra xem user đã tồn tại chưa
+        const existingUser = await prisma.user.findUnique({
+            where: { username }
+        });
+
+        if (existingUser) {
+            return NextResponse.json(
+                { error: "Tên đăng nhập đã tồn tại!" },
+                { status: 400 } // Lỗi 400 Bad Request
+            );
+        }
+
+        // 3. Băm mật khẩu (Bắt buộc dùng bcryptjs như lúc làm Auth)
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        // 4. Lưu vào Database
+        const newUser = await prisma.user.create({
+            data: {
+                username,
+                passwordHash: hashedPassword,
+                fullName,
+                role,
+                teamId,
+                // ... các trường khác tuỳ theo schema.prisma của sếp
+            }
+        });
+
+        // 5. Trả về thành công
+        return NextResponse.json(
+            { message: "Tạo user thành công!", user: newUser },
+            { status: 201 } // 201 Created
+        );
+
+    } catch (error) {
+        console.error(">>> [API USERS ERROR]:", error);
+        return NextResponse.json(
+            { error: "Lỗi hệ thống khi tạo user" },
+            { status: 500 }
+        );
     }
 }

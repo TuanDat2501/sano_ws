@@ -240,7 +240,7 @@ export default function UsersPage() {
                                                 <td className="px-6 py-4">
                                                     <div className="flex items-center gap-3">
                                                         <div className="h-10 w-10 rounded-full bg-red-50 border border-red-100 flex items-center justify-center font-black text-red-600 shrink-0">
-                                                            {user.fullName.charAt(0).toUpperCase()}
+                                                            {user.fullName?.charAt(0).toUpperCase()}
                                                         </div>
                                                         <span className="font-bold text-slate-900">{user.fullName}</span>
                                                     </div>
