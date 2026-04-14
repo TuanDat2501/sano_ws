@@ -239,7 +239,7 @@ export async function GET(req: Request) {
                 { name: "Nghỉ phép/Remote", value: requestTypes.hr, fill: "#94a3b8" },
                 { name: "Tài chính/Tạm ứng", value: requestTypes.finance, fill: "#f97316" },
                 { name: "Mua sắm thiết bị", value: requestTypes.equipment, fill: "#06b6d4" },
-                { name: "Chạy Ads", value: requestTypes.ads, fill: "#ec4899" },
+                
             ],
             hrHealth: [
                 { name: "Xuất Sắc (>100%)", value: hrHealth.excellent, fill: "#10b981" },

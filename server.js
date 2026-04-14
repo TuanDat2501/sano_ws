@@ -14,7 +14,7 @@ const handler = app.getRequestHandler();
 // KHAI BÁO BIẾN TOÀN CỤC (QUAN TRỌNG)
 // ==========================================
 // Dùng Map để lưu danh sách [userId => socket.id]
-const onlineSockets = new Map();
+const onlineUsers = new Map();
 
 app.prepare().then(() => {
   const httpServer = createServer(handler);
@@ -26,30 +26,39 @@ app.prepare().then(() => {
     // ==========================================
     // 1. QUẢN LÝ TRẠNG THÁI ONLINE / OFFLINE
     // ==========================================
-    socket.on("user_online", (userId) => {
-      const uid = String(userId);
-      onlineSockets.set(socket.id, uid); // Gắn ID người dùng vào đúng cái Tab/Socket này
+    socket.on('user_online', (username) => {
+        if (!username) return;
 
-      // Gom tất cả những người đang online lại (Dùng Set để lọc trùng lặp lỡ 1 người mở 5 Tab)
-      const uniqueOnlineUsers = Array.from(new Set(onlineSockets.values()));
-      io.emit("update_online_users", uniqueOnlineUsers);
+        // Lưu thông tin: Cái thẻ socket.id này là của username này
+        onlineUsers.set(socket.id, username);
+
+        // Lọc ra mảng Username ĐỘC NHẤT (Tránh 1 người mở 3 tab báo 3 lần)
+        const uniqueUsernames = Array.from(new Set(onlineUsers.values()));
+        
+        console.log("👥 Đang Online:", uniqueUsernames);
+
+        // Bắn mảng này về cho TẤT CẢ mọi người đang truy cập web
+        io.emit('update_online_users', uniqueUsernames);
     });
 
-    socket.on("disconnect", () => {
-      // Chỉ xóa đúng cái Tab/Socket vừa bị tắt
-      onlineSockets.delete(socket.id);
+    socket.on('disconnect', () => {
+        // Xóa ngay cái thẻ socket.id vừa bị đứt
+        onlineUsers.delete(socket.id);
 
-      // Cập nhật lại danh sách và báo cho anh em
-      const uniqueOnlineUsers = Array.from(new Set(onlineSockets.values()));
-      io.emit("update_online_users", uniqueOnlineUsers);
+        // Tính toán lại danh sách những người còn sót lại
+        const uniqueUsernames = Array.from(new Set(onlineUsers.values()));
+
+        // Bắn lại danh sách mới cho anh em trên web
+        io.emit('update_online_users', uniqueUsernames);
+        
+        console.log('❌ Vừa ngắt kết nối:', socket.id);
     });
 
     // ==========================================
     // 2. CHAT NỘI BỘ (SANO CHAT CHÍNH)
     // ==========================================
-    socket.on("join_chat_room", (roomId) => {
-      socket.join(roomId);
-      console.log(`💬 User joined Chat Room: ${roomId}`);
+    socket.on('join_chat_room', (roomId) => {
+        socket.join(roomId);
     });
 
     socket.on("send_chat_message", async (data) => {

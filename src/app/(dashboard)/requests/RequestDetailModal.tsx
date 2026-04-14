@@ -1,9 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { XCircle, CheckCircle, XOctagon } from "lucide-react";
+import { XCircle, CheckCircle, XOctagon, Loader2 } from "lucide-react";
 import { useToast } from "@/app/component/ToastProvider";
-
 
 export default function RequestDetailModal({ isOpen, onClose, request, currentUserId, onRefresh }: any) {
     const { showToast } = useToast();
@@ -12,28 +11,24 @@ export default function RequestDetailModal({ isOpen, onClose, request, currentUs
 
     if (!isOpen || !request) return null;
 
-    // 🚀 ĐOÁN XEM MÌNH CÓ QUYỀN DUYỆT ĐƠN NÀY LÚC NÀY KHÔNG?
     const isMyTurnToApprove = 
         (request.status === "PENDING_1" && request.firstApproverId === currentUserId) ||
         (request.status === "PENDING_2" && request.secondApproverId === currentUserId);
+        
     const renderStatusBadge = (status: string) => {
         switch (status) {
             case "PENDING_1": 
             case "PENDING_2": 
-                // Gộp chung 2 cấp lại thành 1 chữ "Chờ duyệt"
-                return <span className="bg-amber-100 text-amber-700 px-2.5 py-1 rounded-md text-xs font-black tracking-wide">CHỜ DUYỆT</span>;
-            
+                return <span className="bg-amber-100 text-amber-700 px-2.5 py-1 rounded-md text-[10px] md:text-xs font-black tracking-wide">CHỜ DUYỆT</span>;
             case "APPROVED": 
-                return <span className="bg-green-100 text-green-700 px-2.5 py-1 rounded-md text-xs font-black tracking-wide">ĐÃ DUYỆT</span>;
-            
+                return <span className="bg-green-100 text-green-700 px-2.5 py-1 rounded-md text-[10px] md:text-xs font-black tracking-wide">ĐÃ DUYỆT</span>;
             case "REJECTED": 
-                return <span className="bg-red-100 text-red-700 px-2.5 py-1 rounded-md text-xs font-black tracking-wide">TỪ CHỐI</span>;
-            
+                return <span className="bg-red-100 text-red-700 px-2.5 py-1 rounded-md text-[10px] md:text-xs font-black tracking-wide">TỪ CHỐI</span>;
             default: 
-                return <span className="bg-slate-100 text-slate-700 px-2.5 py-1 rounded-md text-xs font-black tracking-wide">{status}</span>;
+                return <span className="bg-slate-100 text-slate-700 px-2.5 py-1 rounded-md text-[10px] md:text-xs font-black tracking-wide">{status}</span>;
         }
     };
-    // Hàm gọi API xử lý
+
     const handleAction = async (action: 'APPROVE' | 'REJECT') => {
         if (action === 'REJECT' && !comment.trim()) {
             showToast("error", "Vui lòng nhập lý do từ chối!");
@@ -43,15 +38,13 @@ export default function RequestDetailModal({ isOpen, onClose, request, currentUs
         setIsSubmitting(true);
         try {
             const res = await fetch(`/api/requests/${request.id}/action`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ action, comment })
             });
 
             if (res.ok) {
                 showToast("success", `Đã ${action === 'APPROVE' ? 'duyệt' : 'từ chối'} đơn thành công!`);
                 
-                // 🚀 1. NHỜ NAVBAR BẮN SOCKET CHO NHÂN VIÊN
                 window.dispatchEvent(new CustomEvent("local_system_noti", {
                     detail: {
                         targetId: request.requesterId,
@@ -63,7 +56,6 @@ export default function RequestDetailModal({ isOpen, onClose, request, currentUs
                     }
                 }));
 
-                // 🚀 2. NẾU CÒN SẾP CẤP 2 THÌ BẮN TIẾP CHO SẾP CẤP 2
                 if (action === 'APPROVE' && request.status === "PENDING_1" && request.secondApproverId) {
                     window.dispatchEvent(new CustomEvent("local_system_noti", {
                         detail: {
@@ -88,45 +80,39 @@ export default function RequestDetailModal({ isOpen, onClose, request, currentUs
         }
     };
 
-    // Hàm dịch các key tiếng Anh trong cục JSON ra tiếng Việt cho Sếp đọc
     const translateKey = (key: string) => {
         const dict: any = { startDate: "Từ ngày", endDate: "Đến ngày", reason: "Lý do", amount: "Số tiền (VNĐ)", itemName: "Hạng mục", date: "Ngày áp dụng" };
         return dict[key] || key;
     };
 
     return (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in">
-            <div className="bg-white w-full max-w-xl rounded-[24px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 animate-in fade-in">
+            <div className="bg-white w-full max-w-xl rounded-2xl md:rounded-[24px] shadow-2xl overflow-hidden flex flex-col max-h-[95vh] md:max-h-[90vh]">
                 
-                {/* Header */}
-                <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-                    <h2 className="text-lg font-black text-slate-800">Chi tiết Đề xuất</h2>
-                    <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full text-slate-500">
-                        <XCircle size={24} />
+                <div className="px-4 md:px-6 py-3 md:py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
+                    <h2 className="text-base md:text-lg font-black text-slate-800">Chi tiết Đề xuất</h2>
+                    <button onClick={onClose} className="p-1.5 md:p-2 hover:bg-slate-200 rounded-full text-slate-500 transition-colors">
+                        <XCircle size={20} className="md:w-6 md:h-6" />
                     </button>
                 </div>
 
-                {/* Body cuộn được */}
-                <div className="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-6">
-                    {/* Thông tin người gửi */}
-                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                        <p className="text-sm text-slate-500 mb-1">Người gửi: <strong className="text-slate-800">{request.requester?.fullName}</strong></p>
-                        <p className="text-sm text-slate-500 mb-1">Phòng ban: <strong className="text-slate-800">{request.team?.name || "---"}</strong></p>
+                <div className="p-4 md:p-6 overflow-y-auto custom-scrollbar flex-1 space-y-4 md:space-y-6">
+                    <div className="bg-slate-50 p-3 md:p-4 rounded-xl border border-slate-100">
+                        <p className="text-xs md:text-sm text-slate-500 mb-1">Người gửi: <strong className="text-slate-800">{request.requester?.fullName}</strong></p>
+                        <p className="text-xs md:text-sm text-slate-500 mb-2">Phòng ban: <strong className="text-slate-800">{request.team?.name || "---"}</strong></p>
                         <div className="flex items-center gap-2">
-                            <span className="text-sm text-slate-500">Trạng thái:</span> 
+                            <span className="text-xs md:text-sm text-slate-500">Trạng thái:</span> 
                             {renderStatusBadge(request.status)}
                         </div>
                     </div>
 
-                    {/* Nội dung JSON linh hoạt */}
                     <div>
-                        <h3 className="text-sm font-bold text-slate-800 mb-3 uppercase tracking-wider">Nội dung chi tiết</h3>
-                        <div className="grid grid-cols-1 gap-3">
+                        <h3 className="text-xs md:text-sm font-bold text-slate-800 mb-2 md:mb-3 uppercase tracking-wider">Nội dung chi tiết</h3>
+                        <div className="grid grid-cols-1 gap-2 md:gap-3">
                             {request.contentData && Object.keys(request.contentData).map(key => (
                                 <div key={key} className="border-b border-slate-100 pb-2">
-                                    <p className="text-xs text-slate-400 font-bold mb-1">{translateKey(key)}</p>
-                                    <p className="text-slate-800 font-medium whitespace-pre-wrap">
-                                        {/* Nếu là tiền thì format số cho đẹp */}
+                                    <p className="text-[10px] md:text-xs text-slate-400 font-bold mb-0.5 md:mb-1">{translateKey(key)}</p>
+                                    <p className="text-sm md:text-base text-slate-800 font-medium whitespace-pre-wrap">
                                         {key === 'amount' ? Number(request.contentData[key]).toLocaleString('vi-VN') : request.contentData[key]}
                                     </p>
                                 </div>
@@ -134,29 +120,30 @@ export default function RequestDetailModal({ isOpen, onClose, request, currentUs
                         </div>
                     </div>
 
-                    {/* Vùng duyệt đơn (Chỉ hiện khi đến lượt mình duyệt) */}
                     {isMyTurnToApprove && (
                         <div className="mt-4 pt-4 border-t border-slate-200">
-                            <label className="block text-sm font-bold text-slate-700 mb-2">Lời phê / Lý do từ chối (nếu có)</label>
+                            <label className="block text-xs md:text-sm font-bold text-slate-700 mb-2">Lời phê / Lý do từ chối (nếu có)</label>
                             <textarea 
                                 rows={2} 
-                                className="w-full bg-slate-50 border border-slate-200 rounded-lg p-3 outline-none focus:border-red-500 mb-4"
+                                className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 md:p-3 text-sm md:text-base outline-none focus:border-red-500 mb-3 md:mb-4 resize-none"
                                 placeholder="Nhập ý kiến của sếp vào đây..."
                                 value={comment}
                                 onChange={(e) => setComment(e.target.value)}
                             />
-                            <div className="flex gap-3">
+                            {/* Mobile: Các nút xếp dọc hoặc bóp khoảng cách ngang */}
+                            <div className="flex flex-col sm:flex-row gap-2.5 md:gap-3">
                                 <button 
                                     onClick={() => handleAction('REJECT')} disabled={isSubmitting}
-                                    className="flex-1 flex justify-center items-center gap-2 bg-red-100 text-red-700 py-3 rounded-xl font-bold hover:bg-red-200 transition"
+                                    className="w-full sm:flex-1 flex justify-center items-center gap-2 bg-red-100 text-red-700 py-2.5 md:py-3 rounded-xl text-sm md:text-base font-bold hover:bg-red-200 transition-colors"
                                 >
-                                    <XOctagon size={18} /> Từ chối
+                                    <XOctagon size={18} className="md:w-5 md:h-5" /> Từ chối
                                 </button>
                                 <button 
                                     onClick={() => handleAction('APPROVE')} disabled={isSubmitting}
-                                    className="flex-1 flex justify-center items-center gap-2 bg-green-600 text-white py-3 rounded-xl font-bold hover:bg-green-700 shadow-lg shadow-green-600/20 transition"
+                                    className="w-full sm:flex-1 flex justify-center items-center gap-2 bg-green-600 text-white py-2.5 md:py-3 rounded-xl text-sm md:text-base font-bold hover:bg-green-700 shadow-md shadow-green-600/20 transition-all active:scale-95"
                                 >
-                                    <CheckCircle size={18} /> Phê duyệt
+                                    {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle size={18} className="md:w-5 md:h-5" />} 
+                                    Phê duyệt
                                 </button>
                             </div>
                         </div>

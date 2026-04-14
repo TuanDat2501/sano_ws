@@ -1,3 +1,4 @@
+import { PermissionProvider } from "./component/PermissionProvider";
 import { Providers } from "./component/Providers";
 import { ToastProvider } from "./component/ToastProvider";
 import "./globals.css";
@@ -8,7 +9,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <Providers>
           <ToastProvider>
-          {children}
+            <PermissionProvider> {/* 🚀 Bọc ở đây */}
+              {children}
+            </PermissionProvider>
           </ToastProvider>
         </Providers>
       </body>

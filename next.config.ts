@@ -9,3 +9,6 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
+module.exports = {
+  allowedDevOrigins: ['postfebrile-nonabortively-lani.ngrok-free.dev'],
+}

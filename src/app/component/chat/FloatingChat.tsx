@@ -4,33 +4,35 @@ import { useState, useEffect, useRef } from "react";
 import { MessageCircle, X, Send, UserCircle2, Minus } from "lucide-react";
 import { io, Socket } from "socket.io-client";
 import { useSession } from "next-auth/react";
-import { usePathname } from 'next/navigation'; // 🚀 Lấy công cụ soi đường dẫn
+import { usePathname, useRouter } from 'next/navigation'; // 🚀 Nhúng thêm useRouter
 import { useToast } from "../ToastProvider";
 
 export default function FloatingChat() {
     const pathname = usePathname();
+    const router = useRouter(); // 🚀 Khai báo Router
     const { data: session } = useSession();
     const currentUser = session?.user as any;
     const { showToast } = useToast();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [dbUsers, setDbUsers] = useState<any[]>([]);
-    const [onlineUserIds, setOnlineUserIds] = useState<string[]>([]);
+    const [onlineUserNames, setOnlineUserNames] = useState<string[]>([]);
     const [activeChats, setActiveChats] = useState<any[]>([]);
     const [socket, setSocket] = useState<Socket | null>(null);
     const chatEndRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
     const audioRef = useRef<HTMLAudioElement>(null);
+    
     // 🚀 TÚI NHỚ ẨN: Giúp Socket đọc được danh sách chat hiện tại mà không làm web bị giật (re-render)
     const activeChatsRef = useRef(activeChats);
 
     const playNotificationSound = () => {
         try {
-            // Sếp nhớ chuẩn bị 1 file mp3 vứt vào thư mục public/sounds nhé
             const audio = new Audio('/sounds/sound-noti.mp3');
-            audio.play().catch(e => console.log("Trình duyệt chặn phát nhạc (Do chưa click vào web):", e));
+            audio.play().catch(e => console.log("Trình duyệt chặn phát nhạc:", e));
         } catch (err) {
             console.error("Lỗi audio:", err);
         }
     };
+
     useEffect(() => {
         activeChatsRef.current = activeChats;
     }, [activeChats]);
@@ -42,7 +44,7 @@ export default function FloatingChat() {
         const userId = currentUser?.id;
         if (!userId) return;
 
-        fetch("/api/users")
+        fetch("/api/users/chat-list")
             .then(res => res.json())
             .then(data => {
                 if (Array.isArray(data)) setDbUsers(data.filter(u => String(u.id) !== String(userId)));
@@ -53,8 +55,8 @@ export default function FloatingChat() {
         setSocket(newSocket);
 
         const handleConnect = () => {
-            console.log("🟢 Floating Chat: Kết nối thành công. Báo danh ID:", userId);
-            newSocket.emit("user_online", String(userId));
+            console.log("🟢 Floating Chat: Báo danh Username:", currentUser?.username);
+            newSocket.emit("user_online", currentUser?.username);
         };
 
         if (newSocket.connected) {
@@ -63,8 +65,8 @@ export default function FloatingChat() {
             newSocket.on("connect", handleConnect);
         }
 
-        newSocket.on("update_online_users", (userIds: string[]) => {
-            setOnlineUserIds(userIds.map(String));
+        newSocket.on("update_online_users", (usernames: string[]) => {
+            setOnlineUserNames(usernames);
         });
 
         // HỨNG TIN NHẮN (Khi Box Chat ĐÃ MỞ)
@@ -92,55 +94,54 @@ export default function FloatingChat() {
             const { roomId, message } = data;
 
             if (!roomId || !message) return;
-            if (message.senderId === currentUser?.id) return; // 1. Tự gửi từ tab khác -> Bỏ qua
-            if (message.targetId && message.targetId !== currentUser?.id) return; // 2. Không phải gửi cho mình -> Bỏ qua
-            // 1. Nếu đang ở màn hình /chat to đùng rồi thì bỏ qua, không búng popup nữa
+            if (message.senderId === currentUser?.id) return; 
+            if (message.targetId && message.targetId !== currentUser?.id) return; 
             if (pathname === '/chat') return;
 
-            // 2. Kiểm tra xem Box chat này đã được bật chưa?
             const isChatAlreadyOpen = activeChatsRef.current.some(c => c.roomId === roomId);
 
-            // 3. Nếu CHƯA MỞ, ta sẽ tự động lấy data và búng nó lên màn hình!
+            // 🚀 BƯỚC NẢY MOBILE: Nếu đang xài điện thoại, KHÔNG bật popup lơ lửng, chỉ báo Notification (hoặc có thể chuyển thẳng sang /chat)
             if (!isChatAlreadyOpen) {
                 playNotificationSound();
-                try {
-                    const msgRes = await fetch(`/api/chat/rooms/${roomId}/messages`);
-                    const msgData = await msgRes.json();
-                    const newChatBox = {
-                        roomId: roomId,
-                        targetUser: {
-                            id: message.senderId,
-                            fullName: msgData[msgData.length - 1].sender || "Người dùng"
-                        },
-                        messages: Array.isArray(msgData) ? msgData : [],
-                        inputValue: ""
-                    };
+                
+                // Nếu là màn hình rộng (Desktop) thì mới búng Popup Chat lên
+                if (window.innerWidth >= 768) {
+                    try {
+                        const msgRes = await fetch(`/api/chat/rooms/${roomId}/messages`);
+                        const msgData = await msgRes.json();
+                        const newChatBox = {
+                            roomId: roomId,
+                            targetUser: {
+                                id: message.senderId,
+                                fullName: msgData[msgData.length - 1]?.sender || "Người dùng"
+                            },
+                            messages: Array.isArray(msgData) ? msgData : [],
+                            inputValue: ""
+                        };
 
+                        setActiveChats(prev => {
+                            if (prev.some(c => c.roomId === roomId)) return prev;
+                            return [...prev, newChatBox];
+                        });
 
-                    setActiveChats(prev => {
-                        // Bẫy chống double-box (lỡ bấm đúp)
-                        if (prev.some(c => c.roomId === roomId)) return prev;
-                        return [...prev, newChatBox];
-                    });
-
-                    // Chui vào phòng socket luôn để nghe tin nhắn tiếp theo
-                    newSocket.emit("join_chat_room", roomId);
-                } catch (err) {
-                    console.error("Lỗi khi tự động búng popup chat:", err);
+                        newSocket.emit("join_chat_room", roomId);
+                    } catch (err) {
+                        console.error("Lỗi khi tự động búng popup chat:", err);
+                    }
+                } else {
+                    // Nếu là Mobile, hiện Toast mượt mà báo có tin nhắn tới để người dùng tự click vào /chat
+                    showToast("info", `💬 Tin nhắn mới từ ${message.sender || "ai đó"}`);
                 }
             }
         });
-        newSocket.on("receive_system_noti", (data: any) => {
-            // Chỉ hiển thị Noti nếu ID đích trùng với ID của mình
-            if (data.targetId === currentUser?.id) {
-                // 1. Kêu tiếng "Tíng"
-                playNotificationSound();
 
-                // 2. Trượt cái Toast ra cho sếp đọc
-                // Dùng toast.success hay info tùy sếp nhé
+        newSocket.on("receive_system_noti", (data: any) => {
+            if (data.targetId === currentUser?.id) {
+                playNotificationSound();
                 showToast("success", `${data.title}: ${data.message}`);
             }
         });
+
         return () => {
             newSocket.off("connect", handleConnect);
             newSocket.off("update_online_users");
@@ -149,7 +150,7 @@ export default function FloatingChat() {
             newSocket.off("receive_system_noti");
             newSocket.disconnect();
         };
-    }, [currentUser?.id, pathname]); // 🚀 Bổ sung pathname vào mảng dependency
+    }, [currentUser?.id, pathname]);
 
 
     useEffect(() => {
@@ -162,13 +163,21 @@ export default function FloatingChat() {
     // 2. MỞ BOX CHAT KHI BẤM VÀO USER
     // ==========================================
     const openChatBox = async (targetUser: any) => {
-        if (activeChats.find(c => c.targetUser.id === targetUser.id)) return;
+        // 🚀 MOBILE REDIRECT: Nếu là màn hình nhỏ, lập tức chuyển qua trang Full Chat
+        if (window.innerWidth < 768) {
+            router.push(`/chat`);
+            setIsMenuOpen(false);
+            return;
+        }
+
+        // DESKTOP LOGIC (Giữ nguyên)
+        if (activeChats.find(c => c.targetUser.username === targetUser.username)) return;
 
         try {
             const res = await fetch('/api/chat/rooms/create', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ targetId: targetUser.id, type: 'DIRECT' })
+                body: JSON.stringify({ targetUsername: targetUser.username, type: 'DIRECT' })
             });
             const roomData = await res.json();
 
@@ -254,89 +263,101 @@ export default function FloatingChat() {
     }
 
     return (
-        <div className="fixed bottom-0 right-6 z-[9999] flex items-end gap-3 pointer-events-none pb-0">
+        <div className="fixed bottom-0 right-4 md:right-6 z-[9999] flex items-end gap-3 pointer-events-none pb-4 md:pb-0">
 
             {/* ========================================== */}
-            {/* A. CÁC HỘP THOẠI CHAT ĐANG MỞ */}
+            {/* A. CÁC HỘP THOẠI CHAT ĐANG MỞ (CHỈ HIỂN THỊ TRÊN DESKTOP) */}
             {/* ========================================== */}
-            {activeChats.map((chat) => (
-                <div key={chat.roomId} className="w-[320px] h-[400px] bg-white rounded-t-xl shadow-[0_0_20px_rgba(0,0,0,0.15)] border border-slate-200 flex flex-col pointer-events-auto overflow-hidden animate-in slide-in-from-bottom-5 duration-300">
-                    <div className="h-12 bg-red-600 text-white px-3 flex justify-between items-center shrink-0 cursor-pointer">
-                        <div className="flex items-center gap-2 font-bold text-[15px] truncate">
-                            <div className="relative shrink-0">
-                                <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center font-black">
-                                    {chat.targetUser.fullName?.charAt(0)}
+            {/* Thêm hidden md:flex để triệt tiêu việc hiện box lơ lửng trên màn nhỏ */}
+            <div className="hidden md:flex items-end gap-3 pointer-events-none">
+                {activeChats.map((chat) => (
+                    <div key={chat.roomId} className="w-[320px] h-[400px] bg-white rounded-t-xl shadow-[0_0_20px_rgba(0,0,0,0.15)] border border-slate-200 flex flex-col pointer-events-auto overflow-hidden animate-in slide-in-from-bottom-5 duration-300">
+                        <div className="h-12 bg-red-600 text-white px-3 flex justify-between items-center shrink-0 cursor-pointer">
+                            <div className="flex items-center gap-2 font-bold text-[15px] truncate">
+                                <div className="relative shrink-0">
+                                    <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center font-black text-sm">
+                                        {chat.targetUser.avatarUrl ? (
+                                            <img src={chat.targetUser.avatarUrl} alt="Avatar" className="h-full w-full rounded-full object-cover" />
+                                        ) : (
+                                            <span>{chat.targetUser.fullName?.charAt(0)}</span>
+                                        )}
+                                    </div>
+                                    {onlineUserNames.includes(chat.targetUser.username) && (
+                                        <div className="absolute bottom-0 right-0 h-2.5 w-2.5 bg-green-500 rounded-full border-2 border-red-600"></div>
+                                    )}
                                 </div>
-                                {onlineUserIds.includes(String(chat.targetUser.id)) && (
-                                    <div className="absolute bottom-0 right-0 h-2.5 w-2.5 bg-green-500 rounded-full border-2 border-red-600"></div>
-                                )}
+                                <span className="truncate max-w-[150px]">{chat.targetUser.fullName}</span>
                             </div>
-                            <span className="truncate max-w-[150px]">{chat.targetUser.fullName}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                            <button onClick={() => closeChatBox(chat.roomId)} className="p-1 hover:bg-white/20 rounded-md transition-colors"><X size={18} /></button>
-                        </div>
-                    </div>
-
-                    <div className="flex-1 overflow-y-auto p-3 bg-slate-50 flex flex-col gap-2 custom-scrollbar">
-                        {chat.messages.map((msg: any) => (
-                            <div key={msg.id} className={`max-w-[80%] px-3 py-2 rounded-2xl text-[14px] ${msg.isMe ? 'bg-red-600 text-white self-end rounded-br-sm' : 'bg-white border border-slate-200 text-slate-800 self-start rounded-bl-sm shadow-sm'}`}>
-                                {msg.text || msg.content}
+                            <div className="flex items-center gap-1">
+                                <button onClick={() => closeChatBox(chat.roomId)} className="p-1 hover:bg-white/20 rounded-md transition-colors"><X size={18} /></button>
                             </div>
-                        ))}
-                        <div ref={(el) => { chatEndRefs.current[chat.roomId] = el; }} />
-                    </div>
+                        </div>
 
-                    <div className="p-2 bg-white border-t border-slate-200 flex items-center gap-2">
-                        <input
-                            type="text"
-                            placeholder="Nhập tin nhắn..."
-                            className="flex-1 bg-slate-100 rounded-full px-4 py-2 text-[14px] outline-none"
-                            value={chat.inputValue}
-                            onChange={(e) => {
-                                const newChats = [...activeChats];
-                                const idx = newChats.findIndex(c => c.roomId === chat.roomId);
-                                newChats[idx].inputValue = e.target.value;
-                                setActiveChats(newChats);
-                            }}
-                            onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(chat.roomId)}
-                        />
-                        <button onClick={() => handleSendMessage(chat.roomId)} className="p-2 text-red-600 hover:bg-red-50 rounded-full shrink-0">
-                            <Send size={18} />
-                        </button>
+                        <div className="flex-1 overflow-y-auto p-3 bg-slate-50 flex flex-col gap-2 custom-scrollbar">
+                            {chat.messages.map((msg: any) => (
+                                <div key={msg.id} className={`max-w-[80%] px-3 py-2 rounded-2xl text-[13px] md:text-[14px] ${msg.isMe ? 'bg-red-600 text-white self-end rounded-br-sm' : 'bg-white border border-slate-200 text-slate-800 self-start rounded-bl-sm shadow-sm'}`}>
+                                    {msg.text || msg.content}
+                                </div>
+                            ))}
+                            <div ref={(el) => { chatEndRefs.current[chat.roomId] = el; }} />
+                        </div>
+
+                        <div className="p-2 bg-white border-t border-slate-200 flex items-center gap-2">
+                            <input
+                                type="text"
+                                placeholder="Nhập tin nhắn..."
+                                className="flex-1 bg-slate-100 rounded-full px-4 py-2 text-[13px] md:text-[14px] outline-none"
+                                value={chat.inputValue}
+                                onChange={(e) => {
+                                    const newChats = [...activeChats];
+                                    const idx = newChats.findIndex(c => c.roomId === chat.roomId);
+                                    newChats[idx].inputValue = e.target.value;
+                                    setActiveChats(newChats);
+                                }}
+                                onKeyDown={(e) => e.key === 'Enter' && handleSendMessage(chat.roomId)}
+                            />
+                            <button onClick={() => handleSendMessage(chat.roomId)} className="p-2 text-red-600 hover:bg-red-50 rounded-full shrink-0 transition-colors">
+                                <Send size={18} className="md:w-5 md:h-5" />
+                            </button>
+                        </div>
                     </div>
-                </div>
-            ))}
+                ))}
+            </div>
 
             {/* ========================================== */}
             {/* B. CỤC MENU LIÊN HỆ GỐC */}
             {/* ========================================== */}
-            <div className="flex flex-col items-end pointer-events-auto pb-6">
+            <div className="flex flex-col items-end pointer-events-auto pb-2 md:pb-6 relative z-50">
                 {isMenuOpen && (
-                    <div className="mb-4 w-[320px] h-[450px] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-in slide-in-from-bottom-5 duration-300">
-                        <div className="p-4 bg-slate-950 text-white flex justify-between items-center shrink-0">
-                            <span className="font-bold text-[15px]">Sano Chat</span>
-                            <button onClick={() => setIsMenuOpen(false)} className="hover:bg-white/20 p-1 rounded-lg transition-colors"><X size={18} /></button>
+                    // 🚀 Responsive: Giới hạn chiều cao và co chiều rộng trên mobile
+                    <div className="mb-3 md:mb-4 w-[280px] sm:w-[320px] h-[350px] md:h-[450px] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-in slide-in-from-bottom-5 duration-300">
+                        <div className="p-3 md:p-4 bg-slate-950 text-white flex justify-between items-center shrink-0">
+                            <span className="font-bold text-[14px] md:text-[15px]">Sano Chat</span>
+                            <button onClick={() => setIsMenuOpen(false)} className="hover:bg-white/20 p-1 rounded-lg transition-colors"><X size={18} className="md:w-5 md:h-5" /></button>
                         </div>
 
-                        <div className="p-3 bg-slate-50/50">
-                            <input type="text" placeholder="Tìm kiếm liên hệ..." className="w-full bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-red-500" />
+                        <div className="p-2 md:p-3 bg-slate-50/50">
+                            <input type="text" placeholder="Tìm kiếm liên hệ..." className="w-full bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 text-xs md:text-sm outline-none focus:ring-1 focus:ring-red-500" />
                         </div>
 
                         <div className="flex-1 overflow-y-auto custom-scrollbar">
                             {dbUsers.map(user => {
-                                const isOnline = onlineUserIds.includes(String(user.id));
+                                const isOnline = onlineUserNames.includes(user.username);
                                 return (
-                                    <div key={user.id} onClick={() => openChatBox(user)} className="flex items-center gap-3.5 p-3.5 hover:bg-slate-50 cursor-pointer transition-colors border-b border-slate-100 last:border-0">
+                                    <div key={user.id} onClick={() => openChatBox(user)} className="flex items-center gap-3 p-3 hover:bg-slate-50 cursor-pointer transition-colors border-b border-slate-100 last:border-0 group">
                                         <div className="shrink-0 relative">
-                                            <div className="h-10 w-10 bg-slate-100 rounded-full flex items-center justify-center font-black text-slate-500 text-sm shadow-inner">
-                                                {user.fullName?.charAt(0)}
+                                            <div className="h-10 w-10 bg-slate-100 rounded-full flex items-center justify-center font-black text-slate-500 text-sm shadow-inner group-hover:bg-red-50 group-hover:text-red-600 transition-colors">
+                                                {user.avatarUrl ? (
+                                                    <img src={user.avatarUrl} alt="Avatar" className="h-full w-full rounded-full object-cover" />
+                                                ) : (
+                                                    <span>{user.fullName?.charAt(0)}</span>
+                                                )}
                                             </div>
                                             {isOnline && <div className="absolute bottom-0 right-0 h-3 w-3 bg-green-500 border-2 border-white rounded-full"></div>}
                                         </div>
-                                        <div>
-                                            <p className="font-black text-slate-800 text-[15px] leading-snug">{user.fullName}</p>
-                                            <p className="text-[10px] font-black text-slate-400 mt-1 uppercase tracking-tight">{user.role}</p>
+                                        <div className="min-w-0">
+                                            <p className="font-black text-slate-800 text-xs md:text-[15px] leading-snug truncate">{user.fullName}</p>
+                                            <p className="text-[9px] md:text-[10px] font-black text-slate-400 mt-1 uppercase tracking-tight truncate">{user.role}</p>
                                         </div>
                                     </div>
                                 );
@@ -347,12 +368,13 @@ export default function FloatingChat() {
 
                 <button
                     onClick={() => setIsMenuOpen(!isMenuOpen)}
-                    className={`relative p-4 rounded-full shadow-xl transition-all active:scale-95 ${isMenuOpen ? 'bg-slate-800' : 'bg-red-600 hover:bg-red-700'}`}
+                    // 🚀 Responsive: Co nút nhỏ lại chút trên mobile (p-3 vs p-4)
+                    className={`relative p-3 md:p-4 rounded-full shadow-xl transition-all active:scale-95 ${isMenuOpen ? 'bg-slate-800' : 'bg-red-600 hover:bg-red-700'}`}
                 >
-                    {isMenuOpen ? <X className="text-white" /> : <MessageCircle className="text-white" size={28} />}
-                    {!isMenuOpen && onlineUserIds.length > 0 && (
-                        <div className="absolute -top-1 -left-1 bg-green-500 text-[10px] text-white font-black px-1.5 py-0.5 rounded-full border-2 border-white shadow-sm animate-pulse">
-                            {onlineUserIds.length}
+                    {isMenuOpen ? <X className="text-white w-6 h-6 md:w-7 md:h-7" /> : <MessageCircle className="text-white w-6 h-6 md:w-7 md:h-7" />}
+                    {!isMenuOpen && onlineUserNames.length > 0 && (
+                        <div className="absolute -top-1 -left-1 bg-green-500 text-[9px] md:text-[10px] text-white font-black px-1.5 py-0.5 rounded-full border border-white md:border-2 shadow-sm animate-pulse">
+                            {onlineUserNames.length}
                         </div>
                     )}
                 </button>

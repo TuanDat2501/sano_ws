@@ -14,73 +14,75 @@ export default function LoginPage() {
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  console.log(">>> Đã bấm nút đăng nhập!"); // Thêm dòng này
-  console.log("Dữ liệu gửi đi:", { username, password }); // Thêm dòng này
-  
-  setLoading(true);
-  setError("");
+    e.preventDefault();
+    console.log(">>> Đã bấm nút đăng nhập!");
+    console.log("Dữ liệu gửi đi:", { username, password });
+    
+    setLoading(true);
+    setError("");
 
-  try {
-    const res = await signIn("credentials", {
-      username,
-      password,
-      redirect: false,
-    });
-    console.log(">>> Kết quả từ NextAuth:", res); // Thêm dòng này
+    try {
+      const res = await signIn("credentials", {
+        username,
+        password,
+        redirect: false,
+      });
+      console.log(">>> Kết quả từ NextAuth:", res);
 
-    if (res?.error) {
-      setError("Tài khoản hoặc mật khẩu không chính xác!");
+      if (res?.error) {
+        setError("Tài khoản hoặc mật khẩu không chính xác!");
+        setLoading(false);
+      } else {
+        console.log(">>> Đăng nhập thành công, đang chuyển hướng...");
+        window.location.href = "/dashboard";
+      }
+    } catch (err) {
+      console.error(">>> Lỗi khi gọi hàm signIn:", err);
       setLoading(false);
-    } else {
-      console.log(">>> Đăng nhập thành công, đang chuyển hướng...");
-      window.location.href = "/dashboard"; // Dùng cái này thay cho router.push để ép tải lại trang
     }
-  } catch (err) {
-    console.error(">>> Lỗi khi gọi hàm signIn:", err);
-    setLoading(false);
-  }
-};
+  };
 
   return (
     // ---------- BACKGROUND NỀN CHÍNH ----------
-    <div className="flex items-center justify-center min-h-screen bg-slate-50 p-6 relative overflow-hidden">
+    // Đổi p-6 thành p-4 trên mobile để tiết kiệm lề
+    <div className="flex items-center justify-center min-h-screen bg-slate-50 p-4 md:p-6 relative overflow-hidden">
       
-      {/* Hình tròn trang trí mờ nổi trên background */}
-      <div className="absolute top-1/4 left-10 h-32 w-32 bg-red-100 backdrop-blur-sm rounded-full opacity-60 z-0"></div>
-      <div className="absolute bottom-10 right-20 h-40 w-40 bg-red-100 backdrop-blur-sm rounded-full opacity-60 z-0"></div>
+      {/* Hình tròn trang trí mờ nổi trên background (Thu nhỏ trên mobile) */}
+      <div className="absolute top-10 left-[-20px] md:top-1/4 md:left-10 h-24 w-24 md:h-32 md:w-32 bg-red-100 backdrop-blur-sm rounded-full opacity-60 z-0"></div>
+      <div className="absolute bottom-[-20px] right-[-20px] md:bottom-10 md:right-20 h-28 w-28 md:h-40 md:w-40 bg-red-100 backdrop-blur-sm rounded-full opacity-60 z-0"></div>
 
-      {/* ---------- POPUP CONTAINER LỚN (NỔI LÊN) ---------- */}
-      <div className="max-w-7xl w-full bg-white rounded-[40px] shadow-[0_35px_100px_-15px_rgba(0,0,0,0.15)] overflow-hidden relative z-10">
-        <div className="grid grid-cols-1 md:grid-cols-2">
+      {/* ---------- POPUP CONTAINER LỚN ---------- */}
+      {/* Trên mobile max-w-md, trên máy tính max-w-7xl */}
+      <div className="w-full max-w-md md:max-w-5xl lg:max-w-7xl bg-white rounded-3xl md:rounded-[40px] shadow-[0_20px_50px_-15px_rgba(0,0,0,0.1)] md:shadow-[0_35px_100px_-15px_rgba(0,0,0,0.15)] overflow-hidden relative z-10">
+        <div className="flex flex-col md:flex-row h-full">
           
-          {/* ---------- PHẦN TRÁI: FORM ĐĂNG NHẬP (TRẮNG) ---------- */}
-          <div className="p-16 space-y-10 flex flex-col items-center justify-center border-r border-gray-100">
+          {/* ---------- PHẦN TRÁI: FORM ĐĂNG NHẬP ---------- */}
+          {/* Bóp padding p-8 trên mobile, p-16 trên Desktop */}
+          <div className="w-full md:w-1/2 p-8 sm:p-12 md:p-16 space-y-8 md:space-y-10 flex flex-col items-center justify-center border-r border-gray-100">
             
             {/* Site Logo */}
-            <div className="flex flex-col items-center gap-3">
-              <div className="bg-red-600 p-3 rounded-2xl shadow-lg shadow-red-500/20">
-                <Zap className="h-8 w-8 text-white" />
-               
+            <div className="flex flex-col items-center gap-2 md:gap-3">
+              <div className="bg-red-600 p-2.5 md:p-3 rounded-xl md:rounded-2xl shadow-lg shadow-red-500/20">
+                <Zap className="h-6 w-6 md:h-8 md:w-8 text-white" />
               </div>
-              <h1 className="text-4xl font-extrabold text-black tracking-tight">
+              <h1 className="text-3xl md:text-4xl font-extrabold text-black tracking-tight text-center">
                 Sano <span className="text-red-600">Workspace</span>
               </h1>
             </div>
 
-            <div className="flex flex-col items-center gap-2">
-              <h2 className="text-2xl font-bold text-black uppercase tracking-widest">Đăng Nhập</h2>
-              <p className="text-slate-600 text-base text-center">Chào mừng bạn trở lại hệ thống quản trị.</p>
+            <div className="flex flex-col items-center gap-1.5 md:gap-2 text-center">
+              <h2 className="text-xl md:text-2xl font-bold text-black uppercase tracking-widest">Đăng Nhập</h2>
+              <p className="text-slate-600 text-sm md:text-base">Chào mừng bạn trở lại hệ thống quản trị.</p>
             </div>
             
-            <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-6">
+            <form onSubmit={handleSubmit} className="w-full max-w-sm space-y-5 md:space-y-6">
               {/* Tên đăng nhập */}
               <div className="relative">
-                <User className="absolute left-4 top-3.5 h-6 w-6 text-slate-400" />
+                <User className="absolute left-4 top-3.5 md:top-3.5 h-5 w-5 md:h-6 md:w-6 text-slate-400" />
                 <input
                   type="text"
                   required
-                  className="w-full bg-slate-100 border border-slate-200 text-black rounded-xl py-3.5 pl-12 pr-4 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all"
+                  className="w-full bg-slate-100 border border-slate-200 text-black rounded-xl py-3 md:py-3.5 pl-11 md:pl-12 pr-4 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all text-sm md:text-base"
                   placeholder="Tên đăng nhập"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
@@ -89,11 +91,11 @@ export default function LoginPage() {
               
               {/* Mật khẩu */}
               <div className="relative">
-                <Lock className="absolute left-4 top-3.5 h-6 w-6 text-slate-400" />
+                <Lock className="absolute left-4 top-3.5 md:top-3.5 h-5 w-5 md:h-6 md:w-6 text-slate-400" />
                 <input
                   type={showPassword ? "text" : "password"}
                   required
-                  className="w-full bg-slate-100 border border-slate-200 text-black rounded-xl py-3.5 pl-12 pr-12 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all"
+                  className="w-full bg-slate-100 border border-slate-200 text-black rounded-xl py-3 md:py-3.5 pl-11 md:pl-12 pr-12 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all text-sm md:text-base"
                   placeholder="Mật khẩu"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -103,44 +105,25 @@ export default function LoginPage() {
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-4 top-3.5 text-slate-400 hover:text-red-600"
                 >
-                  {showPassword ? <EyeOff size={22} /> : <Eye size={22} />}
+                  {showPassword ? <EyeOff size={20} className="md:w-[22px] md:h-[22px]" /> : <Eye size={20} className="md:w-[22px] md:h-[22px]" />}
                 </button>
               </div>
               
-              {error && <p className="text-red-600 text-sm bg-red-50 p-4 rounded-xl border border-red-200 font-medium text-center">{error}</p>}
+              {error && <p className="text-red-600 text-xs md:text-sm bg-red-50 p-3 md:p-4 rounded-xl border border-red-200 font-medium text-center">{error}</p>}
               
               {/* Nút đăng nhập */}
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-4 rounded-xl transition-all shadow-md active:scale-[0.98]"
+                className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3.5 md:py-4 rounded-xl transition-all shadow-md active:scale-[0.98] text-sm md:text-base flex justify-center items-center gap-2"
               >
-                {loading ? <Loader2 className="animate-spin" /> : "Vào hệ thống ngay"}
+                {loading ? <Loader2 className="animate-spin" size={20} /> : "Vào hệ thống ngay"}
               </button>
             </form>
-            
-            {/* Phân tách */}
-            {/* <div className="w-full max-w-sm flex items-center gap-3">
-              <div className="flex-grow h-px bg-slate-200"></div>
-              <p className="text-sm text-slate-500 whitespace-nowrap">Hoặc đăng nhập bằng</p>
-              <div className="flex-grow h-px bg-slate-200"></div>
-            </div> */}
-            
-            {/* Đăng nhập mạng xã hội */}
-            {/* <div className="w-full max-w-sm space-y-4">
-              <button className="w-full bg-white border border-slate-200 text-black font-semibold py-3.5 rounded-xl shadow-sm flex items-center justify-center gap-3 hover:bg-slate-50 transition-all active:scale-[0.98]">
-                <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" className="h-5 w-5" />
-                Đăng nhập với Google
-              </button>
-              <button className="w-full bg-white border border-slate-200 text-black font-semibold py-3.5 rounded-xl shadow-sm flex items-center justify-center gap-3 hover:bg-slate-50 transition-all active:scale-[0.98]">
-                <img src="https://www.svgrepo.com/show/475647/facebook-color.svg" alt="Facebook" className="h-5 w-5" />
-                Đăng nhập với Facebook
-              </button>
-            </div> */}
           </div>
 
-          {/* ---------- PHẦN PHẢI: HÌNH ẢNH HỆ THỐNG ---------- */}
-          <div className="bg-red-600 p-16 flex items-center justify-center relative overflow-hidden">
+          {/* ---------- PHẦN PHẢI: HÌNH ẢNH HỆ THỐNG (Ẩn trên Mobile) ---------- */}
+          <div className="hidden md:flex w-1/2 bg-red-600 p-12 lg:p-16 items-center justify-center relative overflow-hidden">
             
             {/* Vân nền */}
             <div className="absolute inset-0 opacity-10">
@@ -166,15 +149,18 @@ export default function LoginPage() {
         </div>
       </div>
       
-      {/* ---------- FOOTER THÔNG TIN ---------- */}
-      <div className="absolute bottom-6 left-12 flex items-center gap-3 text-slate-600 z-10">
+      {/* ---------- FOOTER THÔNG TIN (Chỉ hiện trên màn hình lớn để tránh đè bàn phím) ---------- */}
+      <div className="hidden lg:flex absolute bottom-6 left-12 items-center gap-3 text-slate-600 z-10">
         <div className="h-10 w-10 rounded-full bg-red-600 flex items-center justify-center text-white font-bold border-2 border-white shadow-sm">S</div>
         <div className="text-sm">
           <p className="font-semibold text-black">Sano Team</p>
           <p>Hỗ trợ nội bộ 24/7</p>
         </div>
       </div>
-      <p className="absolute bottom-6 right-12 text-slate-400 text-sm z-10 font-bold tracking-widest uppercase">© 2026 Sano Workspace</p>
+      <p className="hidden lg:block absolute bottom-6 right-12 text-slate-400 text-sm z-10 font-bold tracking-widest uppercase">
+        © 2026 Sano Workspace
+      </p>
+
     </div>
   );
 }

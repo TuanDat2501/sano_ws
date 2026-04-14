@@ -3,22 +3,21 @@
 import { useState, useEffect, useCallback } from "react";
 import { Network, Loader2 } from "lucide-react";
 import ReactFlow, { Background, Controls, MiniMap, addEdge, useNodesState, useEdgesState } from "reactflow";
-import "reactflow/dist/style.css"; // Bắt buộc phải có để React Flow hiển thị mượt
+import "reactflow/dist/style.css"; 
 import dagre from "dagre";
 import CustomNode from "./CustomNode";
 import { useToast } from "@/app/component/ToastProvider";
 import OrgNodeDrawer from "./OrgNodeDrawer";
-// Đăng ký Custom Node vừa tạo
+import PermissionGuard from "@/app/component/PermissionGuard";
+
 const nodeTypes = {
     custom: CustomNode,
 };
 
-// 🧠 HÀM TỰ ĐỘNG DÀN LAYOUT SƠ ĐỒ (XẾP CÂY) BẰNG DAGRE
 const getLayoutedElements = (nodes: any[], edges: any[], direction = 'TB') => {
     const dagreGraph = new dagre.graphlib.Graph();
     dagreGraph.setDefaultEdgeLabel(() => ({}));
     
-    // Kích thước ước tính của một Node để căn lề
     const nodeWidth = 200;
     const nodeHeight = 100;
 
@@ -33,7 +32,6 @@ const getLayoutedElements = (nodes: any[], edges: any[], direction = 'TB') => {
         const nodeWithPosition = dagreGraph.node(node.id);
         node.targetPosition = 'top';
         node.sourcePosition = 'bottom';
-        // Tính toán lại vị trí tâm của Node
         node.position = {
             x: nodeWithPosition.x - nodeWidth / 2,
             y: nodeWithPosition.y - nodeHeight / 2,
@@ -51,7 +49,6 @@ export default function OrgChartPage() {
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [selectedNodeData, setSelectedNodeData] = useState<any>(null);
 
-    // Các State của React Flow
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
@@ -85,7 +82,7 @@ export default function OrgChartPage() {
                     data: { 
                         label: user.fullName, role: user.role === "ADMIN" ? "Giám Đốc" : "Phó Giám Đốc", 
                         borderColor: 'border-red-300', textColor: 'text-red-600',
-                        fullUserObj: user // 🚀 NHÉT FULL DATA VÀO ĐÂY ĐỂ LÁT DRAW LẤY RA DÙNG
+                        fullUserObj: user 
                     }
                 });
                 initialEdges.push({ id: `e_${rootId}-${userNodeId}`, source: rootId, target: userNodeId, type: 'smoothstep', animated: true });
@@ -120,10 +117,10 @@ export default function OrgChartPage() {
                     id: userNodeId, type: 'custom', position: { x: 0, y: 0 },
                     data: { 
                         label: user.fullName, role: user.role, actual: actual, target: target,
-                        avatar: user.avatar || null,
+                        avatar: user.avatarUrl || null,
                         borderColor: user.role === 'LEADER' ? 'border-blue-300' : 'border-slate-200', 
                         textColor: user.role === 'LEADER' ? 'text-blue-600' : 'text-slate-500',
-                        fullUserObj: user // 🚀 NHÉT FULL DATA VÀO ĐÂY
+                        fullUserObj: user
                     }
                 });
                 initialEdges.push({ id: `e_${parentId}-${userNodeId}`, source: parentId, target: userNodeId, type: 'smoothstep' });
@@ -136,56 +133,59 @@ export default function OrgChartPage() {
         });
     }, []);
 
-    // Sự kiện nối dây bằng tay (Dành cho sau này sếp muốn tự kéo nối)
     const onConnect = useCallback((params: any) => setEdges((eds) => addEdge(params, eds)), [setEdges]);
 
     return (
-        <div className="h-full flex flex-col p-4 md:p-8 animate-fade-in bg-slate-50 relative overflow-hidden">
+        <PermissionGuard moduleId="MENU_ORG_CHART">
+        // Đổi p-4 md:p-8 thành p-3 md:p-6 lg:p-8 để trên điện thoại tràn lề tốt hơn
+        <div className="h-full flex flex-col p-3 md:p-6 lg:p-8 animate-fade-in bg-slate-50 relative overflow-hidden">
             {/* HEADER */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shrink-0 mb-6 z-10 relative">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 shrink-0 mb-4 md:mb-6 z-10 relative">
                 <div>
-                    <h1 className="text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">
-                        <Network className="text-red-600" size={32} />
+                    <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight flex items-center gap-2 md:gap-3">
+                        <Network className="text-red-600 w-6 h-6 md:w-8 md:h-8" />
                         Sơ Đồ <span className="text-red-600">Tổ Chức</span>
                     </h1>
-                    <p className="text-slate-500 font-medium mt-1">Vuốt chuột để Zoom. Kéo thả để xem tổng quan bộ máy (Powered by React Flow).</p>
+                    <p className="text-[11px] md:text-sm text-slate-500 font-medium mt-1">Dùng 2 ngón tay (vuốt chuột) để Zoom. Kéo thả để xem tổng quan bộ máy.</p>
                 </div>
             </div>
 
             {/* VÙNG VẼ CANVAS CỦA REACT FLOW */}
-            <div className="flex-1 bg-white rounded-[32px] border border-slate-200 shadow-xl overflow-hidden relative z-0">
+            {/* Bo góc giảm xuống trên mobile (rounded-2xl thay vì 32px) */}
+            <div className="flex-1 bg-white rounded-2xl md:rounded-[32px] border border-slate-200 shadow-xl overflow-hidden relative z-0">
                 {loading ? (
                     <div className="h-full flex flex-col items-center justify-center text-slate-400 font-medium gap-3">
-                        <Loader2 size={32} className="animate-spin text-red-500" /> Đang tính toán toạ độ sơ đồ...
+                        <Loader2 size={24} className="animate-spin text-red-500 md:w-8 md:h-8" /> 
+                        <span className="text-xs md:text-sm">Đang tính toán toạ độ sơ đồ...</span>
                     </div>
                 ) : (
                     <ReactFlow
+                        nodesDraggable={false} 
                         nodes={nodes}
                         edges={edges}
                         onNodesChange={onNodesChange}
                         onEdgesChange={onEdgesChange}
                         onConnect={onConnect}
                         nodeTypes={nodeTypes}
-                        fitView // Tự động Zoom vừa vặn màn hình lúc mới load
+                        fitView 
                         attributionPosition="bottom-right"
                         className="bg-slate-50/50"
                         onNodeClick={onNodeClick}
                     >
-                        {/* Background chấm bi */}
                         <Background color="#cbd5e1" gap={20} size={1} />
-                        {/* Các nút Zoom In, Zoom Out ở góc */}
-                        <Controls className="!bg-white !shadow-lg !border-slate-200 !rounded-xl overflow-hidden" />
-                        {/* Bản đồ mini thu nhỏ ở góc phải dưới */}
-                        <MiniMap className="!bg-white !border-slate-200 !rounded-xl !shadow-lg" />
+                        <Controls className="!bg-white !shadow-lg !border-slate-200 !rounded-xl overflow-hidden hidden sm:flex" showInteractive={false}/>
+                        {/* Ẩn Minimap trên Mobile vì vướng chỗ */}
+                        <MiniMap className="!bg-white !border-slate-200 !rounded-xl !shadow-lg hidden md:block" />
                     </ReactFlow>
                 )}
             </div>
-            {/* ================= DRAWER COMPONENT ================= */}
+            
             <OrgNodeDrawer 
                 isOpen={isDrawerOpen} 
                 onClose={() => setIsDrawerOpen(false)} 
                 nodeData={selectedNodeData} 
             />
         </div>
+        </PermissionGuard>
     );
 }

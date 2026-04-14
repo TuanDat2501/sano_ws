@@ -119,6 +119,17 @@ model User {
   taskComments TaskComment[]
   notifications Notification[]
   taskLogs TaskLog[]
+  avatarUrl   String?
+}
+
+model Permission {
+  id        String  @id @default(uuid()) // Đổi sang uuid() chuẩn của MySQL/PostgreSQL
+  role      String  // Tên chức vụ: "CONTENT", "EDITOR", "LEADER",...
+  moduleId  String  // Mã tính năng: "MENU_DASHBOARD", "ACTION_CREATE_TASK",...
+  isAllowed Boolean @default(false)
+
+  // Đảm bảo mỗi chức vụ chỉ có 1 trạng thái cho 1 module
+  @@unique([role, moduleId]) 
 }
 
 model Task {

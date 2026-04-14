@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth/next";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
 export const dynamic = "force-dynamic";
+
 export async function GET(req: Request) {
     try {
         const session = await getServerSession(authOptions);
@@ -34,7 +35,6 @@ export async function GET(req: Request) {
         // 👑 LUỒNG DATA CHO QUẢN LÝ (BGD / ADMIN / LEADER)
         // ==========================================
         if (isManager) {
-            // 🚀 GIẢI PHÁP CHỐNG LỖI PRISMA: Lấy danh sách ID nhân viên trước
             let teamUserIds: string[] = [];
             if (!isTopManagement) {
                 const teamUsers = await prisma.user.findMany({ 
@@ -44,7 +44,6 @@ export async function GET(req: Request) {
                 teamUserIds = teamUsers.map(u => u.id);
             }
 
-            // 🚀 Bộ lọc Task cực chuẩn: Tìm những task mà người làm nằm trong mảng teamUserIds
             const taskFilter = isTopManagement ? {} : {
                 OR: [
                     { contentId: { in: teamUserIds } },
@@ -53,10 +52,8 @@ export async function GET(req: Request) {
                 ]
             };
 
-            // 🚀 Bộ lọc User cho Log và KPI
             const userCondition = isTopManagement ? {} : { userId: { in: teamUserIds } };
 
-            // Dùng Promise.all để bắn song song nhiều Query cùng lúc (Chống sập server)
             const [
                 totalActiveTasks,
                 totalPendingTasks,
@@ -64,12 +61,8 @@ export async function GET(req: Request) {
                 logsThisWeek,
                 kpiRecords
             ] = await Promise.all([
-                // 1. Tổng Task đang chạy (Chưa đóng)
-                prisma.task.count({ 
-                    where: { ...taskFilter, isClosed: false } 
-                }),
+                prisma.task.count({ where: { ...taskFilter, isClosed: false } }),
                 
-                // 2. Chờ nghiệm thu (Task đã có ít nhất 1 link nhưng chưa đóng)
                 prisma.task.count({
                     where: {
                         ...taskFilter,
@@ -82,7 +75,6 @@ export async function GET(req: Request) {
                     }
                 }),
 
-                // 3. Tồn đọng/Cảnh báo (Task giao rồi nhưng trống Link)
                 prisma.task.count({
                     where: {
                         ...taskFilter,
@@ -93,38 +85,38 @@ export async function GET(req: Request) {
                     }
                 }),
 
-                // 4. Lấy toàn bộ Log trong tuần để vẽ biểu đồ Sản lượng
                 prisma.taskLog.findMany({
                     where: {
                         createdAt: { gte: startOfWeek },
-                        ...userCondition, // Ép theo userId thuộc team
+                        ...userCondition, 
                         action: { in: ["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO"] }
                     },
                     include: { user: { select: { fullName: true } } }
                 }),
 
-                // 5. Lấy KPI tuần này để vẽ Bảng Phong Thần
                 prisma.weeklyKPI.findMany({
                     where: {
                         year: today.getFullYear(),
                         month: today.getMonth() + 1,
                         weekNumber: Math.ceil(today.getDate() / 7) > 4 ? 4 : Math.ceil(today.getDate() / 7),
-                        ...userCondition // Ép theo userId thuộc team
+                        ...userCondition 
                     },
                     include: { user: { select: { fullName: true, role: true } } }
                 })
             ]);
 
-            // Tính % KPI Trung bình của toàn cty/team
+            // 🚀 ĐÃ FIX: Tính tổng số Task độc nhất (Lọc trùng Task ID)
             let totalTarget = 0;
             kpiRecords.forEach((k: any) => totalTarget += k.targetValue);
-            const totalActual = logsThisWeek.length;
+            
+            const uniqueTasksManager = new Set(logsThisWeek.map((log: any) => log.taskId));
+            const totalActual = uniqueTasksManager.size; // Đếm size của Set thay vì length của mảng
+            
             const avgKpiPercent = totalTarget > 0 ? Math.round((totalActual / totalTarget) * 100) : 0;
 
-            // Đóng gói JSON trả về cho Frontend
             return NextResponse.json({
-                role: "MANAGER", // Vẫn giữ nguyên để Frontend rẽ nhánh UI cho nhàn
-                dbRole: role,    // 🚀 TRẢ VỀ ĐÚNG GIÁ TRỊ TRONG DB (LEADER / BAN_GIAM_DOC / ADMIN) ĐỂ DEBUG
+                role: "MANAGER", 
+                dbRole: role,    
                 isTopManagement,
                 stats: {
                     activeTasks: totalActiveTasks,
@@ -147,7 +139,6 @@ export async function GET(req: Request) {
                 myLogs7Days,
                 myKpiThisWeek
             ] = await Promise.all([
-                // 1. Việc khẩn đang giữ (Chưa nộp link)
                 prisma.task.findMany({
                     where: {
                         isClosed: false,
@@ -160,15 +151,15 @@ export async function GET(req: Request) {
                     select: { id: true, title: true, createdAt: true }
                 }),
 
-                // 2. Góc Thành Tựu (Toàn bộ log từ lúc vào làm)
-                prisma.taskLog.count({
+                // 🚀 ĐÃ FIX: Góc thành tựu đếm theo số lượng TASK, không phải số lượng LOG
+                prisma.taskLog.findMany({
                     where: { 
                         userId: userId,
-                        action: { in: ["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO"] }
-                    }
-                }),
+                        action: { in: ["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK"] }
+                    },
+                    select: { taskId: true } // Chỉ lấy taskId cho nhẹ
+                }).then(logs => new Set(logs.map(l => l.taskId)).size),
 
-                // 3. Biểu đồ Năng suất & Lịch sử 7 ngày qua
                 prisma.taskLog.findMany({
                     where: {
                         userId: userId,
@@ -179,7 +170,6 @@ export async function GET(req: Request) {
                     include: { task: { select: { title: true } } }
                 }),
 
-                // 4. Target KPI Tuần này của mình
                 prisma.weeklyKPI.findFirst({
                     where: {
                         userId: userId,
@@ -190,14 +180,33 @@ export async function GET(req: Request) {
                 })
             ]);
 
-            // Tính số bài làm được tuần này
-            const actualThisWeek = myLogs7Days.filter(log => new Date(log.createdAt) >= startOfWeek).length;
+            // 🚀 ĐÃ FIX: Tính số bài làm được tuần này (Lọc trùng Task ID)
+            const logsThisWeek = myLogs7Days.filter(log => new Date(log.createdAt) >= startOfWeek);
+            const actualThisWeek = new Set(logsThisWeek.map((log: any) => log.taskId)).size;
+            
             const target = myKpiThisWeek?.targetValue || 0;
             const kpiPercent = target > 0 ? Math.round((actualThisWeek / target) * 100) : 0;
 
+            // 🚀 MỚI: Format sẵn Data cho Biểu đồ Năng suất (Chống hover ra 3)
+            const chartDataMap: Record<string, Set<string>> = {};
+            myLogs7Days.forEach(log => {
+                const dateStr = new Date(log.createdAt).toLocaleDateString('vi-VN', { 
+                    day: '2-digit', month: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' 
+                }).replace('/', '-');
+                
+                if (!chartDataMap[dateStr]) chartDataMap[dateStr] = new Set();
+                chartDataMap[dateStr].add(log.taskId); // Add vào Set để tự triệt tiêu trùng lặp
+            });
+
+            // Biến Object thành Array để chart dễ dùng: [{ date: '08-04', done: 1 }, ...]
+            const chartDataArray = Object.keys(chartDataMap).map(date => ({
+                date: date,
+                done: chartDataMap[date].size
+            })).reverse(); // Đảo ngược để ngày cũ lên trước, ngày mới xuống sau
+
             return NextResponse.json({
-                role: "EMPLOYEE", // Dùng để gọi component DashboardEmployee
-                dbRole: role,     // 🚀 TRẢ VỀ ĐÚNG GIÁ TRỊ (CONTENT / EDITOR / PUBLISHER)
+                role: "EMPLOYEE", 
+                dbRole: role,     
                 stats: {
                     pendingTasks: myActiveTasks,
                     lifetimeLogs: myLogsAllTime,
@@ -205,7 +214,8 @@ export async function GET(req: Request) {
                     targetThisWeek: target,
                     actualThisWeek: actualThisWeek
                 },
-                recentLogs: myLogs7Days
+                recentLogs: myLogs7Days, // Vẫn trả về danh sách log để hiển thị bảng lịch sử
+                chartData: chartDataArray // 👈 TRẢ VỀ CỤC DATA SẠCH NÀY CHO BIỂU ĐỒ
             });
         }
     } catch (error) {

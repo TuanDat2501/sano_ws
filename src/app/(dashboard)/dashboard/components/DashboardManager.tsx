@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { TrendingUp, AlertCircle, Clock, CheckCircle, Trophy, Activity, Loader2 } from "lucide-react";
+import { TrendingUp, AlertCircle, Clock, Trophy, Activity, Loader2 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { useToast } from "@/app/component/ToastProvider";
 
@@ -30,14 +30,13 @@ export default function DashboardManager() {
         return (
             <div className="flex flex-col items-center justify-center h-[50vh] text-slate-400 gap-3">
                 <Loader2 className="animate-spin text-blue-600" size={40} />
-                <p className="font-medium">Đang vẽ biểu đồ...</p>
+                <p className="font-medium text-sm">Đang vẽ biểu đồ...</p>
             </div>
         );
     }
 
     if (!data) return null;
 
-    // 🚀 XỬ LÝ DATA CHO BIỂU ĐỒ SẢN LƯỢNG TUẦN NÀY (T2 -> CN)
     const chartData = [
         { name: "T2", script: 0, video: 0, publish: 0 },
         { name: "T3", script: 0, video: 0, publish: 0 },
@@ -49,8 +48,8 @@ export default function DashboardManager() {
     ];
 
     data.logs?.forEach((log: any) => {
-        const day = new Date(log.createdAt).getDay(); // 0 (CN) -> 6 (T7)
-        const index = day === 0 ? 6 : day - 1; // Chuyển đổi để T2 là index 0
+        const day = new Date(log.createdAt).getDay(); 
+        const index = day === 0 ? 6 : day - 1; 
         if (log.action === "SUBMIT_SCRIPT") chartData[index].script++;
         else if (log.action === "SUBMIT_VIDEO") chartData[index].video++;
         else if (log.action === "PUBLISH_VIDEO") chartData[index].publish++;
@@ -58,52 +57,52 @@ export default function DashboardManager() {
 
     return (
         <div className="space-y-6 md:space-y-8">
-            {/* 1. KHỐI THỐNG KÊ NHANH (Data thật từ API) */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                    <div className="flex justify-between items-start mb-4">
-                        <div className="p-3 bg-blue-50 text-blue-600 rounded-xl"><Activity size={24} /></div>
+            {/* 1. KHỐI THỐNG KÊ NHANH: Ép mobile hiển thị 2 cột (grid-cols-2) thay vì 1 cột cho gọn màn hình */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
+                <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <div className="flex justify-between items-start mb-2 md:mb-4">
+                        <div className="p-2 md:p-3 bg-blue-50 text-blue-600 rounded-xl"><Activity className="w-5 h-5 md:w-6 md:h-6" /></div>
                     </div>
-                    <p className="text-3xl font-black text-slate-800">{data.stats?.activeTasks || 0}</p>
-                    <p className="text-sm font-bold text-slate-500 uppercase mt-1">Task Đang Chạy</p>
+                    <p className="text-2xl md:text-3xl font-black text-slate-800">{data.stats?.activeTasks || 0}</p>
+                    <p className="text-[10px] md:text-sm font-bold text-slate-500 uppercase mt-1 line-clamp-1">Task Đang Chạy</p>
                 </div>
                 
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                    <div className="flex justify-between items-start mb-4">
-                        <div className="p-3 bg-green-50 text-green-600 rounded-xl"><TrendingUp size={24} /></div>
+                <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <div className="flex justify-between items-start mb-2 md:mb-4">
+                        <div className="p-2 md:p-3 bg-green-50 text-green-600 rounded-xl"><TrendingUp className="w-5 h-5 md:w-6 md:h-6" /></div>
                     </div>
-                    <p className="text-3xl font-black text-slate-800">{data.stats?.kpiPercent || 0}%</p>
-                    <p className="text-sm font-bold text-slate-500 uppercase mt-1">Hoàn thành KPI Tuần</p>
+                    <p className="text-2xl md:text-3xl font-black text-slate-800">{data.stats?.kpiPercent || 0}%</p>
+                    <p className="text-[10px] md:text-sm font-bold text-slate-500 uppercase mt-1 line-clamp-1">Hoàn thành KPI</p>
                 </div>
 
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                    <div className="flex justify-between items-start mb-4">
-                        <div className="p-3 bg-yellow-50 text-yellow-600 rounded-xl"><Clock size={24} /></div>
-                        {data.stats?.pendingQC > 0 && <span className="text-[10px] font-black text-red-600 bg-red-50 px-2 py-1 rounded-full animate-pulse">Cần duyệt!</span>}
+                <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <div className="flex justify-between items-start mb-2 md:mb-4">
+                        <div className="p-2 md:p-3 bg-yellow-50 text-yellow-600 rounded-xl"><Clock className="w-5 h-5 md:w-6 md:h-6" /></div>
+                        {data.stats?.pendingQC > 0 && <span className="hidden sm:inline-block text-[10px] font-black text-red-600 bg-red-50 px-2 py-1 rounded-full animate-pulse">Cần duyệt!</span>}
                     </div>
-                    <p className="text-3xl font-black text-slate-800">{data.stats?.pendingQC || 0}</p>
-                    <p className="text-sm font-bold text-slate-500 uppercase mt-1">Chờ Nghiệm Thu</p>
+                    <p className="text-2xl md:text-3xl font-black text-slate-800">{data.stats?.pendingQC || 0}</p>
+                    <p className="text-[10px] md:text-sm font-bold text-slate-500 uppercase mt-1 line-clamp-1">Chờ Nghiệm Thu</p>
                 </div>
 
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                    <div className="flex justify-between items-start mb-4">
-                        <div className="p-3 bg-red-50 text-red-600 rounded-xl"><AlertCircle size={24} /></div>
+                <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <div className="flex justify-between items-start mb-2 md:mb-4">
+                        <div className="p-2 md:p-3 bg-red-50 text-red-600 rounded-xl"><AlertCircle className="w-5 h-5 md:w-6 md:h-6" /></div>
                     </div>
-                    <p className="text-3xl font-black text-slate-800">{data.stats?.overdue || 0}</p>
-                    <p className="text-sm font-bold text-slate-500 uppercase mt-1">Cảnh Báo Tồn Đọng</p>
+                    <p className="text-2xl md:text-3xl font-black text-slate-800">{data.stats?.overdue || 0}</p>
+                    <p className="text-[10px] md:text-sm font-bold text-slate-500 uppercase mt-1 line-clamp-1">Tồn Đọng</p>
                 </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
-                {/* 2. BIỂU ĐỒ SẢN LƯỢNG (Đã gắn Data) */}
-                <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                    <h2 className="text-lg font-black text-slate-800 mb-6 flex items-center gap-2">Biểu đồ Sản lượng Tuần</h2>
-                    <div className="h-[300px] w-full">
+                {/* 2. BIỂU ĐỒ SẢN LƯỢNG */}
+                <div className="lg:col-span-2 bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200 min-w-0">
+                    <h2 className="text-base md:text-lg font-black text-slate-800 mb-6 flex items-center gap-2">Biểu đồ Sản lượng Tuần</h2>
+                    <div className="h-[250px] md:h-[300px] w-full">
                         <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                            <BarChart data={chartData} margin={{ top: 10, right: 0, left: -25, bottom: 0 }}>
                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b', fontWeight: 'bold' }} />
-                                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b', fontWeight: 'bold' }} />
+                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b', fontWeight: 'bold' }} />
+                                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b', fontWeight: 'bold' }} />
                                 <Tooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
                                 <Bar dataKey="script" name="Kịch bản" stackId="a" fill="#eab308" radius={[0, 0, 4, 4]} />
                                 <Bar dataKey="video" name="Dựng Video" stackId="a" fill="#3b82f6" />
@@ -114,25 +113,25 @@ export default function DashboardManager() {
                 </div>
 
                 <div className="space-y-6 md:space-y-8">
-                    {/* 3. BẢNG VÀNG (Lấy từ mảng kpis) */}
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                        <h2 className="text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
-                            <Trophy className="text-amber-500" size={20} /> Top Nhân Sự (Chỉ tiêu)
+                    {/* 3. BẢNG VÀNG */}
+                    <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200">
+                        <h2 className="text-base md:text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
+                            <Trophy className="text-amber-500" size={18} /> Top Nhân Sự 
                         </h2>
                         <div className="space-y-4">
                             {!data.kpis || data.kpis.length === 0 ? (
-                                <p className="text-sm text-slate-400">Chưa có dữ liệu KPI tuần này.</p>
+                                <p className="text-xs md:text-sm text-slate-400">Chưa có dữ liệu KPI tuần này.</p>
                             ) : (
                                 data.kpis.slice(0, 5).map((kpi: any, index: number) => (
-                                    <div key={kpi.id} className="flex items-center gap-4 border-b border-slate-50 pb-3 last:border-0 last:pb-0">
-                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-sm ${index === 0 ? 'bg-amber-100 text-amber-600' : index === 1 ? 'bg-slate-100 text-slate-500' : 'bg-orange-100 text-orange-600'}`}>
+                                    <div key={kpi.id} className="flex items-center gap-3 border-b border-slate-50 pb-3 last:border-0 last:pb-0">
+                                        <div className={`w-7 h-7 md:w-8 md:h-8 rounded-full flex items-center justify-center font-black text-xs md:text-sm shrink-0 ${index === 0 ? 'bg-amber-100 text-amber-600' : index === 1 ? 'bg-slate-100 text-slate-500' : 'bg-orange-100 text-orange-600'}`}>
                                             #{index + 1}
                                         </div>
-                                        <div className="flex-1">
-                                            <p className="font-bold text-slate-800 text-sm truncate">{kpi.user?.fullName}</p>
-                                            <p className="text-[10px] font-black text-slate-400 uppercase">{kpi.user?.role}</p>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="font-bold text-slate-800 text-xs md:text-sm truncate">{kpi.user?.fullName}</p>
+                                            <p className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase truncate">{kpi.user?.role}</p>
                                         </div>
-                                        <span className="font-black text-slate-600 text-xs">Target: {kpi.targetValue}</span>
+                                        <span className="font-black text-slate-600 text-xs shrink-0 bg-slate-50 px-2 py-1 rounded-md">Target: {kpi.targetValue}</span>
                                     </div>
                                 ))
                             )}

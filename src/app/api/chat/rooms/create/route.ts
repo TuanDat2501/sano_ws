@@ -14,17 +14,24 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { targetId, type } = body;
+    const { targetUsername, type } = body;
 
-    if (!targetId || !type) {
-       return NextResponse.json({ error: "Thiếu targetId hoặc type khi gửi lên Server!" }, { status: 400 });
+    if (!targetUsername || !type) {
+       return NextResponse.json({ error: "Thiếu targetUsername hoặc type khi gửi lên Server!" }, { status: 400 });
     }
 
     console.log("=== ĐANG TẠO PHÒNG CHAT ===");
     console.log("Người tạo (myId):", myId);
-    console.log("Mục tiêu (targetId):", targetId);
+    console.log("Mục tiêu (targetUsername):", targetUsername);
     console.log("Loại phòng:", type);
+    const targetUser = await prisma.user.findUnique({
+            where: { username: targetUsername },
+            select: { id: true } // Backend lấy ID một cách an toàn và bí mật
+        });
 
+        if (!targetUser) return NextResponse.json({ error: "Không tìm thấy người dùng" }, { status: 404 });
+
+        const targetId = targetUser.id;
     // ==========================================
     // TRƯỜNG HỢP 1: TẠO CHAT 1-1 (DIRECT)
     // ==========================================
