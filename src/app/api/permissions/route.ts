@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-
-
 // LẤY DANH SÁCH QUYỀN
 export async function GET() {
     try {
