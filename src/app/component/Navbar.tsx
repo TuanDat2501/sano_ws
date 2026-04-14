@@ -253,7 +253,7 @@ export default function Navbar({ isSidebarOpen, setSidebarOpen }: NavbarProps) {
           
           <div className="h-8 w-8 md:h-10 md:w-10 rounded-xl md:rounded-2xl bg-red-50 border border-red-100 flex items-center justify-center font-black text-red-600 shadow-sm text-sm md:text-base">
             {session?.user?.avatarUrl ? (
-              <img src={session.user.avatarUrl} alt="Avatar" className="h-full w-full rounded-xl md:rounded-2xl object-cover" />
+              <img src={session?.user?.avatarUrl} alt="Avatar" className="h-full w-full rounded-xl md:rounded-2xl object-cover" />
             ) : (
               <span>{session?.user?.name?.charAt(0) || "U"}</span>
             )}
