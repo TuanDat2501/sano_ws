@@ -50,7 +50,11 @@ export async function POST(req: Request) {
                     update: { isAllowed: data.isAllowed },
                     create: data
                 })
-            )
+            ),
+            {
+                maxWait: 5000, // Đợi kết nối DB tối đa 5s
+                timeout: 20000 // 🚀 CHUẨN CẤP PHÉP CHẠY TỐI ĐA 20 GIÂY
+            }
         );
 
         return NextResponse.json({ message: "Lưu thành công!" });
