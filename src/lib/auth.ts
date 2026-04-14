@@ -1,8 +1,41 @@
-// File: src/lib/auth.ts (hoặc đường dẫn tương ứng của sếp)
-import { NextAuthOptions } from "next-auth";
+import { NextAuthOptions, DefaultSession } from "next-auth"; // 🚀 Import thêm DefaultSession ở đây
 import CredentialsProvider from "next-auth/providers/credentials";
-import bcrypt from "bcryptjs"; // Bắt buộc dùng bcryptjs để không văng lỗi trên Vercel
+import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
+
+// =====================================================================
+// 🚀 DẠY TYPE-SCRIPT BIẾT RẰNG USER CỦA MÌNH CÓ THÊM AVATAR VÀ ROLE
+// =====================================================================
+declare module "next-auth" {
+  interface Session {
+    user: {
+      id: string;
+      username: string;
+      role: string;
+      teamId: string | null;
+      avatarUrl: string | null;
+    } & DefaultSession["user"];
+  }
+
+  interface User {
+    id: string;
+    username: string;
+    role: string;
+    teamId: string | null;
+    avatarUrl: string | null;
+  }
+}
+
+declare module "next-auth/jwt" {
+  interface JWT {
+    id: string;
+    username: string;
+    role: string;
+    teamId: string | null;
+    avatarUrl: string | null;
+  }
+}
+// =====================================================================
 
 export const authOptions: NextAuthOptions = {
   // KHÔNG CẦN PrismaAdapter khi dùng Credentials
@@ -26,7 +59,6 @@ export const authOptions: NextAuthOptions = {
             where: { username: credentials.username },
             include: { team: true } 
           });
-          console.log(user);
           
           console.log(">>> [AUTH] Tìm thấy User trong DB:", user ? user.username : "KHÔNG");
 
@@ -41,7 +73,7 @@ export const authOptions: NextAuthOptions = {
           // 4. Trả về thông tin
           return {
             id: user.id,
-            name: user.fullName,
+            name: user.fullName, // Giữ nguyên ánh xạ fullName vào name mặc định
             username: user.username,
             role: user.role,
             teamId: user.teamId,
@@ -58,20 +90,20 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
-        token.role = (user as any).role;
-        token.teamId = (user as any).teamId;
-        token.username = (user as any).username;
-        token.avatarUrl = (user as any).avatarUrl;
+        token.role = user.role;
+        token.teamId = user.teamId;
+        token.username = user.username;
+        token.avatarUrl = user.avatarUrl;
       }
       return token;
     },
     async session({ session, token }) {
       if (token && session.user) {
-        (session.user as any).id = token.id;
-        (session.user as any).role = token.role;
-        (session.user as any).teamId = token.teamId;
-        (session.user as any).username = token.username;
-        (session.user as any).avatarUrl = token.avatarUrl;
+        session.user.id = token.id;
+        session.user.role = token.role;
+        session.user.teamId = token.teamId;
+        session.user.username = token.username;
+        session.user.avatarUrl = token.avatarUrl;
       }
       return session;
     }
