@@ -150,7 +150,6 @@ export default function ProfilePage() {
     }
 
     return (
-        // Responsive Padding: p-3 (Mobile) -> p-8 (PC)
         <div className="h-full flex flex-col p-3 sm:p-5 md:p-8 bg-slate-50 overflow-y-auto custom-scrollbar animate-fade-in">
 
             <div className="mb-6 md:mb-8">

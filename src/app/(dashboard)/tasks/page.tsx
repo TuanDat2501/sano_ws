@@ -400,7 +400,7 @@ export default function KanbanBoard() {
 
   return (
     <PermissionGuard moduleId="MENU_TASKS">
-    // Responsive padding
+    
     <div className="h-full flex flex-col p-3 md:p-6 animate-fade-in">
 
       <div className="shrink-0 mb-4 md:mb-6 space-y-4">

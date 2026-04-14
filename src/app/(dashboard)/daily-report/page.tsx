@@ -55,7 +55,6 @@ export default function DailyReportPage() {
 
     return (
         <PermissionGuard moduleId="MENU_DAILY_REPORT">
-        // Responsive Padding: Giảm padding trên mobile để nhường diện tích cho bảng
         <div className="h-full flex flex-col p-3 md:p-8 bg-slate-50 overflow-y-auto custom-scrollbar animate-fade-in">
             
             {/* HEADER */}

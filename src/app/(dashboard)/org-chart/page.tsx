@@ -137,7 +137,7 @@ export default function OrgChartPage() {
 
     return (
         <PermissionGuard moduleId="MENU_ORG_CHART">
-        // Đổi p-4 md:p-8 thành p-3 md:p-6 lg:p-8 để trên điện thoại tràn lề tốt hơn
+        
         <div className="h-full flex flex-col p-3 md:p-6 lg:p-8 animate-fade-in bg-slate-50 relative overflow-hidden">
             {/* HEADER */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 shrink-0 mb-4 md:mb-6 z-10 relative">
