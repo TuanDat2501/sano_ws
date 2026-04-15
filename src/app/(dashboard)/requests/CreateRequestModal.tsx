@@ -131,6 +131,20 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
     };
 
     const handleSubmit = async () => {
+        if (selectedType === "NGHI_PHEP" && (!contentData.startDate || !contentData.endDate || !contentData.reason?.trim())) {
+            showToast("error", "Sếp ơi, nhập đủ Từ ngày, Đến ngày và Lý do nhé!");
+            return;
+        }
+        if (["DI_MUON_VE_SOM", "LAM_REMOTE"].includes(selectedType) && (!contentData.date || !contentData.reason?.trim())) {
+            showToast("error", "Chưa chọn ngày hoặc thiếu lý do rồi sếp!");
+            return;
+        }
+        if (["MUA_SAM", "TAM_UNG", "CHAY_ADS", "THANH_TOAN"].includes(selectedType)) {
+            if (!contentData.itemName?.trim() || !contentData.amount || !contentData.reason?.trim()) {
+                showToast("error", "Thiếu tên hạng mục, số tiền hoặc lý do!");
+                return;
+            }
+        }
         setIsSubmitting(true);
         try {
             const payload = {

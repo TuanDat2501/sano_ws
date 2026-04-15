@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
-import bcrypt from "bcryptjs"; // 🚀 Dùng chuẩn bcryptjs giống hệt file auth.ts của sếp
+import bcrypt from "bcryptjs"; 
 import { prisma } from "@/lib/prisma";
-
-
+import jwt from "jsonwebtoken";
 
 // Xử lý CORS cho Mobile
 export async function OPTIONS() {
@@ -20,7 +18,7 @@ export async function OPTIONS() {
 export async function POST(req: Request) {
     try {
         const { username, password } = await req.json();
-
+        
         const corsHeaders = {
             'Access-Control-Allow-Origin': '*',
             'Content-Type': 'application/json',
@@ -35,7 +33,7 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "Tài khoản không tồn tại!" }, { status: 404, headers: corsHeaders });
         }
 
-        // 2. 🚀 KIỂM TRA MẬT KHẨU (GỌI ĐÚNG TRƯỜNG passwordHash)
+        // 2. KIỂM TRA MẬT KHẨU
         if (!password || !user.passwordHash) {
             return NextResponse.json({ error: "Dữ liệu mật khẩu không hợp lệ!" }, { status: 400, headers: corsHeaders });
         }
@@ -46,7 +44,21 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "Mật khẩu không chính xác!" }, { status: 401, headers: corsHeaders });
         }
 
-        // 3. Lấy ma trận quyền (Giữ nguyên logic)
+        // ==========================================
+        // 🚀 BƯỚC MỚI: TẠO TOKEN BẢO MẬT (JWT)
+        // ==========================================
+        // Lấy mã bí mật từ .env, nếu quên setup thì dùng tạm chuỗi backup
+        const secretKey = process.env.NEXTAUTH_SECRET || "sano_super_secret_key_2026";
+
+        // Gói id và role vào token, hạn sử dụng 7 ngày
+        const mobileToken = jwt.sign(
+            { id: user.id, role: user.role }, 
+            secretKey, 
+            { expiresIn: '7d' } 
+        );
+        // ==========================================
+
+        // 3. Lấy ma trận quyền
         const permissions = await prisma.permission.findMany({
             where: { role: user.role }
         });
@@ -56,8 +68,9 @@ export async function POST(req: Request) {
             myPerms[p.moduleId] = p.isAllowed;
         });
 
-        // 4. Trả về đúng format mà AuthContext trên Mobile đang cần
+        // 4. Trả về đúng format kèm theo TOKEN
         return NextResponse.json({
+            token: mobileToken, // 🚀 TRẢ VỀ TOKEN Ở ĐÂY
             user: {
                 id: user.id,
                 username: user.username,
