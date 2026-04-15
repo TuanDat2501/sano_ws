@@ -26,7 +26,12 @@ export async function POST(req: Request) {
         const matrix = await req.json(); 
         
         // 2. Biến đổi ma trận Object thành 1 Mảng (Array) phẳng
-        const newPermissions = [];
+        const newPermissions: { 
+            role: string; 
+            moduleId: string; 
+            isAllowed: boolean 
+        }[] = [];
+        
         for (const moduleId in matrix) {
             for (const role in matrix[moduleId]) {
                 newPermissions.push({
