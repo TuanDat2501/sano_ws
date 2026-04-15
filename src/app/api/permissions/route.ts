@@ -52,7 +52,7 @@ export async function POST(req: Request) {
                 })
             ),
             {
-                maxWait: 5000, // Đợi kết nối DB tối đa 5s
+                maxWait: 20000, // Đợi kết nối DB tối đa 20s
                 timeout: 20000 // 🚀 CHUẨN CẤP PHÉP CHẠY TỐI ĐA 20 GIÂY
             }
         );
