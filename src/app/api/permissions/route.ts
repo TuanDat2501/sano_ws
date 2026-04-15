@@ -20,16 +20,16 @@ export async function GET() {
     }
 }
 
-// LƯU CẤU HÌNH QUYỀN (Ghi đè toàn bộ)
 export async function POST(req: Request) {
     try {
-        const matrix = await req.json(); // Nhận ma trận từ Frontend
+        // 1. Lấy dữ liệu ma trận từ phía Client gửi lên
+        const matrix = await req.json(); 
         
-        // Chuyển ma trận ngược lại thành mảng để nhét vào Prisma
-        const updates = [];
+        // 2. Biến đổi ma trận Object thành 1 Mảng (Array) phẳng
+        const newPermissions = [];
         for (const moduleId in matrix) {
             for (const role in matrix[moduleId]) {
-                updates.push({
+                newPermissions.push({
                     role: role,
                     moduleId: moduleId,
                     isAllowed: matrix[moduleId][role]
@@ -37,29 +37,26 @@ export async function POST(req: Request) {
             }
         }
 
-        // Thực hiện Upsert (Có thì sửa, chưa có thì tạo mới) cho từng ô trong ma trận
-        await prisma.$transaction(
-            updates.map((data) => 
-                prisma.permission.upsert({
-                    where: {
-                        role_moduleId: {
-                            role: data.role,
-                            moduleId: data.moduleId
-                        }
-                    },
-                    update: { isAllowed: data.isAllowed },
-                    create: data
-                })
-            ),
-            {
-                maxWait: 20000, // Đợi kết nối DB tối đa 20s
-                timeout: 20000 // 🚀 CHUẨN CẤP PHÉP CHẠY TỐI ĐA 20 GIÂY
-            }
-        );
+        // =======================================================
+        // 🚀 CÁCH 2: GIAO DỊCH (TRANSACTION) SIÊU TỐC ĐỘ
+        // =======================================================
+        await prisma.$transaction(async (tx) => {
+            // Bước A: Xóa toàn bộ dữ liệu phân quyền cũ trong Database
+            await tx.permission.deleteMany();
 
-        return NextResponse.json({ message: "Lưu thành công!" });
+            // Bước B: Bơm toàn bộ mảng dữ liệu mới vào bằng 1 lệnh duy nhất
+            await tx.permission.createMany({
+                data: newPermissions,
+            });
+        });
+
+        return NextResponse.json({ message: "Lưu thành công siêu tốc!" }, { status: 200 });
+
     } catch (error) {
-        console.error(error);
-        return NextResponse.json({ error: "Lỗi lưu cấu hình" }, { status: 500 });
+        console.error(">>> [API POST PERMISSIONS] LỖI:", error);
+        return NextResponse.json(
+            { error: "Lỗi lưu cấu hình phân quyền trên Server" }, 
+            { status: 500 }
+        );
     }
 }
