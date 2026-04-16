@@ -1,18 +1,19 @@
 import { X, UserCircle2, Briefcase, Target, CheckCircle2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 export default function OrgNodeDrawer({ isOpen, onClose, nodeData }: { isOpen: boolean, onClose: () => void, nodeData: any }) {
-    if (!nodeData) return null;
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => setMounted(true), []);
 
-    return (
+    if (!nodeData) return null;
+    const drawerContent = (
         <>
             {isOpen && (
-                <div 
-                    className="fixed inset-0 z-[60] bg-slate-900/40 backdrop-blur-sm transition-opacity" 
-                    onClick={onClose}
-                ></div>
+                <div className="fixed inset-0 z-[99998] bg-slate-900/40 backdrop-blur-sm transition-opacity" onClick={onClose}></div>
             )}
             
-            <div className={`fixed top-0 right-0 h-full w-full sm:w-[400px] md:w-[420px] bg-white shadow-2xl z-[100] transform transition-transform duration-300 ease-out flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+            <div className={`fixed top-0 right-0 h-full w-full sm:w-[400px] md:w-[420px] bg-white shadow-2xl z-[99999] transform transition-transform duration-300 ease-out flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
                 
                 {/* --- HEADER DRAWER --- */}
                 <div className="p-4 md:p-6 lg:p-8 border-b border-slate-100 flex justify-between items-start bg-slate-50/50 shrink-0">
@@ -99,7 +100,10 @@ export default function OrgNodeDrawer({ isOpen, onClose, nodeData }: { isOpen: b
                         Đóng cửa sổ
                     </button>
                 </div>
+
             </div>
         </>
     );
+    if (!mounted) return null;
+    return createPortal(drawerContent, document.body);
 }

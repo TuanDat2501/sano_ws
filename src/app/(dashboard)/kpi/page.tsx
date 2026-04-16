@@ -124,18 +124,41 @@ export default function KpiDashboard() {
     const handleUpdateTarget = async (userId: string, newTarget: string) => {
         const targetNum = parseInt(newTarget);
         if (isNaN(targetNum) || targetNum < 0) return;
+
+        // 🚀 BƯỚC 1: OPTIMISTIC UPDATE - Cập nhật giao diện ngay lập tức để không bị "Nháy bảng"
+        setKpiList(prev => prev.map(k => {
+            if (k.userId === userId) {
+                // Tự động tính toán lại phần trăm trên Frontend
+                const newPercent = targetNum > 0 ? Math.round((k.actualValue / targetNum) * 100) : 0;
+                return { ...k, targetValue: targetNum, percent: newPercent };
+            }
+            return k;
+        }));
+
+        // 🚀 BƯỚC 2: Gọi API lưu ngầm dưới nền (Background Sync)
         try {
             const res = await fetch("/api/kpi", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ userId, year: selectedYear, month: selectedMonth, weekNumber: selectedWeek, targetValue: targetNum })
+                body: JSON.stringify({ 
+                    userId, 
+                    year: selectedYear, 
+                    month: selectedMonth, 
+                    weekNumber: selectedWeek, 
+                    targetValue: targetNum 
+                })
             });
+            
             if (res.ok) {
-                showToast("success", "Đã chốt chỉ tiêu mới!");
-                fetchKpiData();
+                showToast("success", "Đã chốt chỉ tiêu!");
+                // Không cần gọi lại fetchKpiData() ở đây nữa để tránh nháy màn hình
+            } else {
+                showToast("error", "Lỗi lưu dữ liệu. Đang tải lại bảng...");
+                fetchKpiData(); // Chỉ tải lại nếu lưu bị lỗi
             }
         } catch (error) {
             showToast("error", "Mất kết nối server");
+            fetchKpiData(); // Trả lại data gốc nếu mất mạng
         }
     };
 

@@ -16,7 +16,6 @@ const REQUEST_TYPES_CONFIG = [
     { id: "LAM_REMOTE", label: "Xin làm Remote", category: "HR", allowedRoles: ["ALL"] },
     { id: "MUA_SAM", label: "Đề xuất Mua sắm", category: "ADMIN", allowedRoles: ["ADMIN", "BAN_GIAM_DOC", "LEADER", "CHANNEL_MANAGER"] },
     { id: "TAM_UNG", label: "Xin Tạm ứng", category: "ADMIN", allowedRoles: ["ADMIN", "BAN_GIAM_DOC", "LEADER", "CHANNEL_MANAGER"] },
-    { id: "CHAY_ADS", label: "Ngân sách chạy Ads", category: "ADMIN", allowedRoles: ["ADMIN", "BAN_GIAM_DOC", "LEADER", "CHANNEL_MANAGER"] },
     { id: "THANH_TOAN", label: "Đề nghị Thanh toán", category: "ADMIN", allowedRoles: ["ADMIN", "BAN_GIAM_DOC", "LEADER", "CHANNEL_MANAGER"] },
     { id: "THUONG", label: "Đề xuất Thưởng nóng", category: "ADMIN", allowedRoles: ["ADMIN", "BAN_GIAM_DOC", "LEADER"] },
 ];
@@ -28,15 +27,16 @@ export default function RequestsPage() {
 
     const { data: session } = useSession();
     const currentUser = session?.user as any;
-    const userRole = currentUser?.role || "CONTENT"; 
+    const userRole = currentUser?.role || "CONTENT";
 
-    const APPROVER_ROLES = ["ADMIN", "BAN_GIAM_DOC", "LEADER", "CHANNEL_MANAGER", "HR"]; 
-    const isApprover = APPROVER_ROLES.includes(userRole); 
+    const APPROVER_ROLES = ["ADMIN", "BAN_GIAM_DOC", "LEADER", "CHANNEL_MANAGER", "HR"];
+    const isApprover = APPROVER_ROLES.includes(userRole);
+    const isAdmin = userRole === "ADMIN" || userRole === "BAN_GIAM_DOC";
     const [activeTab, setActiveTab] = useState<'MY_REQUESTS' | 'NEED_APPROVAL'>(
         (tabParam as 'MY_REQUESTS' | 'NEED_APPROVAL') || 'MY_REQUESTS'
     );
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-    
+
     const allowedRequestTypes = REQUEST_TYPES_CONFIG.filter(req =>
         req.allowedRoles.includes("ALL") || req.allowedRoles.includes(userRole)
     );
@@ -46,17 +46,24 @@ export default function RequestsPage() {
     const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
 
     const [dbTeams, setDbTeams] = useState<any[]>([]);
+    const [searchTerm, setSearchTerm] = useState("");
+    const [debouncedSearch, setDebouncedSearch] = useState("");
+
+    const [currentPage, setCurrentPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const [totalCount, setTotalCount] = useState(0);
+    const limit = 10;
 
     const renderStatusBadge = (status: string) => {
         switch (status) {
-            case "PENDING_1": 
-            case "PENDING_2": 
+            case "PENDING_1":
+            case "PENDING_2":
                 return <span className="bg-amber-100 text-amber-700 px-2 py-1 md:px-2.5 md:py-1 rounded-md text-[10px] md:text-xs font-black tracking-wide whitespace-nowrap">CHỜ DUYỆT</span>;
-            case "APPROVED": 
+            case "APPROVED":
                 return <span className="bg-green-100 text-green-700 px-2 py-1 md:px-2.5 md:py-1 rounded-md text-[10px] md:text-xs font-black tracking-wide whitespace-nowrap">ĐÃ DUYỆT</span>;
-            case "REJECTED": 
+            case "REJECTED":
                 return <span className="bg-red-100 text-red-700 px-2 py-1 md:px-2.5 md:py-1 rounded-md text-[10px] md:text-xs font-black tracking-wide whitespace-nowrap">TỪ CHỐI</span>;
-            default: 
+            default:
                 return <span className="bg-slate-100 text-slate-700 px-2 py-1 md:px-2.5 md:py-1 rounded-md text-[10px] md:text-xs font-black tracking-wide whitespace-nowrap">{status}</span>;
         }
     };
@@ -74,31 +81,44 @@ export default function RequestsPage() {
             }
         }
     }, [idParam, requests]);
-
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearch(searchTerm);
+            setCurrentPage(1); // Gõ tìm kiếm thì phải reset về trang 1
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [searchTerm]);
     const fetchRequests = () => {
         setIsLoading(true);
-        fetch(`/api/requests?tab=${activeTab}`)
+        // 🚀 Bổ sung thêm &search=${debouncedSearch}
+        fetch(`/api/requests?tab=${activeTab}&page=${currentPage}&limit=${limit}&search=${debouncedSearch}`)
             .then(res => res.json())
             .then(data => {
-                if (Array.isArray(data)) setRequests(data);
+                if (data.requests) setRequests(data.requests);
+                setTotalPages(data.totalPages || 1);
+                setTotalCount(data.totalCount || 0);
                 setIsLoading(false);
             })
             .catch(err => {
-                console.error("Lỗi fetch đơn:", err);
                 setIsLoading(false);
             });
     };
-    useEffect(() => { fetchRequests(); }, [activeTab]);
 
     useEffect(() => {
-        fetch("/api/teams").then(res => res.json()).then((data:any) => { if (Array.isArray(data)) setDbTeams(data); });
+        setCurrentPage(1); // Reset về trang 1 khi đổi tab
+    }, [activeTab]);
+
+    useEffect(() => { fetchRequests(); }, [activeTab, currentPage, debouncedSearch]);
+
+    useEffect(() => {
+        fetch("/api/teams").then(res => res.json()).then((data: any) => { if (Array.isArray(data)) setDbTeams(data); });
     }, []);
-    
+
     return (
         <Suspense fallback={<div className="p-8 text-center text-slate-500">Đang tải...</div>}>
             {/* Giảm padding trên mobile để nhường chỗ cho nội dung */}
             <div className="h-full p-3 md:p-6 animate-fade-in flex flex-col bg-slate-50 overflow-hidden">
-                
+
                 {/* ================= HEADER ================= */}
                 {/* Mobile: Cột dọc, PC: Hàng ngang */}
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 md:mb-6 gap-3 md:gap-0 shrink-0">
@@ -116,25 +136,44 @@ export default function RequestsPage() {
 
                 {/* ================= TABS NAVIGATION ================= */}
                 {/* Cho phép cuộn ngang nếu màn hình quá nhỏ */}
-                <div className="flex items-center gap-4 md:gap-6 border-b border-slate-200 mb-4 md:mb-6 overflow-x-auto custom-scrollbar-thin shrink-0">
-                    <button
-                        onClick={() => setActiveTab('MY_REQUESTS')}
-                        className={`pb-2.5 md:pb-3 text-sm md:text-[15px] font-bold transition-all relative whitespace-nowrap ${activeTab === 'MY_REQUESTS' ? 'text-red-600' : 'text-slate-500 hover:text-slate-800'}`}
-                    >
-                        Đơn của tôi
-                        {activeTab === 'MY_REQUESTS' && <div className="absolute bottom-0 left-0 w-full h-1 bg-red-600 rounded-t-full"></div>}
-                    </button>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 mb-4 md:mb-6 gap-3">
 
-                    {isApprover && (
+                    {/* NHÓM TABS BÊN TRÁI */}
+                    <div className="flex items-center gap-4 md:gap-6 overflow-x-auto custom-scrollbar-thin shrink-0">
                         <button
-                            onClick={() => setActiveTab('NEED_APPROVAL')}
-                            className={`pb-2.5 md:pb-3 text-sm md:text-[15px] font-bold transition-all relative flex items-center gap-1.5 md:gap-2 whitespace-nowrap ${activeTab === 'NEED_APPROVAL' ? 'text-red-600' : 'text-slate-500 hover:text-slate-800'}`}
+                            onClick={() => setActiveTab('MY_REQUESTS')}
+                            className={`pb-2.5 md:pb-3 text-sm md:text-[15px] font-bold transition-all relative whitespace-nowrap ${activeTab === 'MY_REQUESTS' ? 'text-red-600' : 'text-slate-500 hover:text-slate-800'}`}
                         >
-                            Cần tôi duyệt
-                            <span className="bg-red-100 text-red-600 text-[9px] md:text-[10px] px-1.5 py-0.5 rounded-full font-black">3</span>
-                            {activeTab === 'NEED_APPROVAL' && <div className="absolute bottom-0 left-0 w-full h-1 bg-red-600 rounded-t-full"></div>}
+                            {isAdmin ? 'Tất cả đề xuất' : 'Đơn của tôi'}
+                            {activeTab === 'MY_REQUESTS' && <div className="absolute bottom-0 left-0 w-full h-1 bg-red-600 rounded-t-full"></div>}
                         </button>
-                    )}
+
+                        {isApprover && (
+                            <button
+                                onClick={() => setActiveTab('NEED_APPROVAL')}
+                                className={`pb-2.5 md:pb-3 text-sm md:text-[15px] font-bold transition-all relative flex items-center gap-1.5 md:gap-2 whitespace-nowrap ${activeTab === 'NEED_APPROVAL' ? 'text-red-600' : 'text-slate-500 hover:text-slate-800'}`}
+                            >
+                                Cần tôi duyệt
+                                <span className="bg-red-100 text-red-600 text-[9px] md:text-[10px] px-1.5 py-0.5 rounded-full font-black">3</span>
+                                {activeTab === 'NEED_APPROVAL' && <div className="absolute bottom-0 left-0 w-full h-1 bg-red-600 rounded-t-full"></div>}
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Ô TÌM KIẾM BÊN PHẢI */}
+                    <div className="relative w-full sm:w-64 pb-2 sm:pb-3">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none pb-2 sm:pb-3">
+                            <Search size={16} className="text-slate-400" />
+                        </div>
+                        <input
+                            type="text"
+                            className="w-full pl-9 pr-4 py-1.5 md:py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all text-slate-700 font-medium"
+                            placeholder="Tìm theo mã đơn (VD: a1b2c)..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                    </div>
+
                 </div>
 
                 {/* ================= MAIN CONTENT AREA ================= */}
@@ -194,6 +233,41 @@ export default function RequestsPage() {
                             </table>
                         </div>
                     )}
+                    {!isLoading && requests.length > 0 && (
+                        <div className="px-4 py-3 md:px-6 md:py-4 border-t border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
+                            <p className="text-[11px] md:text-xs text-slate-500 font-medium">
+                                Hiển thị {(currentPage - 1) * limit + 1} - {Math.min(currentPage * limit, totalCount)} trên {totalCount} đề xuất
+                            </p>
+
+                            <div className="flex items-center gap-2">
+                                <button
+                                    disabled={currentPage === 1}
+                                    onClick={() => setCurrentPage(prev => prev - 1)}
+                                    className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-bold text-slate-600 disabled:opacity-50 hover:bg-slate-50 transition-colors"
+                                >
+                                    Trước
+                                </button>
+
+                                {[...Array(totalPages)].map((_, i) => (
+                                    <button
+                                        key={i + 1}
+                                        onClick={() => setCurrentPage(i + 1)}
+                                        className={`w-8 h-8 rounded-lg text-xs font-bold transition-all ${currentPage === i + 1 ? 'bg-red-600 text-white shadow-md shadow-red-600/20' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                                    >
+                                        {i + 1}
+                                    </button>
+                                ))}
+
+                                <button
+                                    disabled={currentPage === totalPages}
+                                    onClick={() => setCurrentPage(prev => prev + 1)}
+                                    className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-bold text-slate-600 disabled:opacity-50 hover:bg-slate-50 transition-colors"
+                                >
+                                    Sau
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 <CreateRequestModal
@@ -203,12 +277,12 @@ export default function RequestsPage() {
                     teams={dbTeams}
                 />
 
-                <RequestDetailModal 
+                <RequestDetailModal
                     isOpen={isDetailModalOpen}
                     onClose={() => setIsDetailModalOpen(false)}
                     request={selectedRequest}
                     currentUserId={currentUser?.id}
-                    onRefresh={fetchRequests} 
+                    onRefresh={fetchRequests}
                 />
             </div>
         </Suspense>

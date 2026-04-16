@@ -1,10 +1,11 @@
+// /api/requests/[id]/action/route.ts
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
-export async function POST(req: Request,context: { params: Promise<{ id: string }> }) {
+export async function POST(req: Request, context: { params: Promise<{ id: string }> }) {
     try {
         const resolvedParams = await context.params;
         const requestId = resolvedParams.id;
@@ -15,14 +16,25 @@ export async function POST(req: Request,context: { params: Promise<{ id: string 
         const userId = (session.user as any).id;
 
         const body = await req.json();
-        const { action, comment } = body; // action: 'APPROVE' hoặc 'REJECT'
+        const { action, comment } = body; 
 
         if (!action || (action === 'REJECT' && !comment)) {
             return NextResponse.json({ error: "Thiếu hành động hoặc lý do từ chối" }, { status: 400 });
         }
 
-        // 1. Lấy thông tin đơn ra kiểm tra
-        const request = await prisma.request.findUnique({ where: { id: requestId } });
+        // 1. 🚀 TỐI ƯU TRUY VẤN: Chỉ lấy những field dùng để check logic, bỏ qua contentData JSON
+        const request = await prisma.request.findUnique({ 
+            where: { id: requestId },
+            select: {
+                id: true,
+                status: true,
+                type: true,
+                requesterId: true,
+                firstApproverId: true,
+                secondApproverId: true
+            }
+        });
+        
         if (!request) return NextResponse.json({ error: "Không tìm thấy đơn" }, { status: 404 });
 
         // 2. Xác định quyền duyệt và Trạng thái tiếp theo
@@ -43,6 +55,7 @@ export async function POST(req: Request,context: { params: Promise<{ id: string 
                 }
             })
         );
+        
         if (action === 'APPROVE' && request.status === "PENDING_1" && request.secondApproverId) {
             notificationQueries.push(
                 prisma.notification.create({
@@ -58,19 +71,16 @@ export async function POST(req: Request,context: { params: Promise<{ id: string 
         }
 
         if (action === "REJECT") {
-            // Nếu ai đó chê, đơn chết luôn tại chỗ
             if (request.firstApproverId !== userId && request.secondApproverId !== userId) {
                 return NextResponse.json({ error: "Bạn không có quyền từ chối đơn này" }, { status: 403 });
             }
             nextStatus = "REJECTED";
             actionLog = "REJECTED";
         } else if (action === "APPROVE") {
-            // Đang chờ Cấp 1, và người bấm là Cấp 1
             if (request.status === "PENDING_1" && request.firstApproverId === userId) {
                 nextStatus = request.secondApproverId ? "PENDING_2" : "APPROVED";
                 actionLog = "APPROVED_LEVEL_1";
             } 
-            // Đang chờ Cấp 2, và người bấm là Cấp 2
             else if (request.status === "PENDING_2" && request.secondApproverId === userId) {
                 nextStatus = "APPROVED";
                 actionLog = "APPROVED_LEVEL_2";
@@ -93,9 +103,11 @@ export async function POST(req: Request,context: { params: Promise<{ id: string 
                     approverId: userId
                 }
             }),
-            // 🚀 BUNG TOÀN BỘ QUERRY THÔNG BÁO VÀO ĐÂY
             ...notificationQueries
         ]);
+
+        // 🚀TODO (RT-01): Bắn trigger Pusher (WebSockets) ở đây để App/Web nảy chuông ngay lập tức!
+        // VD: await pusher.trigger(`user-${request.requesterId}`, 'new-notification', { message: '...' });
 
         return NextResponse.json({ message: "Xử lý thành công", status: nextStatus });
 

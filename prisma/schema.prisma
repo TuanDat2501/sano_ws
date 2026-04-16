@@ -193,30 +193,41 @@ model WeeklyKPI {
 }
 
 model Request {
-  id            String        @id @default(uuid())
-  type          RequestType
-  status        RequestStatus @default(PENDING_1)
+  id               String        @id @default(uuid())
+  type             RequestType
+  status           RequestStatus @default(PENDING_1)
   
-  contentData   Json          
+  // ==========================================
+  // 🚀 CÁC CỘT VẬT LÝ MỚI (Tối ưu truy vấn)
+  // ==========================================
+  startDate        DateTime?     // Dành cho Nghỉ phép
+  endDate          DateTime?     // Dành cho Nghỉ phép
+  targetDate       DateTime?     // Dành cho Đi muộn / Về sớm / Remote
+  amount           Int?          // Tiền (VNĐ) cho Tạm ứng, Mua sắm, Thưởng...
+  itemName         String?       // Tên món đồ/chiến dịch
+  reason           String?       @db.Text // Lý do chi tiết
   
-  attachmentUrl String?       @db.Text 
+  // Vẫn giữ lại Json để sơ cua cho các form đặc thù phát sinh sau này
+  contentData      Json?          
+  
+  attachmentUrl    String?       @db.Text 
 
-  teamId        String?
-  team          Team?         @relation(fields: [teamId], references: [id])
-  requesterId   String
-  requester     User          @relation("Requester", fields: [requesterId], references: [id], onDelete: Cascade)
+  teamId           String?
+  team             Team?         @relation(fields: [teamId], references: [id])
+  
+  requesterId      String
+  requester        User          @relation("Requester", fields: [requesterId], references: [id], onDelete: Cascade)
 
-  firstApproverId  String     // Bắt buộc phải có cấp 1
-  firstApprover    User       @relation("ApproverLevel1", fields: [firstApproverId], references: [id])
+  firstApproverId  String        
+  firstApprover    User          @relation("ApproverLevel1", fields: [firstApproverId], references: [id])
 
-  secondApproverId String?    // Có thể null nếu đơn nhỏ chỉ cần 1 cấp
-  secondApprover   User?      @relation("ApproverLevel2", fields: [secondApproverId], references: [id])
+  secondApproverId String?    
+  secondApprover   User?         @relation("ApproverLevel2", fields: [secondApproverId], references: [id])
 
-  // Lịch sử duyệt của đơn này
-  logs          ApprovalLog[]
+  logs             ApprovalLog[]
 
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 }
 model ApprovalLog {
   id          String         @id @default(uuid())
@@ -247,8 +258,8 @@ model ChatRoom {
   members   RoomMember[]
   messages  Message[]
 
-  createdAt DateTime   @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
+  createdAt DateTime 
+  updatedAt DateTime @updatedAt
 }
 
 model RoomMember {
@@ -272,8 +283,8 @@ model Message {
   senderId  String
   sender    User     @relation(fields: [senderId], references: [id])
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
+  createdAt DateTime
+  updatedAt DateTime @updatedAt
 }
 
 model TaskComment {

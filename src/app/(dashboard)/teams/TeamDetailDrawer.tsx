@@ -1,23 +1,25 @@
 import { Users, X, UserCircle2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 export default function TeamDetailDrawer({ isOpen, onClose, team }: { isOpen: boolean, onClose: () => void, team: any }) {
-    return (
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => setMounted(true), []);
+    const drawerContent = (
         <>
             {isOpen && (
-                <div 
-                    className="fixed inset-0 z-[70] bg-slate-900/40 backdrop-blur-sm transition-opacity"
-                    onClick={onClose}
-                ></div>
+                <div className="fixed inset-0 z-[99998] bg-slate-900/40 backdrop-blur-sm transition-opacity" onClick={onClose}></div>
             )}
 
-            {/* Responsive Width: Tràn viền trên Mobile, max 400px trên PC */}
-            <div className={`fixed top-0 right-0 h-full w-full sm:w-[400px] bg-white shadow-2xl z-[100] transform transition-transform duration-300 ease-out flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+            <div className={`fixed top-0 right-0 h-full w-full sm:w-[400px] bg-white shadow-2xl z-[99999] transform transition-transform duration-300 ease-out flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+                
                 {team && (
                     <>
                         <div className="p-4 md:p-6 border-b border-slate-100 flex justify-between items-start bg-slate-50/50 shrink-0">
                             <div className="min-w-0 pr-4">
                                 <div className="flex items-center gap-2.5 md:gap-3 mb-1.5 md:mb-2">
                                     <div className="bg-red-100 text-red-600 p-2 md:p-2.5 rounded-lg md:rounded-xl shrink-0"><Users size={18} className="md:w-5 md:h-5" /></div>
+                                    
                                     <h2 className="text-lg md:text-2xl font-black text-slate-900 truncate">{team.name}</h2>
                                 </div>
                                 <p className="text-xs md:text-sm font-medium text-slate-500 truncate" title={team.description || "Chưa có mô tả."}>{team.description || "Chưa có mô tả."}</p>
@@ -42,7 +44,12 @@ export default function TeamDetailDrawer({ isOpen, onClose, team }: { isOpen: bo
                                     team.users.map((user: any) => (
                                         <div key={user.id} className="flex items-center gap-3 md:gap-4 p-2.5 md:p-3 rounded-lg md:rounded-xl hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-100 group">
                                             <div className="bg-slate-200 text-slate-500 p-1.5 md:p-2 rounded-full group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors shrink-0">
-                                                <UserCircle2 size={20} className="md:w-6 md:h-6" />
+                                                {/* <UserCircle2 size={20} className="md:w-6 md:h-6" /> */}
+                                                {user.avatarUrl ? (
+                                                    <img src={user.avatarUrl} alt={user.fullName} className="md:w-6 md:h-6 rounded-full object-cover" />
+                                                ) : (
+                                                    <UserCircle2 size={20} className="md:w-6 md:h-6" />
+                                                )}
                                             </div>
                                             <div className="min-w-0 flex-1">
                                                 <p className="text-xs md:text-sm font-bold text-slate-900 truncate">{user.fullName}</p>
@@ -65,7 +72,10 @@ export default function TeamDetailDrawer({ isOpen, onClose, team }: { isOpen: bo
                         </div>
                     </>
                 )}
+
             </div>
         </>
     );
+    if (!mounted) return null;
+    return createPortal(drawerContent, document.body);
 }

@@ -1,3 +1,4 @@
+// /api/requests/approvers/route.ts
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -7,7 +8,10 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    // 🚀 Bổ sung: Lấy ID của người đang thao tác
+    const currentUserId = (session.user as any).id;
 
     const { searchParams } = new URL(req.url);
     const teamId = searchParams.get("teamId");
@@ -15,27 +19,17 @@ export async function GET(req: Request) {
     if (!teamId) {
       return NextResponse.json({ error: "Thiếu Team ID" }, { status: 400 });
     }
+
     const approvers = await prisma.user.findMany({
       where: {
         isActive: true,
+        // 🚀 BỔ SUNG CỰC QUAN TRỌNG: Loại trừ chính bản thân người đang tạo đơn
+        id: { not: currentUserId },
         OR: [
-          // 1. CHỈ lấy Leader của Team đang được chọn
-          { 
-            teamId: teamId,
-            role: "LEADER" 
-          }, 
-          // 2. VÀ lấy thêm Ban Giám Đốc (Quyền tối cao)
-          { 
-            role: "BAN_GIAM_DOC" 
-          },
-          // 🚀 3. VÀ lấy toàn bộ thành viên của phòng Hành chính - Nhân sự
-          {
-            team: {
-              name: {
-                contains: "Nhân sự", // Sếp nhớ đổi chữ này cho khớp với tên Team trong DB (VD: "HR", "Hành chính")
-              }
-            }
-          }
+          { teamId: teamId, role: "LEADER" }, 
+          { role: "BAN_GIAM_DOC" },
+          // 🚀 TỐI ƯU: Dùng thẳng Enum Role, không tìm theo Text rủi ro nữa
+          { role: "HR" } 
         ]
       },
       select: {
@@ -43,10 +37,7 @@ export async function GET(req: Request) {
         fullName: true,
         role: true,
         teamId: true,
-        // Lấy thêm tên Team để Frontend hiển thị cho rõ ràng
-        team: {
-          select: { name: true }
-        }
+        team: { select: { name: true } }
       },
       orderBy: { role: "asc" }, 
     });

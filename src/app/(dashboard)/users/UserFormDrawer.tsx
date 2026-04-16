@@ -1,4 +1,6 @@
-import { X, Loader2 } from "lucide-react";
+import { X, Loader2, ShieldAlert } from "lucide-react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 export default function UserFormDrawer({
     isOpen,
@@ -10,19 +12,15 @@ export default function UserFormDrawer({
     handleSubmit,
     teams
 }: any) {
-    return (
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => setMounted(true), []);
+    const drawerContent = (
         <>
-            {/* Lớp màng mờ che phía sau */}
             {isOpen && (
-                <div
-                    className="fixed inset-0 z-[60] bg-slate-900/40 backdrop-blur-[2px] transition-opacity"
-                    onClick={onClose}
-                ></div>
+                <div className="fixed inset-0 z-[99998] bg-slate-900/40 backdrop-blur-[2px] transition-opacity" onClick={onClose}></div>
             )}
 
-            {/* Khối Panel trượt ra từ bên phải */}
-            {/* Mobile tràn viền (w-full), Tablet/PC giữ nguyên max-width */}
-            <div className={`fixed top-0 right-0 h-full w-full sm:w-[400px] md:w-[450px] bg-white shadow-2xl z-[100] transform transition-transform duration-300 ease-out flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+            <div className={`fixed top-0 right-0 h-full w-full sm:w-[400px] md:w-[450px] bg-white shadow-2xl z-[99999] transform transition-transform duration-300 ease-out flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
 
                 {/* Header Drawer */}
                 <div className="p-4 md:p-6 lg:p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 shrink-0">
@@ -73,7 +71,30 @@ export default function UserFormDrawer({
                                 {teams.map((t: any) => <option key={t.id} value={t.id}>{t.name}</option>)}
                             </select>
                         </div>
-
+                        {editingUser && (
+                            <div className="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
+                                <div>
+                                    <h4 className="text-sm font-bold text-slate-800">Trạng thái hoạt động</h4>
+                                    <p className="text-[10px] text-slate-500 mt-0.5">Khóa tài khoản nếu nhân viên đã nghỉ việc.</p>
+                                </div>
+                                <label className="relative inline-flex items-center cursor-pointer">
+                                    <input 
+                                        type="checkbox" 
+                                        className="sr-only peer" 
+                                        checked={formData.isActive}
+                                        onChange={(e) => setFormData({...formData, isActive: e.target.checked})}
+                                    />
+                                    <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
+                                </label>
+                            </div>
+                        )}
+                        
+                        {!formData.isActive && (
+                            <div className="flex items-start gap-2 bg-orange-50 text-orange-700 p-3 rounded-lg border border-orange-100">
+                                <ShieldAlert size={16} className="shrink-0 mt-0.5" />
+                                <p className="text-xs font-medium">Tài khoản này đang bị khóa. Người dùng sẽ không thể đăng nhập hoặc nhận việc mới.</p>
+                            </div>
+                        )}
                         {/* Footer Button: Tràn viền, đẩy xuống đáy */}
                         <div className="pt-6 md:pt-8 pb-2 md:pb-4 flex gap-2.5 md:gap-3 mt-auto border-t border-slate-100">
                             <button type="button" onClick={onClose} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 md:py-3.5 rounded-xl md:rounded-2xl transition-all text-sm md:text-base">Hủy</button>
@@ -83,7 +104,10 @@ export default function UserFormDrawer({
                         </div>
                     </form>
                 </div>
+
             </div>
         </>
     );
+    if (!mounted) return null;
+    return createPortal(drawerContent, document.body);
 }

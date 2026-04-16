@@ -1,10 +1,10 @@
-import { NextAuthOptions, DefaultSession } from "next-auth"; // 🚀 Import thêm DefaultSession ở đây
+import { NextAuthOptions, DefaultSession } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 
 // =====================================================================
-// 🚀 DẠY TYPE-SCRIPT BIẾT RẰNG USER CỦA MÌNH CÓ THÊM AVATAR VÀ ROLE
+// 🚀 DẠY TYPE-SCRIPT BIẾT RẰNG USER CÓ THÊM QUYỀN (PERMISSIONS)
 // =====================================================================
 declare module "next-auth" {
   interface Session {
@@ -14,6 +14,7 @@ declare module "next-auth" {
       role: string;
       teamId: string | null;
       avatarUrl: string | null;
+      permissions: string[]; // Bổ sung mảng quyền
     } & DefaultSession["user"];
   }
 
@@ -33,12 +34,12 @@ declare module "next-auth/jwt" {
     role: string;
     teamId: string | null;
     avatarUrl: string | null;
+    permissions: string[]; // Bổ sung mảng quyền
   }
 }
 // =====================================================================
 
 export const authOptions: NextAuthOptions = {
-  // KHÔNG CẦN PrismaAdapter khi dùng Credentials
   providers: [
     CredentialsProvider({
       name: "Credentials",
@@ -47,33 +48,22 @@ export const authOptions: NextAuthOptions = {
         password: { label: "Mật khẩu", type: "password" }
       },
       async authorize(credentials) {
-        // 1. Kiểm tra xem người dùng có nhập đủ không
-        if (!credentials?.username || !credentials?.password) {
-            console.log(">>> [AUTH] Thiếu username hoặc password");
-            return null;
-        }
+        if (!credentials?.username || !credentials?.password) return null;
 
         try {
-          // 2. Tìm user trong DB theo USERNAME
           const user = await prisma.user.findUnique({
             where: { username: credentials.username },
             include: { team: true } 
           });
-          
-          console.log(">>> [AUTH] Tìm thấy User trong DB:", user ? user.username : "KHÔNG");
 
           if (!user || !user.passwordHash) return null;
 
-          // 3. So sánh mật khẩu bằng bcryptjs
           const isPasswordValid = await bcrypt.compare(credentials.password, user.passwordHash);
-          console.log(">>> [AUTH] Mật khẩu đúng không?:", isPasswordValid);
-
           if (!isPasswordValid) return null;
 
-          // 4. Trả về thông tin
           return {
             id: user.id,
-            name: user.fullName, // Giữ nguyên ánh xạ fullName vào name mặc định
+            name: user.fullName,
             username: user.username,
             role: user.role,
             teamId: user.teamId,
@@ -88,12 +78,29 @@ export const authOptions: NextAuthOptions = {
   ],
   callbacks: {
     async jwt({ token, user }) {
+      // Biến 'user' chỉ tồn tại ở lần chạy ĐẦU TIÊN ngay khi đăng nhập thành công
       if (user) {
         token.id = user.id;
         token.role = user.role;
         token.teamId = user.teamId;
         token.username = user.username;
         token.avatarUrl = user.avatarUrl;
+
+        // 🚀 CHỌC DATABASE 1 LẦN DUY NHẤT LẤY QUYỀN NẠP VÀO TOKEN
+        try {
+            const userPermissions = await prisma.permission.findMany({
+                where: { 
+                    role: user.role,
+                    isAllowed: true 
+                },
+                select: { moduleId: true }
+            });
+            // Ép thành mảng các chuỗi, VD: ["MENU_USERS", "MENU_KPI"]
+            token.permissions = userPermissions.map(p => p.moduleId);
+        } catch (error) {
+            console.error(">>> [AUTH] Lỗi nạp Permission:", error);
+            token.permissions = [];
+        }
       }
       return token;
     },
@@ -104,6 +111,7 @@ export const authOptions: NextAuthOptions = {
         session.user.teamId = token.teamId;
         session.user.username = token.username;
         session.user.avatarUrl = token.avatarUrl;
+        session.user.permissions = token.permissions; // Đẩy ra Session cho Frontend dùng
       }
       return session;
     }

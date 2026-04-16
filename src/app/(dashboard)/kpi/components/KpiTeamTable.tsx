@@ -69,6 +69,9 @@ export default function KpiTeamTable({ kpiList, handleUpdateTarget, onRowClick, 
 
                                         <td className="px-4 md:px-6 py-3 md:py-4 text-center" onClick={(e) => e.stopPropagation()}>
                                             <input 
+                                                // 🚀 KEY QUAN TRỌNG: Ép input làm mới hoàn toàn khi lướt phân trang
+                                                key={`input-${user.userId}-${user.targetValue}`}
+                                                
                                                 type="number"
                                                 defaultValue={user.targetValue}
                                                 onBlur={(e) => {

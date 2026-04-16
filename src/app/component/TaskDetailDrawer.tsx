@@ -1,6 +1,8 @@
 "use client";
 
 import { X, Link as LinkIcon, CheckCircle2, Loader2, MessageSquare, Send } from "lucide-react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 interface TaskDetailDrawerProps {
   isOpen: boolean;
@@ -26,16 +28,15 @@ export default function TaskDetailDrawer({
   isOpen, onClose, selectedTask, taskLinks, setTaskLinks, errors, isSavingLinks, userRole,
   onSaveLinks, onToggleClose, onReject, canReject, messages, chatMessage, setChatMessage, onSendMessage, sessionUserId
 }: TaskDetailDrawerProps) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   if (!selectedTask) return null;
   const isManager = ["ADMIN", "BAN_GIAM_DOC", "LEADER", "HR"].includes(userRole);
-  
-  return (
+  const drawerContent = (
     <>
-      {isOpen && <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm z-40 transition-opacity" onClick={onClose} />}
+      {isOpen && <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm z-[99998] transition-opacity" onClick={onClose} />}
       
-      {/* Responsive Width: 100vw trên mobile, 900px trên PC */}
-      <div className={`fixed top-0 right-0 h-full w-full md:w-[900px] md:max-w-[95vw] bg-white shadow-2xl z-50 transform transition-transform duration-300 flex flex-col ${isOpen ? "translate-x-0" : "translate-x-full"}`}>
-        
+      <div className={`fixed top-0 right-0 h-full w-full md:w-[900px] md:max-w-[95vw] bg-white shadow-2xl z-[99999] transform transition-transform duration-300 flex flex-col ${isOpen ? "translate-x-0" : "translate-x-full"}`}>
         {/* ================= HEADER ================= */}
         {/* Bóp padding, nút xếp linh hoạt trên Mobile */}
         <div className="px-4 md:px-6 py-3 md:py-5 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 md:gap-0 shrink-0 bg-white z-10">
@@ -194,7 +195,11 @@ export default function TaskDetailDrawer({
              
           </div>
         </div>
+        
+        
       </div>
     </>
   );
+ if (!mounted) return null;
+  return createPortal(drawerContent, document.body);
 }

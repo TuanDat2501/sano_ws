@@ -80,11 +80,6 @@ export default function RequestDetailModal({ isOpen, onClose, request, currentUs
         }
     };
 
-    const translateKey = (key: string) => {
-        const dict: any = { startDate: "Từ ngày", endDate: "Đến ngày", reason: "Lý do", amount: "Số tiền (VNĐ)", itemName: "Hạng mục", date: "Ngày áp dụng" };
-        return dict[key] || key;
-    };
-
     return (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 animate-in fade-in">
             <div className="bg-white w-full max-w-xl rounded-2xl md:rounded-[24px] shadow-2xl overflow-hidden flex flex-col max-h-[95vh] md:max-h-[90vh]">
@@ -106,17 +101,49 @@ export default function RequestDetailModal({ isOpen, onClose, request, currentUs
                         </div>
                     </div>
 
+                    {/* 🚀 ĐÃ SỬA LẠI LUỒNG RENDER HIỂN THỊ CÁC CỘT VẬT LÝ */}
                     <div>
                         <h3 className="text-xs md:text-sm font-bold text-slate-800 mb-2 md:mb-3 uppercase tracking-wider">Nội dung chi tiết</h3>
-                        <div className="grid grid-cols-1 gap-2 md:gap-3">
-                            {request.contentData && Object.keys(request.contentData).map(key => (
-                                <div key={key} className="border-b border-slate-100 pb-2">
-                                    <p className="text-[10px] md:text-xs text-slate-400 font-bold mb-0.5 md:mb-1">{translateKey(key)}</p>
-                                    <p className="text-sm md:text-base text-slate-800 font-medium whitespace-pre-wrap">
-                                        {key === 'amount' ? Number(request.contentData[key]).toLocaleString('vi-VN') : request.contentData[key]}
+                        <div className="grid grid-cols-1 gap-2 md:gap-3 bg-white p-4 rounded-xl border border-slate-100">
+                            
+                            {request.startDate && request.endDate && (
+                                <div className="border-b border-slate-100 pb-3 mb-1">
+                                    <p className="text-[10px] md:text-xs text-slate-400 font-bold mb-1">Thời gian xin nghỉ</p>
+                                    <p className="text-sm md:text-base text-slate-800 font-medium">
+                                        Từ {new Date(request.startDate).toLocaleDateString('vi-VN')} đến {new Date(request.endDate).toLocaleDateString('vi-VN')}
                                     </p>
                                 </div>
-                            ))}
+                            )}
+
+                            {request.targetDate && (
+                                <div className="border-b border-slate-100 pb-3 mb-1">
+                                    <p className="text-[10px] md:text-xs text-slate-400 font-bold mb-1">Ngày áp dụng</p>
+                                    <p className="text-sm md:text-base text-slate-800 font-medium">
+                                        {new Date(request.targetDate).toLocaleDateString('vi-VN')}
+                                    </p>
+                                </div>
+                            )}
+
+                            {request.itemName && (
+                                <div className="border-b border-slate-100 pb-3 mb-1">
+                                    <p className="text-[10px] md:text-xs text-slate-400 font-bold mb-1">Hạng mục / Thiết bị / Chiến dịch</p>
+                                    <p className="text-sm md:text-base text-slate-800 font-medium">{request.itemName}</p>
+                                </div>
+                            )}
+
+                            {request.amount !== null && request.amount !== undefined && (
+                                <div className="border-b border-slate-100 pb-3 mb-1">
+                                    <p className="text-[10px] md:text-xs text-slate-400 font-bold mb-1">Số tiền đề xuất (VNĐ)</p>
+                                    <p className="text-sm md:text-base text-red-600 font-black">{Number(request.amount).toLocaleString('vi-VN')} đ</p>
+                                </div>
+                            )}
+
+                            {request.reason && (
+                                <div className="pt-1">
+                                    <p className="text-[10px] md:text-xs text-slate-400 font-bold mb-1">Lý do / Mục đích chi tiết</p>
+                                    <p className="text-sm md:text-base text-slate-800 font-medium whitespace-pre-wrap">{request.reason}</p>
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -130,7 +157,7 @@ export default function RequestDetailModal({ isOpen, onClose, request, currentUs
                                 value={comment}
                                 onChange={(e) => setComment(e.target.value)}
                             />
-                            {/* Mobile: Các nút xếp dọc hoặc bóp khoảng cách ngang */}
+                            
                             <div className="flex flex-col sm:flex-row gap-2.5 md:gap-3">
                                 <button 
                                     onClick={() => handleAction('REJECT')} disabled={isSubmitting}

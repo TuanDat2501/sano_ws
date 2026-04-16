@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
+
 export async function POST(req: Request) {
     try {
         const session = await getServerSession(authOptions);
@@ -14,97 +15,122 @@ export async function POST(req: Request) {
         const userId = (session.user as any).id;
         const body = await req.json();
         
-        // 🚀 ĐÃ HỨNG THÊM TEAM ID TỪ FRONTEND
         const { type, teamId, contentData, firstApproverId, secondApproverId } = body;
 
-        // 1. Lớp phòng thủ chặt chẽ hơn
         if (!type || !contentData || !firstApproverId || !teamId) {
-            return NextResponse.json({ error: "Thiếu thông tin bắt buộc (Loại đơn, Team, Nội dung, Sếp duyệt)" }, { status: 400 });
+            return NextResponse.json({ error: "Thiếu thông tin bắt buộc" }, { status: 400 });
         }
 
-        // 2. Tạo Đơn mới trong Database
+        // Bóc tách dữ liệu vào các cột vật lý mới để tối ưu performance
+        const targetDate = contentData.date ? new Date(contentData.date) : null;
+        const startDate = contentData.startDate ? new Date(contentData.startDate) : null;
+        const endDate = contentData.endDate ? new Date(contentData.endDate) : null;
+        const amount = contentData.amount ? Number(contentData.amount) : null;
+        const itemName = contentData.itemName || null;
+        const reason = contentData.reason || null;
+
         const newRequest = await prisma.request.create({
             data: {
-                type: type,
+                type,
                 status: "PENDING_1", 
-                contentData: contentData, 
                 requesterId: userId,
-                // 🚀 LƯU THẲNG TEAM ID VÀO DATABASE
-                teamId: teamId, 
-                firstApproverId: firstApproverId,
+                teamId, 
+                firstApproverId,
                 secondApproverId: secondApproverId || null,
+                startDate,
+                endDate,
+                targetDate,
+                amount,
+                itemName,
+                reason,
+                contentData // Vẫn lưu JSON dự phòng
             }
         });
+
+        // Tạo thông báo cho người duyệt cấp 1
         await prisma.notification.create({
             data: {
                 title: "Đơn từ mới cần duyệt",
                 message: `Bạn vừa nhận được một đề xuất ${type} mới cần phê duyệt.`,
-                type: "info", // Có thể dùng info, success, warning theo db của sếp
-                userId: firstApproverId, // Gửi đích danh cho sếp cấp 1
+                type: "info", 
+                userId: firstApproverId,
                 requestId: newRequest.id
-            }
-        });
-        // 3. (Tùy chọn) Ghi luôn 1 dòng Log lịch sử
-        await prisma.approvalLog.create({
-            data: {
-                action: "APPROVED_LEVEL_1", 
-                comment: "Đã tạo đơn và gửi phê duyệt",
-                requestId: newRequest.id,
-                approverId: userId
             }
         });
 
         return NextResponse.json(newRequest, { status: 201 });
-
     } catch (error) {
         console.error("❌ Lỗi API Tạo đơn:", error);
-        return NextResponse.json({ error: "Lỗi Server không thể tạo đơn" }, { status: 500 });
+        return NextResponse.json({ error: "Lỗi Server" }, { status: 500 });
     }
 }
 
 export async function GET(req: Request) {
     try {
         const session = await getServerSession(authOptions);
-        if (!session?.user) {
-            return NextResponse.json({ error: "Chưa đăng nhập" }, { status: 401 });
-        }
+        if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-        const userId = (session.user as any).id;
+        const user = session.user as any;
         const { searchParams } = new URL(req.url);
         
-        // 🚀 LẤY PARAM TAB TỪ FRONTEND ĐỂ BIẾT CẦN LỌC ĐƠN GÌ
+        const page = Number(searchParams.get("page")) || 1;
+        const limit = Number(searchParams.get("limit")) || 10;
+        const skip = (page - 1) * limit;
+        
         const tab = searchParams.get("tab") || "MY_REQUESTS";
+        // 🚀 Lấy từ khóa tìm kiếm
+        const searchKeyword = searchParams.get("search") || ""; 
+        
+        const isAdmin = user.role === "ADMIN" || user.role === "BAN_GIAM_DOC";
 
-        let whereClause = {};
-
-        if (tab === "MY_REQUESTS") {
-            // Lấy các đơn do chính mình tạo
-            whereClause = { requesterId: userId };
-        } else if (tab === "NEED_APPROVAL") {
-            // Lấy các đơn đang chờ mình duyệt (Đúng cấp, đúng trạng thái)
+        let whereClause: any = {};
+        
+        if (tab === "NEED_APPROVAL") {
             whereClause = {
                 OR: [
-                    { firstApproverId: userId, status: "PENDING_1" },
-                    { secondApproverId: userId, status: "PENDING_2" }
+                    { firstApproverId: user.id, status: "PENDING_1" },
+                    { secondApproverId: user.id, status: "PENDING_2" }
                 ]
+            };
+        } else {
+            whereClause = isAdmin ? {} : { requesterId: user.id };
+        }
+
+        // 🚀 NẾU CÓ TỪ KHÓA TÌM KIẾM, ĐÍNH KÈM VÀO BỘ LỌC
+        if (searchKeyword.trim() !== "") {
+            whereClause = {
+                ...whereClause,
+                id: {
+                    startsWith: searchKeyword.trim() // Tìm các ID bắt đầu bằng chuỗi gõ vào
+                }
             };
         }
 
-        const requests = await prisma.request.findMany({
-            where: whereClause,
-            include: {
-                requester: { select: { fullName: true } },
-                team: { select: { name: true } },
-                firstApprover: { select: { fullName: true } },
-                secondApprover: { select: { fullName: true } }
-            },
-            orderBy: { createdAt: 'desc' } // Đơn mới nhất lên đầu
+        // Truy vấn song song: Lấy dữ liệu và Đếm tổng
+        const [requests, totalCount] = await Promise.all([
+            prisma.request.findMany({
+                where: whereClause,
+                include: {
+                    requester: { select: { fullName: true } },
+                    team: { select: { name: true } },
+                    firstApprover: { select: { fullName: true } },
+                    secondApprover: { select: { fullName: true } }
+                },
+                orderBy: { createdAt: 'desc' },
+                take: limit,
+                skip: skip
+            }),
+            prisma.request.count({ where: whereClause })
+        ]);
+
+        return NextResponse.json({
+            requests,
+            totalPages: Math.ceil(totalCount / limit),
+            totalCount,
+            currentPage: page
         });
 
-        return NextResponse.json(requests);
-
     } catch (error) {
-        console.error("❌ Lỗi API Lấy danh sách đơn:", error);
-        return NextResponse.json({ error: "Lỗi Server không thể lấy dữ liệu" }, { status: 500 });
+        return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
     }
 }

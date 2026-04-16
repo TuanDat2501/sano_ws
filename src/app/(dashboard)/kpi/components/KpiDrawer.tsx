@@ -1,5 +1,7 @@
 "use client";
 
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { X, BellRing } from "lucide-react";
 import KpiEmployeeDetail from "./KpiEmployeeDetail";
 import { useToast } from "@/app/component/ToastProvider";
@@ -12,6 +14,12 @@ interface KpiDrawerProps {
 
 export default function KpiDrawer({ isOpen, onClose, activeKpi }: KpiDrawerProps) {
     const { showToast } = useToast();
+    // 🚀 BƯỚC 1: Khai báo state để check môi trường Client
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
 
     const handleCopyReminder = () => {
         if (!activeKpi) return;
@@ -34,8 +42,9 @@ Vào hệ thống cập nhật link nghiệm thu công việc lẹ lên nhé! �
         });
     };
 
-    return (
-        <div className={`fixed inset-0 z-[100] flex justify-end transition-all duration-300 ease-in-out ${isOpen ? 'visible' : 'invisible pointer-events-none'}`}>
+    // 🚀 BƯỚC 2: Gói toàn bộ giao diện vào một biến
+    const drawerContent = (
+        <div className={`fixed inset-0 z-[99999] flex justify-end transition-all duration-300 ease-in-out ${isOpen ? 'visible' : 'invisible pointer-events-none'}`}>
             <div 
                 className={`absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity duration-300 ease-in-out ${isOpen ? 'opacity-100' : 'opacity-0'}`}
                 onClick={onClose}
@@ -44,7 +53,8 @@ Vào hệ thống cập nhật link nghiệm thu công việc lẹ lên nhé! �
             <div className={`relative w-full md:max-w-4xl lg:max-w-5xl bg-slate-50 h-full flex flex-col transform transition-transform duration-300 ease-out shadow-2xl ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
                 {activeKpi && (
                     <>
-                        <div className="sticky top-0 z-20 flex items-center justify-between p-3 md:p-5 lg:p-6 bg-white border-b border-slate-200 shadow-sm shrink-0">
+                        {/* 🚀 Đã bỏ 'sticky top-0' và dùng 'relative shrink-0' để Header nằm im một chỗ chuẩn chỉnh */}
+                        <div className="relative z-20 flex items-center justify-between p-3 md:p-5 lg:p-6 bg-white border-b border-slate-200 shadow-sm shrink-0">
                             <h2 className="text-base md:text-lg lg:text-xl font-black text-slate-800 flex items-center gap-1.5 md:gap-2 truncate">
                                 Chi tiết KPI: <span className="text-blue-600 truncate">{activeKpi.fullName}</span>
                             </h2>
@@ -65,7 +75,7 @@ Vào hệ thống cập nhật link nghiệm thu công việc lẹ lên nhé! �
                             </div>
                         </div>
                         
-                        {/* Khu vực Detail bên trong tự động co giãn bằng Responsive Card ở trên */}
+                        {/* Nội dung bên dưới sẽ tự động cuộn (overflow-y-auto) */}
                         <div className="p-3 md:p-6 lg:p-8 flex-1 overflow-y-auto custom-scrollbar">
                             <KpiEmployeeDetail activeKpi={activeKpi} isLoading={false} />
                         </div>
@@ -74,4 +84,8 @@ Vào hệ thống cập nhật link nghiệm thu công việc lẹ lên nhé! �
             </div>
         </div>
     );
+
+    // 🚀 BƯỚC 3: Dùng Portal bắn thẳng ra ngoài document.body
+    if (!mounted) return null;
+    return createPortal(drawerContent, document.body);
 }

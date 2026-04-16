@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { XCircle, Loader2 } from "lucide-react";
 import { useToast } from "@/app/component/ToastProvider";
 import { useSession } from "next-auth/react";
+import { createPortal } from "react-dom";
 
 interface CreateRequestModalProps {
     isOpen: boolean;
@@ -13,6 +14,8 @@ interface CreateRequestModalProps {
 }
 
 export default function CreateRequestModal({ isOpen, onClose, allowedTypes, teams }: CreateRequestModalProps) {
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => setMounted(true), []);
     const { showToast } = useToast();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [selectedType, setSelectedType] = useState(allowedTypes[0]?.id || "");
@@ -139,7 +142,7 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
             showToast("error", "Chưa chọn ngày hoặc thiếu lý do rồi sếp!");
             return;
         }
-        if (["MUA_SAM", "TAM_UNG", "CHAY_ADS", "THANH_TOAN"].includes(selectedType)) {
+        if (["MUA_SAM", "TAM_UNG", "THANH_TOAN"].includes(selectedType)) {
             if (!contentData.itemName?.trim() || !contentData.amount || !contentData.reason?.trim()) {
                 showToast("error", "Thiếu tên hạng mục, số tiền hoặc lý do!");
                 return;
@@ -176,11 +179,9 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
             setIsSubmitting(false);
         }
     };
-
-    return (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200">
+    const modalContent = (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200">
             <div className="bg-white w-full max-w-2xl rounded-2xl md:rounded-[24px] shadow-2xl flex flex-col max-h-[95vh] md:max-h-[90vh] overflow-hidden">
-
                 <div className="px-4 md:px-6 py-3 md:py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 shrink-0">
                     <h2 className="text-base md:text-lg font-black text-slate-800">Tạo đề xuất mới</h2>
                     <button onClick={onClose} className="p-1.5 md:p-2 hover:bg-slate-200 rounded-full text-slate-500 transition-colors">
@@ -297,4 +298,6 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
             </div>
         </div>
     );
+    if (!mounted) return null;
+    return createPortal(modalContent, document.body);
 }

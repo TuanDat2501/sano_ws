@@ -11,7 +11,7 @@ export async function GET() {
       include: {
         _count: { select: { users: true } },
         users: {
-          select: { id: true, fullName: true, role: true }
+          select: { id: true, fullName: true, role: true, avatarUrl: true }
         }
       },
 
@@ -53,7 +53,7 @@ export async function POST(req: Request) {
         name,
         description,
         // 🚀 Bổ sung thêm dòng này để Team biết nó thuộc Phòng nào
-        departmentId: departmentId || null
+        departmentId: departmentId || null,
       }
     });
 
