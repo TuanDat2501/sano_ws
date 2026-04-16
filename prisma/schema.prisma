@@ -258,7 +258,7 @@ model ChatRoom {
   members   RoomMember[]
   messages  Message[]
 
-  createdAt DateTime 
+  createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
