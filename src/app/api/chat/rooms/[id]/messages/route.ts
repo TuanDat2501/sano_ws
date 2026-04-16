@@ -50,7 +50,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (!content || content.trim() === "") {
       return NextResponse.json({ error: "Tin nhắn trống" }, { status: 400 });
     }
-
     // 1. Lưu tin nhắn vào DB
     const newMessage = await prisma.message.create({
       data: {
@@ -63,7 +62,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         sender: { select: { id: true, fullName: true } } 
       }
     });
-
     // 2. Cập nhật thời gian của phòng chat để nó nhảy lên đầu danh sách (Như Zalo)
     (await prisma).chatRoom.update({
       where: { id: roomId },
