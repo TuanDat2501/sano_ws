@@ -57,6 +57,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         content,
         roomId,
         senderId: (session.user as any).id,
+        createdAt: new Date(),
       },
       include: { 
         sender: { select: { id: true, fullName: true } } 
