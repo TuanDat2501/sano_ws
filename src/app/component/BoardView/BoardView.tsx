@@ -15,7 +15,7 @@ interface BoardViewProps {
 export default function BoardView({ tasks, columns, getTeamColor, onDragEnd, onOpenTaskDetail, userRole }: BoardViewProps) {
   
   const isManager = ["ADMIN", "BAN_GIAM_DOC", "LEADER"].includes(userRole);
-
+  
   return (
     <DragDropContext onDragEnd={onDragEnd}>
       {/* Giảm gap trên mobile để các cột gần nhau hơn */}

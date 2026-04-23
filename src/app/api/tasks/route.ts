@@ -67,6 +67,7 @@ export async function GET(req: Request) {
           team: { select: { name: true } },
           contentUser: { select: { fullName: true } },
           editorUser: { select: { fullName: true } },
+          
         },
         orderBy: { createdAt: "desc" },
       });
@@ -85,6 +86,7 @@ export async function GET(req: Request) {
             team: { select: { name: true } },
             contentUser: { select: { fullName: true } },
             editorUser: { select: { fullName: true } },
+
           },
           orderBy: { createdAt: "desc" },
           skip: skip,
@@ -166,11 +168,12 @@ export async function POST(req: Request) {
       data: {
         title,
         linkContent : rawLink,
-        status: "TODO",
+        status: body.status ? body.status : "TODO",
         contentId: contentId || undefined,
         editorId: editorId || undefined,
         teamId: teamId || undefined,
         creatorId: creatorId,
+        projectId: body.projectId || undefined
       },
       include: {
         creator: { select: { fullName: true } },

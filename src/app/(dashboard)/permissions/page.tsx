@@ -21,14 +21,17 @@ const MODULES = [
     { id: "MENU_DASHBOARD", name: "Xem Tổng quan (Dashboard)" },
     { id: "MENU_TASKS", name: "Xem Bảng công việc (Kanban)" },
     { id: "MENU_KPI", name: "Xem Đánh giá KPI" },
+    { id: "MENU_REVENUE", name: "Quản lý Doanh thu" },
     { id: "MENU_REQUESTS", name: "Xem Đơn từ & Đề xuất" },
     { id: "MENU_TEAMS", name: "Quản lý Cơ cấu Đội ngũ" },
     { id: "MENU_USERS", name: "Quản lý Nhân sự (Users)" },
     { id: "MENU_ORG_CHART", name: "Xem Sơ đồ tổ chức" },
     { id: "MENU_DAILY_REPORT", name: "Xem Báo cáo Hằng ngày" },
+    { id: "MENU_CHANNELS", name: "Quản lý Hệ thống Kênh" },
     { id: "MENU_ANALYTICS", name: "Xem Báo cáo Chiến lược (Tuyệt mật)" },
     { id: "ACTION_CREATE_TASK", name: "Quyền Tạo Task (Giao việc)" },
-    { id: "ACTION_APPROVE_REQUEST", name: "Quyền Duyệt Đơn từ" }
+    { id: "ACTION_APPROVE_REQUEST", name: "Quyền Duyệt Đơn từ" },
+    { id: "MENU_PROJECTS", name: "Quản lý Dự án" },
 ];
 
 export default function PermissionsPage() {

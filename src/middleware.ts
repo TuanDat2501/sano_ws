@@ -15,6 +15,7 @@ const routePermissions: Record<string, string> = {
     "/org-chart": "MENU_ORG_CHART",   // Sơ đồ tổ chức
     "/daily-report": "MENU_DAILY_REPORT", // Báo cáo Hằng ngày
     "/analytics": "MENU_ANALYTICS",   // Báo cáo Chiến lược
+    "/projects": "MENU_PROJECTS",
     // Các tính năng thao tác lẻ (ACTION_) thì kiểm tra ở tầng API hoặc Nút bấm trên giao diện, không kiểm tra ở Middleware chặn Route.
 };
 

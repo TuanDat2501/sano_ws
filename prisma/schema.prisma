@@ -4,7 +4,6 @@ generator client {
 
 datasource db {
   provider = "mysql"
-  
 }
 
 // ================= ENUMS =================
@@ -19,10 +18,11 @@ enum Role {
 }
 
 enum TaskStatus {
-  TODO      
-  DOING     
-  REVIEW    
-  DONE     
+  BACKLOG
+  TODO
+  DOING
+  REVIEW
+  DONE
 }
 
 enum RequestType {
@@ -41,8 +41,8 @@ enum RequestType {
 enum RequestStatus {
   PENDING_1 // Đang chờ cấp 1 duyệt (VD: Leader)
   PENDING_2 // Cấp 1 đã duyệt, chờ cấp 2 (VD: Giám đốc)
-  APPROVED  // Đã duyệt hoàn toàn
-  REJECTED  // Bị từ chối ở bất kỳ cấp nào
+  APPROVED // Đã duyệt hoàn toàn
+  REJECTED // Bị từ chối ở bất kỳ cấp nào
 }
 
 enum ApprovalAction {
@@ -60,227 +60,263 @@ enum RoomType {
 
 // Thêm Enum này vào khu vực ENUMS ở trên cùng
 enum TaskLogAction {
-  CREATE_TASK     
-  UPDATE_STATUS   
-  UPDATE_LINK     
-  SUBMIT_SCRIPT   
-  SUBMIT_VIDEO    
-  PUBLISH_VIDEO   
-  COMPLETE_TASK  
-  REJECT_TASK 
+  CREATE_TASK
+  UPDATE_STATUS
+  UPDATE_LINK
+  SUBMIT_SCRIPT
+  SUBMIT_VIDEO
+  PUBLISH_VIDEO
+  COMPLETE_TASK
+  REJECT_TASK
+  ASSIGN_USER
 }
-
 
 // ================= MODELS =================
 
 model Team {
-  id          String   @id @default(uuid())
-  name        String   @unique // VD: Team Anime, Team Manga
-  description String?
+  id           String      @id @default(uuid())
+  name         String      @unique // VD: Team Anime, Team Manga
+  description  String?
   departmentId String?
   department   Department? @relation(fields: [departmentId], references: [id])
-  users       User[]
-  tasks       Task[]
-  rooms       ChatRoom[] // Group chat riêng của team
-
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  requests    Request[]
+  users        User[]
+  tasks        Task[]
+  rooms        ChatRoom[] // Group chat riêng của team
+  channels     Channel[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  requests  Request[]
+  projects  Project[]
 }
 
 model User {
-  id            String    @id @default(uuid())
-  username      String    @unique
-  passwordHash  String
-  fullName      String
-  role          Role      @default(CONTENT)
-  isActive      Boolean   @default(true)
+  id           String  @id @default(uuid())
+  username     String  @unique
+  passwordHash String
+  fullName     String
+  role         Role    @default(CONTENT)
+  isActive     Boolean @default(true)
 
-  teamId        String?
-  team          Team?     @relation(fields: [teamId], references: [id])
+  teamId String?
+  team   Team?   @relation(fields: [teamId], references: [id])
 
   // Relations cho Workflow Task
-  tasksCreated  Task[]    @relation("TaskCreator")
-  tasksContent  Task[]    @relation("TaskContent")
-  tasksEdited   Task[]    @relation("TaskEditor")
-  tasksPub      Task[]    @relation("TaskPublisher")
-  assignedTasks Task[]  @relation("TaskAssignee")
+  tasksCreated       Task[]        @relation("TaskCreator")
+  tasksContent       Task[]        @relation("TaskContent")
+  tasksEdited        Task[]        @relation("TaskEditor")
+  tasksPub           Task[]        @relation("TaskPublisher")
+  assignedTasks      Task[]        @relation("TaskAssignee")
   // Relations khác
-  weeklyKPIs    WeeklyKPI[]
-  requestsSent        Request[] @relation("Requester")
-  requestsApprLevel1  Request[] @relation("ApproverLevel1")
-  requestsApprLevel2  Request[] @relation("ApproverLevel2")
-  approvalLogs        ApprovalLog[] @relation("LogApprover")
-  messages      Message[]
-  roomMembers   RoomMember[]
+  weeklyKPIs         WeeklyKPI[]
+  requestsSent       Request[]     @relation("Requester")
+  requestsApprLevel1 Request[]     @relation("ApproverLevel1")
+  requestsApprLevel2 Request[]     @relation("ApproverLevel2")
+  approvalLogs       ApprovalLog[] @relation("LogApprover")
+  messages           Message[]
+  roomMembers        RoomMember[]
 
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  taskComments TaskComment[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  taskComments  TaskComment[]
   notifications Notification[]
-  taskLogs TaskLog[]
-  avatarUrl   String?
+  taskLogs      TaskLog[]
+  avatarUrl     String?
+  evaluations   Evaluation[]
+  supervisedProjects Project[] @relation("ProjectSupervisor")
+  revenueUpdates DailyRevenue[]
+  managedChannels   Channel[]       @relation("ChannelManager")
+  channelMemberships ChannelMember[]
 }
 
 model Permission {
   id        String  @id @default(uuid()) // Đổi sang uuid() chuẩn của MySQL/PostgreSQL
-  role      String  // Tên chức vụ: "CONTENT", "EDITOR", "LEADER",...
-  moduleId  String  // Mã tính năng: "MENU_DASHBOARD", "ACTION_CREATE_TASK",...
+  role      String // Tên chức vụ: "CONTENT", "EDITOR", "LEADER",...
+  moduleId  String // Mã tính năng: "MENU_DASHBOARD", "ACTION_CREATE_TASK",...
   isAllowed Boolean @default(false)
 
   // Đảm bảo mỗi chức vụ chỉ có 1 trạng thái cho 1 module
-  @@unique([role, moduleId]) 
+  @@unique([role, moduleId])
 }
 
 model Task {
-  id              String     @id @default(uuid())
-  title           String
-  linkContent     String     @unique // CỰC QUAN TRỌNG: Chặn trùng link tuyệt đối
-  status          TaskStatus @default(TODO)
-  
-  scriptLink      String?    @db.Text // Link docs kịch bản
-  videoLink       String?    @db.Text // Link video render xong
-  publishLink     String?    @db.Text // Link youtube/tiktok đã đăng
+  id          String     @id @default(uuid())
+  title       String
+  linkContent String     @unique // CỰC QUAN TRỌNG: Chặn trùng link tuyệt đối
+  status      TaskStatus @default(TODO)
 
-  teamId          String
-  team            Team       @relation(fields: [teamId], references: [id])
+  // Các link tài nguyên
+  scriptLink  String? @db.Text
+  videoLink   String? @db.Text
+  publishLink String? @db.Text
 
-  // Tracking ai làm bước nào
-  creatorId       String     // Thường là Leader
-  creator         User       @relation("TaskCreator", fields: [creatorId], references: [id])
-  
-  contentId       String?    // Ai viết kịch bản
-  contentUser     User?      @relation("TaskContent", fields: [contentId], references: [id])
-  
-  editorId        String?    // Ai dựng video
-  editorUser      User?      @relation("TaskEditor", fields: [editorId], references: [id])
+  // 🚀 BỔ SUNG 1: PHẢI LINK VỚI PROJECT (Để lấy Checklist)
+  projectId     String?
+  project       Project?    @relation(fields: [projectId], references: [id])
 
-  publisherId     String?    // Ai đăng kênh
-  publisherUser   User?      @relation("TaskPublisher", fields: [publisherId], references: [id])
+  teamId String?
+  team   Team?   @relation(fields: [teamId], references: [id])
 
-  chatRoom        ChatRoom?  // Chat đính kèm task
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
-  assigneeId  String?
-  assignee        User?    @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  // Tracking ai làm bước nào (Giữ nguyên của sếp)
+  creatorId     String
+  creator       User    @relation("TaskCreator", fields: [creatorId], references: [id])
+  contentId     String?
+  contentUser   User?   @relation("TaskContent", fields: [contentId], references: [id])
+  editorId      String?
+  editorUser    User?   @relation("TaskEditor", fields: [editorId], references: [id])
+  publisherId   String?
+  publisherUser User?   @relation("TaskPublisher", fields: [publisherId], references: [id])
+
+  assigneeId String?
+  assignee   User?   @relation("TaskAssignee", fields: [assigneeId], references: [id])
+
+  chatRoom     ChatRoom?
   taskComments TaskComment[]
-  taskLogs TaskLog[]
+  taskLogs     TaskLog[]
+
+  // 🚀 BỔ SUNG 2: LIÊN KẾT BẢNG ĐÁNH GIÁ (CHẤM ĐIỂM)
+  evaluations Evaluation[]
+
   isClosed  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Evaluation {
+  id     String @id @default(cuid())
+  taskId String
+  task   Task   @relation(fields: [taskId], references: [id])
+
+  score Float
+
+  criteria Json
+
+  // Nhận xét để Editor/Content vào đọc rồi Kaizen
+  kaizenNote String? @db.Text
+
+  // Ai là người chấm (Chỉ QLK hoặc Leader mới có quyền)
+  evaluatorId String
+  evaluator   User   @relation(fields: [evaluatorId], references: [id])
+
+  createdAt DateTime @default(now())
+
 }
 
 model Department {
-  id          String   @id @default(uuid())
-  name        String   @unique // VD: Phòng Sản Xuất Nội Dung, Phòng Marketing, Phòng Hành Chính
+  id          String  @id @default(uuid())
+  name        String  @unique // VD: Phòng Sản Xuất Nội Dung, Phòng Marketing, Phòng Hành Chính
   description String?
 
-  teams       Team[]   // Một phòng ban quản lý nhiều Team nhỏ bên dưới
+  teams Team[] // Một phòng ban quản lý nhiều Team nhỏ bên dưới
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model WeeklyKPI {
-  id          String   @id @default(uuid())
+  id          String @id @default(uuid())
   year        Int
   month       Int
   weekNumber  Int
-  targetValue Int      // Chỉ tiêu tuần (Leader giao)
-  
-  userId      String
-  user        User     @relation(fields: [userId], references: [id])
+  targetValue Int // Chỉ tiêu tuần (Leader giao)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
 
   @@unique([userId, year, month, weekNumber], name: "user_time_unique")
 }
 
 model Request {
-  id               String        @id @default(uuid())
-  type             RequestType
-  status           RequestStatus @default(PENDING_1)
-  
+  id     String        @id @default(uuid())
+  type   RequestType
+  status RequestStatus @default(PENDING_1)
+
   // ==========================================
   // 🚀 CÁC CỘT VẬT LÝ MỚI (Tối ưu truy vấn)
   // ==========================================
-  startDate        DateTime?     // Dành cho Nghỉ phép
-  endDate          DateTime?     // Dành cho Nghỉ phép
-  targetDate       DateTime?     // Dành cho Đi muộn / Về sớm / Remote
-  amount           Int?          // Tiền (VNĐ) cho Tạm ứng, Mua sắm, Thưởng...
-  itemName         String?       // Tên món đồ/chiến dịch
-  reason           String?       @db.Text // Lý do chi tiết
-  
+  startDate  DateTime? // Dành cho Nghỉ phép
+  endDate    DateTime? // Dành cho Nghỉ phép
+  targetDate DateTime? // Dành cho Đi muộn / Về sớm / Remote
+  amount     Int? // Tiền (VNĐ) cho Tạm ứng, Mua sắm, Thưởng...
+  itemName   String? // Tên món đồ/chiến dịch
+  reason     String?   @db.Text // Lý do chi tiết
+
   // Vẫn giữ lại Json để sơ cua cho các form đặc thù phát sinh sau này
-  contentData      Json?          
-  
-  attachmentUrl    String?       @db.Text 
+  contentData Json?
 
-  teamId           String?
-  team             Team?         @relation(fields: [teamId], references: [id])
-  
-  requesterId      String
-  requester        User          @relation("Requester", fields: [requesterId], references: [id], onDelete: Cascade)
+  attachmentUrl String? @db.Text
 
-  firstApproverId  String        
-  firstApprover    User          @relation("ApproverLevel1", fields: [firstApproverId], references: [id])
+  teamId String?
+  team   Team?   @relation(fields: [teamId], references: [id])
 
-  secondApproverId String?    
-  secondApprover   User?         @relation("ApproverLevel2", fields: [secondApproverId], references: [id])
+  requesterId String
+  requester   User   @relation("Requester", fields: [requesterId], references: [id], onDelete: Cascade)
 
-  logs             ApprovalLog[]
+  firstApproverId String
+  firstApprover   User   @relation("ApproverLevel1", fields: [firstApproverId], references: [id])
 
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
-}
-model ApprovalLog {
-  id          String         @id @default(uuid())
-  action      ApprovalAction // Hành động đã làm
-  comment     String?        @db.Text // Lý do từ chối hoặc lời phê (Bắt buộc khi Reject)
+  secondApproverId String?
+  secondApprover   User?   @relation("ApproverLevel2", fields: [secondApproverId], references: [id])
 
-  // Thuộc về Đơn nào?
-  requestId   String
-  request     Request        @relation(fields: [requestId], references: [id], onDelete: Cascade)
-
-  // Ai là người thực hiện hành động này?
-  approverId  String
-  approver    User           @relation("LogApprover", fields: [approverId], references: [id])
-
-  createdAt   DateTime       @default(now())
-}
-model ChatRoom {
-  id        String     @id @default(uuid())
-  name      String?
-  type      RoomType
-  
-  taskId    String?    @unique
-  task      Task?      @relation(fields: [taskId], references: [id])
-
-  teamId    String?
-  team      Team?      @relation(fields: [teamId], references: [id])
-
-  members   RoomMember[]
-  messages  Message[]
+  logs ApprovalLog[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+model ApprovalLog {
+  id      String         @id @default(uuid())
+  action  ApprovalAction // Hành động đã làm
+  comment String?        @db.Text // Lý do từ chối hoặc lời phê (Bắt buộc khi Reject)
+
+  // Thuộc về Đơn nào?
+  requestId String
+  request   Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  // Ai là người thực hiện hành động này?
+  approverId String
+  approver   User   @relation("LogApprover", fields: [approverId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+model ChatRoom {
+  id   String   @id @default(uuid())
+  name String?
+  type RoomType
+
+  taskId String? @unique
+  task   Task?   @relation(fields: [taskId], references: [id])
+
+  teamId String?
+  team   Team?   @relation(fields: [teamId], references: [id])
+
+  members  RoomMember[]
+  messages Message[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model RoomMember {
-  roomId    String
-  room      ChatRoom @relation(fields: [roomId], references: [id])
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
-  joinedAt  DateTime @default(now())
+  roomId     String
+  room       ChatRoom  @relation(fields: [roomId], references: [id])
+  userId     String
+  user       User      @relation(fields: [userId], references: [id])
+  joinedAt   DateTime  @default(now())
   lastReadAt DateTime? @default(now())
 
   @@id([roomId, userId])
 }
 
 model Message {
-  id        String   @id @default(uuid())
-  content     String?      @db.Text
-  
-  roomId    String
-  room      ChatRoom @relation(fields: [roomId], references: [id])
+  id      String  @id @default(uuid())
+  content String? @db.Text
+
+  roomId      String
+  room        ChatRoom     @relation(fields: [roomId], references: [id])
   attachments Attachment[]
-  senderId  String
-  sender    User     @relation(fields: [senderId], references: [id])
+  senderId    String
+  sender      User         @relation(fields: [senderId], references: [id])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
@@ -290,50 +326,150 @@ model TaskComment {
   id        String   @id @default(uuid())
   text      String   @db.Text
   createdAt DateTime @default(now())
-  
+
   // Liên kết với Task
-  taskId    String
-  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  
+  taskId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
   // Liên kết với Người gửi
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
+
 model Notification {
   id        String   @id @default(uuid())
   title     String
   message   String
   isRead    Boolean  @default(false)
   createdAt DateTime @default(now())
-  
+
   // Liên kết tới người nhận thông báo
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   taskId    String?
-  type      String   @default("info") // Các giá trị: "info", "success", "error", "warning"
+  type      String  @default("info") // Các giá trị: "info", "success", "error", "warning"
   requestId String?
 }
 
 model TaskLog {
   id        String        @id @default(uuid())
   action    TaskLogAction // 🚀 Sửa từ String thành Enum
-  details   String        // Ví dụ: "Từ Chờ dựng -> Chờ đăng"
+  details   String // Ví dụ: "Từ Chờ dựng -> Chờ đăng"
   createdAt DateTime      @default(now())
 
-  taskId    String
-  task      Task          @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  userId    String
-  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
+
 model Attachment {
-  id        String   @id @default(uuid())
-  url       String   @db.Text // Link S3, Cloudinary hoặc thư mục local
-  fileType  String   // Loại file (Ví dụ: 'image', 'pdf', 'docx', 'video')
-  fileName  String   // Tên file gốc (Ví dụ: "Kich-ban-Sano.docx")
-  fileSize  Int?     // Dung lượng file (bytes) để validate FE
-  
+  id       String @id @default(uuid())
+  url      String @db.Text // Link S3, Cloudinary hoặc thư mục local
+  fileType String // Loại file (Ví dụ: 'image', 'pdf', 'docx', 'video')
+  fileName String // Tên file gốc (Ví dụ: "Kich-ban-Sano.docx")
+  fileSize Int? // Dung lượng file (bytes) để validate FE
+
   messageId String
-  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
+}
+
+model Project {
+  id           String  @id @default(cuid())
+  name         String
+  description  String?
+  teamId       String?
+  team         Team?   @relation(fields: [teamId], references: [id])
+  supervisorId String? // Người giám sát dự án
+  supervisor   User?   @relation("ProjectSupervisor", fields: [supervisorId], references: [id])
+  status       String  @default("ACTIVE")
+
+  // 🚀 LƯU TRỮ QUY TRÌNH (Workflow) DẠY DẠNG JSON
+  // Lưu vị trí các nút (Canva-style) và các bước checklist
+  workflowNodes Json? // Lưu mảng các Node (vị trí X, Y, Loại trạm)
+  workflowEdges Json? // Lưu các đường nối (Logic luồng)
+  criteria      Json?
+  
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  tasks       Task[]
+  channelId     String?
+  channel       Channel? @relation(fields: [channelId], references: [id])
+}
+
+model Channel {
+  id              String   @id @default(uuid())
+  name            String   @unique
+  
+  // 🚀 Mới: Lưu URL kênh để sếp hoặc nhân sự click xem nhanh
+  link            String?  @db.Text 
+  startedAt   DateTime? @db.Date
+  topic           String?
+  status          ChannelStatus      @default(XAY_DUNG)
+  monetization    MonetizationStatus @default(CHUA_DAT)
+
+  teamId          String
+  team            Team               @relation(fields: [teamId], references: [id])
+  
+  managerId       String?
+  manager         User?              @relation("ChannelManager", fields: [managerId], references: [id])
+
+  members         ChannelMember[]
+  projects        Project[]
+  revenues        DailyRevenue[]
+  avatarUrl       String?   @db.Text
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+}
+
+model DailyRevenue {
+  id          String   @id @default(uuid())
+  date        DateTime @db.Date 
+  amount      Float    
+  views       Int      @default(0)
+  channelId   String
+  channel     Channel  @relation(fields: [channelId], references: [id])
+  
+  updaterId   String
+  updater     User     @relation(fields: [updaterId], references: [id])
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([channelId, date]) 
+}
+
+// 🚀 1. THÊM CÁC ENUM TRẠNG THÁI CHO YOUTUBE
+enum MonetizationStatus {
+  CHUA_DAT          // Đang cày thông số
+  DA_DU_DIEU_KIEN   // 🚀 Mới: Đã đạt 1k Sub/4k Giờ hoặc 10M View Shorts
+  CHO_DUYET         // Đang đợi YouTube xem xét đơn
+  DA_BAT            // Đã có biểu tượng $ xanh
+  TAT_KIEM_TIEN     // Bị tắt do vi phạm hoặc nội dung dùng lại
+}
+
+enum ChannelStatus {
+  XAY_DUNG      // Kênh mới, đang nuôi
+  HOAT_DONG     // Đang up video đều
+  CANH_BAO      // Dính gậy bản quyền / Nguyên tắc CĐ
+  BAY_KENH      // Bị khoá (Suspended)
+  DUNG_HOAT_DONG
+}
+
+
+model ChannelMember {
+  channelId       String
+  channel         Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  
+  userId          String
+  user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Vai trò CỤ THỂ trên kênh này (VD: "Trưởng nhóm Nội dung", "Voice Talent chính")
+  roleOnChannel   String  
+
+  assignedAt      DateTime @default(now())
+
+  @@id([channelId, userId]) // 1 người chỉ có 1 chức danh chính trên 1 kênh
 }
