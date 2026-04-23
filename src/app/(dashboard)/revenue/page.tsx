@@ -7,6 +7,11 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { usePermission } from "@/app/component/PermissionProvider";
 // 🚀 1. DATA MOCKUP CHO DANH SÁCH KÊNH (Lấy từ Excel thật của sếp)
+
+interface RevenueEntry {
+    views?: number | string;
+    revenue?: number | string;
+}
 const MOCK_CHANNELS = [
     { id: "c1", name: "Kova - Wild Animals", team: { name: "NOVA" } },
     { id: "c2", name: "WUFO - Space Documentary", team: { name: "WEVIC" } },
@@ -55,7 +60,7 @@ export default function RevenueEntryPage() {
     const { showToast } = useToast();
     const [currentDate, setCurrentDate] = useState(new Date());
     const [channels, setChannels] = useState<any[]>([]);
-    const [revenueData, setRevenueData] = useState<Record<string, number | "">>({});
+    const [revenueData, setRevenueData] = useState<Record<string, RevenueEntry>>({});
     const [savingCells, setSavingCells] = useState<Record<string, 'saving' | 'saved' | null>>({});
 
     const days = getDaysOfWeek(currentDate);
@@ -148,7 +153,7 @@ export default function RevenueEntryPage() {
         if (revenueData[cellKey] === numValue) return;
 
         setSavingCells(prev => ({ ...prev, [cellKey]: 'saving' }));
-        setRevenueData(prev => ({ ...prev, [cellKey]: numValue }));
+        setRevenueData(prev => ({ ...prev, [cellKey]: numValue as any }));
 
         try {
             const res = await fetch('/api/revenue', {
@@ -246,10 +251,10 @@ export default function RevenueEntryPage() {
                                                             const numVal = parseFloat(rawVal);
 
                                                             if (!isNaN(numVal)) {
-                                                                handleCellBlur(channel.id, day, { views: numVal });
+                                                                handleCellBlur(channel.id, day, "views"); // Chỉ truyền chuỗi "views"
                                                             } else {
                                                                 e.target.value = "";
-                                                                handleCellBlur(channel.id, day, { views: "" });
+                                                                handleCellBlur(channel.id, day, "views"); // Chỉ truyền chuỗi "views"
                                                             }
                                                         }}
                                                     />
@@ -283,12 +288,10 @@ export default function RevenueEntryPage() {
                                                             const numVal = parseFloat(rawVal);
 
                                                             if (!isNaN(numVal)) {
-                                                                // Chuẩn hóa lại hiển thị (VD: nếu sếp lỡ gõ "100." thì nó sẽ tự sửa thành "100")
-                                                                e.target.value = numVal.toLocaleString('en-US', { maximumFractionDigits: 2 });
-                                                                handleCellBlur(channel.id, day, { revenue: numVal });
+                                                                handleCellBlur(channel.id, day, String(numVal)); // Tham số 3 là string, 4 là value
                                                             } else {
                                                                 e.target.value = "";
-                                                                handleCellBlur(channel.id, day, { revenue: "" });
+                                                                handleCellBlur(channel.id, day, ""); // Tham số 3 là string, 4 là rỗng
                                                             }
                                                         }}
                                                     />

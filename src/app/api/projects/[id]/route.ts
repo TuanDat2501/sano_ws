@@ -101,9 +101,10 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
         }
 
         const resolvedParams = await params;
+        const projectId = resolvedParams.id;
         
         await prisma.project.delete({
-            where: { id: resolvedParams.id }
+            where: { id: projectId }
         });
 
         return NextResponse.json({ success: true, message: "Đã xóa dự án thành công" });

@@ -52,7 +52,7 @@ export async function POST(req: Request) {
             create: {
                 channelId,
                 date: parsedDate,
-                revenue: Number(revenue || 0),
+                amount: Number(revenue || 0),
                 views: Number(views || 0),
                 updaterId: (session.user as any).id
             }

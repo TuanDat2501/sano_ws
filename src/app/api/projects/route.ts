@@ -106,14 +106,24 @@ export async function POST(req: Request) {
 }
 
 
-export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(req: Request) {
     try {
-        const resolvedParams = await params;
+        // Lấy ID từ dấu hỏi trên thanh URL (ví dụ: /api/projects?id=123)
+        const { searchParams } = new URL(req.url);
+        const projectId = searchParams.get("id");
+
+        if (!projectId) {
+            return NextResponse.json({ error: "Thiếu ID dự án cần xóa" }, { status: 400 });
+        }
+
+        // Thực thi xóa dưới Database
         await prisma.project.delete({
-            where: { id: resolvedParams.id }
+            where: { id: projectId }
         });
+
         return NextResponse.json({ success: true });
     } catch (error) {
-        return NextResponse.json({ error: "Lỗi Server" }, { status: 500 });
+        console.error(">>> LỖI XÓA PROJECT:", error);
+        return NextResponse.json({ error: "Lỗi Server khi xóa" }, { status: 500 });
     }
 }
