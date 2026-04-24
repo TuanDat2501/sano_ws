@@ -232,7 +232,8 @@ export default function FloatingChat() {
                     targetId: activeChats[chatIndex].targetUser.id,
                     senderId: currentUser.id,
                     text: savedMsg.content,
-                    isMe: true
+                    isMe: true,
+                    fullName: (session?.user as any)?.fullName,
                 };
 
                 setActiveChats(prevChats => prevChats.map(chat => {

@@ -123,6 +123,7 @@ export default function ChatPage() {
                     content: savedMsg.content || savedMsg.message || savedMsg.body || textToSend,
                     time: new Date(savedMsg.createdAt || Date.now()).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
                     isMe: true,
+                    fullName: (session?.user as any)?.fullName,
                     attachments: savedMsg.attachments || []
                 };
 

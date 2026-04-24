@@ -157,13 +157,21 @@ export default function KanbanBoard() {
   };
 
   useEffect(() => {
-    const newSocket = io();
+    // 🚀 Kết nối thẳng đến VPS của sếp
+    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "https://socket.sanogroup.tv";
+    
+    const newSocket = io(socketUrl, {
+        transports: ['websocket', 'polling']
+    });
+    
     setSocket(newSocket);
-    newSocket.on("reload_board", () => { setBoardUpdateSignal(prev => prev + 1); });
+
+    newSocket.on("reload_board", () => { 
+        setBoardUpdateSignal(prev => prev + 1); 
+    });
     loadUsers(); loadTeams(); loadProjects(); fetchTasks();
     return () => { newSocket.disconnect(); };
-  }, []);
-
+}, []);
   const isFirstRender = useRef(true);
   useEffect(() => {
     if (isFirstRender.current) { isFirstRender.current = false; return; }
