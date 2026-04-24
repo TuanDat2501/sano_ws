@@ -12,7 +12,7 @@ import TaskDetailDrawer from "@/app/component/TaskDetailDrawer";
 import ListView from "@/app/component/ListView/ListView";
 import BoardView from "@/app/component/BoardView/BoardView";
 import PermissionGuard from "@/app/component/PermissionGuard";
-import BacklogView from "./BacklogView"; 
+import BacklogView from "./BacklogView";
 import PushTaskModal from "./PushTaskModal";
 
 const COLUMNS = {
@@ -58,14 +58,14 @@ export default function KanbanBoard() {
   const [chatMessage, setChatMessage] = useState("");
   const [messages, setMessages] = useState([{ id: 1, sender: "Hệ thống", text: "Chào mừng đến với không gian thảo luận Task!", time: new Date().toLocaleTimeString(), isMine: false }]);
   const [socket, setSocket] = useState<Socket | null>(null);
-  
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [users, setUsers] = useState<any[]>([]);
   const [newTask, setNewTask] = useState({ title: "", linkContent: "", contentId: "", editorId: "", teamId: "" });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [teams, setTeams] = useState<any[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
-  
+
   const [viewMode, setViewMode] = useState<'board' | 'list' | 'backlog'>((searchParams.get("viewMode") as 'board' | 'list' | 'backlog') || 'board');
   const [searchTerm, setSearchTerm] = useState(searchParams.get("search") || "");
   const [filterStatus, setFilterStatus] = useState(searchParams.get("status") || "ALL");
@@ -85,15 +85,15 @@ export default function KanbanBoard() {
   const [drawerErrors, setDrawerErrors] = useState<{ [key: string]: string }>({});
   const [boardUpdateSignal, setBoardUpdateSignal] = useState(0);
   const [isClearing, setIsClearing] = useState(false);
-  
+
   const [isPushModalOpen, setIsPushModalOpen] = useState(false);
   const [taskToPush, setTaskToPush] = useState<any>(null);
   const [isPushing, setIsPushing] = useState(false);
 
   const backlogTasks = rawTasks.filter(t => t.status === 'BACKLOG');
-  
+
   const filteredTasks = rawTasks.filter((task) => {
-    if (task.status === 'BACKLOG') return false; 
+    if (task.status === 'BACKLOG') return false;
     const matchSearch = task.title.toLowerCase().includes(searchTerm.toLowerCase());
     const matchStatus = filterStatus === "ALL" || task.status === filterStatus;
     const taskDate = new Date(task.createdAt).toISOString().split('T')[0];
@@ -130,14 +130,14 @@ export default function KanbanBoard() {
         setTotalPages(data.totalPages || 1);
         setTotalItems(data.total || 0);
       }
-      
+
       // 🚀 TỰ ĐỘNG MỞ NGĂN KÉO NẾU TRÊN URL CÓ CHỨA TASK ID
       const taskIdFromUrl = searchParams.get("taskId");
       if (taskIdFromUrl && !isDrawerOpen) {
-          const targetTask = data.tasks.find((t: any) => t.id === taskIdFromUrl);
-          if (targetTask && !selectedTask) {
-              handleOpenTaskDetail(targetTask);
-          }
+        const targetTask = data.tasks.find((t: any) => t.id === taskIdFromUrl);
+        if (targetTask && !selectedTask) {
+          handleOpenTaskDetail(targetTask);
+        }
       }
 
       setLoading(false);
@@ -158,20 +158,20 @@ export default function KanbanBoard() {
 
   useEffect(() => {
     // 🚀 Kết nối thẳng đến VPS của sếp
-    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "https://socket.sanogroup.tv";
-    
+    const socketUrl ="https://socket.sanogroup.tv";
+
     const newSocket = io(socketUrl, {
-        transports: ['websocket', 'polling']
+      transports: ['websocket', 'polling']
     });
-    
+
     setSocket(newSocket);
 
-    newSocket.on("reload_board", () => { 
-        setBoardUpdateSignal(prev => prev + 1); 
+    newSocket.on("reload_board", () => {
+      setBoardUpdateSignal(prev => prev + 1);
     });
     loadUsers(); loadTeams(); loadProjects(); fetchTasks();
     return () => { newSocket.disconnect(); };
-}, []);
+  }, []);
   const isFirstRender = useRef(true);
   useEffect(() => {
     if (isFirstRender.current) { isFirstRender.current = false; return; }
@@ -196,223 +196,223 @@ export default function KanbanBoard() {
   const handleFilterChange = (setter: any, value: any) => { setter(value); setCurrentPage(1); };
 
   const handleSwitchTab = (mode: 'board' | 'list' | 'backlog') => {
-      setViewMode(mode);
-      setCurrentPage(1);
-      setSearchTerm(""); 
+    setViewMode(mode);
+    setCurrentPage(1);
+    setSearchTerm("");
   };
 
   const handleOpenTaskDetail = (task: any) => {
-      setSelectedTask(task);
-      setTaskLinks({
-          scriptLink: task.scriptLink || "",
-          videoLink: task.videoLink || "",
-          publishLink: task.publishLink || ""
-      });
-      setIsDrawerOpen(true);
+    setSelectedTask(task);
+    setTaskLinks({
+      scriptLink: task.scriptLink || "",
+      videoLink: task.videoLink || "",
+      publishLink: task.publishLink || ""
+    });
+    setIsDrawerOpen(true);
 
-      // 🚀 BẮN TASK ID LÊN URL (Để copy link gửi cho người khác)
-      const params = new URLSearchParams(searchParams.toString());
-      params.set("taskId", task.id);
-      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    // 🚀 BẮN TASK ID LÊN URL (Để copy link gửi cho người khác)
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("taskId", task.id);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   };
 
   const handleCloseDrawer = () => {
-      setIsDrawerOpen(false);
-      setTimeout(() => setSelectedTask(null), 300); // Đợi anim đóng xong mới clear data
+    setIsDrawerOpen(false);
+    setTimeout(() => setSelectedTask(null), 300); // Đợi anim đóng xong mới clear data
 
-      // 🚀 GỠ TASK ID KHỎI URL KHI ĐÓNG
-      const params = new URLSearchParams(searchParams.toString());
-      params.delete("taskId");
-      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    // 🚀 GỠ TASK ID KHỎI URL KHI ĐÓNG
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("taskId");
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   };
 
   // Kéo thả Kanban
   const onDragEnd = async (result: any) => {
-      if (!result.destination) return;
-      const { source, destination, draggableId } = result;
-      if (source.droppableId === destination.droppableId) return;
+    if (!result.destination) return;
+    const { source, destination, draggableId } = result;
+    if (source.droppableId === destination.droppableId) return;
 
-      // Cập nhật UI ngay lập tức (Optimistic UI)
-      const sourceCol = [...tasks[source.droppableId]];
-      const destCol = [...tasks[destination.droppableId]];
-      const [movedTask] = sourceCol.splice(source.index, 1);
-      movedTask.status = destination.droppableId;
-      destCol.splice(destination.index, 0, movedTask);
+    // Cập nhật UI ngay lập tức (Optimistic UI)
+    const sourceCol = [...tasks[source.droppableId]];
+    const destCol = [...tasks[destination.droppableId]];
+    const [movedTask] = sourceCol.splice(source.index, 1);
+    movedTask.status = destination.droppableId;
+    destCol.splice(destination.index, 0, movedTask);
 
-      setTasks({ ...tasks, [source.droppableId]: sourceCol, [destination.droppableId]: destCol });
+    setTasks({ ...tasks, [source.droppableId]: sourceCol, [destination.droppableId]: destCol });
 
-      // Bắn API lưu Database
-      try {
-          const res = await fetch(`/api/tasks/${draggableId}`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ status: destination.droppableId })
-          });
-          if (res.ok) {
-              if (socket) socket.emit("board_updated");
-          } else {
-              showToast('error', 'Lỗi chuyển trạng thái');
-              fetchTasks(); // Giật lại data cũ nếu lỗi
-          }
-      } catch (e) {
-          fetchTasks();
+    // Bắn API lưu Database
+    try {
+      const res = await fetch(`/api/tasks/${draggableId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: destination.droppableId })
+      });
+      if (res.ok) {
+        if (socket) socket.emit("board_updated");
+      } else {
+        showToast('error', 'Lỗi chuyển trạng thái');
+        fetchTasks(); // Giật lại data cũ nếu lỗi
       }
+    } catch (e) {
+      fetchTasks();
+    }
   };
 
   // Tạo Task mới
   const handleCreateTaskSubmit = async (taskData: any) => {
-      setIsSubmitting(true);
-      setModalErrors({});
-      try {
-          const res = await fetch("/api/tasks", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(taskData)
-          });
-          const data = await res.json();
-          if (res.ok) {
-              showToast("success", taskData.status === 'BACKLOG' ? "Đã thêm ý tưởng vào kho!" : "Đã tạo Yêu cầu Video!");
-              setIsModalOpen(false);
-              setCurrentPage(1);
-              fetchTasks();
-              
-              // 🚀 PHỤC HỒI SOCKET TẠO TASK
-              if (socket) {
-                  socket.emit("board_updated");
-                  if (data.userIdsToNotify && data.userIdsToNotify.length > 0) {
-                      socket.emit("send_notification", { userIds: data.userIdsToNotify, notification: data.notifications[0] });
-                  } else {
-                      const targetUserId = taskData.contentId || taskData.editorId;
-                      if (targetUserId) {
-                          socket.emit("assign_task", { 
-                              taskId: data.task?.id, 
-                              taskName: data.task?.title || taskData.title, 
-                              assigneeId: targetUserId, 
-                              assignerName: (session?.user as any)?.fullName || "Quản lý" 
-                          });
-                      }
-                  }
-              }
+    setIsSubmitting(true);
+    setModalErrors({});
+    try {
+      const res = await fetch("/api/tasks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(taskData)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast("success", taskData.status === 'BACKLOG' ? "Đã thêm ý tưởng vào kho!" : "Đã tạo Yêu cầu Video!");
+        setIsModalOpen(false);
+        setCurrentPage(1);
+        fetchTasks();
+
+        // 🚀 PHỤC HỒI SOCKET TẠO TASK
+        if (socket) {
+          socket.emit("board_updated");
+          if (data.userIdsToNotify && data.userIdsToNotify.length > 0) {
+            socket.emit("send_notification", { userIds: data.userIdsToNotify, notification: data.notifications[0] });
           } else {
-              setModalErrors({ submit: data.error || "Có lỗi xảy ra" });
-              showToast("error", data.error || "Có lỗi xảy ra");
+            const targetUserId = taskData.contentId || taskData.editorId;
+            if (targetUserId) {
+              socket.emit("assign_task", {
+                taskId: data.task?.id,
+                taskName: data.task?.title || taskData.title,
+                assigneeId: targetUserId,
+                assignerName: (session?.user as any)?.fullName || "Quản lý"
+              });
+            }
           }
-      } catch (error) {
-          showToast("error", "Lỗi kết nối Server");
-      } finally {
-          setIsSubmitting(false);
+        }
+      } else {
+        setModalErrors({ submit: data.error || "Có lỗi xảy ra" });
+        showToast("error", data.error || "Có lỗi xảy ra");
       }
+    } catch (error) {
+      showToast("error", "Lỗi kết nối Server");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Lưu link báo cáo trong Task Detail
   const handleSaveLinks = async () => {
-      setIsSavingLinks(true);
-      setDrawerErrors({});
-      try {
-          const res = await fetch(`/api/tasks/${selectedTask.id}`, {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(taskLinks)
-          });
-          const data = await res.json();
-          if (res.ok) {
-              showToast("success", "Đã lưu cập nhật Link!");
-              fetchTasks();
-              if (socket) socket.emit("board_updated");
-              handleCloseDrawer(); 
-              setTaskLinks({ scriptLink: "", videoLink: "", publishLink: "" });
-              setLinksError("");
-          } else {
-              if (data.field) setDrawerErrors({ [data.field]: data.error });
-              showToast("error", data.error || "Lỗi lưu link");
-          }
-      } catch (error) {
-          showToast("error", "Lỗi kết nối Server");
-      } finally {
-          setIsSavingLinks(false);
+    setIsSavingLinks(true);
+    setDrawerErrors({});
+    try {
+      const res = await fetch(`/api/tasks/${selectedTask.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(taskLinks)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast("success", "Đã lưu cập nhật Link!");
+        fetchTasks();
+        if (socket) socket.emit("board_updated");
+        handleCloseDrawer();
+        setTaskLinks({ scriptLink: "", videoLink: "", publishLink: "" });
+        setLinksError("");
+      } else {
+        if (data.field) setDrawerErrors({ [data.field]: data.error });
+        showToast("error", data.error || "Lỗi lưu link");
       }
+    } catch (error) {
+      showToast("error", "Lỗi kết nối Server");
+    } finally {
+      setIsSavingLinks(false);
+    }
   };
 
   // Đóng / Mở lại Task (Nghiệm thu)
   // Đóng / Mở lại Task (Nghiệm thu)
   const handleToggleCloseTask = async () => {
-      if (!confirm(`Bạn chắc chắn muốn ${selectedTask.isClosed ? 'MỞ LẠI' : 'ĐÓNG (Nghiệm thu)'} task này?`)) return;
-      const newClosedState = !selectedTask.isClosed;
-      try {
-          const res = await fetch(`/api/tasks/${selectedTask.id}`, {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ isClosed: newClosedState })
-          });
-          const data = await res.json();
-          if (res.ok) {
-              showToast("success", newClosedState ? "Đã đóng Task!" : "Đã mở lại Task!");
-              setIsDrawerOpen(false);
-              fetchTasks();
-              
-              // 🚀 PHỤC HỒI SOCKET NGHIỆM THU
-              if (socket) {
-                  socket.emit("board_updated");
-                  if (newClosedState) {
-                      if (data.userIdsToNotify && data.userIdsToNotify.length > 0) {
-                          socket.emit("send_notification", { userIds: data.userIdsToNotify, notification: data.notifications[0] });
-                      } else {
-                          const targetUserId = selectedTask.contentId || selectedTask.editorId;
-                          if (targetUserId) {
-                              socket.emit("approve_task", { 
-                                  taskId: selectedTask.id, 
-                                  taskName: selectedTask.title, 
-                                  workerId: targetUserId 
-                              });
-                          }
-                      }
-                  }
+    if (!confirm(`Bạn chắc chắn muốn ${selectedTask.isClosed ? 'MỞ LẠI' : 'ĐÓNG (Nghiệm thu)'} task này?`)) return;
+    const newClosedState = !selectedTask.isClosed;
+    try {
+      const res = await fetch(`/api/tasks/${selectedTask.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isClosed: newClosedState })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast("success", newClosedState ? "Đã đóng Task!" : "Đã mở lại Task!");
+        setIsDrawerOpen(false);
+        fetchTasks();
+
+        // 🚀 PHỤC HỒI SOCKET NGHIỆM THU
+        if (socket) {
+          socket.emit("board_updated");
+          if (newClosedState) {
+            if (data.userIdsToNotify && data.userIdsToNotify.length > 0) {
+              socket.emit("send_notification", { userIds: data.userIdsToNotify, notification: data.notifications[0] });
+            } else {
+              const targetUserId = selectedTask.contentId || selectedTask.editorId;
+              if (targetUserId) {
+                socket.emit("approve_task", {
+                  taskId: selectedTask.id,
+                  taskName: selectedTask.title,
+                  workerId: targetUserId
+                });
               }
+            }
           }
-      } catch (error) {
-          showToast("error", "Lỗi thao tác");
+        }
       }
+    } catch (error) {
+      showToast("error", "Lỗi thao tác");
+    }
   };
 
   // Đánh Reject (Trả về làm lại)
   const handleRejectTask = async () => {
-      const reason = window.prompt("Nhập lý do yêu cầu làm lại (hoặc để trống):") || "Cần chỉnh sửa thêm theo yêu cầu Sếp.";
-      if (!reason) return; // Nếu user bấm Cancel ở prompt thì hủy
-      
-      try {
-          const res = await fetch(`/api/tasks/${selectedTask.id}`, {
-              method: "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ isClosed: false, status: "DOING" })
-          });
-          const data = await res.json();
-          if (res.ok) {
-              showToast("success", "Đã trả Task về làm lại!");
-              setIsDrawerOpen(false);
-              fetchTasks();
-              
-              // 🚀 PHỤC HỒI SOCKET REJECT
-              if (socket) {
-                  socket.emit("board_updated");
-                  if (data.userIdsToNotify && data.userIdsToNotify.length > 0) {
-                      socket.emit("send_notification", { userIds: data.userIdsToNotify, notification: data.notifications[0] });
-                  } else {
-                      const targetUserId = selectedTask.contentId || selectedTask.editorId;
-                      if (targetUserId) {
-                          socket.emit("reject_task", { 
-                              taskId: selectedTask.id, 
-                              taskName: selectedTask.title, 
-                              workerId: targetUserId, 
-                              reason: reason, 
-                              rejecterName: (session?.user as any)?.fullName || "Quản lý" 
-                          });
-                      }
-                  }
-              }
+    const reason = window.prompt("Nhập lý do yêu cầu làm lại (hoặc để trống):") || "Cần chỉnh sửa thêm theo yêu cầu Sếp.";
+    if (!reason) return; // Nếu user bấm Cancel ở prompt thì hủy
+
+    try {
+      const res = await fetch(`/api/tasks/${selectedTask.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isClosed: false, status: "DOING" })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast("success", "Đã trả Task về làm lại!");
+        setIsDrawerOpen(false);
+        fetchTasks();
+
+        // 🚀 PHỤC HỒI SOCKET REJECT
+        if (socket) {
+          socket.emit("board_updated");
+          if (data.userIdsToNotify && data.userIdsToNotify.length > 0) {
+            socket.emit("send_notification", { userIds: data.userIdsToNotify, notification: data.notifications[0] });
+          } else {
+            const targetUserId = selectedTask.contentId || selectedTask.editorId;
+            if (targetUserId) {
+              socket.emit("reject_task", {
+                taskId: selectedTask.id,
+                taskName: selectedTask.title,
+                workerId: targetUserId,
+                reason: reason,
+                rejecterName: (session?.user as any)?.fullName || "Quản lý"
+              });
+            }
           }
-      } catch (error) {
-          showToast("error", "Lỗi thao tác");
+        }
       }
+    } catch (error) {
+      showToast("error", "Lỗi thao tác");
+    }
   };
 
   const handleClearDoneTasks = async () => {
@@ -423,8 +423,8 @@ export default function KanbanBoard() {
       const data = await res.json();
       if (res.ok) {
         showToast('success', `Đã cất ${data.count} task vào kho lưu trữ!`);
-        fetchTasks(); 
-        if (socket) socket.emit("board_updated"); 
+        fetchTasks();
+        if (socket) socket.emit("board_updated");
       } else {
         showToast('error', data.error || 'Có lỗi xảy ra!');
       }
@@ -441,14 +441,14 @@ export default function KanbanBoard() {
     setIsPushing(true);
     try {
       const res = await fetch(`/api/tasks/${taskToPush.id}`, {
-        method: "PATCH", 
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-            status: "TODO", 
-            teamId: pushData.teamId || undefined, 
-            projectId: pushData.projectId || undefined,
-            contentId: pushData.contentId || undefined,
-            editorId: pushData.editorId || undefined
+        body: JSON.stringify({
+          status: "TODO",
+          teamId: pushData.teamId || undefined,
+          projectId: pushData.projectId || undefined,
+          contentId: pushData.contentId || undefined,
+          editorId: pushData.editorId || undefined
         })
       });
       const data = await res.json();
@@ -459,20 +459,20 @@ export default function KanbanBoard() {
 
         // 🚀 PHỤC HỒI SOCKET REAL-TIME GIAO VIỆC
         if (socket) {
-            socket.emit("board_updated");
-            if (data.userIdsToNotify && data.userIdsToNotify.length > 0) {
-                socket.emit("send_notification", { userIds: data.userIdsToNotify, notification: data.notifications[0] });
-            } else {
-                const targetUserId = pushData.contentId || pushData.editorId;
-                if (targetUserId) {
-                    socket.emit("assign_task", { 
-                        taskId: taskToPush.id, 
-                        taskName: taskToPush.title, 
-                        assigneeId: targetUserId, 
-                        assignerName: (session?.user as any)?.fullName || "Quản lý" 
-                    });
-                }
+          socket.emit("board_updated");
+          if (data.userIdsToNotify && data.userIdsToNotify.length > 0) {
+            socket.emit("send_notification", { userIds: data.userIdsToNotify, notification: data.notifications[0] });
+          } else {
+            const targetUserId = pushData.contentId || pushData.editorId;
+            if (targetUserId) {
+              socket.emit("assign_task", {
+                taskId: taskToPush.id,
+                taskName: taskToPush.title,
+                assigneeId: targetUserId,
+                assignerName: (session?.user as any)?.fullName || "Quản lý"
+              });
             }
+          }
         }
       } else {
         showToast('error', data.error || 'Lỗi giao việc');
@@ -488,27 +488,27 @@ export default function KanbanBoard() {
   const handleDeleteTask = async (taskId: string) => {
     if (!confirm("Sếp có chắc muốn xóa ý tưởng này khỏi kho không?")) return;
     try {
-        const res = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
-        if (res.ok) {
-            showToast("success", "Đã xóa thành công!");
-            fetchTasks();
-            if (socket) socket.emit("board_updated");
-        } else {
-            showToast("error", "Lỗi khi xóa ý tưởng");
-        }
+      const res = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
+      if (res.ok) {
+        showToast("success", "Đã xóa thành công!");
+        fetchTasks();
+        if (socket) socket.emit("board_updated");
+      } else {
+        showToast("error", "Lỗi khi xóa ý tưởng");
+      }
     } catch (error) {
-        showToast("error", "Lỗi kết nối Server");
+      showToast("error", "Lỗi kết nối Server");
     }
   };
 
   // Fake chức năng Chat và Đánh giá (Bổ sung sau nếu cần API thực)
   const handleSendMessage = async () => {
-      if (!chatMessage.trim()) return;
-      setMessages([...messages, { id: Date.now(), sender: "Tôi", text: chatMessage, time: new Date().toLocaleTimeString(), isMine: true }]);
-      setChatMessage("");
+    if (!chatMessage.trim()) return;
+    setMessages([...messages, { id: Date.now(), sender: "Tôi", text: chatMessage, time: new Date().toLocaleTimeString(), isMine: true }]);
+    setChatMessage("");
   };
   const handleEvaluationSubmit = async (score: number, criteriaData: any, note: string) => {
-      showToast("success", "Đã lưu đánh giá KPI!");
+    showToast("success", "Đã lưu đánh giá KPI!");
   };
 
   if (loading) return <div className="flex h-full items-center justify-center animate-pulse text-slate-400"><Loader2 size={32} className="animate-spin text-blue-500" /></div>;
@@ -577,7 +577,7 @@ export default function KanbanBoard() {
           {viewMode === 'board' && (
             <BoardView tasks={tasks} columns={COLUMNS} getTeamColor={getTeamColor} onDragEnd={onDragEnd} onOpenTaskDetail={handleOpenTaskDetail} userRole={userRole} />
           )}
-          
+
           {viewMode === 'list' && (
             <ListView filteredTasks={filteredTasks} columns={COLUMNS} onOpenTaskDetail={handleOpenTaskDetail} currentPage={currentPage} setCurrentPage={setCurrentPage} totalPages={totalPages} totalItems={totalItems} itemsPerPage={ITEMS_PER_PAGE} />
           )}
@@ -585,28 +585,28 @@ export default function KanbanBoard() {
           {viewMode === 'backlog' && (
             <BacklogView
               backlogTasks={backlogTasks}
-              onQuickAdd={handleCreateTaskSubmit} 
+              onQuickAdd={handleCreateTaskSubmit}
               onPushToBoard={(task: any) => {
                 setTaskToPush(task);
                 setIsPushModalOpen(true);
               }}
-              onDelete={handleDeleteTask} 
+              onDelete={handleDeleteTask}
             />
           )}
         </div>
 
         <CreateTaskModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} users={users} teams={teams} onSubmit={handleCreateTaskSubmit} isSubmitting={isSubmitting} errors={modalErrors} projects={projects} />
-        
+
         <TaskDetailDrawer isOpen={isDrawerOpen} onClose={handleCloseDrawer} selectedTask={selectedTask} taskLinks={taskLinks} setTaskLinks={setTaskLinks} errors={drawerErrors} isSavingLinks={isSavingLinks} onSaveLinks={handleSaveLinks} onToggleClose={handleToggleCloseTask} onReject={handleRejectTask} canReject={canReject} messages={messages} chatMessage={chatMessage} setChatMessage={setChatMessage} onSendMessage={handleSendMessage} userRole={userRole} sessionUserId={(session?.user as any)?.id} onSubmitEvaluation={handleEvaluationSubmit} />
-        
-        <PushTaskModal 
-            isOpen={isPushModalOpen}
-            onClose={() => setIsPushModalOpen(false)}
-            task={taskToPush}
-            teams={teams}
-            session={session}
-            onSubmit={handlePushTaskSubmit}
-            isSubmitting={isPushing}
+
+        <PushTaskModal
+          isOpen={isPushModalOpen}
+          onClose={() => setIsPushModalOpen(false)}
+          task={taskToPush}
+          teams={teams}
+          session={session}
+          onSubmit={handlePushTaskSubmit}
+          isSubmitting={isPushing}
         />
       </div>
     </PermissionGuard>

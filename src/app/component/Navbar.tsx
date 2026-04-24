@@ -61,8 +61,10 @@ export default function Navbar({ isSidebarOpen, setSidebarOpen }: NavbarProps) {
         if (Array.isArray(data)) setNotifications(data);
       });
 
-    const socketInstance = io({
-      transports: ["websocket"], 
+    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "https://socket.sanogroup.tv";
+
+    const socketInstance = io(socketUrl, {
+      transports: ["websocket", "polling"], // Thêm polling để backup cho chắc
       reconnectionAttempts: 5,  
       reconnectionDelay: 2000,  
     });

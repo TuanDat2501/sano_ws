@@ -20,7 +20,7 @@ export default function FloatingChat() {
     const [socket, setSocket] = useState<Socket | null>(null);
     const chatEndRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
     const audioRef = useRef<HTMLAudioElement>(null);
-    
+
     // 🚀 TÚI NHỚ ẨN: Giúp Socket đọc được danh sách chat hiện tại mà không làm web bị giật (re-render)
     const activeChatsRef = useRef(activeChats);
 
@@ -51,7 +51,12 @@ export default function FloatingChat() {
             })
             .catch(err => console.error("Lỗi tải users:", err));
 
-        const newSocket = io();
+        const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "https://socket.sanogroup.tv";
+
+        // Gọi thẳng đích danh
+        const newSocket = io(socketUrl, {
+            transports: ['websocket', 'polling']
+        });
         setSocket(newSocket);
 
         const handleConnect = () => {
@@ -94,8 +99,8 @@ export default function FloatingChat() {
             const { roomId, message } = data;
 
             if (!roomId || !message) return;
-            if (message.senderId === currentUser?.id) return; 
-            if (message.targetId && message.targetId !== currentUser?.id) return; 
+            if (message.senderId === currentUser?.id) return;
+            if (message.targetId && message.targetId !== currentUser?.id) return;
             if (pathname === '/chat') return;
 
             const isChatAlreadyOpen = activeChatsRef.current.some(c => c.roomId === roomId);
@@ -103,7 +108,7 @@ export default function FloatingChat() {
             // 🚀 BƯỚC NẢY MOBILE: Nếu đang xài điện thoại, KHÔNG bật popup lơ lửng, chỉ báo Notification (hoặc có thể chuyển thẳng sang /chat)
             if (!isChatAlreadyOpen) {
                 playNotificationSound();
-                
+
                 // Nếu là màn hình rộng (Desktop) thì mới búng Popup Chat lên
                 if (window.innerWidth >= 768) {
                     try {
