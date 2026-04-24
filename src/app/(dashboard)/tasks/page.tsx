@@ -155,17 +155,51 @@ export default function KanbanBoard() {
   const loadTeams = async () => {
     try { const res = await fetch("/api/teams"); const data = await res.json(); if (Array.isArray(data)) setTeams(data); } catch (error) { }
   };
-
+  useEffect(() => {
+    const taskIdFromUrl = searchParams.get("taskId");
+    
+    // Nếu có ID trên URL và hiện tại chưa hiển thị đúng task đó
+    if (taskIdFromUrl && selectedTask?.id !== taskIdFromUrl) {
+      const fetchAndOpenTask = async () => {
+        try {
+          // Gọi API lấy thông tin chi tiết của task ĐÍCH DANH (Bất kể nó ở trang nào)
+          const res = await fetch(`/api/tasks/${taskIdFromUrl}`);
+          if (res.ok) {
+            const taskData = await res.json();
+            handleOpenTaskDetail(taskData);
+          }
+        } catch (err) {
+          console.error("Lỗi khi tự động mở task từ URL:", err);
+        }
+      };
+      
+      fetchAndOpenTask();
+    }
+  }, [searchParams, socket]);
+  
   useEffect(() => {
     // 🚀 Kết nối thẳng đến VPS của sếp
-    const socketUrl ="https://socket.sanogroup.tv";
+    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "https://socket.sanogroup.tv";
 
     const newSocket = io(socketUrl, {
       transports: ['websocket', 'polling']
     });
 
     setSocket(newSocket);
-
+    newSocket.on("receive_message", (data: any) => {
+      setMessages((prev) => {
+        // Tránh bị lặp tin nhắn nếu mình chính là người vừa bấm gửi
+        if (prev.some(m => m.id === data.id)) return prev;
+        
+        return [...prev, {
+          id: data.id,
+          sender: data.sender,
+          text: data.text,
+          time: data.time || new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+          isMine: data.senderId === (session?.user as any)?.id
+        }];
+      });
+    });
     newSocket.on("reload_board", () => {
       setBoardUpdateSignal(prev => prev + 1);
     });
@@ -200,7 +234,29 @@ export default function KanbanBoard() {
     setCurrentPage(1);
     setSearchTerm("");
   };
-
+  const loadTaskComments = async (taskId: string) => {
+    try {
+      const res = await fetch(`/api/tasks/${taskId}/comments`);
+      if (res.ok) {
+        const data = await res.json();
+        const formattedMessages = data.map((c: any) => ({
+          id: c.id,
+          sender: c.user?.fullName || "Ẩn danh",
+          text: c.text,
+          time: new Date(c.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+          isMine: c.userId === (session?.user as any)?.id
+        }));
+        
+        // Đặt lại danh sách tin nhắn (Giữ lại câu chào hệ thống trên cùng)
+        setMessages([
+          { id: "system", sender: "Hệ thống", text: "Chào mừng đến với không gian thảo luận Task!", time: "", isMine: false },
+          ...formattedMessages
+        ]);
+      }
+    } catch (error) {
+      console.error("Lỗi tải lịch sử comment:", error);
+    }
+  };
   const handleOpenTaskDetail = (task: any) => {
     setSelectedTask(task);
     setTaskLinks({
@@ -209,11 +265,17 @@ export default function KanbanBoard() {
       publishLink: task.publishLink || ""
     });
     setIsDrawerOpen(true);
-
+    loadTaskComments(task.id);
+    if (socket) {
+      socket.emit("join_task", task.id);
+    }
     // 🚀 BẮN TASK ID LÊN URL (Để copy link gửi cho người khác)
-    const params = new URLSearchParams(searchParams.toString());
-    params.set("taskId", task.id);
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    const currentTaskId = searchParams.get("taskId");
+    if (currentTaskId !== task.id) {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("taskId", task.id);
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    }
   };
 
   const handleCloseDrawer = () => {
