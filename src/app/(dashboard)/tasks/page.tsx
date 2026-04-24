@@ -130,6 +130,16 @@ export default function KanbanBoard() {
         setTotalPages(data.totalPages || 1);
         setTotalItems(data.total || 0);
       }
+      
+      // 🚀 TỰ ĐỘNG MỞ NGĂN KÉO NẾU TRÊN URL CÓ CHỨA TASK ID
+      const taskIdFromUrl = searchParams.get("taskId");
+      if (taskIdFromUrl && !isDrawerOpen) {
+          const targetTask = data.tasks.find((t: any) => t.id === taskIdFromUrl);
+          if (targetTask && !selectedTask) {
+              handleOpenTaskDetail(targetTask);
+          }
+      }
+
       setLoading(false);
     } catch (err) { setLoading(false); }
   };
@@ -191,11 +201,21 @@ export default function KanbanBoard() {
           publishLink: task.publishLink || ""
       });
       setIsDrawerOpen(true);
+
+      // 🚀 BẮN TASK ID LÊN URL (Để copy link gửi cho người khác)
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("taskId", task.id);
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   };
 
   const handleCloseDrawer = () => {
       setIsDrawerOpen(false);
       setTimeout(() => setSelectedTask(null), 300); // Đợi anim đóng xong mới clear data
+
+      // 🚀 GỠ TASK ID KHỎI URL KHI ĐÓNG
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("taskId");
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   };
 
   // Kéo thả Kanban
@@ -291,6 +311,9 @@ export default function KanbanBoard() {
               showToast("success", "Đã lưu cập nhật Link!");
               fetchTasks();
               if (socket) socket.emit("board_updated");
+              handleCloseDrawer(); 
+              setTaskLinks({ scriptLink: "", videoLink: "", publishLink: "" });
+              setLinksError("");
           } else {
               if (data.field) setDrawerErrors({ [data.field]: data.error });
               showToast("error", data.error || "Lỗi lưu link");
@@ -404,7 +427,6 @@ export default function KanbanBoard() {
     }
   };
 
-  // Giao việc từ kho
   // Giao việc từ kho
   const handlePushTaskSubmit = async (pushData: { teamId: string, projectId: string, contentId: string, editorId: string }) => {
     if (!taskToPush) return;
