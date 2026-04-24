@@ -242,8 +242,12 @@ export default function UsersPage() {
                                                 <td className="px-4 md:px-6 py-3 md:py-4">
                                                     <div className="flex items-center gap-2.5 md:gap-3">
                                                         <div className={`h-8 w-8 md:h-10 md:w-10 rounded-full flex items-center justify-center font-black shrink-0 text-xs md:text-sm ${user.isActive ? 'bg-red-50 border border-red-100 text-red-600' : 'bg-slate-200 border border-slate-300 text-slate-500'}`}>
-                                                            {user.fullName?.charAt(0).toUpperCase()}
+                                                           
+                                                            {user.avatarUrl ? (
+                                                            <img src={user.avatarUrl} alt={user.fullName} className="h-8 w-8 md:h-10 md:w-10 rounded-full object-cover" />
+                                                        ) :  user.fullName?.charAt(0).toUpperCase()}
                                                         </div>
+                                                        
                                                         <div className="min-w-0">
                                                             <span className={`font-bold text-sm md:text-base truncate block ${user.isActive ? 'text-slate-900' : 'text-slate-500 line-through'}`}>{user.fullName}</span>
                                                             <div className="flex items-center gap-2 mt-0.5">

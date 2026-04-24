@@ -31,14 +31,14 @@ export async function PUT(
 
         // 2. LẤY DỮ LIỆU TỪ FORM (Frontend)
         const body = await request.json();
-        const { username, fullName, role, teamId, password, isActive } = body;
+        const { username, fullName, role, teamId, password, isActive, avatarUrl } = body;
 
         // 3. CHUẨN BỊ GIỎ DỮ LIỆU UPDATE
         const updateData: any = {};
         
         if (fullName) updateData.fullName = fullName;
         if (username) updateData.username = username;
-
+        if (avatarUrl) updateData.avatarUrl = avatarUrl;
         // Xử lý mật khẩu (Chỉ băm nếu sếp có gõ pass mới)
         if (password && password.trim() !== "") {
             updateData.passwordHash = await bcrypt.hash(password, 10);
@@ -60,6 +60,7 @@ export async function PUT(
                 username: true,
                 fullName: true,
                 role: true,
+                avatarUrl: true,
                 teamId: true,
                 isActive: true, // Trả về trạng thái khóa
                 createdAt: true,

@@ -35,6 +35,7 @@ export default function ChannelFormDrawer({
     // 🚀 LOGIC LỌC NHÂN SỰ CHỈ THUỘC TEAM ĐÃ CHỌN
     const teamMembers = useMemo(() => {
         if (!formData.teamId || !allUsers) return [];
+
         return allUsers.filter((u: any) => u.teamId === formData.teamId);
     }, [formData.teamId, allUsers]);
 
@@ -293,9 +294,9 @@ export default function ChannelFormDrawer({
                                                     const memberData = (formData.members || []).find((m: any) => m.userId === user.id);
 
                                                     return (
-                                                        <div key={user.id} className={`flex items-center justify-between p-3 rounded-xl border transition-all bg-white ${isSelected ? 'border-red-200 shadow-sm' : 'border-slate-100 opacity-70 hover:opacity-100 cursor-pointer'}`}  onClick={() => toggleMember(user.id)}>
+                                                        <div key={user.id} className={`flex items-center justify-between p-3 rounded-xl border transition-all bg-white ${isSelected ? 'border-red-200 shadow-sm' : 'border-slate-100 opacity-70 hover:opacity-100 cursor-pointer'}`}  >
                                                             <div className="flex items-center gap-3" style={{ cursor: 'pointer' }}>
-                                                                <button type="button"  className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isSelected ? 'bg-red-600 text-white shadow-md shadow-red-600/20' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}>
+                                                                <button type="button" onClick={() => toggleMember(user.id)}  className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isSelected ? 'bg-red-600 text-white shadow-md shadow-red-600/20' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}>
                                                                     {isSelected ? <UserCheck size={18}/> : <UserPlus size={18}/>}
                                                                 </button>
                                                                 <div>

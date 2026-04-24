@@ -47,7 +47,7 @@ export async function GET(req: Request) {
         // 1. QUERY 1: LẤY 50 USERS
         const users = await prisma.user.findMany({
             where: userWhere,
-            select: { id: true, fullName: true, role: true }
+            select: { id: true, fullName: true, role: true, avatarUrl: true }
         });
 
         if (users.length === 0) return NextResponse.json({ weekData: { year, month, weekIndex }, kpiList: [] });
@@ -118,7 +118,7 @@ export async function GET(req: Request) {
 
             return {
                 userId: user.id, fullName: user.fullName, role: user.role,
-                targetValue, actualValue: actualCount, percent, logs: allUserLogs
+                targetValue, actualValue: actualCount, percent, logs: allUserLogs,avatarUrl: (user as any).avatarUrl || null
             };
         });
 

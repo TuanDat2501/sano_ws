@@ -58,7 +58,9 @@ export default function KpiTeamTable({ kpiList, handleUpdateTarget, onRowClick, 
                                         <td className="px-4 md:px-6 py-3 md:py-4">
                                             <div className="flex items-center gap-2.5 md:gap-3">
                                                 <div className="h-8 w-8 md:h-10 md:w-10 rounded-full bg-slate-100 flex items-center justify-center font-black text-slate-600 shrink-0 text-xs md:text-base">
-                                                    {user.fullName.charAt(0).toUpperCase()}
+                                                    {user.avatarUrl ? (
+                                                        <img src={user.avatarUrl} alt={user.fullName} className="h-8 w-8 md:h-10 md:w-10 rounded-full object-cover" />
+                                                    ) :  user.fullName?.charAt(0).toUpperCase()}
                                                 </div>
                                                 <div>
                                                     <p className="font-bold text-xs md:text-sm text-slate-900 group-hover:text-blue-700 transition-colors line-clamp-1">{user.fullName}</p>

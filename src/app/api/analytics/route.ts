@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-export const dynamic = "force-dynamic";
 
+export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
     try {
@@ -18,243 +18,312 @@ export async function GET(req: Request) {
         const { searchParams } = new URL(req.url);
         const month = parseInt(searchParams.get("month") || (new Date().getMonth() + 1).toString());
         const year = parseInt(searchParams.get("year") || new Date().getFullYear().toString());
+        const week = parseInt(searchParams.get("week") || "0");
         const teamId = searchParams.get("teamId") || "ALL";
 
-        const startDate = new Date(year, month - 1, 1);
-        const endDate = new Date(year, month, 0, 23, 59, 59);
+        // 🚀 LOGIC TÍNH NGÀY TUẦN LIÊN TỤC (KHÔNG BỊ LỖI GIAO THÁNG)
+        let startDate = new Date(year, month - 1, 1);
+        let endDate = new Date(year, month, 0, 23, 59, 59);
+
+        if (week > 0) {
+            const firstDayOfMonth = new Date(year, month - 1, 1);
+            const lastDayOfMonth = new Date(year, month, 0);
+
+            const dayOfWeek = firstDayOfMonth.getDay(); 
+            const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+            const startOfFirstWeek = new Date(year, month - 1, 1 + diffToMonday);
+
+            const startOfWeek = new Date(startOfFirstWeek);
+            startOfWeek.setDate(startOfFirstWeek.getDate() + (week - 1) * 7);
+
+            const endOfWeek = new Date(startOfWeek);
+            endOfWeek.setDate(startOfWeek.getDate() + 6);
+
+            const actualStart = startOfWeek < firstDayOfMonth ? firstDayOfMonth : startOfWeek;
+            const actualEnd = endOfWeek > lastDayOfMonth ? lastDayOfMonth : endOfWeek;
+
+            startDate = actualStart;
+            endDate = new Date(actualEnd.getFullYear(), actualEnd.getMonth(), actualEnd.getDate(), 23, 59, 59);
+        }
 
         const teamFilter = teamId !== "ALL" ? { teamId } : {};
 
-        // 🚀 BẮN MULTI-QUERY LẤY THÊM BẢNG REQUEST (ĐỀ XUẤT)
+        const kpiWhere: any = { month, year, user: { ...teamFilter } };
+        if (week > 0) kpiWhere.weekNumber = week;
+
+        // 🚀 BẮN MULTI-QUERY LẤY TOÀN BỘ DATA
         const [
-            teams,
-            users,
-            taskLogsThisMonth,
-            kpisThisMonth,
-            requestsThisMonth
+            teams, users, taskLogsThisMonth, kpisThisMonth,
+            revenuesThisMonth, allChannels, evaluationsThisMonth, projects,
+            taskStatusCounts, leadTimeTasks // 🚀 MỚI: Thêm truy vấn lấy lịch sử Task để tính Lead Time
         ] = await Promise.all([
-            prisma.team.findMany({
-                where: { users: { some: { role: { notIn: ["ADMIN", "BAN_GIAM_DOC", "HR"] } } } },
-                select: { id: true, name: true }
-            }),
+            prisma.team.findMany({ select: { id: true, name: true } }),
             prisma.user.findMany({
                 where: { ...teamFilter, role: { notIn: ["ADMIN", "BAN_GIAM_DOC", "HR"] } },
                 select: { id: true, fullName: true, role: true, isActive: true, createdAt: true, teamId: true }
             }),
             prisma.taskLog.findMany({
-                where: {
-                    createdAt: { gte: startDate, lte: endDate },
-                    user: { ...teamFilter, role: { notIn: ["ADMIN", "BAN_GIAM_DOC", "HR"] } },
-                    // 🚀 PHẢI CÓ COMPLETE_TASK Ở ĐÂY
-                    action: {
-                        in: ["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK"]
-                    }
-                },
+                where: { createdAt: { gte: startDate, lte: endDate }, user: { ...teamFilter, role: { notIn: ["ADMIN", "BAN_GIAM_DOC", "HR"] } }, action: { in: ["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK"] } },
                 include: { user: { select: { role: true } } }
             }),
-            prisma.weeklyKPI.findMany({
-                where: { month, year, user: { ...teamFilter, role: { notIn: ["ADMIN", "BAN_GIAM_DOC", "HR"] } } },
-                include: { user: { select: { id: true } } }
+            prisma.weeklyKPI.findMany({ where: kpiWhere }),
+            prisma.dailyRevenue.findMany({ 
+                where: { date: { gte: startDate, lte: endDate }, channel: teamFilter },
+                include: { channel: { include: { team: { select: { name: true } } } } } 
             }),
-            // Lấy tất cả Request (Đề xuất) trong tháng
-            prisma.request.findMany({
-                where: {
-                    createdAt: { gte: startDate, lte: endDate },
-                    ...teamFilter // Lọc đơn theo Team nếu có
+            prisma.channel.findMany({ where: teamFilter, include: { team: { select: { name: true } } } }),
+            prisma.evaluation.findMany({ 
+                where: { createdAt: { gte: startDate, lte: endDate }, task: teamFilter },
+                include: { task: { select: { contentId: true, editorId: true } } }
+            }),
+            prisma.project.findMany({
+                where: teamFilter,
+                include: { tasks: { select: { status: true } }, supervisor: { select: { fullName: true } } }
+            }),
+            prisma.task.groupBy({
+                by: ['status'],
+                where: teamFilter,
+                _count: { id: true }
+            }),
+            // 🚀 MỚI: Truy vấn lịch sử các khâu để đo thời gian (Lead Time)
+            prisma.task.findMany({
+                where: { 
+                    ...teamFilter,
+                    taskLogs: { some: { createdAt: { gte: startDate, lte: endDate } } }
+                },
+                select: {
+                    id: true,
+                    taskLogs: {
+                        select: { action: true, createdAt: true },
+                        orderBy: { createdAt: 'asc' }
+                    }
                 }
             })
         ]);
 
         // ==========================================
-        // 🧠 XỬ LÝ SỐ LIỆU SẢN XUẤT (TASKS & KPI)
+        // 1. XỬ LÝ DOANH THU, VIEW, KÊNH VÀ TEAM
         // ==========================================
-
-        const isDoneLog = (l: any) => {
-            return ["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK"].includes(l.action) ||
-                   (l.action === "UPDATE_STATUS" && l.details && l.details.includes("sang [DONE]"));
-        };
-
-        // 🚀 FIX LỖI 1: Dùng Set() gom nhóm theo taskId. Đảm bảo 1 task có 3 log DONE cũng chỉ đếm là 1.
-        let totalOutput = new Set(taskLogsThisMonth.filter(isDoneLog).map((l:any) => l.taskId)).size;
+        let totalRevenue = 0;
+        let totalViews = 0;
         
-        // 🚀 FIX LỖI 2: Phân bổ tác vụ đếm trực tiếp bằng chữ "SUBMIT_...", không quan tâm ai là người bấm.
-        let scriptCount = new Set(taskLogsThisMonth.filter((l:any) => l.action === "SUBMIT_SCRIPT").map((l:any) => l.taskId)).size;
-        let videoCount = new Set(taskLogsThisMonth.filter((l:any) => l.action === "SUBMIT_VIDEO").map((l:any) => l.taskId)).size;
-        let publishCount = new Set(taskLogsThisMonth.filter((l:any) => l.action === "PUBLISH_VIDEO" ).map((l:any) => l.taskId)).size;
-
-        // Tính KPI (Sử dụng Set để chống đúp điểm cho nhân viên)
-        const userKpiMap: Record<string, { target: number, actualTasks: Set<string> }> = {};
-        kpisThisMonth.forEach((kpi:any) => {
-            if (!userKpiMap[kpi.userId]) userKpiMap[kpi.userId] = { target: 0, actualTasks: new Set() };
-            userKpiMap[kpi.userId].target += kpi.targetValue;
-        });
+        const teamRevByDay: Record<string, Record<string, number>> = {};
+        const activeTeams = new Set<string>();
+        const channelRevByDay: Record<string, Record<string, number>> = {};
+        const channelViewsByDay: Record<string, Record<string, number>> = {};
+        const activeChannels = new Set<string>();
+        const dailyOverallTrend: Record<string, { revenue: number, views: number }> = {};
+        const channelViewsMap: Record<string, number> = {};
         
-        taskLogsThisMonth.forEach((log:any) => {
-            if (isDoneLog(log) && userKpiMap[log.userId]) {
-                userKpiMap[log.userId].actualTasks.add(log.taskId); // Thêm ID task vào mảng lưới lọc
-            }
+        revenuesThisMonth.forEach((r: any) => {
+            totalRevenue += r.amount;
+            totalViews += r.views;
+            
+            const dayKey = `${new Date(r.date).getDate().toString().padStart(2, '0')}/${(new Date(r.date).getMonth() + 1).toString().padStart(2, '0')}`;
+            
+            const teamName = r.channel?.team?.name || "Khác";
+            activeTeams.add(teamName);
+            if (!teamRevByDay[dayKey]) teamRevByDay[dayKey] = {};
+            teamRevByDay[dayKey][teamName] = (teamRevByDay[dayKey][teamName] || 0) + r.amount;
+
+            const channelName = r.channel?.name || "Khác";
+            activeChannels.add(channelName);
+            if (!channelRevByDay[dayKey]) channelRevByDay[dayKey] = {};
+            channelRevByDay[dayKey][channelName] = (channelRevByDay[dayKey][channelName] || 0) + r.amount;
+
+            if (!channelViewsByDay[dayKey]) channelViewsByDay[dayKey] = {};
+            channelViewsByDay[dayKey][channelName] = (channelViewsByDay[dayKey][channelName] || 0) + r.views; 
+
+            if (!dailyOverallTrend[dayKey]) dailyOverallTrend[dayKey] = { revenue: 0, views: 0 };
+            dailyOverallTrend[dayKey].revenue += r.amount;
+            dailyOverallTrend[dayKey].views += r.views;
+
+            channelViewsMap[channelName] = (channelViewsMap[channelName] || 0) + r.views;
         });
 
-        let hrHealth = { excellent: 0, good: 0, pip: 0 };
-        Object.values(userKpiMap).forEach((d:any) => {
-            const actual = d.actualTasks.size; // Lấy số lượng thực tế sau khi đã lọc trùng
-            const p = d.target > 0 ? (actual / d.target) * 100 : 0;
-            if (p >= 100) hrHealth.excellent++;
-            else if (p >= 80) hrHealth.good++;
-            else if (d.target > 0) hrHealth.pip++;
-        });
+        const revenueTrend = [];
+        const channelRevenueTrend = []; 
+        const channelViewsTrend = []; 
+        const overallTrend = []; 
+        
+        const activeTeamNames = Array.from(activeTeams);
+        const activeChannelNames = Array.from(activeChannels);
 
-        // ==========================================
-        // 💰 XỬ LÝ SỐ LIỆU HÀNH CHÍNH / ĐỀ XUẤT (REQUESTS)
-        // ==========================================
-        let pendingRequestsCount = 0;
-        const requestTypes = { hr: 0, finance: 0, equipment: 0, ads: 0 };
-        const userPendingReqMap: Record<string, number> = {};
+        // Chạy vòng lặp chuẩn theo ngày
+        const loopDate = new Date(startDate);
+        loopDate.setHours(0, 0, 0, 0);
 
-        requestsThisMonth.forEach((req:any) => {
-            // Đếm số đơn chờ duyệt
-            if (req.status === "PENDING_1" || req.status === "PENDING_2") {
-                pendingRequestsCount++;
-                userPendingReqMap[req.requesterId] = (userPendingReqMap[req.requesterId] || 0) + 1;
-            }
-            // Phân loại nhóm đơn
-            if (["NGHI_PHEP", "DI_MUON_VE_SOM", "LAM_REMOTE"].includes(req.type)) requestTypes.hr++;
-            else if (["TAM_UNG", "THUONG", "THANH_TOAN"].includes(req.type)) requestTypes.finance++;
-            else if (req.type === "MUA_SAM") requestTypes.equipment++;
-            else if (req.type === "CHAY_ADS") requestTypes.ads++;
-        });
+        while (loopDate <= endDate) {
+            const dayKey = `${loopDate.getDate().toString().padStart(2, '0')}/${(loopDate.getMonth() + 1).toString().padStart(2, '0')}`;
+            
+            const dayDataTeam: any = { date: dayKey };
+            activeTeamNames.forEach(team => { dayDataTeam[team] = teamRevByDay[dayKey]?.[team] || 0; });
+            revenueTrend.push(dayDataTeam);
 
+            const dayDataChannelRev: any = { date: dayKey };
+            const dayDataChannelView: any = { date: dayKey };
+            activeChannelNames.forEach(channel => { 
+                dayDataChannelRev[channel] = channelRevByDay[dayKey]?.[channel] || 0; 
+                dayDataChannelView[channel] = channelViewsByDay[dayKey]?.[channel] || 0; 
+            });
+            channelRevenueTrend.push(dayDataChannelRev);
+            channelViewsTrend.push(dayDataChannelView);
 
+            overallTrend.push({
+                date: dayKey,
+                revenue: dailyOverallTrend[dayKey]?.revenue || 0,
+                views: dailyOverallTrend[dayKey]?.views || 0
+            });
 
-        const trendPromises = [];
-        // Lặp 6 lần để lấy data của tháng hiện tại và 5 tháng trước đó
-        for (let i = 5; i >= 0; i--) {
-            let d = new Date(year, month - 1 - i, 1);
-            let m = d.getMonth() + 1;
-            let y = d.getFullYear();
-            let dStart = new Date(y, m - 1, 1);
-            let dEnd = new Date(y, m, 0, 23, 59, 59);
-
-            // Bắn truy vấn lấy Target (KPI) và Actual (TaskLog) của từng tháng
-            trendPromises.push(
-                Promise.all([
-                    prisma.weeklyKPI.findMany({
-                        where: { month: m, year: y, user: { ...teamFilter, role: { notIn: ["ADMIN", "BAN_GIAM_DOC", "HR"] } } }
-                    }),
-
-                    // 🚀 SỬA Ở ĐÂY: Chỉ đếm số lượng Task đã chốt DONE (Đường Xanh)
-                    prisma.taskLog.count({
-                        where: {
-                            createdAt: { gte: dStart, lte: dEnd },
-                            user: { ...teamFilter, role: { notIn: ["ADMIN", "BAN_GIAM_DOC", "HR"] } },
-                            // Chỉ lấy log Đóng task (Cron Job) HOẶC Kéo thẻ sang DONE (Real-time)
-
-                            OR: [
-                                { action: "COMPLETE_TASK" },
-                                { action: "UPDATE_STATUS", details: { contains: "sang [DONE]" } }
-                            ]
-                        }
-                    })
-                ]).then(([kpis, actualCount]) => ({
-                    name: `T${m < 10 ? '0' + m : m}`,
-                    Target: kpis.reduce((sum, k) => sum + k.targetValue, 0),
-                    Actual: actualCount // <-- Trả về số lượng Task thực tế hoàn thành
-                }))
-            );
+            loopDate.setDate(loopDate.getDate() + 1);
         }
 
+        const topChannelsByViews = Object.entries(channelViewsMap)
+            .map(([name, views]) => ({ name, views }))
+            .sort((a, b) => b.views - a.views)
+            .slice(0, 5);
+
+        const monetMap: any = { DA_BAT: "Đã bật ($)", DA_DU_DIEU_KIEN: "Đủ ĐK", CHO_DUYET: "Chờ duyệt", CHUA_DAT: "Chưa đạt", TAT_KIEM_TIEN: "Tắt kiếm tiền" };
+        const monetStatusMap: Record<string, any> = {
+            DA_BAT: { name: "Đã bật ($)", fill: "#10b981", value: 0 },
+            DA_DU_DIEU_KIEN: { name: "Đủ ĐK", fill: "#3b82f6", value: 0 },
+            CHO_DUYET: { name: "Chờ duyệt", fill: "#f59e0b", value: 0 },
+            CHUA_DAT: { name: "Chưa đạt", fill: "#94a3b8", value: 0 },
+            TAT_KIEM_TIEN: { name: "Tắt kiếm tiền", fill: "#ef4444", value: 0 },
+        };
+
+        const channelGrid = allChannels.map((c: any) => {
+            if(monetStatusMap[c.monetization]) monetStatusMap[c.monetization].value++;
+            const cRevs = revenuesThisMonth.filter((r: any) => r.channelId === c.id);
+            const totalRev = cRevs.reduce((sum: number, r: any) => sum + r.amount, 0);
+            const totalV = cRevs.reduce((sum: number, r: any) => sum + r.views, 0);
+            return {
+                id: c.id, name: c.name, team: c.team?.name || "Chưa có nhóm", monetization: c.monetization,
+                monetizationLabel: monetMap[c.monetization] || c.monetization,
+                revenue: totalRev, views: totalV, rpm: totalV > 0 ? (totalRev / totalV) * 1000 : 0
+            };
+        }).sort((a: any, b: any) => b.revenue - a.revenue);
+
         // ==========================================
-        // ⏱️ XỬ LÝ SỐ LIỆU LEAD TIME (ĐIỂM NGHẼN)
-        // Lấy toàn bộ lịch sử của các Task có hoạt động trong tháng
+        // 2. XỬ LÝ ĐÁNH GIÁ CHẤT LƯỢNG (EVALUATIONS)
         // ==========================================
-        const activeTaskIds = [...new Set(taskLogsThisMonth.map(l => l.taskId))];
+        let totalScoreSum = 0;
+        const userScoreMap: Record<string, { total: number, count: number }> = {};
+        evaluationsThisMonth.forEach((e: any) => {
+            totalScoreSum += e.score;
+            const cid = e.task?.contentId; const eid = e.task?.editorId;
+            if (cid) { userScoreMap[cid] = userScoreMap[cid] || { total: 0, count: 0 }; userScoreMap[cid].total += e.score; userScoreMap[cid].count++; }
+            if (eid) { userScoreMap[eid] = userScoreMap[eid] || { total: 0, count: 0 }; userScoreMap[eid].total += e.score; userScoreMap[eid].count++; }
+        });
+        const avgQualityScore = evaluationsThisMonth.length > 0 ? (totalScoreSum / evaluationsThisMonth.length) : 0;
+
+        // ==========================================
+        // 3. XỬ LÝ DỰ ÁN (PROJECT HEALTH)
+        // ==========================================
+        const projectHealth = projects.map((p: any) => {
+            const total = p.tasks.length; const done = p.tasks.filter((t: any) => t.status === "DONE").length;
+            return {
+                id: p.id, name: p.name, supervisor: p.supervisor?.fullName || "Chưa gán",
+                status: p.status, progress: total > 0 ? Math.round((done / total) * 100) : 0,
+                totalTasks: total, doneTasks: done
+            };
+        }).sort((a,b) => b.progress - a.progress);
+
+        // ==========================================
+        // 4. XỬ LÝ SẢN LƯỢNG TASK & HR
+        // ==========================================
+        const isDoneLog = (l: any) => ["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK"].includes(l.action) || (l.action === "UPDATE_STATUS" && l.details?.includes("sang [DONE]"));
+        let totalOutput = new Set(taskLogsThisMonth.filter(isDoneLog).map((l:any) => l.taskId)).size;
+
+        const userKpiMap: Record<string, { target: number, actualTasks: Set<string> }> = {};
+        kpisThisMonth.forEach((kpi:any) => { if (!userKpiMap[kpi.userId]) userKpiMap[kpi.userId] = { target: 0, actualTasks: new Set() }; userKpiMap[kpi.userId].target += kpi.targetValue; });
+        taskLogsThisMonth.forEach((log:any) => { if (isDoneLog(log) && userKpiMap[log.userId]) userKpiMap[log.userId].actualTasks.add(log.taskId); });
+
+        // ==========================================
+        // 5. XỬ LÝ PHỄU TÁC VỤ (TASK PIPELINE)
+        // ==========================================
+        const statusMapVi: any = { BACKLOG: "Kho Ý Tưởng", TODO: "Cần Làm", DOING: "Đang Làm", REVIEW: "Chờ Duyệt", DONE: "Hoàn Thành" };
+        const funnelOrder = ["BACKLOG", "TODO", "DOING", "REVIEW", "DONE"];
+        const rawFunnel: any = { BACKLOG: 0, TODO: 0, DOING: 0, REVIEW: 0, DONE: 0 };
         
-        const fullTaskLogs = await prisma.taskLog.findMany({
-            where: { taskId: { in: activeTaskIds } },
-            orderBy: { createdAt: 'asc' }
-        });
-
-        const logsByTask: Record<string, any[]> = {};
-        fullTaskLogs.forEach((log:any) => {
-            if (!logsByTask[log.taskId]) logsByTask[log.taskId] = [];
-            logsByTask[log.taskId].push(log);
-        });
-
-        let scriptTimeTotal = 0, scriptCountLT = 0;
-        let videoTimeTotal = 0, videoCountLT = 0;
-        let publishTimeTotal = 0, publishCountLT = 0;
-
-        Object.values(logsByTask).forEach((logs:any) => {
-            // Tìm thời điểm xảy ra các hành động (Lấy mốc đầu tiên nếu bị bấm nhiều lần)
-            const createTime = logs.find((l:any) => l.action === "CREATE_TASK")?.createdAt?.getTime() || logs[0]?.createdAt?.getTime(); 
-            const scriptTime = logs.find((l:any) => l.action === "SUBMIT_SCRIPT")?.createdAt?.getTime();
-            const videoTime = logs.find((l:any) => l.action === "SUBMIT_VIDEO")?.createdAt?.getTime();
-            const publishTime = logs.find((l:any) => l.action === "PUBLISH_VIDEO" || l.action === "COMPLETE_TASK")?.createdAt?.getTime();
-
-            // Tính số ngày (1 ngày = 1000 * 60 * 60 * 24 milliseconds)
-            if (createTime && scriptTime && scriptTime > createTime) {
-                scriptTimeTotal += (scriptTime - createTime) / 86400000;
-                scriptCountLT++;
-            }
-            if (scriptTime && videoTime && videoTime > scriptTime) {
-                videoTimeTotal += (videoTime - scriptTime) / 86400000;
-                videoCountLT++;
-            }
-            if (videoTime && publishTime && publishTime > videoTime) {
-                publishTimeTotal += (publishTime - videoTime) / 86400000;
-                publishCountLT++;
+        taskStatusCounts.forEach((t: any) => {
+            if (rawFunnel[t.status] !== undefined) {
+                rawFunnel[t.status] = t._count.id;
             }
         });
+        const taskFunnel = funnelOrder.map(status => ({ name: statusMapVi[status], value: rawFunnel[status] }));
 
+        // ==========================================
+        // 🚀 6. XỬ LÝ ĐIỂM NGHẼN BẰNG DATA THẬT (LEAD TIME)
+        // ==========================================
+        let scriptDays = 0, scriptCount = 0;
+        let videoDays = 0, videoCount = 0;
+        let publishDays = 0, publishCount = 0;
+        let reviewDays = 0, reviewCount = 0;
+
+        leadTimeTasks.forEach((t: any) => {
+            const logs = t.taskLogs;
+            
+            const getLog = (action: string) => logs.find((l: any) => l.action === action);
+            
+            const createLog = getLog('CREATE_TASK');
+            const scriptLog = getLog('SUBMIT_SCRIPT');
+            const videoLog = getLog('SUBMIT_VIDEO');
+            const publishLog = getLog('PUBLISH_VIDEO');
+            const completeLog = getLog('COMPLETE_TASK');
+
+            // Tính số ngày lệch giữa 2 trạm (1 ngày = 86400000ms)
+            const calcDays = (start: any, end: any) => {
+                if (start && end && end.createdAt >= start.createdAt) {
+                    return (end.createdAt.getTime() - start.createdAt.getTime()) / (1000 * 60 * 60 * 24);
+                }
+                return null;
+            };
+
+            // Khâu Kịch bản (Từ lúc tạo -> Có kịch bản)
+            const dScript = calcDays(createLog, scriptLog);
+            if (dScript !== null) { scriptDays += dScript; scriptCount++; }
+
+            // Khâu Dựng Video (Từ lúc có Kịch bản -> Nộp Video)
+            const dVideo = calcDays(scriptLog || createLog, videoLog);
+            if (dVideo !== null) { videoDays += dVideo; videoCount++; }
+
+            // Khâu Đăng Kênh (Từ lúc Nộp Video -> Lên Kênh)
+            const dPublish = calcDays(videoLog, publishLog);
+            if (dPublish !== null) { publishDays += dPublish; publishCount++; }
+
+            // Khâu Nghiệm Thu (Từ lúc lên kênh -> Leader Chấm điểm DONE)
+            const dReview = calcDays(publishLog || videoLog, completeLog);
+            if (dReview !== null) { reviewDays += dReview; reviewCount++; }
+        });
+
+        // Đổ ra mảng để trả về
         const leadTimeData = [
-            { name: "Viết Kịch bản", days: scriptCountLT ? Number((scriptTimeTotal / scriptCountLT).toFixed(1)) : 0 },
-            { name: "Dựng Video", days: videoCountLT ? Number((videoTimeTotal / videoCountLT).toFixed(1)) : 0 },
-            { name: "Duyệt & Đăng", days: publishCountLT ? Number((publishTimeTotal / publishCountLT).toFixed(1)) : 0 },
+            { name: 'Lên Kịch Bản', days: scriptCount > 0 ? Number((scriptDays / scriptCount).toFixed(1)) : 0 },
+            { name: 'Dựng Video', days: videoCount > 0 ? Number((videoDays / videoCount).toFixed(1)) : 0 },
+            { name: 'Đăng Kênh', days: publishCount > 0 ? Number((publishDays / publishCount).toFixed(1)) : 0 },
+            { name: 'Nghiệm Thu', days: reviewCount > 0 ? Number((reviewDays / reviewCount).toFixed(1)) : 0 }
         ];
 
-        // Đợi cả 6 tháng query xong
-        const trendData = await Promise.all(trendPromises);
-        // ==========================================
-        // 📦 TRẢ DỮ LIỆU VỀ CHO FRONTEND
-        // ==========================================
         return NextResponse.json({
             teams,
-            trendData, // 🚀 BƠM DATA 6 THÁNG VÀO ĐÂY
-            leadTimeData,
             stats: {
-                totalOutput,
-                avgKpi: kpisThisMonth.length > 0 ? Math.round((totalOutput / kpisThisMonth.reduce((a, b) => a + b.targetValue, 0)) * 100) : 0,
-                pendingRequestsCount,
-                currentHeadcount: users.filter(u => u.isActive).length,
-                newHires: users.filter(u => u.createdAt >= startDate && u.createdAt <= endDate).length,
-                resigns: users.filter(u => !u.isActive).length
+                totalOutput, avgKpi: kpisThisMonth.length > 0 ? Math.round((totalOutput / kpisThisMonth.reduce((a, b) => a + b.targetValue, 0)) * 100) : 0,
+                totalRevenue, totalViews, avgQualityScore, currentHeadcount: users.filter(u => u.isActive).length
             },
-            // ... (Phần allocation, requestBreakdown, hrHealth, hrGrid sếp giữ nguyên như cũ nhé)
-            allocation: [
-                { name: "Kịch bản (Content)", value: scriptCount, fill: "#3b82f6" },
-                { name: "Dựng Video (Editor)", value: videoCount, fill: "#eab308" },
-                { name: "Lên Kênh (Manager)", value: publishCount, fill: "#a855f7" },
-            ],
-            requestBreakdown: [
-                { name: "Nghỉ phép/Remote", value: requestTypes.hr, fill: "#94a3b8" },
-                { name: "Tài chính/Tạm ứng", value: requestTypes.finance, fill: "#f97316" },
-                { name: "Mua sắm thiết bị", value: requestTypes.equipment, fill: "#06b6d4" },
-                
-            ],
-            hrHealth: [
-                { name: "Xuất Sắc (>100%)", value: hrHealth.excellent, fill: "#10b981" },
-                { name: "Khá/TB (80-100%)", value: hrHealth.good, fill: "#f59e0b" },
-                { name: "Báo động (<80%)", value: hrHealth.pip, fill: "#ef4444" }
-            ],
+            overallTrend, topChannelsByViews, revenueTrend, activeTeamNames,
+            channelRevenueTrend, channelViewsTrend, activeChannelNames,
+            channelGrid, projectHealth, taskFunnel, 
+            leadTimeData, // 🚀 Trả Data thực tế ra Frontend
+            monetizationStatus: Object.values(monetStatusMap).filter(m => m.value > 0),
             hrGrid: users.map(u => {
                 const actual = userKpiMap[u.id]?.actualTasks.size || 0;
                 const target = userKpiMap[u.id]?.target || 0;
                 return {
                     id: u.id, name: u.fullName, role: u.role,
                     kpi: target > 0 ? Math.round((actual / target) * 100) : 0,
-                    // Lọc trùng cho output của cá nhân
                     output: new Set(taskLogsThisMonth.filter(l => l.userId === u.id && isDoneLog(l)).map(l => l.taskId)).size,
-                    pendingReq: userPendingReqMap[u.id] || 0,
+                    avgScore: userScoreMap[u.id] ? (userScoreMap[u.id].total / userScoreMap[u.id].count).toFixed(1) : "-",
                     status: u.isActive ? "Active" : "Nghỉ việc"
                 };
             }).sort((a,b) => b.output - a.output)

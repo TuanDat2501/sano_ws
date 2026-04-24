@@ -42,14 +42,14 @@ export default function Sidebar({ isSidebarOpen, setSidebarOpen }: SidebarProps)
         { name: "Đơn từ & Đề xuất", icon: <FileText size={20} />, path: "/requests", show: hasPermission("MENU_REQUESTS") },
         { name: "Đánh giá KPI", icon: <BarChart3 size={20} />, path: "/kpi", show: hasPermission("MENU_KPI") },
         { name: "Thảo luận", icon: <MessageSquare size={20} />, path: "/chat", show: true }, // Chat mặc định ai cũng được vào
-        { name: "Doanh thu", icon: <DollarSign size={20} />, path: "/revenue", show: hasPermission("MENU_REVENUE") },
         { name: "Hệ thống Kênh", icon: <TvMinimalPlay  size={20} />, path: "/channels", show: hasPermission("MENU_CHANNELS") },
+        { name: "Dự án", icon: <FolderKanban size={20} />, path: "/projects", show: hasPermission("MENU_PROJECTS") },
+        { name: "Doanh thu", icon: <DollarSign size={20} />, path: "/revenue", show: hasPermission("MENU_REVENUE") },
         { name: "Đội ngũ", icon: <Shield size={20} />, path: "/teams", show: hasPermission("MENU_TEAMS") },
         { name: "Nhân sự", icon: <Users size={20} />, path: "/users", show: hasPermission("MENU_USERS") },
         { name: "Sơ đồ tổ chức", icon: <Network size={20} />, path: "/org-chart", show: hasPermission("MENU_ORG_CHART") },
         { name: "Báo cáo ngày", icon: <PieChart size={20} />, path: "/daily-report", show: hasPermission("MENU_DAILY_REPORT") },
         { name: "Báo cáo chiến lược", icon: <PieChart size={20} />, path: "/analytics", show: hasPermission("MENU_ANALYTICS") },
-        { name: "Dự án", icon: <FolderKanban size={20} />, path: "/projects", show: hasPermission("MENU_PROJECTS") },
         // Riêng menu Phân quyền, fix cứng chỉ Admin cao nhất mới thấy để tránh rủi ro
         { name: "Phân quyền", icon: <ShieldCheck size={20} />, path: "/permissions", show: userRole === "ADMIN" },
     ];

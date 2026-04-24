@@ -45,7 +45,7 @@ export async function POST(req: Request) {
             where: { channelId_date: { channelId, date: parsedDate } },
             update: {
                 // Chỉ cập nhật nếu giá trị được gửi lên là số
-                ...(revenue !== undefined && { revenue: Number(revenue) }),
+                ...(revenue !== undefined && { amount: Number(revenue) }),
                 ...(views !== undefined && { views: Number(views) }),
                 updaterId: (session.user as any).id
             },

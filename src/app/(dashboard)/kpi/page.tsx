@@ -8,6 +8,7 @@ import { useToast } from "@/app/component/ToastProvider";
 import KpiEmployeeDetail from "./components/KpiEmployeeDetail";
 import KpiTeamTable from "./components/KpiTeamTable";
 import KpiDrawer from "./components/KpiDrawer";
+import { getContinuousWeekRange } from "@/lib/utils";
 
 // --- BỘ CÔNG CỤ TÍNH LỊCH CHUẨN ---
 function getMonthlyWeekRange(year: number, month: number, weekNumber: number) {
@@ -40,7 +41,7 @@ function getCurrentWeekNumber(date: Date) {
     const year = date.getFullYear();
     const month = date.getMonth() + 1;
     for (let w = 1; w <= 5; w++) {
-        const range = getMonthlyWeekRange(year, month, w);
+        const range = getContinuousWeekRange(year, month, w);
         if (date >= range.start && date <= range.end) {
             return w > 4 ? 4 : w; 
         }
@@ -178,7 +179,7 @@ export default function KpiDashboard() {
                         <TrendingUp className="text-red-600 w-5 h-5 md:w-6 md:h-6" /> Bảng Theo Dõi KPI
                     </h1>
                     <p className="text-xs md:text-sm font-medium text-slate-500 mt-1 md:mt-1.5 flex items-center gap-1.5 md:gap-2">
-                        <Calendar size={14} className="md:w-4 md:h-4" /> {getMonthlyWeekRange(selectedYear, selectedMonth, selectedWeek).label}
+                        <Calendar size={14} className="md:w-4 md:h-4" /> {getContinuousWeekRange(selectedYear, selectedMonth, selectedWeek).label}
                     </p>
                 </div>
 
