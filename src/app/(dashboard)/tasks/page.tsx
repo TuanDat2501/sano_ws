@@ -501,14 +501,87 @@ export default function KanbanBoard() {
     }
   };
 
-  // Fake chức năng Chat và Đánh giá (Bổ sung sau nếu cần API thực)
+ // ==========================================
+  // XỬ LÝ CHAT TRONG TASK CHUẨN API & SOCKET
+  // ==========================================
   const handleSendMessage = async () => {
-    if (!chatMessage.trim()) return;
-    setMessages([...messages, { id: Date.now(), sender: "Tôi", text: chatMessage, time: new Date().toLocaleTimeString(), isMine: true }]);
-    setChatMessage("");
+    if (chatMessage.trim() !== '' && socket && selectedTask) {
+      const textToSend = chatMessage;
+      setChatMessage("");
+
+      try {
+        const res = await fetch(`/api/tasks/${selectedTask.id}/comments`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: textToSend }),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          const savedComment = data.comment;
+          const newMsg = {
+            id: savedComment.id, taskId: selectedTask.id, sender: savedComment.user.fullName,
+            senderId: savedComment.userId, text: savedComment.text,
+            time: new Date(savedComment.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+          };
+          socket.emit("send_message", newMsg);
+
+          if (data.userIdsToNotify.length > 0) {
+            socket.emit("send_notification", { userIds: data.userIdsToNotify, notification: data.notifications[0] });
+          }
+        }
+      } catch (error) { showToast('error', 'Lỗi gửi tin nhắn!'); }
+    }
   };
+
+  // ==========================================
+  // XỬ LÝ NỘP ĐÁNH GIÁ KPI CHUẨN API & SOCKET
+  // ==========================================
   const handleEvaluationSubmit = async (score: number, criteriaData: any, note: string) => {
-    showToast("success", "Đã lưu đánh giá KPI!");
+    try {
+      const res = await fetch("/api/evaluations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          taskId: selectedTask.id,
+          score: score,
+          criteria: criteriaData,
+          note: note
+        })
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        showToast("success", "Đã lưu đánh giá KPI thành công!");
+        
+        // 1. Refresh lại data bảng Kanban
+        fetchTasks();
+
+        if (socket) {
+          // 2. Báo mọi người tải lại bảng
+          socket.emit("board_updated");
+
+          // 3. Bắn Noti "Ting ting" cho người làm task (Content / Editor)
+          const targetUserId = selectedTask.editorId || selectedTask.contentId;
+          if (targetUserId) {
+            socket.emit("send_notification", {
+              userIds: [targetUserId],
+              notification: {
+                title: "Đánh giá Task 🌟",
+                message: `Task "${selectedTask.title}" của bạn vừa được đánh giá ${score} điểm!`,
+                type: "success",
+                taskId: selectedTask.id,
+                time: new Date().toISOString()
+              }
+            });
+          }
+        }
+      } else {
+        showToast("error", data.error || "Lỗi khi lưu đánh giá");
+      }
+    } catch (error) {
+      showToast("error", "Lỗi kết nối tới Server");
+    }
   };
 
   if (loading) return <div className="flex h-full items-center justify-center animate-pulse text-slate-400"><Loader2 size={32} className="animate-spin text-blue-500" /></div>;
