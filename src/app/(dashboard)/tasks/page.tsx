@@ -155,14 +155,14 @@ export default function KanbanBoard() {
   const loadTeams = async () => {
     try { const res = await fetch("/api/teams"); const data = await res.json(); if (Array.isArray(data)) setTeams(data); } catch (error) { }
   };
+  // 🚀 LOGIC TỰ ĐỘNG MỞ DRAWER KHI URL CÓ TASKID
   useEffect(() => {
     const taskIdFromUrl = searchParams.get("taskId");
     
-    // Nếu có ID trên URL và hiện tại chưa hiển thị đúng task đó
-    if (taskIdFromUrl && selectedTask?.id !== taskIdFromUrl) {
+    // Chỉ chạy nếu URL có ID mà state selectedTask đang trống (trường hợp F5 hoặc ấn thông báo)
+    if (taskIdFromUrl && !selectedTask) {
       const fetchAndOpenTask = async () => {
         try {
-          // Gọi API lấy thông tin chi tiết của task ĐÍCH DANH (Bất kể nó ở trang nào)
           const res = await fetch(`/api/tasks/${taskIdFromUrl}`);
           if (res.ok) {
             const taskData = await res.json();
@@ -175,7 +175,7 @@ export default function KanbanBoard() {
       
       fetchAndOpenTask();
     }
-  }, [searchParams, socket]);
+  }, [searchParams, socket, selectedTask]); // Thêm selectedTask vào dependency để check trạng thái
   
   useEffect(() => {
     // 🚀 Kết nối thẳng đến VPS của sếp
@@ -257,7 +257,8 @@ export default function KanbanBoard() {
       console.error("Lỗi tải lịch sử comment:", error);
     }
   };
-  const handleOpenTaskDetail = (task: any) => {
+  const handleOpenTaskDetail = async (task: any) => {
+    // 🚀 BƯỚC 1: Hiện Drawer ngay lập tức với data đang có (để UI mượt, không bị khựng)
     setSelectedTask(task);
     setTaskLinks({
       scriptLink: task.scriptLink || "",
@@ -265,11 +266,25 @@ export default function KanbanBoard() {
       publishLink: task.publishLink || ""
     });
     setIsDrawerOpen(true);
-    loadTaskComments(task.id);
-    if (socket) {
-      socket.emit("join_task", task.id);
+
+    // 🚀 BƯỚC 2: Kiểm tra nếu task đang thiếu thông tin quan trọng (như project), Fetch bản đầy đủ ngay
+    if (!task.project || !task.taskLogs) {
+      try {
+        const res = await fetch(`/api/tasks/${task.id}`);
+        if (res.ok) {
+          const fullTask = await res.json();
+          setSelectedTask(fullTask); // Ghi đè bản "xịn" vào state để Drawer cập nhật
+        }
+      } catch (err) {
+        console.error("Lỗi fetch chi tiết task:", err);
+      }
     }
-    // 🚀 BẮN TASK ID LÊN URL (Để copy link gửi cho người khác)
+
+    // Tải comment và vào phòng socket (Giữ nguyên)
+    loadTaskComments(task.id);
+    if (socket) socket.emit("join_task", task.id);
+
+    // Cập nhật URL (Giữ nguyên)
     const currentTaskId = searchParams.get("taskId");
     if (currentTaskId !== task.id) {
       const params = new URLSearchParams(searchParams.toString());
