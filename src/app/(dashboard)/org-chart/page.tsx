@@ -70,6 +70,7 @@ export default function OrgChartPage() {
         ]).then(([teamsData, deptsData, usersData]) => {
             const initialNodes: any[] = [];
             const initialEdges: any[] = [];
+            
             const bgdUsers = usersData.filter((u: any) => u.role === "BAN_GIAM_DOC" );
             const bgdTeamIds = bgdUsers.map((u: any) => u.teamId).filter(Boolean);
             const bgdDeptIds = bgdTeamIds.map((tid: string) => teamsData.find((t:any) => t.id === tid)?.departmentId).filter(Boolean);
@@ -86,8 +87,7 @@ export default function OrgChartPage() {
                     id: userNodeId, type: 'custom', position: { x: 0, y: 0 },
                     data: { 
                         label: user.fullName, role: user.role === "ADMIN" ? "Giám Đốc" : "Phó Giám Đốc", 
-                        borderColor: 'border-red-300', textColor: 'text-red-600',
-                        fullUserObj: user 
+                        borderColor: 'border-red-300', textColor: 'text-red-600', fullUserObj: user 
                     }
                 });
                 initialEdges.push({ id: `e_${rootId}-${userNodeId}`, source: rootId, target: userNodeId, type: 'smoothstep', animated: true });
@@ -125,16 +125,74 @@ export default function OrgChartPage() {
                         avatar: user.avatarUrl || null,
                         borderColor: user.role === 'LEADER' ? 'border-blue-300' : 'border-slate-200', 
                         textColor: user.role === 'LEADER' ? 'text-blue-600' : 'text-slate-500',
-                        fullUserObj: user
+                        fullUserObj: user,
+                        targetPosition: 'left' // 🚀 Ra lệnh cho node này cắm cổng bên trái
                     }
                 });
                 initialEdges.push({ id: `e_${parentId}-${userNodeId}`, source: parentId, target: userNodeId, type: 'smoothstep' });
             });
 
-            const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(initialNodes, initialEdges);
-            setNodes(layoutedNodes); setEdges(layoutedEdges); setLoading(false);
+            // =================================================================
+            // 🚀 BẮT ĐẦU THUẬT TOÁN CUSTOM LAYOUT XƯƠNG CÁ (VERTICAL TREE)
+            // =================================================================
+            
+            // 1. Tách mảng: Chỉ cho các Node Hệ thống (BGD, Phòng, Team) đi dàn hàng ngang
+            const systemNodes = initialNodes.filter(n => n.data.isSystemNode || n.data.role === "Giám Đốc" || n.data.role === "Phó Giám Đốc");
+            const systemEdges = initialEdges.filter(e => systemNodes.some(n => n.id === e.source) && systemNodes.some(n => n.id === e.target));
+
+            const userNodes = initialNodes.filter(n => !systemNodes.some(sn => sn.id === n.id));
+            const userEdges = initialEdges.filter(e => !systemEdges.some(se => se.id === e.id));
+
+            // 2. Chạy thuật toán Dagre cho bộ khung hệ thống
+            const { nodes: layoutedSystemNodes, edges: layoutedSystemEdges } = getLayoutedElements(systemNodes, systemEdges);
+
+            const finalNodes = [...layoutedSystemNodes];
+            const finalEdges = [...layoutedSystemEdges];
+
+            // 3. Nhóm các nhân viên theo Team quản lý
+            const usersByParent: any = {};
+            userEdges.forEach(edge => {
+                if (!usersByParent[edge.source]) usersByParent[edge.source] = [];
+                const uNode = userNodes.find(n => n.id === edge.target);
+                if (uNode) usersByParent[edge.source].push(uNode);
+            });
+
+            // 4. Bắt đầu xếp dọc nhân viên dưới hộp Team
+            Object.keys(usersByParent).forEach(parentId => {
+                const parentNode = layoutedSystemNodes.find((n: any) => n.id === parentId);
+                if (!parentNode) return;
+
+                // Tính toán toạ độ xương sống: Tâm của node Team (node rộng 200px -> tâm là x + 100)
+                const spineX = parentNode.position.x + 100; 
+                let currentY = parentNode.position.y + 130; // Node con đầu tiên cách đáy Team 130px
+
+                usersByParent[parentId].forEach((uNode: any) => {
+                    // Đặt cạnh trái của Node nhân viên khớp đúng với trục xương sống
+                    uNode.position = { x: spineX, y: currentY };
+                    uNode.targetPosition = 'left';
+                    uNode.sourcePosition = 'bottom';
+                    finalNodes.push(uNode);
+
+                    // Bẻ dây kết nối thành hình góc vuông (L-shape)
+                    const uEdge = userEdges.find(e => e.target === uNode.id);
+                    if (uEdge) {
+                        uEdge.type = 'smoothstep';
+                        uEdge.sourcePosition = 'bottom';
+                        uEdge.targetPosition = 'left';
+                        finalEdges.push(uEdge);
+                    }
+
+                    // Tịnh tiến Y xuống cho người tiếp theo (Chiều cao node khoàng 100px + 20px khe hở)
+                    currentY += 120; 
+                });
+            });
+
+            setNodes(finalNodes); 
+            setEdges(finalEdges); 
+            setLoading(false);
         }).catch(() => {
-            showToast("error", "Lỗi tải dữ liệu Sơ đồ"); setLoading(false);
+            showToast("error", "Lỗi tải dữ liệu Sơ đồ"); 
+            setLoading(false);
         });
     }, []);
 

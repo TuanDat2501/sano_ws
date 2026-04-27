@@ -9,16 +9,18 @@ export default function CustomNode({ data }: { data: any }) {
     const progressColor = percent >= 100 ? 'bg-emerald-500' : percent >= 50 ? 'bg-amber-400' : 'bg-red-500';
 
     const initials = data.label ? data.label.charAt(0).toUpperCase() : "?";
-
     const showAvatar = data.role !== "Điều hành" && data.role !== "Phòng Ban";
 
+    // 🚀 LẤY HƯỚNG CẮM DÂY TỪ DATA (Dọc dùng Top, Xương cá dùng Left)
+    const targetPos = data.targetPosition === 'left' ? Position.Left : Position.Top;
+
     return (
-        // Đã ghim chết min-w-[200px] để thuật toán dàn cây (Dagre) không bị lệch toạ độ
         <div className={`relative p-2.5 md:p-3 rounded-xl md:rounded-2xl border bg-white shadow-sm hover:shadow-lg transition-all min-w-[200px] md:min-w-[220px] ${data.borderColor}`}>
-            <Handle type="target" position={Position.Top} className="!w-2.5 !h-2.5 !bg-slate-300 !border-white" />
+            
+            {/* 🚀 ĐỔI CỔNG TARGET THEO LINH HOẠT */}
+            <Handle type="target" position={targetPos} className="!w-2.5 !h-2.5 !bg-slate-300 !border-white" />
             
             <div className={`flex items-center ${showAvatar ? 'gap-2.5 md:gap-3' : 'justify-center py-1 md:py-2'} mb-2.5 md:mb-3`}>
-                
                 {showAvatar && (
                     data.avatar ? (
                         <img src={data.avatar} alt="avatar" className="w-8 h-8 md:w-10 md:h-10 rounded-full object-cover border border-slate-100 shadow-sm shrink-0" />
