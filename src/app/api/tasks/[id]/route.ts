@@ -260,10 +260,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
                         criteria: true
                     }
                 },
-                evaluation: {
+                evaluations: {
                     include: {
                         evaluator: { select: { fullName: true } }
-                    }
+                    },
+                    orderBy: { createdAt: 'desc' }, // Lấy bản ghi chấm điểm mới nhất
                 },
             }
         });
