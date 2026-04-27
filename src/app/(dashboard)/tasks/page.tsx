@@ -131,14 +131,7 @@ export default function KanbanBoard() {
         setTotalItems(data.total || 0);
       }
 
-      // 🚀 TỰ ĐỘNG MỞ NGĂN KÉO NẾU TRÊN URL CÓ CHỨA TASK ID
-      const taskIdFromUrl = searchParams.get("taskId");
-      if (taskIdFromUrl && !isDrawerOpen) {
-        const targetTask = data.tasks.find((t: any) => t.id === taskIdFromUrl);
-        if (targetTask && !selectedTask) {
-          handleOpenTaskDetail(targetTask);
-        }
-      }
+      // ❌ ĐÃ XÓA BỎ ĐOẠN AUTO-OPEN Ở ĐÂY ĐỂ TRÁNH XUNG ĐỘT GÂY NHÁY
 
       setLoading(false);
     } catch (err) { setLoading(false); }
@@ -209,13 +202,18 @@ export default function KanbanBoard() {
   const isFirstRender = useRef(true);
   useEffect(() => {
     if (isFirstRender.current) { isFirstRender.current = false; return; }
-    const params = new URLSearchParams();
+    
+    // 🚀 LẤY GỐC TỪ URL HIỆN TẠI (Giúp giữ lại ?taskId=... không bị mất)
+    const params = new URLSearchParams(window.location.search);
+    
     params.set("viewMode", viewMode);
     params.set("page", currentPage.toString());
-    if (searchTerm) params.set("search", searchTerm);
-    if (filterStatus !== "ALL") params.set("status", filterStatus);
-    if (fromDate) params.set("fromDate", fromDate);
-    if (toDate) params.set("toDate", toDate);
+    
+    if (searchTerm) params.set("search", searchTerm); else params.delete("search");
+    if (filterStatus !== "ALL") params.set("status", filterStatus); else params.delete("status");
+    if (fromDate) params.set("fromDate", fromDate); else params.delete("fromDate");
+    if (toDate) params.set("toDate", toDate); else params.delete("toDate");
+
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
 
     const timeoutId = setTimeout(() => { fetchTasks(); }, 300);
@@ -258,7 +256,7 @@ export default function KanbanBoard() {
     }
   };
   const handleOpenTaskDetail = async (task: any) => {
-    // 🚀 BƯỚC 1: Hiện Drawer ngay lập tức với data đang có (để UI mượt, không bị khựng)
+    // 1. Hiện Drawer ngay lập tức (UI mượt)
     setSelectedTask(task);
     setTaskLinks({
       scriptLink: task.scriptLink || "",
@@ -267,27 +265,25 @@ export default function KanbanBoard() {
     });
     setIsDrawerOpen(true);
 
-    // 🚀 BƯỚC 2: Kiểm tra nếu task đang thiếu thông tin quan trọng (như project), Fetch bản đầy đủ ngay
+    // 2. Fetch data xịn nếu task bị thiếu trường (để cập nhật được Tên Dự Án)
     if (!task.project || !task.taskLogs) {
       try {
         const res = await fetch(`/api/tasks/${task.id}`);
         if (res.ok) {
           const fullTask = await res.json();
-          setSelectedTask(fullTask); // Ghi đè bản "xịn" vào state để Drawer cập nhật
+          setSelectedTask(fullTask); 
         }
       } catch (err) {
         console.error("Lỗi fetch chi tiết task:", err);
       }
     }
 
-    // Tải comment và vào phòng socket (Giữ nguyên)
     loadTaskComments(task.id);
     if (socket) socket.emit("join_task", task.id);
 
-    // Cập nhật URL (Giữ nguyên)
-    const currentTaskId = searchParams.get("taskId");
-    if (currentTaskId !== task.id) {
-      const params = new URLSearchParams(searchParams.toString());
+    // 3. Đẩy ID lên URL an toàn
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("taskId") !== task.id) {
       params.set("taskId", task.id);
       router.replace(`${pathname}?${params.toString()}`, { scroll: false });
     }
@@ -295,10 +291,10 @@ export default function KanbanBoard() {
 
   const handleCloseDrawer = () => {
     setIsDrawerOpen(false);
-    setTimeout(() => setSelectedTask(null), 300); // Đợi anim đóng xong mới clear data
+    setTimeout(() => setSelectedTask(null), 300); 
 
-    // 🚀 GỠ TASK ID KHỎI URL KHI ĐÓNG
-    const params = new URLSearchParams(searchParams.toString());
+    // Gỡ ID khỏi URL an toàn
+    const params = new URLSearchParams(window.location.search);
     params.delete("taskId");
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   };
