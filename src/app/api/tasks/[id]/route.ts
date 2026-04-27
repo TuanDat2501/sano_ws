@@ -268,7 +268,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
                 },
             }
         });
-        return NextResponse.json(task);
+        const formattedTask = {
+            ...task,
+            evaluation: task.evaluations && task.evaluations.length > 0 ? task.evaluations[0] : null,
+        };
+
+        return NextResponse.json(formattedTask);
     } catch (error) {
         return NextResponse.json({ error: "Lỗi Server" }, { status: 500 });
     }
