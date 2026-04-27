@@ -152,8 +152,8 @@ export default function KanbanBoard() {
   useEffect(() => {
     const taskIdFromUrl = searchParams.get("taskId");
     
-    // Chỉ chạy nếu URL có ID mà state selectedTask đang trống (trường hợp F5 hoặc ấn thông báo)
-    if (taskIdFromUrl && !selectedTask) {
+    // Chỉ chạy nếu URL có ID, chưa có task được chọn, VÀ Drawer đang đóng
+    if (taskIdFromUrl && !selectedTask && !isDrawerOpen) {
       const fetchAndOpenTask = async () => {
         try {
           const res = await fetch(`/api/tasks/${taskIdFromUrl}`);
@@ -168,7 +168,7 @@ export default function KanbanBoard() {
       
       fetchAndOpenTask();
     }
-  }, [searchParams, socket, selectedTask]); // Thêm selectedTask vào dependency để check trạng thái
+  }, [searchParams]); // ❌ Xóa bớt socket và selectedTask khỏi dependency
   
   useEffect(() => {
     // 🚀 Kết nối thẳng đến VPS của sếp
@@ -203,8 +203,8 @@ export default function KanbanBoard() {
   useEffect(() => {
     if (isFirstRender.current) { isFirstRender.current = false; return; }
     
-    // 🚀 LẤY GỐC TỪ URL HIỆN TẠI (Giúp giữ lại ?taskId=... không bị mất)
-    const params = new URLSearchParams(window.location.search);
+    // 🚀 LẤY GỐC TỪ searchParams CỦA NEXT.JS (An toàn tuyệt đối)
+    const params = new URLSearchParams(searchParams.toString());
     
     params.set("viewMode", viewMode);
     params.set("page", currentPage.toString());
@@ -214,11 +214,16 @@ export default function KanbanBoard() {
     if (fromDate) params.set("fromDate", fromDate); else params.delete("fromDate");
     if (toDate) params.set("toDate", toDate); else params.delete("toDate");
 
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    // 🚀 CHỈ THAY ĐỔI URL NẾU CÓ SỰ KHÁC BIỆT THỰC SỰ
+    const newQueryString = params.toString();
+    if (searchParams.toString() !== newQueryString) {
+      router.replace(`${pathname}?${newQueryString}`, { scroll: false });
+    }
 
     const timeoutId = setTimeout(() => { fetchTasks(); }, 300);
     return () => clearTimeout(timeoutId);
-  }, [currentPage, searchTerm, filterStatus, fromDate, toDate, viewMode, pathname, router, boardUpdateSignal]);
+  }, [currentPage, searchTerm, filterStatus, fromDate, toDate, viewMode, boardUpdateSignal]); 
+  // ❌ ĐÃ XÓA router và pathname khỏi dependency để chống loop vô tận
 
 
   // =========================================================================
@@ -256,7 +261,6 @@ export default function KanbanBoard() {
     }
   };
   const handleOpenTaskDetail = async (task: any) => {
-    // 1. Hiện Drawer ngay lập tức (UI mượt)
     setSelectedTask(task);
     setTaskLinks({
       scriptLink: task.scriptLink || "",
@@ -265,7 +269,6 @@ export default function KanbanBoard() {
     });
     setIsDrawerOpen(true);
 
-    // 2. Fetch data xịn nếu task bị thiếu trường (để cập nhật được Tên Dự Án)
     if (!task.project || !task.taskLogs) {
       try {
         const res = await fetch(`/api/tasks/${task.id}`);
@@ -281,8 +284,8 @@ export default function KanbanBoard() {
     loadTaskComments(task.id);
     if (socket) socket.emit("join_task", task.id);
 
-    // 3. Đẩy ID lên URL an toàn
-    const params = new URLSearchParams(window.location.search);
+    // 🚀 DÙNG searchParams CHUẨN CỦA NEXT.JS
+    const params = new URLSearchParams(searchParams.toString());
     if (params.get("taskId") !== task.id) {
       params.set("taskId", task.id);
       router.replace(`${pathname}?${params.toString()}`, { scroll: false });
@@ -293,10 +296,12 @@ export default function KanbanBoard() {
     setIsDrawerOpen(false);
     setTimeout(() => setSelectedTask(null), 300); 
 
-    // Gỡ ID khỏi URL an toàn
-    const params = new URLSearchParams(window.location.search);
-    params.delete("taskId");
-    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    // 🚀 DÙNG searchParams CHUẨN CỦA NEXT.JS
+    const params = new URLSearchParams(searchParams.toString());
+    if (params.has("taskId")) {
+      params.delete("taskId");
+      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    }
   };
 
   // Kéo thả Kanban
