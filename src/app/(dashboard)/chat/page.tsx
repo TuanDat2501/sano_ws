@@ -14,10 +14,10 @@ export default function ChatPage() {
     const [selectedFiles, setSelectedFiles] = useState<any[]>([]);
     const imageInputRef = useRef<HTMLInputElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
-    
+
     const [rooms, setRooms] = useState<any[]>([]);
     const [messages, setMessages] = useState<any[]>([]);
-    const [isCreatingChat, setIsCreatingChat] = useState(false); 
+    const [isCreatingChat, setIsCreatingChat] = useState(false);
     const [searchNewChat, setSearchNewChat] = useState("");
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -38,7 +38,7 @@ export default function ChatPage() {
     };
 
     const loadRooms = () => {
-        fetch("/api/chat/rooms", { cache: "no-store" }) 
+        fetch("/api/chat/rooms", { cache: "no-store" })
             .then(res => res.json())
             .then(data => {
                 if (Array.isArray(data)) setRooms(data);
@@ -56,7 +56,7 @@ export default function ChatPage() {
             const data = await res.json();
 
             if (res.ok && data.id) {
-                setIsCreatingChat(false); 
+                setIsCreatingChat(false);
                 setSearchNewChat("");
                 setActiveRoom({ id: data.id, name: targetName, type: type });
                 loadRooms();
@@ -81,7 +81,7 @@ export default function ChatPage() {
 
         if (textToSend.trim() && filesToSend.length === 0) {
             const tempMessage = {
-                id: tempId, 
+                id: tempId,
                 sender: "Tôi",
                 senderId: currentUserId,
                 text: textToSend,
@@ -114,7 +114,7 @@ export default function ChatPage() {
                 const savedMsg = await res.json();
 
                 const realMessage = {
-                    ...savedMsg, 
+                    ...savedMsg,
                     id: savedMsg.id || tempId,
                     sender: (session?.user as any)?.fullName || "Tôi",
                     senderId: currentUserId,
@@ -179,7 +179,7 @@ export default function ChatPage() {
                 file: file,
                 name: file.name,
                 type: file.type.startsWith('image/') ? 'image' : 'file',
-                previewUrl: URL.createObjectURL(file) 
+                previewUrl: URL.createObjectURL(file)
             }));
             setSelectedFiles(prev => [...prev, ...filesArray]);
         }
@@ -209,8 +209,13 @@ export default function ChatPage() {
     useEffect(() => {
         loadRooms(); loadUsers(); loadTeams();
 
-        const newSocket = io();
+        const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "https://socket.sanogroup.tv";
+
+        const newSocket = io(socketUrl, {
+            transports: ['websocket', 'polling']
+        });
         setSocket(newSocket);
+
 
         if (currentUserId) newSocket.emit("user_online", currentUserId);
 
@@ -261,7 +266,7 @@ export default function ChatPage() {
                     if (prev.find(m => m.id === incomingMsg.id)) return prev;
                     return [...prev, {
                         ...incomingMsg,
-                        isMe: incomingMsg.senderId === currentUserId 
+                        isMe: incomingMsg.senderId === currentUserId
                     }];
                 });
             } else {
@@ -286,7 +291,7 @@ export default function ChatPage() {
     return (
         // Responsive: Bóp padding màn hình bé (p-2 sm:p-4 md:p-6)
         <div className="h-full animate-fade-in flex flex-col p-2 sm:p-4 md:p-6">
-            
+
             <div className="flex-1 bg-white md:rounded-[24px] rounded-xl border border-slate-200 shadow-sm overflow-hidden flex min-h-0 relative">
 
                 {/* ================= CỘT TRÁI: DANH SÁCH CUỘC TRÒ CHUYỆN ================= */}
@@ -383,7 +388,7 @@ export default function ChatPage() {
                         <div className="absolute inset-0 bg-white z-20 flex flex-col animate-fade-in">
                             <div className="p-3 md:p-4 border-b border-slate-200 flex items-center gap-2 md:gap-3">
                                 {/* 🚀 NÚT BACK CHO MOBILE */}
-                                <button 
+                                <button
                                     className="md:hidden p-2 -ml-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors shrink-0"
                                     onClick={() => setIsCreatingChat(false)}
                                 >
@@ -435,7 +440,7 @@ export default function ChatPage() {
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
                                             {filteredTeams.map((t, index) => (
                                                 <div key={`team_${t.id}_${index}`} className="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-2xl hover:border-red-300 hover:shadow-sm cursor-pointer transition-all group"
-                                                     onClick={(e) => { e.stopPropagation(); handleStartChat(t.id, 'TEAM', t.name); }}
+                                                    onClick={(e) => { e.stopPropagation(); handleStartChat(t.id, 'TEAM', t.name); }}
                                                 >
                                                     <div className="flex items-center gap-3 min-w-0">
                                                         <div className="h-9 w-9 md:h-10 md:w-10 rounded-xl bg-red-600 flex items-center justify-center text-white font-black relative shadow-md shadow-red-600/10 shrink-0">
@@ -467,7 +472,7 @@ export default function ChatPage() {
                             <div className="h-[60px] md:h-[70px] px-3 md:px-6 border-b border-slate-200 flex justify-between items-center shrink-0 bg-white/90 backdrop-blur-sm z-10">
                                 <div className="flex items-center gap-2 md:gap-3 min-w-0">
                                     {/* 🚀 NÚT BACK CHO MOBILE */}
-                                    <button 
+                                    <button
                                         className="md:hidden p-2 -ml-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors shrink-0"
                                         onClick={() => setActiveRoom(null)}
                                     >

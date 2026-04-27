@@ -304,7 +304,6 @@ export default function KanbanBoard() {
     }
   };
 
-  // Kéo thả Kanban
   const onDragEnd = async (result: any) => {
     if (!result.destination) return;
     const { source, destination, draggableId } = result;
@@ -326,8 +325,36 @@ export default function KanbanBoard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: destination.droppableId })
       });
+      
       if (res.ok) {
-        if (socket) socket.emit("board_updated");
+        if (socket) {
+          // 1. Báo mọi người tải lại bảng Kanban
+          socket.emit("board_updated");
+
+          // 🚀 2. PHẦN BỔ SUNG: Bắn Noti Real-time khi kéo Task vào cột DONE
+          if (destination.droppableId === "REVIEW") {
+            const targetUserIds = [];
+            // Lấy ID những người đang làm Task này để báo tin vui
+            if (movedTask.contentId) targetUserIds.push(movedTask.contentId);
+            if (movedTask.editorId) targetUserIds.push(movedTask.editorId);
+
+            if (targetUserIds.length > 0) {
+              socket.emit("send_notification", {
+                userIds: targetUserIds,
+                notification: {
+                  title: "Hoàn thành Task 🎉",
+                  message: `Task "${movedTask.title || 'Không tên'}" vừa được chuyển sang trạng thái Hoàn Thành!`,
+                  type: "success",
+                  taskId: movedTask.id,
+                  time: new Date().toISOString()
+                }
+              });
+            }
+          }
+          
+          // 💡 Sếp có thể copy đoạn if ở trên, đổi chữ "DONE" thành "REVIEW" 
+          // để bắn thêm thông báo nhắc Leader vào chấm điểm khi task chuyển sang cột Chờ Duyệt.
+        }
       } else {
         showToast('error', 'Lỗi chuyển trạng thái');
         fetchTasks(); // Giật lại data cũ nếu lỗi
