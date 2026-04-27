@@ -150,32 +150,41 @@ export default function ChannelsPage() {
     };
 
     return (
-        <div className="p-4 md:p-6 bg-slate-50 min-h-screen">
-            <div className="mb-6 flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-slate-200 relative z-10">
+        // 🚀 1. Thêm flex-col, h-full và overflow-hidden để khoá chặt view trong 1 màn hình
+        <div className="p-4 md:p-6 bg-slate-50 h-full max-h-[calc(100vh-80px)] flex flex-col overflow-hidden">
+            
+            {/* 🚀 2. Thêm shrink-0 để cái khối Header này không bị bóp méo khi bảng quá dài */}
+            <div className="mb-4 md:mb-6 shrink-0 flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-slate-200 relative z-10">
                 <div>
-                    <h1 className="text-2xl font-black text-slate-900 flex items-center gap-2">
+                    <h1 className="text-xl md:text-2xl font-black text-slate-900 flex items-center gap-2">
                         <Youtube className="text-red-600" /> Hệ thống Kênh
                     </h1>
-                    <p className="text-sm text-slate-500 font-medium mt-1">Quản lý mạng lưới YouTube Studio.</p>
+                    <p className="text-xs md:text-sm text-slate-500 font-medium mt-1">Quản lý mạng lưới YouTube Studio.</p>
                 </div>
-                <button onClick={() => openDrawer()} className="bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all shadow-md active:scale-95 text-sm md:text-base">
-                    <Plus size={18} /> Thêm Kênh
+                <button onClick={() => openDrawer()} className="bg-red-600 hover:bg-red-700 text-white px-4 md:px-5 py-2 md:py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all shadow-md active:scale-95 text-sm md:text-base">
+                    <Plus size={18} className="md:w-5 md:h-5" /> <span className="hidden sm:inline">Thêm Kênh</span>
                 </button>
             </div>
 
             {isLoading ? (
-                <div className="flex justify-center p-12"><Loader2 className="animate-spin text-red-500" size={32} /></div>
+                <div className="flex justify-center items-center flex-1"><Loader2 className="animate-spin text-red-500" size={32} /></div>
             ) : (
-                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden relative z-0">
-                    <table className="w-full text-left border-collapse">
-                        <thead>
-                            <tr className="bg-slate-100/50 text-slate-500 text-[10px] font-black uppercase tracking-widest">
+                // 🚀 3. Container của bảng chiếm hết phần còn lại (flex-1) và tự động sinh thanh cuộn (overflow-auto)
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm flex-1 overflow-auto custom-scrollbar relative z-0">
+                    
+                    {/* 🚀 Thêm min-w-[700px] để bảng cuộn ngang mượt mà trên Mobile mà không bị ép chữ */}
+                    <table className="w-full text-left border-collapse min-w-[700px]">
+                        
+                        {/* 🚀 4. Ghim Header của Bảng lên nóc (sticky top-0) */}
+                        <thead className="sticky top-0 z-20 bg-slate-100/95 backdrop-blur-md shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
+                            <tr className="text-slate-500 text-[10px] font-black uppercase tracking-widest">
                                 <th className="p-4 border-b border-slate-200">Thông tin Kênh</th>
                                 <th className="p-4 border-b border-slate-200">Trạng thái HĐ</th>
                                 <th className="p-4 border-b border-slate-200">Kiếm tiền</th>
                                 <th className="p-4 border-b border-slate-200 text-right">Thao tác</th>
                             </tr>
                         </thead>
+                        
                         <tbody>
                             {channels.map((ch) => (
                                 <tr key={ch.id} className="hover:bg-slate-50 transition-colors border-b border-slate-100 last:border-0">
@@ -233,7 +242,7 @@ export default function ChannelsPage() {
                 setFormData={setFormData}
                 handleSubmit={handleSubmit}
                 teams={teams}
-                allUsers={allUsers} // 🚀 Truyền prop allUsers xuống đây
+                allUsers={allUsers}
             />
         </div>
     );

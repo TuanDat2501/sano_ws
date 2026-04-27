@@ -159,13 +159,16 @@ export default function RevenueEntryPage() {
     };
 
     return (
-        <div className="p-6 bg-slate-50 min-h-screen animate-fade-in">
-            <div className="mb-6 flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-4 rounded-2xl shadow-sm border border-slate-200 gap-4">
+        // 🚀 1. Khóa view 1 màn hình với flex-col và overflow-hidden
+        <div className="p-4 md:p-6 bg-slate-50 h-full max-h-[calc(100vh-80px)] flex flex-col overflow-hidden animate-fade-in">
+            
+            {/* 🚀 2. Giữ nguyên Header bằng shrink-0 */}
+            <div className="mb-4 md:mb-6 shrink-0 flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-4 rounded-2xl shadow-sm border border-slate-200 gap-4 relative z-10">
                 <div>
-                    <h1 className="text-2xl font-black text-slate-900 flex items-center gap-2">
+                    <h1 className="text-xl md:text-2xl font-black text-slate-900 flex items-center gap-2">
                         <DollarSign className="text-emerald-500" /> Bảng Kê Doanh Thu Kênh
                     </h1>
-                    <p className="text-sm text-slate-500 font-medium mt-1">Nhập liệu doanh thu hằng ngày (USD).</p>
+                    <p className="text-xs md:text-sm text-slate-500 font-medium mt-1">Nhập liệu doanh thu hằng ngày (USD).</p>
                 </div>
 
                 <div className="flex items-center gap-4 bg-slate-50 p-1.5 rounded-xl border border-slate-200 w-full md:w-auto justify-between">
@@ -177,13 +180,17 @@ export default function RevenueEntryPage() {
                 </div>
             </div>
 
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-x-auto custom-scrollbar">
+            {/* 🚀 3. Container bọc bảng tự sinh thanh cuộn (flex-1 overflow-auto) */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm flex-1 overflow-auto custom-scrollbar relative z-0">
                 <table className="w-full text-left border-collapse min-w-[800px]">
-                    <thead>
-                        <tr className="bg-slate-100 text-slate-600 text-[10px] font-black uppercase tracking-widest">
-                            <th className="p-4 border-b border-r border-slate-200 sticky left-0 z-10 bg-slate-100 w-1/5 min-w-[200px]">Tên Kênh</th>
+                    
+                    {/* 🚀 4. Ghim Header lên Top (sticky top-0 z-30) */}
+                    <thead className="sticky top-0 z-30 bg-slate-100 shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
+                        <tr className="text-slate-600 text-[10px] font-black uppercase tracking-widest">
+                            {/* 🔥 Ô góc trên-trái: Cực kỳ quan trọng, phải ghim cả top, left và z-index to nhất (40) */}
+                            <th className="p-4 border-b border-r border-slate-200 sticky left-0 top-0 z-40 bg-slate-100 w-1/5 min-w-[200px]">Tên Kênh</th>
                             {days.map((day, idx) => (
-                                <th key={idx} className="p-4 border-b border-slate-200 text-center w-[11%]">
+                                <th key={idx} className="p-4 border-b border-slate-200 text-center w-[11%] bg-slate-100">
                                     <div className="text-slate-400 mb-1">{['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'][idx]}</div>
                                     <div className={`text-sm ${day.toDateString() === new Date().toDateString() ? 'text-emerald-600 bg-emerald-100 rounded-md py-0.5' : ''}`}>
                                         {day.getDate()}/{day.getMonth() + 1}
@@ -192,12 +199,14 @@ export default function RevenueEntryPage() {
                             ))}
                         </tr>
                     </thead>
+                    
                     <tbody>
                         {channels.length === 0 ? (
                             <tr><td colSpan={8} className="p-8 text-center text-slate-400 italic">Chưa có kênh nào trong hệ thống.</td></tr>
                         ) : (
                             channels.map((channel) => (
                                 <tr key={channel.id} className="hover:bg-slate-50 transition-colors border-b border-slate-100 group">
+                                    {/* 🔥 Cột Tên Kênh: Chỉ ghim Left (sticky left-0 z-10) */}
                                     <td className="p-4 border-r border-slate-200 sticky left-0 z-10 bg-white group-hover:bg-slate-50 transition-colors">
                                         <p className="font-bold text-sm text-slate-800 line-clamp-1" title={channel.name}>{channel.name}</p>
                                         {channel.team?.name && (
@@ -212,9 +221,8 @@ export default function RevenueEntryPage() {
                                         const cellState = savingCells[cellKey];
                                         const isMonetized = channel.monetization;
                                         return (
-                                            <td key={idx} className="p-1.5 border-r border-slate-100 last:border-0 relative">
+                                            <td key={idx} className="p-1.5 border-r border-slate-100 last:border-0 relative bg-white">
                                                 <div className="flex flex-col gap-1.5">
-                                                    {/* 🚀 Ô NHẬP VIEW (Luôn luôn hiện vì kênh nào cũng có view) */}
                                                     <div className="relative">
                                                         <input
                                                             type="text"
@@ -234,7 +242,6 @@ export default function RevenueEntryPage() {
                                                         <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-300 uppercase select-none pointer-events-none">V</span>
                                                     </div>
 
-                                                    {/* 🚀 Ô DOANH THU: CHỈ HIỆN KHI ĐÃ BẬT KIẾM TIỀN */}
                                                     <div className="relative min-h-[32px] flex items-center">
                                                         {isMonetized === 'DA_BAT' ? (
                                                             <>
@@ -259,7 +266,6 @@ export default function RevenueEntryPage() {
                                                                 <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-black text-emerald-400 uppercase select-none pointer-events-none">$</span>
                                                             </>
                                                         ) : (
-                                                            /* 🚀 TRẠNG THÁI KÊNH CHƯA BẬT KIẾM TIỀN */
                                                             <div className="w-full py-1.5 px-2 bg-slate-100 rounded-md border border-dashed border-slate-200 text-center">
                                                                 <span className="text-[9px] font-bold text-slate-400 uppercase leading-none italic">
                                                                     Chưa bật kiếm tiền
@@ -269,7 +275,6 @@ export default function RevenueEntryPage() {
                                                     </div>
                                                 </div>
 
-                                                {/* Loading Indicator */}
                                                 {cellState === 'saving' && <Loader2 className="absolute top-1/2 right-4 -translate-y-1/2 animate-spin text-slate-400" size={14} />}
                                                 {cellState === 'saved' && <Check className="absolute top-1/2 right-4 -translate-y-1/2 text-emerald-500" size={14} />}
                                             </td>
@@ -278,12 +283,18 @@ export default function RevenueEntryPage() {
                                 </tr>
                             ))
                         )}
-                        <tr className="bg-slate-800 text-white font-black shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] relative z-20">
-                            <td className="p-4 border-r border-slate-700 uppercase tracking-widest text-xs sticky left-0 bg-slate-800">
+                    </tbody>
+
+                    {/* 🚀 5. Tách phần "Tổng Ngày" ra thẻ <tfoot> để ghim cố định ở đáy (sticky bottom-0) */}
+                    <tfoot className="sticky bottom-0 z-30 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
+                        <tr className="bg-slate-800 text-white font-black">
+                            {/* 🔥 Ô góc dưới-trái: Ghim cả bottom, left và z-index 40 */}
+                            <td className="p-4 border-r border-slate-700 uppercase tracking-widest text-xs sticky left-0 bottom-0 z-40 bg-slate-800">
                                 Tổng Ngày
                             </td>
                             {dailyTotals.map((total, idx) => (
-                                <td key={idx} className="p-2 border-r border-slate-700 last:border-0 bg-slate-900/40">
+                                // Bỏ nền trong suốt, dùng màu đặc (bg-slate-800) để không bị lộ chữ khi cuộn dọc
+                                <td key={idx} className="p-2 border-r border-slate-700 last:border-0 bg-slate-800">
                                     <div className="flex flex-col gap-1.5 text-right pr-2">
                                         <div className="text-[11px] text-blue-300 font-bold tracking-tight">
                                             {total.views > 0 ? total.views.toLocaleString() : "0"} <span className="text-[9px] font-black opacity-50 uppercase ml-0.5">V</span>
@@ -296,7 +307,7 @@ export default function RevenueEntryPage() {
                                 </td>
                             ))}
                         </tr>
-                    </tbody>
+                    </tfoot>
                 </table>
             </div>
         </div>

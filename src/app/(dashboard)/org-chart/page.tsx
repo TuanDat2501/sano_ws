@@ -162,18 +162,18 @@ export default function OrgChartPage() {
                 const parentNode = layoutedSystemNodes.find((n: any) => n.id === parentId);
                 if (!parentNode) return;
 
-                // Tính toán toạ độ xương sống: Tâm của node Team (node rộng 200px -> tâm là x + 100)
+                // Tính toán toạ độ xương sống: Tâm của node Team
                 const spineX = parentNode.position.x + 100; 
-                let currentY = parentNode.position.y + 130; // Node con đầu tiên cách đáy Team 130px
+                
+                // 🚀 1. KÉO GIÃN TỪ TEAM XUỐNG NGƯỜI ĐẦU TIÊN (Tăng từ 130 lên 160)
+                let currentY = parentNode.position.y + 160; 
 
                 usersByParent[parentId].forEach((uNode: any) => {
-                    // Đặt cạnh trái của Node nhân viên khớp đúng với trục xương sống
                     uNode.position = { x: spineX, y: currentY };
                     uNode.targetPosition = 'left';
                     uNode.sourcePosition = 'bottom';
                     finalNodes.push(uNode);
 
-                    // Bẻ dây kết nối thành hình góc vuông (L-shape)
                     const uEdge = userEdges.find(e => e.target === uNode.id);
                     if (uEdge) {
                         uEdge.type = 'smoothstep';
@@ -182,8 +182,9 @@ export default function OrgChartPage() {
                         finalEdges.push(uEdge);
                     }
 
-                    // Tịnh tiến Y xuống cho người tiếp theo (Chiều cao node khoàng 100px + 20px khe hở)
-                    currentY += 120; 
+                    // 🚀 2. KÉO GIÃN KHOẢNG CÁCH GIỮA TỪNG NGƯỜI (Tăng từ 120 lên 160)
+                    // Nếu thấy vẫn sát, sếp có thể tăng số 160 này lên 170 hoặc 180 tùy ý
+                    currentY += 160; 
                 });
             });
 
