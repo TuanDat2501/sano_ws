@@ -151,7 +151,7 @@ export default function KanbanBoard() {
   // 🚀 LOGIC TỰ ĐỘNG MỞ DRAWER KHI URL CÓ TASKID
   useEffect(() => {
     const taskIdFromUrl = searchParams.get("taskId");
-    
+
     // Chỉ chạy nếu URL có ID, chưa có task được chọn, VÀ Drawer đang đóng
     if (taskIdFromUrl && !selectedTask && !isDrawerOpen) {
       const fetchAndOpenTask = async () => {
@@ -165,11 +165,11 @@ export default function KanbanBoard() {
           console.error("Lỗi khi tự động mở task từ URL:", err);
         }
       };
-      
+
       fetchAndOpenTask();
     }
   }, [searchParams]); // ❌ Xóa bớt socket và selectedTask khỏi dependency
-  
+
   useEffect(() => {
     // 🚀 Kết nối thẳng đến VPS của sếp
     const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "https://socket.sanogroup.tv";
@@ -183,7 +183,7 @@ export default function KanbanBoard() {
       setMessages((prev) => {
         // Tránh bị lặp tin nhắn nếu mình chính là người vừa bấm gửi
         if (prev.some(m => m.id === data.id)) return prev;
-        
+
         return [...prev, {
           id: data.id,
           sender: data.sender,
@@ -202,13 +202,13 @@ export default function KanbanBoard() {
   const isFirstRender = useRef(true);
   useEffect(() => {
     if (isFirstRender.current) { isFirstRender.current = false; return; }
-    
+
     // 🚀 LẤY GỐC TỪ searchParams CỦA NEXT.JS (An toàn tuyệt đối)
     const params = new URLSearchParams(searchParams.toString());
-    
+
     params.set("viewMode", viewMode);
     params.set("page", currentPage.toString());
-    
+
     if (searchTerm) params.set("search", searchTerm); else params.delete("search");
     if (filterStatus !== "ALL") params.set("status", filterStatus); else params.delete("status");
     if (fromDate) params.set("fromDate", fromDate); else params.delete("fromDate");
@@ -222,7 +222,7 @@ export default function KanbanBoard() {
 
     const timeoutId = setTimeout(() => { fetchTasks(); }, 300);
     return () => clearTimeout(timeoutId);
-  }, [currentPage, searchTerm, filterStatus, fromDate, toDate, viewMode, boardUpdateSignal]); 
+  }, [currentPage, searchTerm, filterStatus, fromDate, toDate, viewMode, boardUpdateSignal]);
   // ❌ ĐÃ XÓA router và pathname khỏi dependency để chống loop vô tận
 
 
@@ -249,7 +249,7 @@ export default function KanbanBoard() {
           time: new Date(c.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
           isMine: c.userId === (session?.user as any)?.id
         }));
-        
+
         // Đặt lại danh sách tin nhắn (Giữ lại câu chào hệ thống trên cùng)
         setMessages([
           { id: "system", sender: "Hệ thống", text: "Chào mừng đến với không gian thảo luận Task!", time: "", isMine: false },
@@ -274,7 +274,7 @@ export default function KanbanBoard() {
         const res = await fetch(`/api/tasks/${task.id}`);
         if (res.ok) {
           const fullTask = await res.json();
-          setSelectedTask(fullTask); 
+          setSelectedTask(fullTask);
         }
       } catch (err) {
         console.error("Lỗi fetch chi tiết task:", err);
@@ -294,7 +294,7 @@ export default function KanbanBoard() {
 
   const handleCloseDrawer = () => {
     setIsDrawerOpen(false);
-    setTimeout(() => setSelectedTask(null), 300); 
+    setTimeout(() => setSelectedTask(null), 300);
 
     // 🚀 DÙNG searchParams CHUẨN CỦA NEXT.JS
     const params = new URLSearchParams(searchParams.toString());
@@ -325,41 +325,65 @@ export default function KanbanBoard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: destination.droppableId })
       });
-      
+
+      const data = await res.json(); // 🚀 Đọc response từ API để lấy Data chuẩn
+
       if (res.ok) {
         if (socket) {
           // 1. Báo mọi người tải lại bảng Kanban
           socket.emit("board_updated");
 
-          // 🚀 2. PHẦN BỔ SUNG: Bắn Noti Real-time khi kéo Task vào cột DONE
-          if (destination.droppableId === "DONE") {
-            const targetUserIds = [];
-            // Lấy ID những người đang làm Task này để báo tin vui
-            if (movedTask.contentId) targetUserIds.push(movedTask.contentId);
-            if (movedTask.editorId) targetUserIds.push(movedTask.editorId);
+          // 🚀 2. XỬ LÝ NOTIFICATION REAL-TIME
+          // Ưu tiên 1: Nếu Backend của Sếp có sinh ra Noti (lưu DB) thì bắn Socket luôn
+          if (data && data.userIdsToNotify && data.userIdsToNotify.length > 0) {
+            socket.emit("send_notification", {
+              userIds: data.userIdsToNotify,
+              notification: data.notifications[0]
+            });
+          }
+          // Ưu tiên 2: Nếu Backend chưa kịp làm Noti, Frontend sẽ tự suy luận để bắn (Fallback)
+          else {
+            const currentUserId = (session?.user as any)?.id;
+            const currentUserName = (session?.user as any)?.name || (session?.user as any)?.fullName || "Ai đó";
 
-            if (targetUserIds.length > 0) {
+            // Dùng Set để lọc trùng lặp ID
+            const targetIds = new Set<string>();
+
+            // 🔥 Quan trọng: Báo cho Người tạo Task (Sếp/Leader) biết để vào nghiệm thu
+            if (movedTask.creatorId && movedTask.creatorId !== currentUserId) targetIds.add(movedTask.creatorId);
+            // Báo cho Content (Nếu Editor kéo)
+            if (movedTask.contentId && movedTask.contentId !== currentUserId) targetIds.add(movedTask.contentId);
+            // Báo cho Editor (Nếu Content/Sếp kéo)
+            if (movedTask.editorId && movedTask.editorId !== currentUserId) targetIds.add(movedTask.editorId);
+
+            const targets = Array.from(targetIds);
+
+            if (targets.length > 0) {
+              // Tuỳ biến câu chữ mượt mà theo từng cột thả vào
+              let actionText = "đã cập nhật trạng thái";
+              if (destination.droppableId === "DOING") actionText = "đã chuyển sang Chờ Dựng 🎬";
+              if (destination.droppableId === "REVIEW") actionText = "đã chuyển sang Chờ Đăng ⏳";
+              if (destination.droppableId === "DONE") actionText = "đã Hoàn Thành 🎉";
+
               socket.emit("send_notification", {
-                userIds: targetUserIds,
+                userIds: targets,
                 notification: {
-                  title: "Hoàn thành Task 🎉",
-                  message: `Task "${movedTask.title || 'Không tên'}" vừa được chuyển sang trạng thái Hoàn Thành!`,
-                  type: "success",
+                  title: destination.droppableId === "DONE" ? "Task Hoàn Thành!" : "Cập nhật tiến độ",
+                  message: `${currentUserName} ${actionText} task: "${movedTask.title || 'Không tên'}"`,
+                  type: destination.droppableId === "DONE" ? "success" : "info",
                   taskId: movedTask.id,
                   time: new Date().toISOString()
                 }
               });
             }
           }
-          
-          // 💡 Sếp có thể copy đoạn if ở trên, đổi chữ "DONE" thành "REVIEW" 
-          // để bắn thêm thông báo nhắc Leader vào chấm điểm khi task chuyển sang cột Chờ Duyệt.
         }
       } else {
-        showToast('error', 'Lỗi chuyển trạng thái');
+        showToast('error', data.error || 'Lỗi chuyển trạng thái');
         fetchTasks(); // Giật lại data cũ nếu lỗi
       }
     } catch (e) {
+      showToast('error', 'Lỗi kết nối tới Server');
       fetchTasks();
     }
   };
@@ -606,7 +630,7 @@ export default function KanbanBoard() {
     }
   };
 
- // ==========================================
+  // ==========================================
   // XỬ LÝ CHAT TRONG TASK CHUẨN API & SOCKET
   // ==========================================
   const handleSendMessage = async () => {
@@ -658,7 +682,7 @@ export default function KanbanBoard() {
 
       if (res.ok) {
         showToast("success", "Đã lưu đánh giá KPI thành công!");
-        
+
         // 1. Refresh lại data bảng Kanban
         fetchTasks();
 
