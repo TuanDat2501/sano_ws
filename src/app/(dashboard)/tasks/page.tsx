@@ -667,30 +667,31 @@ export default function KanbanBoard() {
   // ==========================================
   const handleEvaluationSubmit = async (score: number, criteriaData: any, note: string) => {
     try {
-      const res = await fetch("/api/evaluations", {
+      // 🚀 1. Đổi URL gọi vào đúng file API sếp đã tạo
+      const res = await fetch(`/api/tasks/${selectedTask.id}/evaluate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          taskId: selectedTask.id,
           score: score,
-          criteria: criteriaData,
+          criteria: criteriaData, // Gửi lên với key là 'criteria'
           note: note
         })
       });
+
+      const contentType = res.headers.get("content-type");
+      if (contentType && contentType.includes("text/html")) {
+         showToast("error", "Lỗi 404: Không tìm thấy API Endpoint!");
+         return; 
+      }
 
       const data = await res.json();
 
       if (res.ok) {
         showToast("success", "Đã lưu đánh giá KPI thành công!");
-
-        // 1. Refresh lại data bảng Kanban
         fetchTasks();
 
         if (socket) {
-          // 2. Báo mọi người tải lại bảng
           socket.emit("board_updated");
-
-          // 3. Bắn Noti "Ting ting" cho người làm task (Content / Editor)
           const targetUserId = selectedTask.editorId || selectedTask.contentId;
           if (targetUserId) {
             socket.emit("send_notification", {
@@ -705,6 +706,8 @@ export default function KanbanBoard() {
             });
           }
         }
+        
+        handleCloseDrawer(); 
       } else {
         showToast("error", data.error || "Lỗi khi lưu đánh giá");
       }

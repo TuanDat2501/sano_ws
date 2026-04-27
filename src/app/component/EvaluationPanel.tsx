@@ -6,8 +6,9 @@ import { useState, useMemo } from "react";
 interface EvaluationPanelProps {
   task: any;
   onCancel: () => void;
-  onSubmit: (score: number, criteriaData: any, note: string) => void;
+  onSubmit: (score: number, criteriaData: any, note: string) => Promise<void>;
 }
+
 
 export default function EvaluationPanel({ task, onCancel, onSubmit }: EvaluationPanelProps) {
   const [checkedStandards, setCheckedStandards] = useState<Record<string, boolean>>({});
@@ -57,10 +58,13 @@ export default function EvaluationPanel({ task, onCancel, onSubmit }: Evaluation
   const isPass = currentScore >= 7;
   const isSubmitDisabled = isEvaluating || (!isPass && kaizenNote.trim().length < 5);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     setIsEvaluating(true);
-    // Gửi cả Data Criteria kèm kết quả Check về cho API lưu lại thành Lịch sử
-    onSubmit(currentScore, { criteriaList, checkedStandards }, kaizenNote);
+    try {
+      await onSubmit(currentScore, { criteriaList, checkedStandards }, kaizenNote);
+    } finally {
+      setIsEvaluating(false); // Dù API thành công hay lỗi (404), vẫn phải tắt xoay vòng
+    }
   };
 
   // 🚀 MÀN HÌNH CHẶN: NẾU DỰ ÁN CHƯA SETUP SƯỜN ĐIỂM
