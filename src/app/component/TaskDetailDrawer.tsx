@@ -268,9 +268,11 @@ export default function TaskDetailDrawer({
                   <EvaluationPanel 
                      task={selectedTask} 
                      onCancel={() => setRightTab('chat')} 
-                     onSubmit={(score, criteria, note) => {
-                        if(onSubmitEvaluation) onSubmitEvaluation(score, criteria, note);
-                     }} 
+                     onSubmit={async (score, criteria, note) => {
+                        if (onSubmitEvaluation) {
+                            await onSubmitEvaluation(score, criteria, note);
+                        }
+                     }}
                   />
                </div>
             )}
