@@ -29,14 +29,14 @@ export default function AnalyticsPage() {
     const { data: session, status } = useSession();
     const { showToast } = useToast();
 
-    const [selectedWeek, setSelectedWeek] = useState(0); 
+    const [selectedWeek, setSelectedWeek] = useState(0);
     const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
     const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
     const [selectedTeam, setSelectedTeam] = useState("ALL");
 
     const [data, setData] = useState<any>(null);
     const [isFetching, setIsFetching] = useState(true);
-
+    const [selectedChartChannel, setSelectedChartChannel] = useState("ALL");
     useEffect(() => {
         const fetchAnalytics = async () => {
             setIsFetching(true);
@@ -44,7 +44,7 @@ export default function AnalyticsPage() {
                 const res = await fetch(`/api/analytics?week=${selectedWeek}&month=${selectedMonth}&year=${selectedYear}&teamId=${selectedTeam}`);
                 if (res.ok) setData(await res.json());
                 else showToast("error", "Lỗi tải báo cáo");
-            } catch (error) { showToast("error", "Mất kết nối máy chủ"); } 
+            } catch (error) { showToast("error", "Mất kết nối máy chủ"); }
             finally { setIsFetching(false); }
         };
         if (status === "authenticated") fetchAnalytics();
@@ -52,7 +52,7 @@ export default function AnalyticsPage() {
 
     const getDisplayDateRange = () => {
         const pad = (num: number) => num.toString().padStart(2, '0');
-        
+
         if (selectedWeek === 0) {
             const maxDays = new Date(selectedYear, selectedMonth, 0).getDate();
             return `Dữ liệu từ 01/${pad(selectedMonth)}/${selectedYear} đến ${pad(maxDays)}/${pad(selectedMonth)}/${selectedYear}`;
@@ -61,7 +61,7 @@ export default function AnalyticsPage() {
         const firstDayOfMonth = new Date(selectedYear, selectedMonth - 1, 1);
         const lastDayOfMonth = new Date(selectedYear, selectedMonth, 0);
 
-        const dayOfWeek = firstDayOfMonth.getDay(); 
+        const dayOfWeek = firstDayOfMonth.getDay();
         const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
         const startOfFirstWeek = new Date(selectedYear, selectedMonth - 1, 1 + diffToMonday);
 
@@ -80,7 +80,7 @@ export default function AnalyticsPage() {
     if (status === "loading" || (isFetching && !data)) {
         return <div className="h-full flex items-center justify-center"><Loader2 className="animate-spin text-blue-600" size={40} /></div>;
     }
-    
+
     const currentUser = session?.user as any;
     if (!["ADMIN", "BAN_GIAM_DOC"].includes(currentUser?.role || "CONTENT")) {
         return (
@@ -106,7 +106,7 @@ export default function AnalyticsPage() {
         scales: {
             x: { grid: { display: false }, ticks: { font: { size: 10 } } },
             y: { type: 'linear' as const, display: true, position: 'left' as const, grid: { color: '#f1f5f9' }, border: { display: false }, ticks: { font: { size: 10 }, callback: (value: any) => '$' + value.toLocaleString() } },
-            y1: { type: 'linear' as const, display: true, position: 'right' as const, grid: { drawOnChartArea: false }, border: { display: false }, ticks: { font: { size: 10 }, callback: (value: any) => value > 999999 ? (value/1000000).toFixed(1) + 'M' : value > 999 ? (value/1000).toFixed(1) + 'K' : value } }
+            y1: { type: 'linear' as const, display: true, position: 'right' as const, grid: { drawOnChartArea: false }, border: { display: false }, ticks: { font: { size: 10 }, callback: (value: any) => value > 999999 ? (value / 1000000).toFixed(1) + 'M' : value > 999 ? (value / 1000).toFixed(1) + 'K' : value } }
         }
     };
 
@@ -120,17 +120,41 @@ export default function AnalyticsPage() {
         scales: { x: { display: false }, y: { grid: { display: false }, border: { display: false }, ticks: { font: { size: 11, weight: 'bold' as const } } } }
     };
 
-    const teamRevenueLineData = { 
-        labels: data?.revenueTrend?.map((t: any) => t.date) || [], 
+    const teamRevenueLineData = {
+        labels: data?.revenueTrend?.map((t: any) => t.date) || [],
         datasets: (data?.activeTeamNames || []).map((teamName: string, index: number) => { const color = TEAM_COLORS[index % TEAM_COLORS.length]; return { label: teamName, data: data?.revenueTrend?.map((t: any) => t[teamName] || 0) || [], borderColor: color, backgroundColor: color + '15', borderWidth: 2, pointRadius: 2, pointHoverRadius: 5, tension: 0.3, fill: true }; })
     };
-    const channelRevenueLineData = { 
-        labels: data?.channelRevenueTrend?.map((t: any) => t.date) || [], 
-        datasets: (data?.activeChannelNames || []).map((channelName: string, index: number) => { const color = CHANNEL_COLORS[index % CHANNEL_COLORS.length]; return { label: channelName, data: data?.channelRevenueTrend?.map((t: any) => t[channelName] || 0) || [], borderColor: color, backgroundColor: color + '10', borderWidth: 2, pointRadius: 2, pointHoverRadius: 5, tension: 0.3, fill: false }; })
+    const channelRevenueLineData = {
+        labels: data?.overallTrend?.map((t: any) => t.date) || [],
+        datasets: selectedChartChannel === "ALL"
+            ? [{
+                label: "Tổng Doanh Thu Tất Cả Kênh ($)",
+                data: data?.overallTrend?.map((t: any) => t.revenue) || [],
+                borderColor: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                borderWidth: 3, pointRadius: 2, pointHoverRadius: 6, tension: 0.3, fill: true
+            }]
+            : [{
+                label: `Doanh thu - ${selectedChartChannel} ($)`,
+                data: data?.channelRevenueTrend?.map((t: any) => t[selectedChartChannel] || 0) || [],
+                borderColor: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                borderWidth: 3, pointRadius: 2, pointHoverRadius: 6, tension: 0.3, fill: true
+            }]
     };
-    const channelViewsLineData = { 
-        labels: data?.channelViewsTrend?.map((t: any) => t.date) || [], 
-        datasets: (data?.activeChannelNames || []).map((channelName: string, index: number) => { const color = CHANNEL_COLORS[index % CHANNEL_COLORS.length]; return { label: channelName, data: data?.channelViewsTrend?.map((t: any) => t[channelName] || 0) || [], borderColor: color, backgroundColor: color + '10', borderWidth: 2, borderDash: [5, 5], pointRadius: 2, pointHoverRadius: 5, tension: 0.3, fill: false }; })
+    const channelViewsLineData = {
+        labels: data?.overallTrend?.map((t: any) => t.date) || [],
+        datasets: selectedChartChannel === "ALL"
+            ? [{
+                label: "Tổng Lượt Xem Tất Cả Kênh (Views)",
+                data: data?.overallTrend?.map((t: any) => t.views) || [],
+                borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                borderWidth: 3, pointRadius: 2, pointHoverRadius: 6, tension: 0.3, fill: true
+            }]
+            : [{
+                label: `Lượt xem - ${selectedChartChannel} (Views)`,
+                data: data?.channelViewsTrend?.map((t: any) => t[selectedChartChannel] || 0) || [],
+                borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                borderWidth: 3, pointRadius: 2, pointHoverRadius: 6, tension: 0.3, fill: true
+            }]
     };
 
     const standardLineOptions = {
@@ -138,7 +162,7 @@ export default function AnalyticsPage() {
         plugins: { legend: { display: true, position: 'top' as const, align: 'end' as const, labels: { boxWidth: 12, usePointStyle: true, font: { size: 11, weight: 'bold' as const } } }, tooltip: commonTooltipOptions, datalabels: { display: false } },
         scales: { x: { grid: { display: false }, ticks: { font: { size: 10 } } }, y: { border: { display: false }, ticks: { font: { size: 10 }, callback: (value: any) => '$' + value.toLocaleString() } } }
     };
-    const viewsLineOptions = { ...standardLineOptions, scales: { ...standardLineOptions.scales, y: { border: { display: false }, ticks: { font: { size: 10 }, callback: (value: any) => value > 999999 ? (value/1000000).toFixed(1) + 'M' : value > 999 ? (value/1000).toFixed(1) + 'K' : value.toLocaleString() } } } };
+    const viewsLineOptions = { ...standardLineOptions, scales: { ...standardLineOptions.scales, y: { border: { display: false }, ticks: { font: { size: 10 }, callback: (value: any) => value > 999999 ? (value / 1000000).toFixed(1) + 'M' : value > 999 ? (value / 1000).toFixed(1) + 'K' : value.toLocaleString() } } } };
 
     const monetizationDonutData = {
         labels: data?.monetizationStatus?.map((d: any) => d.name) || [],
@@ -153,18 +177,18 @@ export default function AnalyticsPage() {
     // 🚀 ĐÃ GẮN BIẾN DATA THẬT `data?.leadTimeData` TỪ API (Có đổ dải màu cho đẹp)
     const leadTimeBarData = {
         labels: data?.leadTimeData?.map((d: any) => d.name) || ['Lên Kịch Bản', 'Dựng Video', 'Đăng Kênh', 'Nghiệm Thu'],
-        datasets: [{ 
-            label: "Số ngày xử lý TB", 
-            data: data?.leadTimeData?.map((d: any) => d.days) || [0, 0, 0, 0], 
-            backgroundColor: ['#3b82f6', '#8b5cf6', '#ec4899', '#10b981'], 
-            borderRadius: 4, 
-            barThickness: 24 
+        datasets: [{
+            label: "Số ngày xử lý TB",
+            data: data?.leadTimeData?.map((d: any) => d.days) || [0, 0, 0, 0],
+            backgroundColor: ['#3b82f6', '#8b5cf6', '#ec4899', '#10b981'],
+            borderRadius: 4,
+            barThickness: 24
         }]
     };
 
     return (
         <div className="h-full overflow-y-auto custom-scrollbar bg-slate-50 p-3 md:p-8 space-y-4 md:space-y-6 pb-12 relative">
-            
+
             {/* --- HEADER CONTROLS --- */}
             <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3 md:gap-4">
                 <div>
@@ -215,10 +239,10 @@ export default function AnalyticsPage() {
             </div>
 
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-                <MiniStatCard title="Tổng Doanh Thu" value={`$${(stats.totalRevenue || 0).toLocaleString()}`} suffix="USD" icon={<DollarSign size={16} className="text-emerald-500"/>} />
-                <MiniStatCard title="Tổng Lượt Xem" value={(stats.totalViews || 0).toLocaleString()} suffix="Views" icon={<Eye size={16} className="text-blue-500"/>} />
-                <MiniStatCard title="Điểm Chất Lượng TB" value={stats.avgQualityScore ? stats.avgQualityScore.toFixed(1) : "0.0"} suffix="/10" icon={<Star size={16} className="text-amber-500"/>} />
-                <MiniStatCard title="Sản Lượng Task" value={stats.totalOutput} suffix="Task Done" icon={<TrendingUp size={16} className="text-purple-500"/>} />
+                <MiniStatCard title="Tổng Doanh Thu" value={`$${(stats.totalRevenue || 0).toLocaleString()}`} suffix="USD" icon={<DollarSign size={16} className="text-emerald-500" />} />
+                <MiniStatCard title="Tổng Lượt Xem" value={(stats.totalViews || 0).toLocaleString()} suffix="Views" icon={<Eye size={16} className="text-blue-500" />} />
+                <MiniStatCard title="Điểm Chất Lượng TB" value={stats.avgQualityScore ? stats.avgQualityScore.toFixed(1) : "0.0"} suffix="/10" icon={<Star size={16} className="text-amber-500" />} />
+                <MiniStatCard title="Sản Lượng Task" value={stats.totalOutput} suffix="Task Done" icon={<TrendingUp size={16} className="text-purple-500" />} />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-4 md:gap-6">
@@ -250,14 +274,36 @@ export default function AnalyticsPage() {
                 </div>
             </div>
 
+            {/* 🚀 HEADER BỘ LỌC CHUNG CHO 2 BIỂU ĐỒ KÊNH */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mt-8 mb-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+                <h2 className="text-sm md:text-base font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                    <TrendingUp className="text-purple-500 w-5 h-5" /> Phân Tích Biến Động Kênh
+                </h2>
+
+                <select
+                    value={selectedChartChannel}
+                    onChange={(e) => setSelectedChartChannel(e.target.value)}
+                    className="bg-slate-50 border border-slate-200 text-slate-700 text-sm font-bold rounded-xl px-4 py-2 outline-none focus:ring-2 focus:ring-blue-500/50 shadow-sm cursor-pointer w-full sm:w-auto min-w-[280px]"
+                >
+                    <option value="ALL">TỔNG HỆ THỐNG (Tất cả kênh)</option>
+                    {data?.activeChannelNames?.map((name: string) => (
+                        <option key={name} value={name}>{name}</option>
+                    ))}
+                </select>
+            </div>
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
                 <div className="bg-white p-4 md:p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col h-[300px] md:h-[350px]">
-                    <h2 className="text-xs md:text-sm font-black text-slate-800 uppercase tracking-wider mb-2 shrink-0 flex items-center gap-1.5"><DollarSign size={16} className="text-emerald-500" /> Biến Động Doanh Thu Kênh</h2>
-                    <div className="flex-1 w-full min-h-0 relative"><Line data={channelRevenueLineData} options={standardLineOptions} /></div>
+                    <h2 className="text-xs md:text-sm font-black text-slate-800 uppercase tracking-wider mb-2 shrink-0 flex items-center gap-1.5"><DollarSign size={16} className="text-emerald-500" /> Doanh Thu Kênh</h2>
+                    <div className="flex-1 w-full min-h-0 relative">
+                        <Line data={channelRevenueLineData} options={standardLineOptions} />
+                    </div>
                 </div>
                 <div className="bg-white p-4 md:p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col h-[300px] md:h-[350px]">
-                    <h2 className="text-xs md:text-sm font-black text-slate-800 uppercase tracking-wider mb-2 shrink-0 flex items-center gap-1.5"><Eye size={16} className="text-blue-500" /> Biến Động Lượt Xem Kênh</h2>
-                    <div className="flex-1 w-full min-h-0 relative"><Line data={channelViewsLineData} options={viewsLineOptions} /></div>
+                    <h2 className="text-xs md:text-sm font-black text-slate-800 uppercase tracking-wider mb-2 shrink-0 flex items-center gap-1.5"><Eye size={16} className="text-blue-500" /> Lượt Xem Kênh</h2>
+                    <div className="flex-1 w-full min-h-0 relative">
+                        <Line data={channelViewsLineData} options={viewsLineOptions} />
+                    </div>
                 </div>
             </div>
 
@@ -294,9 +340,9 @@ export default function AnalyticsPage() {
                 <div className="bg-white p-4 md:p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col h-[260px] md:h-[300px]">
                     <h2 className="text-xs md:text-sm font-black text-slate-800 uppercase tracking-wider mb-2 md:mb-4 shrink-0">Phễu Trạng Thái Công Việc (Toàn Hệ Thống)</h2>
                     <div className="flex-1 w-full min-h-0 relative">
-                        <Bar 
-                            data={taskFunnelData} 
-                            options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: commonTooltipOptions, datalabels: { display: true, color: '#ffffff', font: { weight: 'bold', size: 10 }, anchor: 'end', align: 'bottom', offset: 4 } }, scales: { x: { grid: { display: false }, border: { display: false }, ticks: { font: { size: 10, weight: 'bold' as const } } }, y: { grid: { display: false }, border: { display: false } } } }} 
+                        <Bar
+                            data={taskFunnelData}
+                            options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: commonTooltipOptions, datalabels: { display: true, color: '#ffffff', font: { weight: 'bold', size: 10 }, anchor: 'end', align: 'bottom', offset: 4 } }, scales: { x: { grid: { display: false }, border: { display: false }, ticks: { font: { size: 10, weight: 'bold' as const } } }, y: { grid: { display: false }, border: { display: false } } } }}
                         />
                     </div>
                 </div>
@@ -304,9 +350,9 @@ export default function AnalyticsPage() {
                 <div className="bg-white p-4 md:p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col h-[260px] md:h-[300px]">
                     <h2 className="text-xs md:text-sm font-black text-slate-800 uppercase tracking-wider mb-2 md:mb-4 shrink-0">Điểm Nghẽn (Thời Gian Hoàn Thành Trung Bình)</h2>
                     <div className="flex-1 w-full min-h-0 relative">
-                        <Bar 
-                            data={leadTimeBarData} 
-                            options={{ indexAxis: 'y' as const, responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: commonTooltipOptions, datalabels: { display: true, color: '#ffffff', font: { weight: 'bold', size: 10 }, anchor: 'end', align: 'start', formatter: (val) => val > 0 ? `${val} ngày` : '' } }, scales: { x: { grid: { color: '#f1f5f9' }, border: { display: false }, ticks: { font: { size: 10 } } }, y: { grid: { display: false }, border: { display: false }, ticks: { font: { size: 10 } } } } }} 
+                        <Bar
+                            data={leadTimeBarData}
+                            options={{ indexAxis: 'y' as const, responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: commonTooltipOptions, datalabels: { display: true, color: '#ffffff', font: { weight: 'bold', size: 10 }, anchor: 'end', align: 'start', formatter: (val) => val > 0 ? `${val} ngày` : '' } }, scales: { x: { grid: { color: '#f1f5f9' }, border: { display: false }, ticks: { font: { size: 10 } } }, y: { grid: { display: false }, border: { display: false }, ticks: { font: { size: 10 } } } } }}
                         />
                     </div>
                 </div>

@@ -113,7 +113,7 @@ export default function RequestsPage() {
     useEffect(() => {
         fetch("/api/teams").then(res => res.json()).then((data: any) => { if (Array.isArray(data)) setDbTeams(data); });
     }, []);
-
+    
     return (
         <Suspense fallback={<div className="p-8 text-center text-slate-500">Đang tải...</div>}>
             {/* Giảm padding trên mobile để nhường chỗ cho nội dung */}

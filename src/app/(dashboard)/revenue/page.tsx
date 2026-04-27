@@ -157,7 +157,7 @@ export default function RevenueEntryPage() {
             setRevenueData(prev => ({ ...prev, [cellKey]: currentData }));
         }
     };
-
+    
     return (
         // 🚀 1. Khóa view 1 màn hình với flex-col và overflow-hidden
         <div className="p-4 md:p-6 bg-slate-50 h-full max-h-[calc(100vh-80px)] flex flex-col overflow-hidden animate-fade-in">
