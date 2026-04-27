@@ -268,9 +268,13 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
                 },
             }
         });
+
+        if (!task) {
+            return NextResponse.json({ error: "Không tìm thấy task" }, { status: 404 });
+        }
         const formattedTask = {
-            ...task,
-            evaluation: task.evaluations && task.evaluations.length > 0 ? task.evaluations[0] : null,
+            ...task!,
+            evaluation: task!.evaluations && task!.evaluations.length > 0 ? task!.evaluations[0] : null,
         };
 
         return NextResponse.json(formattedTask);
