@@ -2,7 +2,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth"; 
+import { authOptions } from "@/lib/auth";
 import { Role } from "@prisma/client";
 
 const getBaseUrl = (rawUrl: string) => {
@@ -32,7 +32,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         const resolvedParams = await params;
         const taskId = resolvedParams.id;
         const rawBody = await req.json();
-        
+
         // 1. LẤY THÔNG TIN TASK CŨ ĐỂ SO SÁNH
         const oldTask = await prisma.task.findUnique({ where: { id: taskId } });
         if (!oldTask) return NextResponse.json({ error: "Task không tồn tại" }, { status: 404 });
@@ -40,7 +40,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         // =========================================================================
         // 🚀 BƯỚC 1.5: BỘ LỌC QUYỀN (RBAC) - TẠO BODY SẠCH
         // =========================================================================
-        const body: any = {}; 
+        const body: any = {};
         const isManager = ["ADMIN", "BAN_GIAM_DOC", "LEADER", "HR"].includes(currentUser.role);
 
         if (isManager) {
@@ -50,12 +50,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             if (rawBody.videoLink !== undefined) body.videoLink = rawBody.videoLink;
             if (rawBody.publishLink !== undefined) body.publishLink = rawBody.publishLink;
             if (rawBody.isClosed !== undefined) body.isClosed = rawBody.isClosed;
-            
+
             // 🚀 BỔ SUNG: Cho phép Sếp gán việc từ Kho (Backlog)
             if (rawBody.teamId !== undefined) body.teamId = rawBody.teamId;
             if (rawBody.contentId !== undefined) body.contentId = rawBody.contentId || null;
             if (rawBody.editorId !== undefined) body.editorId = rawBody.editorId || null;
-            
+
         } else if (currentUser.role === "CONTENT") {
             if (oldTask.contentId !== currentUser.id && oldTask.creatorId !== currentUser.id) {
                 return NextResponse.json({ error: "Bạn không phụ trách nội dung bài này!" }, { status: 403 });
@@ -98,12 +98,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 where: { id: { not: taskId }, OR: orConditions }
             });
 
-            let duplicateField = ""; 
+            let duplicateField = "";
             const isDuplicate = potentialTasks.some(task => {
                 return linksToCheck.some(l => {
                     const dbValue = (task as any)[l.key];
                     const isMatch = dbValue && getBaseUrl(dbValue) === getBaseUrl(l.value);
-                    if (isMatch) duplicateField = l.key; 
+                    if (isMatch) duplicateField = l.key;
                     return isMatch;
                 });
             });
@@ -137,7 +137,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         if (body.contentId !== undefined && body.contentId !== oldTask.contentId) {
             logsToCreate.push({ action: "ASSIGN_USER", details: `Đã phân công Content mới`, taskId, userId });
         }
-        
+
         // =========================================================================
         // 4. 🚀 CẬP NHẬT TASK XUỐNG DATABASE (ĐÃ THÊM CÁC TRƯỜNG GÁN VIỆC)
         // =========================================================================
@@ -184,10 +184,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             }
         }
 
-       // --- 5.2. BÁO CHO NHÂN SỰ KHI REJECT / ĐÓNG TASK ---
-        const involvedIds = [oldTask.contentId, oldTask.editorId, oldTask.publisherId]; 
+        // --- 5.2. BÁO CHO NHÂN SỰ KHI REJECT / ĐÓNG TASK ---
+        const involvedIds = [oldTask.contentId, oldTask.editorId, oldTask.publisherId];
         const targetWorkerIds = [...new Set(involvedIds.filter(id => id && id !== userId))];
-        
+
         if (targetWorkerIds.length > 0) {
             for (const wId of targetWorkerIds) {
                 if (body.status === "DOING" && oldTask.status !== "DOING") {
@@ -197,7 +197,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 }
                 if (body.isClosed === true && oldTask.isClosed === false) {
                     const notif = await prisma.notification.create({ data: { userId: wId as string, taskId: taskId, title: "Task đã hoàn thành 🎉", message: `Task "${oldTask.title}" của bạn đã được chốt!`, type: "success" } });
-                    createdNotifications.push({ ...notif, type: "success" }); 
+                    createdNotifications.push({ ...notif, type: "success" });
                     userIdsToNotify.push(wId as string);
                 }
             }
@@ -208,7 +208,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             const newAssignees = [];
             if (body.contentId) newAssignees.push(body.contentId);
             if (body.editorId) newAssignees.push(body.editorId);
-            
+
             if (newAssignees.length > 0) {
                 userIdsToNotify.push(...newAssignees);
                 const assignNotis = await Promise.all(
@@ -229,10 +229,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         }
 
         return NextResponse.json({
-            task: updatedTask, 
-            updatedTask: updatedTask, 
+            task: updatedTask,
+            updatedTask: updatedTask,
             notifications: createdNotifications,
-            userIdsToNotify: [...new Set(userIdsToNotify)] 
+            userIdsToNotify: [...new Set(userIdsToNotify)]
         });
 
     } catch (error) {
@@ -260,6 +260,11 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
                         criteria: true
                     }
                 },
+                evaluation: {
+                    include: {
+                        evaluator: { select: { fullName: true } }
+                    }
+                },
             }
         });
         return NextResponse.json(task);
@@ -274,9 +279,9 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     try {
         const session = await getServerSession(authOptions);
         if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-        
+
         const resolvedParams = await params;
-        
+
         // 🚀 Xóa task khỏi Database
         await prisma.task.delete({
             where: { id: resolvedParams.id }

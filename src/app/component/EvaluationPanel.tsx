@@ -1,7 +1,8 @@
 "use client";
 
-import { CheckCircle2, AlertTriangle, Loader2, ClipboardCheck, ArrowRight, Settings } from "lucide-react";
-import { useState, useMemo } from "react";
+// 🚀 Đã import thêm UserCircle2
+import { CheckCircle2, AlertTriangle, Loader2, ClipboardCheck, ArrowRight, Settings, UserCircle2 } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
 
 interface EvaluationPanelProps {
   task: any;
@@ -9,42 +10,53 @@ interface EvaluationPanelProps {
   onSubmit: (score: number, criteriaData: any, note: string) => Promise<void>;
 }
 
-
 export default function EvaluationPanel({ task, onCancel, onSubmit }: EvaluationPanelProps) {
   const [checkedStandards, setCheckedStandards] = useState<Record<string, boolean>>({});
   const [kaizenNote, setKaizenNote] = useState('');
   const [isEvaluating, setIsEvaluating] = useState(false);
 
-  // 🚀 LOGIC 1: BÓC TÁCH SƯỜN ĐIỂM TỪ DATABASE
+  useEffect(() => {
+    if (task?.evaluation) {
+        const evalData = task.evaluation;
+        setKaizenNote(evalData.kaizenNote || '');
+        try {
+            const savedCriteria = typeof evalData.criteria === 'string' 
+                ? JSON.parse(evalData.criteria) 
+                : evalData.criteria;
+            
+            if (savedCriteria && savedCriteria.checkedStandards) {
+                setCheckedStandards(savedCriteria.checkedStandards);
+            }
+        } catch (error) {
+            console.error("Lỗi load lại dữ liệu đã chấm:", error);
+        }
+    }
+  }, [task]);
+
   const criteriaList = useMemo(() => {
     if (!task?.project?.criteria) return [];
     try {
         const parsed = typeof task.project.criteria === 'string' ? JSON.parse(task.project.criteria) : task.project.criteria;
         return Array.isArray(parsed) ? parsed : [];
     } catch (error) {
-        console.error("Lỗi parse Sườn điểm:", error);
         return [];
     }
   }, [task]);
 
-  // 🚀 LOGIC 2: TÍNH ĐIỂM REAL-TIME DỰA TRÊN DỮ LIỆU THẬT
   const currentScore = useMemo(() => {
     if (criteriaList.length === 0) return 0;
     
     let totalScore = 0;
     criteriaList.forEach((group: any) => {
       const totalItems = group.standards?.length || 0;
-      if (totalItems === 0) return; // Bỏ qua nhóm rỗng
+      if (totalItems === 0) return;
 
-      // Đếm số mục được tick trong nhóm này
       let checkedItems = 0;
       group.standards.forEach((std: string, idx: number) => {
-         // Tạo ID ảo: "ID Nhóm - Vị trí Index" (VD: "16789-0")
          const uniqueId = `${group.id}-${idx}`;
          if (checkedStandards[uniqueId]) checkedItems++;
       });
 
-      // Tính điểm theo trọng số của nhóm đó
       totalScore += (checkedItems / totalItems) * (Number(group.weight) / 10);
     });
     
@@ -63,11 +75,10 @@ export default function EvaluationPanel({ task, onCancel, onSubmit }: Evaluation
     try {
       await onSubmit(currentScore, { criteriaList, checkedStandards }, kaizenNote);
     } finally {
-      setIsEvaluating(false); // Dù API thành công hay lỗi (404), vẫn phải tắt xoay vòng
+      setIsEvaluating(false); 
     }
   };
 
-  // 🚀 MÀN HÌNH CHẶN: NẾU DỰ ÁN CHƯA SETUP SƯỜN ĐIỂM
   if (criteriaList.length === 0) {
       return (
           <div className="flex flex-col h-full bg-slate-50 items-center justify-center p-6 text-center animate-fade-in relative z-10">
@@ -87,23 +98,41 @@ export default function EvaluationPanel({ task, onCancel, onSubmit }: Evaluation
 
   return (
     <div className="flex flex-col h-full bg-slate-50 animate-fade-in relative z-10">
-      {/* Header Cảm xúc */}
-      <div className={`p-6 text-white flex justify-between items-center shrink-0 shadow-md z-20 transition-colors duration-500 ${isPass ? 'bg-emerald-600' : 'bg-indigo-600'}`}>
-        <div>
-          <h3 className="font-black text-lg flex items-center gap-2">
-            <ClipboardCheck size={20} /> Phiếu Chấm Điểm
+      
+      {/* 🚀 HEADER ĐÃ ĐƯỢC LÀM LẠI UI */}
+      <div className={`p-5 md:p-6 text-white flex justify-between items-start shrink-0 shadow-md z-20 transition-colors duration-500 ${isPass ? 'bg-emerald-600' : 'bg-indigo-600'}`}>
+        <div className="flex-1 pr-4">
+          <h3 className="font-black text-lg md:text-xl flex items-center gap-2">
+            <ClipboardCheck size={22} className="shrink-0" /> Phiếu Chấm Điểm
           </h3>
-          <p className="text-white/80 text-xs font-medium mt-1">Dự án: {task.project?.name || 'Chưa rõ'}</p>
+          <p className="text-white/80 text-xs md:text-sm font-medium mt-1 truncate">
+            Dự án: {task.project?.name || 'Chưa rõ'}
+          </p>
+
+          {/* 🚀 BOX HIỂN THỊ NGƯỜI ĐÃ CHẤM (Chỉ hiện khi đã có điểm) */}
+          {task?.evaluation && (
+             <div className="mt-3 inline-flex items-center gap-1.5 bg-black/10 hover:bg-black/20 transition-colors px-2.5 py-1.5 rounded-lg text-[10px] md:text-xs font-medium border border-white/20 backdrop-blur-sm w-max">
+                <UserCircle2 size={14} className="opacity-90 shrink-0" />
+                <span>
+                    Đã chấm bởi <strong className="font-black text-white">{task.evaluation.evaluator?.fullName || "Quản lý"}</strong>
+                </span>
+                <span className="opacity-70 ml-0.5">
+                    - {new Date(task.evaluation.createdAt).toLocaleDateString('vi-VN')}
+                </span>
+             </div>
+          )}
         </div>
-        <div className="text-right">
-          <p className="text-[10px] font-black uppercase text-white/70 tracking-widest">Điểm</p>
-          <div className="text-3xl font-black tabular-nums tracking-tight">
-            {currentScore} <span className="text-lg text-white/70">/10</span>
+
+        {/* 🚀 Cục Điểm Số */}
+        <div className="text-right shrink-0">
+          <p className="text-[10px] font-black uppercase text-white/70 tracking-widest mb-0.5">Tổng Điểm</p>
+          <div className="text-4xl md:text-5xl font-black tabular-nums tracking-tight leading-none">
+            {currentScore} <span className="text-lg md:text-xl text-white/70 font-bold">/10</span>
           </div>
         </div>
       </div>
 
-      {/* Form Checklist (Lấy từ DB) */}
+      {/* Form Checklist */}
       <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 custom-scrollbar">
         {criteriaList.map((group: any) => (
           <div key={group.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -159,7 +188,9 @@ export default function EvaluationPanel({ task, onCancel, onSubmit }: Evaluation
               (isPass ? 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/30' : 'bg-orange-500 hover:bg-orange-600 shadow-orange-500/30')}`}
         >
           {isEvaluating ? <Loader2 className="animate-spin" size={18} /> : (
-            isPass ? <>Duyệt Video (Pass) <CheckCircle2 size={18}/></> : <>Yêu Cầu Làm Lại <ArrowRight size={18}/></>
+            // Thay đổi Text một chút cho mượt nếu đã từng chấm
+            task?.evaluation ? (isPass ? <>Cập Nhật Điểm (Pass) <CheckCircle2 size={18}/></> : <>Cập Nhật Lỗi (Làm Lại) <ArrowRight size={18}/></>)
+            : (isPass ? <>Duyệt Video (Pass) <CheckCircle2 size={18}/></> : <>Yêu Cầu Làm Lại <ArrowRight size={18}/></>)
           )}
         </button>
       </div>
