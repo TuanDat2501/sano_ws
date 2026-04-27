@@ -332,7 +332,7 @@ export default function KanbanBoard() {
           socket.emit("board_updated");
 
           // 🚀 2. PHẦN BỔ SUNG: Bắn Noti Real-time khi kéo Task vào cột DONE
-          if (destination.droppableId === "REVIEW") {
+          if (destination.droppableId === "DONE") {
             const targetUserIds = [];
             // Lấy ID những người đang làm Task này để báo tin vui
             if (movedTask.contentId) targetUserIds.push(movedTask.contentId);
