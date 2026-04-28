@@ -40,9 +40,17 @@ function getMonthlyWeekRange(year: number, month: number, weekNumber: number) {
 function getCurrentWeekNumber(date: Date) {
     const year = date.getFullYear();
     const month = date.getMonth() + 1;
+    
+    // Đưa ngày hiện tại về mốc 0h00 để so sánh cho chuẩn
+    const todayTime = new Date(year, month - 1, date.getDate()).getTime();
+
     for (let w = 1; w <= 5; w++) {
         const range = getContinuousWeekRange(year, month, w);
-        if (date >= range.start && date <= range.end) {
+        const startTime = new Date(range.start.getFullYear(), range.start.getMonth(), range.start.getDate()).getTime();
+        const endTime = new Date(range.end.getFullYear(), range.end.getMonth(), range.end.getDate()).getTime();
+        
+        if (todayTime >= startTime && todayTime <= endTime) {
+            // Giới hạn max là tuần 4 (Nếu sang tuần 5 thì vẫn gộp số liệu vào tuần 4)
             return w > 4 ? 4 : w; 
         }
     }
@@ -80,7 +88,7 @@ export default function KpiDashboard() {
     const [weekInfo, setWeekInfo] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(true);
 
-    const availableWeeks = [1, 2, 3, 4];
+    const availableWeeks = [1, 2, 3, 4, 5];
     
     useEffect(() => {
         if (isHighLevel) {
