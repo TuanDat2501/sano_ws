@@ -107,7 +107,7 @@ export default function ProjectModal({ isOpen, onClose, teams, initialData, onSu
               <input
                 required
                 className="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl p-4 text-base focus:border-red-500 focus:bg-white outline-none transition-all font-bold text-slate-800"
-                placeholder="VD: TikTok Series Viral..."
+                placeholder="VD: Tên dự án"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               />

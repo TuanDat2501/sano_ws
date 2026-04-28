@@ -194,7 +194,7 @@ export default function TaskDetailDrawer({
                 {[
                   { key: 'scriptLink', label: '1. Kịch Bản (Docs)', role: 'CONTENT', idField: 'contentId' },
                   { key: 'videoLink', label: '2. Video Render (Drive)', role: 'EDITOR', idField: 'editorId' },
-                  { key: 'publishLink', label: '3. Video Đã Đăng (Tiktok)', role: 'CHANNEL_MANAGER', idField: 'publisherId' }
+                  { key: 'publishLink', label: '3. Video Đã Đăng', role: 'CHANNEL_MANAGER', idField: 'publisherId' }
                 ].map((field) => {
                   const isAllowed = isManager || (userRole === field.role && selectedTask[field.idField] === sessionUserId) || (field.key === 'scriptLink' && selectedTask.creatorId === sessionUserId);
                   return (

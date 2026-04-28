@@ -1,14 +1,17 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Search, Filter, Edit, Trash2, ChevronLeft, ChevronRight, FolderKanban, Star, Users, Clock, CheckCircle2, GitBranch, ListChecks } from "lucide-react";
+import { Plus, Search, Filter, Edit, Trash2, ChevronLeft, ChevronRight, FolderKanban, Star, Users, Clock, CheckCircle2, GitBranch, ListChecks, Sparkles } from "lucide-react";
 import PermissionGuard from "@/app/component/PermissionGuard";
 import { useToast } from "@/app/component/ToastProvider";
 import ProjectModal from "./ProjectModal"; // 🚀 Sửa lại đường dẫn import cho đúng thư mục của sếp
 import Link from "next/link";
 import CriteriaDrawer from "./CriteriaDrawer";
+import { useSession } from "next-auth/react";
+import SampleCriteriaDrawer from "./SampleCriteriaDrawer";
 
 export default function ProjectsPage() {
+    const { data: session } = useSession();
     const { showToast } = useToast();
     const [searchTerm, setSearchTerm] = useState("");
     const [currentPage, setCurrentPage] = useState(1);
@@ -22,6 +25,8 @@ export default function ProjectsPage() {
     const [editingProject, setEditingProject] = useState<any>(null);
     const [isCriteriaOpen, setIsCriteriaOpen] = useState(false);
     const [selectedProjectForCriteria, setSelectedProjectForCriteria] = useState<any>(null);
+    const [isSampleDrawerOpen, setIsSampleDrawerOpen] = useState(false);
+    const isAdmin = (session?.user as any)?.role === "ADMIN";
     const loadData = async () => {
         setLoading(true);
         try {
@@ -89,12 +94,24 @@ export default function ProjectsPage() {
                         <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">Hệ thống <span className="text-red-600">Dự án</span></h1>
                         <p className="text-sm text-slate-500 font-medium mt-1">Quản lý quy trình và tiêu chuẩn chất lượng tập trung.</p>
                     </div>
-                    <button
-                        onClick={() => { setEditingProject(null); setIsModalOpen(true); }}
-                        className="w-full lg:w-auto bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all shadow-md shadow-red-600/20 active:scale-95"
-                    >
-                        <Plus size={20} /> Tạo Dự án mới
-                    </button>
+                    <div className="flex items-center gap-3 w-full lg:w-auto">
+                        {/* 🚀 NÚT TIÊU CHUẨN MẪU (CHỈ ADMIN THẤY) */}
+                        {isAdmin && (
+                            <button
+                                onClick={() => setIsSampleDrawerOpen(true)}
+                                className="flex-1 lg:flex-none bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-6 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all border border-indigo-200"
+                            >
+                                <Sparkles size={20} /> Tiêu chuẩn mẫu
+                            </button>
+                        )}
+
+                        <button
+                            onClick={() => { setEditingProject(null); setIsModalOpen(true); }}
+                            className="flex-1 lg:flex-none bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-2xl font-bold flex items-center justify-center gap-2 transition-all shadow-md shadow-red-600/20 active:scale-95"
+                        >
+                            <Plus size={20} /> Tạo Dự án mới
+                        </button>
+                    </div>
                 </div>
 
                 {/* Bảng Dữ liệu */}
@@ -260,6 +277,10 @@ export default function ProjectsPage() {
                     }
                 }}
             />
+            <SampleCriteriaDrawer 
+                    isOpen={isSampleDrawerOpen}
+                    onClose={() => setIsSampleDrawerOpen(false)}
+                />
         </PermissionGuard>
     );
 }
