@@ -153,6 +153,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 teamId: body.teamId !== undefined ? body.teamId : undefined,
                 contentId: body.contentId !== undefined ? body.contentId : undefined,
                 editorId: body.editorId !== undefined ? body.editorId : undefined,
+                projectId: body.projectId !== undefined ? body.projectId : undefined,
             }
         });
 
