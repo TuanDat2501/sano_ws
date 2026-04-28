@@ -31,7 +31,7 @@ export default function DashboardPage() {
                     <LayoutDashboard className="text-blue-600" /> Tổng quan hệ thống
                 </h1>
                 <p className="text-xs md:text-sm text-slate-500 font-medium mt-1">
-                    Chào mừng trở lại! Chúc một ngày làm việc năng suất tại BeastLore Studio. 🚀
+                    Chào mừng trở lại! Chúc một ngày làm việc năng suất tại Sano WorkSpace. 🚀
                 </p>
             </div>
 
