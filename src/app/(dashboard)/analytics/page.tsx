@@ -309,11 +309,16 @@ export default function AnalyticsPage() {
 
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden shrink-0">
                 <div className="p-3 md:p-4 border-b border-slate-100"><h2 className="text-xs md:text-sm font-black text-slate-800 uppercase tracking-wider">Phân Tích Hiệu Suất Từng Kênh (Tính RPM)</h2></div>
-                <div className="overflow-x-auto text-sm text-slate-600 custom-scrollbar">
+                
+                {/* 🚀 THÊM overflow-auto và max-h-[400px] để bảng có thể cuộn dọc */}
+                <div className="overflow-auto max-h-[400px] text-sm text-slate-600 custom-scrollbar relative">
                     <table className="w-full text-left min-w-[800px]">
-                        <thead className="bg-slate-50 border-b border-slate-200 text-[10px] md:text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                            <tr><th className="px-4 py-3">Tên Kênh</th><th className="px-4 py-3">Đội Nhóm</th><th className="px-4 py-3 text-right">Tổng Lượt Xem (Views)</th><th className="px-4 py-3 text-right">Tổng Doanh Thu ($)</th><th className="px-4 py-3 text-right text-purple-600">RPM ($/1k Views)</th><th className="px-4 py-3 text-right">Trạng Thái Bật KT</th></tr>
+                        
+                        {/* 🚀 THÊM sticky top-0 z-10 để ghim Header */}
+                        <thead className="sticky top-0 z-10 bg-slate-50 shadow-[0_1px_3px_rgba(0,0,0,0.05)] border-b border-slate-200 text-[10px] md:text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                            <tr><th className="px-4 py-3 bg-slate-50">Tên Kênh</th><th className="px-4 py-3 bg-slate-50">Đội Nhóm</th><th className="px-4 py-3 bg-slate-50 text-right">Tổng Lượt Xem (Views)</th><th className="px-4 py-3 bg-slate-50 text-right">Tổng Doanh Thu ($)</th><th className="px-4 py-3 bg-slate-50 text-right text-purple-600">RPM ($/1k Views)</th><th className="px-4 py-3 bg-slate-50 text-right">Trạng Thái Bật KT</th></tr>
                         </thead>
+                        
                         <tbody className="divide-y divide-slate-100">
                             {data?.channelGrid?.length > 0 ? data.channelGrid.map((c: any) => (
                                 <tr key={c.id} className="hover:bg-slate-50">
@@ -360,11 +365,16 @@ export default function AnalyticsPage() {
 
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden shrink-0">
                 <div className="p-3 md:p-4 border-b border-slate-100"><h2 className="text-xs md:text-sm font-black text-slate-800 uppercase tracking-wider">Tiến Độ Dự Án (Project Health)</h2></div>
-                <div className="overflow-x-auto text-sm text-slate-600 custom-scrollbar">
+                
+                {/* 🚀 THÊM overflow-auto và max-h-[400px] */}
+                <div className="overflow-auto max-h-[400px] text-sm text-slate-600 custom-scrollbar relative">
                     <table className="w-full text-left min-w-[700px]">
-                        <thead className="bg-slate-50 border-b border-slate-200 text-[10px] md:text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                            <tr><th className="px-4 py-3">Tên Dự Án</th><th className="px-4 py-3">Người Giám Sát</th><th className="px-4 py-3 text-center">Tiến Độ Giao Việc</th><th className="px-4 py-3 text-right">Hoàn Thành</th></tr>
+                        
+                        {/* 🚀 THÊM sticky top-0 z-10 */}
+                        <thead className="sticky top-0 z-10 bg-slate-50 shadow-[0_1px_3px_rgba(0,0,0,0.05)] border-b border-slate-200 text-[10px] md:text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                            <tr><th className="px-4 py-3 bg-slate-50">Tên Dự Án</th><th className="px-4 py-3 bg-slate-50">Người Giám Sát</th><th className="px-4 py-3 bg-slate-50 text-center">Tiến Độ Giao Việc</th><th className="px-4 py-3 bg-slate-50 text-right">Hoàn Thành</th></tr>
                         </thead>
+                        
                         <tbody className="divide-y divide-slate-100">
                             {data?.projectHealth?.length > 0 ? data.projectHealth.map((p: any) => (
                                 <tr key={p.id} className="hover:bg-slate-50">
@@ -386,11 +396,16 @@ export default function AnalyticsPage() {
 
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden shrink-0">
                 <div className="p-3 md:p-4 border-b border-slate-100"><h2 className="text-xs md:text-sm font-black text-slate-800 uppercase tracking-wider">Hiệu Suất Cán Bộ Nhân Viên</h2></div>
-                <div className="overflow-x-auto text-sm text-slate-600 custom-scrollbar">
+                
+                {/* 🚀 THÊM overflow-auto và max-h-[400px] */}
+                <div className="overflow-auto max-h-[400px] text-sm text-slate-600 custom-scrollbar relative">
                     <table className="w-full text-left min-w-[800px]">
-                        <thead className="bg-slate-50 border-b border-slate-200 text-[10px] md:text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                            <tr><th className="px-4 py-3">Họ & Tên</th><th className="px-4 py-3">Vị Trí</th><th className="px-4 py-3 text-center">Sản Lượng</th><th className="px-4 py-3 text-center">% KPI</th><th className="px-4 py-3 text-center text-amber-600">Điểm TB</th><th className="px-4 py-3 text-right">Trạng Thái</th></tr>
+                        
+                        {/* 🚀 THÊM sticky top-0 z-10 */}
+                        <thead className="sticky top-0 z-10 bg-slate-50 shadow-[0_1px_3px_rgba(0,0,0,0.05)] border-b border-slate-200 text-[10px] md:text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                            <tr><th className="px-4 py-3 bg-slate-50">Họ & Tên</th><th className="px-4 py-3 bg-slate-50">Vị Trí</th><th className="px-4 py-3 bg-slate-50 text-center">Sản Lượng</th><th className="px-4 py-3 bg-slate-50 text-center">% KPI</th><th className="px-4 py-3 bg-slate-50 text-center text-amber-600">Điểm TB</th><th className="px-4 py-3 bg-slate-50 text-right">Trạng Thái</th></tr>
                         </thead>
+                        
                         <tbody className="divide-y divide-slate-100">
                             {data?.hrGrid?.map((u: any) => (
                                 <tr key={u.id} className="hover:bg-slate-50">
