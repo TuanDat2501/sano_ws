@@ -61,11 +61,11 @@ export default function OrgChartPage() {
         Promise.all([
             fetch("/api/teams").then(res => res.ok ? res.json() : []),
             fetch("/api/departments").then(res => res.ok ? res.json() : []),
-            fetch("/api/users?limit=1000").then(async res => {
+            fetch("/api/users/org-chart").then(async res => {
                 if (!res.ok) return [];
                 const data = await res.json();
-               const allUsers = data.users || data;
-               return allUsers.filter((u: any) => u.isActive === true);
+                // Vì API mới trả thẳng ra mảng user luôn nên không cần data.users nữa
+                return data.filter((u: any) => u.isActive === true);
             })
         ]).then(([teamsData, deptsData, usersData]) => {
             const initialNodes: any[] = [];
