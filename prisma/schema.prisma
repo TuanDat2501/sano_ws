@@ -473,3 +473,11 @@ model ChannelMember {
 
   @@id([channelId, userId]) // 1 người chỉ có 1 chức danh chính trên 1 kênh
 }
+
+
+model SystemSetting {
+  id           String   @id @default(uuid())
+  settingKey   String   @unique // VD: "SAMPLE_CRITERIA"
+  settingValue Json?    // Dữ liệu JSON (Sườn điểm, cấu hình...)
+  updatedAt    DateTime @updatedAt
+}

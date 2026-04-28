@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { X, Plus, Trash2, ListChecks, Save, Loader2, Sparkles } from "lucide-react";
 import { createPortal } from "react-dom";
+import { useToast } from "@/app/component/ToastProvider"; // 🚀 Bổ sung Toast để báo lỗi/thành công
 
 interface CriteriaDrawerProps {
     isOpen: boolean;
@@ -11,52 +12,7 @@ interface CriteriaDrawerProps {
     onSave: (criteria: any) => Promise<void>;
 }
 
-// 🚀 BỘ DATA MẪU CHUẨN ĐƯỢC CHUYỂN THÀNH HÀM ĐỂ TẠO ID MỚI MỖI KHI BẤM
-const getMockCriteria = () => [
-  {
-    id: Date.now() + 1, name: 'I. CONTENT: CẢM XÚC & GIÁ TRỊ (RETENTION & SATISFACTION)', weight: 30,
-    standards: [
-      'Tạo ít nhất 1 cảm xúc rõ ràng (tò mò/sợ/bất ngờ...) từ sớm và duy trì',
-      'Mang lại 1 giá trị rõ ràng (hiểu mới, góc nhìn khác, bài học) và mở dần',
-      'Người xem thấy "tự hào/thông thái" khi share & chạm đúng "nỗi đau"',
-      'Có thể tóm gọn giá trị video bằng 1 câu'
-    ]
-  },
-  {
-    id: Date.now() + 2, name: 'II. CONTENT: CÂU CHUYỆN & NHỊP KỂ (FLOW)', weight: 20,
-    standards: [
-      'Hook 3s đầu có "biến" hoặc câu hỏi gây tò mò cực độ (Khớp Thumbnail/Title)',
-      'Mỗi đoạn đều có vấn đề/xung đột, thông tin được bóc tách theo lớp',
-      'Nhịp kể phù hợp, có điểm nghỉ thở, không lan man',
-      'Kết thúc tạo dư âm (suy nghĩ, ám ảnh, tò mò)'
-    ]
-  },
-  {
-    id: Date.now() + 3, name: 'III. EDITOR: HÌNH ẢNH & CẢM XÚC (POLISHING)', weight: 25,
-    standards: [
-      'Pattern Interrupt: Thay đổi góc máy, zoom, text mỗi 2-3s chống nhàm chán',
-      'Pacing chuẩn: Cắt nhanh (kịch tính) & Slow-mo (lắng đọng) đúng chỗ',
-      'Text/Sub nhấn mạnh đúng Keyword quan trọng',
-      'Edit làm cảm xúc mạnh hơn, có khoảnh khắc "đắt giá" để nhớ'
-    ]
-  },
-  {
-    id: Date.now() + 4, name: 'IV. EDITOR: ÂM THANH & SFX', weight: 15,
-    standards: [
-      'Nhạc nền hỗ trợ cảm xúc (cao trào/hạ nhịp đúng lúc), không lấn Voice',
-      'SFX nhấn mạnh đúng thông tin, không lạm dụng gây giật mình',
-      'Âm thanh môi trường (Ambience) mượt, không giả tạo'
-    ]
-  },
-  {
-    id: Date.now() + 5, name: 'V. QLK CHỐT DUYỆT: TÍNH HÀNH ĐỘNG & THẢO LUẬN', weight: 10,
-    standards: [
-      'Tính nhận diện: Tắt tiếng vẫn hiểu, che logo vẫn nhận ra kênh nhà',
-      'Tính hành động: Xem xong biết phải làm gì (Like/Share/Comment/Follow)',
-      'Tính thảo luận: Video gây tranh cãi nhẹ hoặc khiến khán giả phải comment'
-    ]
-  }
-];
+// 🚀 ĐÃ XÓA CỤC MOCK DATA CỨNG Ở ĐÂY VÌ ĐÃ CÓ API
 
 export default function CriteriaDrawer({ isOpen, onClose, projectId, onSave }: CriteriaDrawerProps) {
     const [mounted, setMounted] = useState(false);
@@ -64,9 +20,11 @@ export default function CriteriaDrawer({ isOpen, onClose, projectId, onSave }: C
     const [isLoading, setIsLoading] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
     const [projectName, setProjectName] = useState("");
+    const { showToast } = useToast(); // 🚀 Khởi tạo Toast
 
     useEffect(() => { setMounted(true); }, []);
 
+    // 🚀 LẤY TIÊU CHUẨN HIỆN TẠI CỦA DỰ ÁN
     useEffect(() => {
         const fetchProjectCriteria = async () => {
             if (!isOpen || !projectId) return;
@@ -83,7 +41,7 @@ export default function CriteriaDrawer({ isOpen, onClose, projectId, onSave }: C
                     const saved = typeof data.criteria === 'string' ? JSON.parse(data.criteria) : data.criteria;
                     setGroups(saved);
                 } else {
-                    setGroups([]); // Nếu chưa có thì để mảng rỗng để hiển thị nút Add Mẫu
+                    setGroups([]); 
                 }
             } catch (error) {
                 console.error("LỖI FETCH CRITERIA:", error);
@@ -110,13 +68,33 @@ export default function CriteriaDrawer({ isOpen, onClose, projectId, onSave }: C
         setIsSaving(false);
     };
 
-    // 🚀 HÀM NẠP TIÊU CHUẨN MẪU
-    const handleLoadMockData = () => {
+    // 🚀 HÀM NẠP TIÊU CHUẨN MẪU TỪ API SETTING CỦA ADMIN
+    const handleLoadMockData = async () => {
         if (groups.length > 0) {
             const confirmOverride = confirm("Sếp có chắc chắn muốn ghi đè toàn bộ tiêu chuẩn hiện tại bằng Tiêu Chuẩn Mẫu không?");
             if (!confirmOverride) return;
         }
-        setGroups(getMockCriteria());
+
+        setIsLoading(true);
+        try {
+            const res = await fetch("/api/settings/sample-criteria");
+            if (!res.ok) throw new Error("Lỗi khi gọi API");
+            
+            const data = await res.json();
+            
+            if (data.criteria) {
+                const sampleGroups = JSON.parse(data.criteria);
+                setGroups(sampleGroups);
+                showToast("success", "Đã nạp Tiêu chuẩn mẫu hệ thống thành công!");
+            } else {
+                showToast("error", "Hệ thống chưa có Tiêu chuẩn mẫu. Vui lòng nhờ Admin thiết lập trước!");
+            }
+        } catch (error) {
+            console.error("Lỗi nạp mẫu:", error);
+            showToast("error", "Không thể kết nối đến máy chủ để lấy tiêu chuẩn mẫu.");
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const drawerContent = (
@@ -151,8 +129,8 @@ export default function CriteriaDrawer({ isOpen, onClose, projectId, onSave }: C
                             {/* 🚀 NÚT NẠP TIÊU CHUẨN MẪU TỰ ĐỘNG */}
                             <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-inner">
                                 <div>
-                                    <h4 className="text-sm font-black text-indigo-800">Dùng tiêu chuẩn mẫu Sano TV?</h4>
-                                    <p className="text-[11px] text-indigo-600 font-medium mt-0.5">Hệ thống sẽ tự động tạo 5 nhóm tiêu chí với tổng trọng số 100%.</p>
+                                    <h4 className="text-sm font-black text-indigo-800">Dùng tiêu chuẩn mẫu hệ thống?</h4>
+                                    <p className="text-[11px] text-indigo-600 font-medium mt-0.5">Sẽ lấy bộ khung chuẩn mà Admin đã cài đặt chung.</p>
                                 </div>
                                 <button 
                                     onClick={handleLoadMockData}

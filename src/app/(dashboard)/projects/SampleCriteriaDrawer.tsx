@@ -148,7 +148,7 @@ export default function SampleCriteriaDrawer({ isOpen, onClose }: { isOpen: bool
                             {/* 🚀 BOX NẠP TIÊU CHUẨN TỰ ĐỘNG */}
                             <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-5 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-inner">
                                 <div>
-                                    <h4 className="text-sm font-black text-indigo-900 flex items-center gap-2"><ListChecks size={18} /> Tiêu Chuẩn Sano TV V1.0</h4>
+                                    <h4 className="text-sm font-black text-indigo-900 flex items-center gap-2"><ListChecks size={18} /> Tiêu Chuẩn</h4>
                                     <p className="text-[11px] text-indigo-600 font-medium mt-1">Đã được tinh chỉnh tối ưu cho Retention & Satisfaction. Gồm 5 tầng với tổng 100% điểm.</p>
                                 </div>
                                 <button 

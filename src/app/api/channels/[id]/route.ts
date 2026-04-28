@@ -42,11 +42,27 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
 
         const resolvedParams = await params;
         const channelId = resolvedParams.id;
-        // Bảng ChannelMember đã set onDelete: Cascade trong schema nên khi xóa kênh, nhân sự gán với kênh đó cũng tự động bay theo.
-        await prisma.channel.delete({ where: { id: channelId } });
+
+        // 🚀 BƯỚC 1: Xóa sạch dữ liệu doanh thu (DailyRevenue) gắn với kênh này
+        await prisma.dailyRevenue.deleteMany({
+            where: { channelId: channelId }
+        });
+
+        // 🚀 BƯỚC 2: Ngắt liên kết kênh ra khỏi các Dự án (Project)
+        // Set channelId về null để giữ lại Project, chỉ tháo Kênh ra thôi
+        await prisma.project.updateMany({
+            where: { channelId: channelId },
+            data: { channelId: null }
+        });
+
+        // 🚀 BƯỚC 3: Xóa kênh (Bảng ChannelMember đã set Cascade nên sẽ tự động bay theo)
+        await prisma.channel.delete({ 
+            where: { id: channelId } 
+        });
 
         return NextResponse.json({ success: true });
     } catch (error) {
+        console.error("LỖI XÓA KÊNH:", error); // In ra log để sếp dễ bắt bệnh nếu có lỗi khác
         return NextResponse.json({ error: "Lỗi xóa kênh" }, { status: 500 });
     }
 }
