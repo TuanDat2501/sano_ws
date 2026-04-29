@@ -179,6 +179,11 @@ model Task {
   isClosed  Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  duration Int?     
+  note     String?
+
+  channelId     String?
+  channel       Channel?    @relation(fields: [channelId], references: [id])
 }
 
 model Evaluation {
@@ -422,6 +427,7 @@ model Channel {
   avatarUrl       String?   @db.Text
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
+  tasks           Task[]
 }
 
 model DailyRevenue {

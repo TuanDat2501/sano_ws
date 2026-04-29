@@ -55,7 +55,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             if (rawBody.teamId !== undefined) body.teamId = rawBody.teamId;
             if (rawBody.contentId !== undefined) body.contentId = rawBody.contentId || null;
             if (rawBody.editorId !== undefined) body.editorId = rawBody.editorId || null;
-
+            if (rawBody.projectId !== undefined) body.projectId = rawBody.projectId || null;
+            if (rawBody.duration !== undefined) body.duration = rawBody.duration;
+            if (rawBody.note !== undefined) body.note = rawBody.note;
+            if (rawBody.channelId !== undefined) body.channelId = rawBody.channelId || null;
         } else if (currentUser.role === "CONTENT") {
             if (oldTask.contentId !== currentUser.id && oldTask.creatorId !== currentUser.id) {
                 return NextResponse.json({ error: "Bạn không phụ trách nội dung bài này!" }, { status: 403 });
@@ -154,6 +157,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 contentId: body.contentId !== undefined ? body.contentId : undefined,
                 editorId: body.editorId !== undefined ? body.editorId : undefined,
                 projectId: body.projectId !== undefined ? body.projectId : undefined,
+                duration: body.duration !== undefined ? body.duration : undefined,
+                note: body.note !== undefined ? body.note : undefined,
+                channelId: body.channelId !== undefined ? body.channelId : undefined,
             }
         });
 
@@ -261,6 +267,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
                         criteria: true
                     }
                 },
+                channel: { select: { name: true } },
                 evaluations: {
                     include: {
                         evaluator: { select: { fullName: true } }

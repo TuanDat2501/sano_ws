@@ -1,6 +1,6 @@
 "use client";
 
-import { X, Link as LinkIcon, CheckCircle2, Loader2, MessageSquare, Send, ClipboardCheck, AlertTriangle } from "lucide-react";
+import { X, Link as LinkIcon, CheckCircle2, Loader2, MessageSquare, Send, ClipboardCheck, Clock, Tag, Tv } from "lucide-react";
 import { useEffect, useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 import EvaluationPanel from "./EvaluationPanel";
@@ -23,10 +23,11 @@ interface TaskDetailDrawerProps {
   onSendMessage: () => void;
   sessionUserId: string;
   userRole: string;
-  onSubmitEvaluation?: (score: number, criteriaData: any, note: string) => void; // 🚀 Nút Submit Form Chấm Điểm
+  onSubmitEvaluation?: (score: number, criteriaData: any, note: string) => void;
+  onEditTask?: () => void;
 }
 
-// 🚀 BỘ TIÊU CHUẨN MẪU (Mock Data) - Sau này sếp fetch từ `project.workflowNodes`
+// 🚀 BỘ TIÊU CHUẨN MẪU (Mock Data)
 const MOCK_CRITERIA = [
   {
     id: 'c1', name: 'TẦNG 1: RETENTION (Giữ chân)', weight: 50,
@@ -56,11 +57,10 @@ const MOCK_CRITERIA = [
 
 export default function TaskDetailDrawer({
   isOpen, onClose, selectedTask, taskLinks, setTaskLinks, errors, isSavingLinks, userRole,
-  onSaveLinks, onToggleClose, onReject, canReject, messages, chatMessage, setChatMessage, onSendMessage, sessionUserId, onSubmitEvaluation
+  onSaveLinks, onToggleClose, onReject, canReject, messages, chatMessage, setChatMessage, onSendMessage, sessionUserId, onSubmitEvaluation, onEditTask
 }: TaskDetailDrawerProps) {
   const [mounted, setMounted] = useState(false);
 
-  // 🚀 STATE CHO TÍNH NĂNG CHẤM ĐIỂM
   const [rightTab, setRightTab] = useState<'chat' | 'evaluate'>('chat');
   const [checkedStandards, setCheckedStandards] = useState<Record<string, boolean>>({});
   const [kaizenNote, setKaizenNote] = useState('');
@@ -68,7 +68,6 @@ export default function TaskDetailDrawer({
 
   useEffect(() => setMounted(true), []);
 
-  // Reset tab khi mở task mới
   useEffect(() => {
     if (isOpen) {
       setRightTab('chat');
@@ -77,13 +76,11 @@ export default function TaskDetailDrawer({
     }
   }, [isOpen, selectedTask?.id]);
 
-  // 🚀 LOGIC TÍNH ĐIỂM TỰ ĐỘNG
   const currentScore = useMemo(() => {
     let totalScore = 0;
     MOCK_CRITERIA.forEach(criteria => {
       const totalItems = criteria.standards.length;
       const checkedItems = criteria.standards.filter(s => checkedStandards[s.id]).length;
-      // Công thức: (Số mục pass / Tổng mục) * (Trọng số / 10)
       if (totalItems > 0) {
         totalScore += (checkedItems / totalItems) * (criteria.weight / 10);
       }
@@ -91,13 +88,8 @@ export default function TaskDetailDrawer({
     return totalScore.toFixed(1);
   }, [checkedStandards]);
 
-  const handleStandardToggle = (id: string) => {
-    setCheckedStandards(prev => ({ ...prev, [id]: !prev[id] }));
-  };
-
   const submitEvaluation = () => {
     setIsEvaluating(true);
-    // Gọi hàm truyền từ props cha
     if (onSubmitEvaluation) {
       onSubmitEvaluation(Number(currentScore), checkedStandards, kaizenNote);
     }
@@ -106,6 +98,8 @@ export default function TaskDetailDrawer({
 
   if (!selectedTask) return null;
   const isManager = ["ADMIN", "BAN_GIAM_DOC", "LEADER", "HR", "QLK"].includes(userRole);
+  
+  const isParticipant = isManager || selectedTask.contentId === sessionUserId || selectedTask.editorId === sessionUserId || selectedTask.creatorId === sessionUserId;
 
   const drawerContent = (
     <>
@@ -115,18 +109,31 @@ export default function TaskDetailDrawer({
 
         {/* ================= HEADER ================= */}
         <div className="px-4 md:px-6 py-3 md:py-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shrink-0 bg-white z-10">
-          <div className="flex items-center gap-3 w-full sm:w-auto">
-            <span className="text-[10px] font-black uppercase text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100 shadow-sm shrink-0">
-              {selectedTask.project?.name || "Dự án chưa xác định"}
-            </span>
-            <span className="text-[10px] font-black uppercase text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100">
-              {selectedTask.team?.name || "Sano Dự án"}
-            </span>
-            <h2 className="text-lg md:text-xl font-black text-slate-900 truncate max-w-[300px] md:max-w-[400px]">{selectedTask.title}</h2>
+          
+          {/* 🚀 ĐÃ SỬA: CHIA DÒNG BADGE CHO ĐẸP VÀ THÊM THỜI LƯỢNG */}
+          <div className="flex flex-col w-full sm:w-auto gap-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[10px] font-black uppercase text-blue-600 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-100">
+                {selectedTask.project?.name || "Dự án ẩn"}
+              </span>
+
+              <span className="text-[10px] font-black uppercase text-red-600 bg-red-50 px-2.5 py-1 rounded-md border border-red-100 flex items-center gap-1 shadow-sm">
+                <Tv size={12} /> {selectedTask.channel?.name || "Chưa chọn Kênh"}
+              </span>
+
+              <span className="text-[10px] font-black uppercase text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-100">
+                {selectedTask.team?.name || "Chưa có Team"}
+              </span>
+              {selectedTask.duration && (
+                <span className="text-[10px] font-black uppercase text-purple-600 bg-purple-50 px-2.5 py-1 rounded-md border border-purple-100 flex items-center gap-1 shadow-sm">
+                  <Clock size={12} /> {selectedTask.duration} PHÚT
+                </span>
+              )}
+            </div>
+            <h2 className="text-lg md:text-xl font-black text-slate-900 truncate max-w-[350px] md:max-w-[450px]">{selectedTask.title}</h2>
           </div>
 
           <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-            {/* 🚀 NÚT CHUYỂN ĐỔI CHẤM ĐIỂM DÀNH CHO QUẢN LÝ */}
             {isManager && (
               <button
                 onClick={() => setRightTab(rightTab === 'chat' ? 'evaluate' : 'chat')}
@@ -138,7 +145,16 @@ export default function TaskDetailDrawer({
             )}
 
             <div className="w-[1px] h-6 bg-slate-200 mx-1 hidden sm:block"></div>
-
+            
+            {(isManager || selectedTask.creatorId === sessionUserId) && (
+              <button 
+                onClick={onEditTask} 
+                className="px-3 md:px-4 py-2 rounded-xl text-sm font-bold bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors"
+              >
+                Sửa Task
+              </button>
+            )}
+            
             {canReject && (
               <button onClick={onReject} className="px-3 md:px-4 py-2 rounded-xl text-sm font-bold bg-orange-50 text-orange-600 hover:bg-orange-100 transition-colors">
                 Reject
@@ -187,6 +203,22 @@ export default function TaskDetailDrawer({
                 </div>
               </div>
 
+              {/* 🚀 ĐÃ SỬA: KHỐI GHI CHÚ TRẠNG THÁI RIÊNG BIỆT (AMBER) */}
+              <div className="bg-amber-50/50 border border-amber-100 rounded-[24px] p-5 space-y-3 shadow-sm">
+                <h3 className="font-black text-sm text-amber-900 flex items-center gap-2">
+                  <Tag className="text-amber-500 w-4 h-4" /> Báo Cáo Trạng Thái (Tùy chọn)
+                </h3>
+                <p className="text-[11px] text-amber-700/70 font-bold leading-tight">Dùng để cập nhật nhanh tình trạng bài cho QLK nắm bắt (VD: Đang cắt thô, Đang tìm Voice, Lỗi file...)</p>
+                <input
+                  type="text"
+                  disabled={!isParticipant}
+                  placeholder={!isParticipant ? "Không có quyền" : "Nhập tiến độ hiện tại..."}
+                  className="w-full border border-amber-200 rounded-xl p-3 text-sm outline-none transition-all focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10 disabled:bg-slate-100 disabled:text-slate-400 font-bold text-amber-900 placeholder:text-amber-300"
+                  value={taskLinks.note !== undefined ? taskLinks.note : (selectedTask.note || "")}
+                  onChange={e => setTaskLinks({ ...taskLinks, note: e.target.value })}
+                />
+              </div>
+
               {/* Nộp Bài (Link kết quả) */}
               <div className="bg-slate-50 border border-slate-200 rounded-[24px] p-6 space-y-5 shadow-inner">
                 <h3 className="font-black text-base text-slate-800 flex items-center gap-2"><CheckCircle2 className="text-emerald-500 w-5 h-5" /> Kết Quả Công Việc</h3>
@@ -204,7 +236,7 @@ export default function TaskDetailDrawer({
                         type="url" disabled={!isAllowed}
                         placeholder={!isAllowed ? "Chỉ người phụ trách mới được nhập" : "Dán link vào đây..."}
                         className={`w-full border rounded-xl p-3.5 text-sm outline-none transition-all ${!isAllowed ? 'bg-slate-100 text-slate-400 border-slate-200' : 'bg-white text-slate-800 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10'} ${errors[field.key] ? 'border-red-500' : ''}`}
-                        value={taskLinks[field.key as keyof typeof taskLinks]}
+                        value={taskLinks[field.key as keyof typeof taskLinks] || ""}
                         onChange={e => setTaskLinks({ ...taskLinks, [field.key]: e.target.value })}
                       />
                     </div>
@@ -215,7 +247,7 @@ export default function TaskDetailDrawer({
 
             <div className="p-4 md:p-6 bg-white border-t border-slate-100 shrink-0">
               <button onClick={onSaveLinks} disabled={isSavingLinks} className="w-full bg-slate-900 hover:bg-black text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 transition-all shadow-xl active:scale-95 text-base">
-                {isSavingLinks ? <Loader2 className="animate-spin" size={18} /> : "Lưu Link Tiến Độ"}
+                {isSavingLinks ? <Loader2 className="animate-spin" size={18} /> : "Lưu Thông Tin & Tiến Độ"}
               </button>
             </div>
           </div>

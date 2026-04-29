@@ -1,3 +1,4 @@
+// File: src/app/api/tasks/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
@@ -67,7 +68,7 @@ export async function GET(req: Request) {
           team: { select: { name: true } },
           contentUser: { select: { fullName: true } },
           editorUser: { select: { fullName: true } },
-          
+          channel: { select: { name: true } }
         },
         orderBy: { createdAt: "desc" },
       });
@@ -86,7 +87,7 @@ export async function GET(req: Request) {
             team: { select: { name: true } },
             contentUser: { select: { fullName: true } },
             editorUser: { select: { fullName: true } },
-
+            channel: { select: { name: true } }
           },
           orderBy: { createdAt: "desc" },
           skip: skip,
@@ -172,8 +173,12 @@ export async function POST(req: Request) {
         contentId: contentId || undefined,
         editorId: editorId || undefined,
         teamId: teamId || undefined,
+        
         creatorId: creatorId,
-        projectId: body.projectId || undefined
+        projectId: body.projectId || undefined,
+        channelId: body.channelId || undefined,
+        duration: body.duration || undefined,
+        note: body.note || undefined,
       },
       include: {
         creator: { select: { fullName: true } },

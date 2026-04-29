@@ -91,7 +91,7 @@ export default function KanbanBoard() {
   const [isPushing, setIsPushing] = useState(false);
 
   const backlogTasks = rawTasks.filter(t => t.status === 'BACKLOG');
-
+  const [editingTask, setEditingTask] = useState<any>(null);
   const filteredTasks = rawTasks.filter((task) => {
     if (task.status === 'BACKLOG') return false;
     const matchSearch = task.title.toLowerCase().includes(searchTerm.toLowerCase());
@@ -388,29 +388,37 @@ export default function KanbanBoard() {
     }
   };
 
-  // Tạo Task mới
+  // Tạo hoặc Sửa Task
   const handleCreateTaskSubmit = async (taskData: any) => {
     setIsSubmitting(true);
     setModalErrors({});
     try {
-      const res = await fetch("/api/tasks", {
-        method: "POST",
+      const isEditMode = !!taskData.id; // 🚀 Xác định xem là đang tạo hay sửa
+      const url = isEditMode ? `/api/tasks/${taskData.id}` : "/api/tasks";
+      const method = isEditMode ? "PATCH" : "POST";
+
+      const res = await fetch(url, {
+        method: method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(taskData)
       });
+
       const data = await res.json();
+
       if (res.ok) {
-        showToast("success", taskData.status === 'BACKLOG' ? "Đã thêm ý tưởng vào kho!" : "Đã tạo Yêu cầu Video!");
+        showToast("success", isEditMode ? "Đã cập nhật Task thành công!" : (taskData.status === 'BACKLOG' ? "Đã thêm ý tưởng vào kho!" : "Đã tạo Yêu cầu Video!"));
         setIsModalOpen(false);
+        setEditingTask(null); // 🚀 Xóa state sau khi xong
         setCurrentPage(1);
         fetchTasks();
 
-        // 🚀 PHỤC HỒI SOCKET TẠO TASK
+        // 🚀 PHỤC HỒI SOCKET
         if (socket) {
           socket.emit("board_updated");
           if (data.userIdsToNotify && data.userIdsToNotify.length > 0) {
             socket.emit("send_notification", { userIds: data.userIdsToNotify, notification: data.notifications[0] });
-          } else {
+          } else if (!isEditMode) {
+            // Chỉ báo assign task nếu là tạo mới
             const targetUserId = taskData.contentId || taskData.editorId;
             if (targetUserId) {
               socket.emit("assign_task", {
@@ -680,8 +688,8 @@ export default function KanbanBoard() {
 
       const contentType = res.headers.get("content-type");
       if (contentType && contentType.includes("text/html")) {
-         showToast("error", "Lỗi 404: Không tìm thấy API Endpoint!");
-         return; 
+        showToast("error", "Lỗi 404: Không tìm thấy API Endpoint!");
+        return;
       }
 
       const data = await res.json();
@@ -706,8 +714,8 @@ export default function KanbanBoard() {
             });
           }
         }
-        
-        handleCloseDrawer(); 
+
+        handleCloseDrawer();
       } else {
         showToast("error", data.error || "Lỗi khi lưu đánh giá");
       }
@@ -800,9 +808,15 @@ export default function KanbanBoard() {
           )}
         </div>
 
-        <CreateTaskModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} users={users} teams={teams} onSubmit={handleCreateTaskSubmit} isSubmitting={isSubmitting} errors={modalErrors} projects={projects} />
+        <CreateTaskModal isOpen={isModalOpen} initialData={editingTask} onClose={() => { setIsModalOpen(false); setEditingTask(null); }} users={users} teams={teams} onSubmit={handleCreateTaskSubmit} isSubmitting={isSubmitting} errors={modalErrors} projects={projects} />
 
-        <TaskDetailDrawer isOpen={isDrawerOpen} onClose={handleCloseDrawer} selectedTask={selectedTask} taskLinks={taskLinks} setTaskLinks={setTaskLinks} errors={drawerErrors} isSavingLinks={isSavingLinks} onSaveLinks={handleSaveLinks} onToggleClose={handleToggleCloseTask} onReject={handleRejectTask} canReject={canReject} messages={messages} chatMessage={chatMessage} setChatMessage={setChatMessage} onSendMessage={handleSendMessage} userRole={userRole} sessionUserId={(session?.user as any)?.id} onSubmitEvaluation={handleEvaluationSubmit} />
+        <TaskDetailDrawer isOpen={isDrawerOpen} onClose={handleCloseDrawer} selectedTask={selectedTask} taskLinks={taskLinks} setTaskLinks={setTaskLinks} errors={drawerErrors} isSavingLinks={isSavingLinks} onSaveLinks={handleSaveLinks} onToggleClose={handleToggleCloseTask} onReject={handleRejectTask} canReject={canReject} messages={messages} chatMessage={chatMessage} setChatMessage={setChatMessage} onSendMessage={handleSendMessage} userRole={userRole} sessionUserId={(session?.user as any)?.id} onSubmitEvaluation={handleEvaluationSubmit}
+          onEditTask={() => {
+            setIsDrawerOpen(false); // Tạm đóng Drawer chi tiết
+            setEditingTask(selectedTask); // Lưu data task hiện tại vào state
+            setIsModalOpen(true); // Mở modal Create lên (Nó sẽ tự thành Form Sửa vì đã có editingTask)
+          }}
+        />
 
         <PushTaskModal
           isOpen={isPushModalOpen}
@@ -812,6 +826,7 @@ export default function KanbanBoard() {
           session={session}
           onSubmit={handlePushTaskSubmit}
           isSubmitting={isPushing}
+
         />
       </div>
     </PermissionGuard>
