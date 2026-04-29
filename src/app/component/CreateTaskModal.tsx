@@ -8,6 +8,8 @@ interface CreateTaskModalProps {
   isOpen: boolean;
   onClose: () => void;
   teams: any[];
+  users?: any[];       
+  projects?: any[];    
   initialData?: any; // 🚀 THÊM PROP NÀY ĐỂ NHẬN DATA KHI SỬA
   onSubmit: (taskData: any) => Promise<void>;
   isSubmitting: boolean;
