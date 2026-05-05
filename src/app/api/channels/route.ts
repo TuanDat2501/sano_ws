@@ -39,7 +39,7 @@ export async function GET(req: Request) {
         } 
         // TH2: Trả về danh sách mặc định (Cần phân quyền tránh nhìn trộm Kênh team khác)
         else {
-            if (role !== "ADMIN" && role !== "BAN_GIAM_DOC") {
+            if (role !== "ADMIN" && role !== "BAN_GIAM_DOC" && role !== "HR") {
                 // Nếu KHÔNG phải Admin/Giám đốc -> Ép cứng chỉ được lấy Kênh của team mình
                 whereClause.teamId = userTeamId;
             }
