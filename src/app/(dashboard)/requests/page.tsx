@@ -1,15 +1,15 @@
 // src/app/requests/page.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSession } from "next-auth/react";
 import { Plus, FileText, CheckCircle, Clock, XCircle, Search, Filter } from "lucide-react";
 import CreateRequestModal from "./CreateRequestModal";
+// Sếp nhớ đổi tên import nếu đã đổi file thành RequestDetailDrawer nhé
 import RequestDetailModal from "./RequestDetailModal";
-import { useSearchParams } from "next/navigation";
-import { Suspense } from "react";
+// 🚀 1. Bổ sung useRouter và usePathname
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 
-// 🚀 TỪ ĐIỂN PHÂN QUYỀN HIỂN THỊ LOẠI ĐƠN
 const REQUEST_TYPES_CONFIG = [
     { id: "NGHI_PHEP", label: "Xin nghỉ phép", category: "HR", allowedRoles: ["ALL"] },
     { id: "DI_MUON_VE_SOM", label: "Đi muộn / Về sớm", category: "HR", allowedRoles: ["ALL"] },
@@ -22,6 +22,10 @@ const REQUEST_TYPES_CONFIG = [
 
 export default function RequestsPage() {
     const searchParams = useSearchParams();
+    // 🚀 2. Khởi tạo router và pathname
+    const router = useRouter();
+    const pathname = usePathname();
+
     const tabParam = searchParams.get("tab");
     const idParam = searchParams.get("id");
 
@@ -72,6 +76,7 @@ export default function RequestsPage() {
         if (tabParam === "MY_REQUESTS" || tabParam === "NEED_APPROVAL") setActiveTab(tabParam);
     }, [tabParam]);
 
+    // 🚀 Lắng nghe URL: Tự động mở Modal/Drawer nếu có ID
     useEffect(() => {
         if (idParam && requests.length > 0) {
             const targetRequest = requests.find(r => r.id === idParam);
@@ -82,15 +87,22 @@ export default function RequestsPage() {
         }
     }, [idParam, requests]);
     useEffect(() => {
+        if (idParam) {
+            setIsDetailModalOpen(true);
+        } else {
+            setIsDetailModalOpen(false);
+        }
+    }, [idParam]);
+    useEffect(() => {
         const timer = setTimeout(() => {
             setDebouncedSearch(searchTerm);
-            setCurrentPage(1); // Gõ tìm kiếm thì phải reset về trang 1
+            setCurrentPage(1);
         }, 500);
         return () => clearTimeout(timer);
     }, [searchTerm]);
+
     const fetchRequests = () => {
         setIsLoading(true);
-        // 🚀 Bổ sung thêm &search=${debouncedSearch}
         fetch(`/api/requests?tab=${activeTab}&page=${currentPage}&limit=${limit}&search=${debouncedSearch}`)
             .then(res => res.json())
             .then(data => {
@@ -105,7 +117,7 @@ export default function RequestsPage() {
     };
 
     useEffect(() => {
-        setCurrentPage(1); // Reset về trang 1 khi đổi tab
+        setCurrentPage(1);
     }, [activeTab]);
 
     useEffect(() => { fetchRequests(); }, [activeTab, currentPage, debouncedSearch]);
@@ -113,14 +125,12 @@ export default function RequestsPage() {
     useEffect(() => {
         fetch("/api/teams").then(res => res.json()).then((data: any) => { if (Array.isArray(data)) setDbTeams(data); });
     }, []);
-    
+
     return (
         <Suspense fallback={<div className="p-8 text-center text-slate-500">Đang tải...</div>}>
-            {/* Giảm padding trên mobile để nhường chỗ cho nội dung */}
             <div className="h-full p-3 md:p-6 animate-fade-in flex flex-col bg-slate-50 overflow-hidden">
 
                 {/* ================= HEADER ================= */}
-                {/* Mobile: Cột dọc, PC: Hàng ngang */}
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 md:mb-6 gap-3 md:gap-0 shrink-0">
                     <div>
                         <h1 className="text-xl md:text-2xl font-black text-slate-900">Quản lý Đơn từ & Đề xuất</h1>
@@ -135,10 +145,7 @@ export default function RequestsPage() {
                 </div>
 
                 {/* ================= TABS NAVIGATION ================= */}
-                {/* Cho phép cuộn ngang nếu màn hình quá nhỏ */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 mb-4 md:mb-6 gap-3">
-
-                    {/* NHÓM TABS BÊN TRÁI */}
                     <div className="flex items-center gap-4 md:gap-6 overflow-x-auto custom-scrollbar-thin shrink-0">
                         <button
                             onClick={() => setActiveTab('MY_REQUESTS')}
@@ -173,7 +180,6 @@ export default function RequestsPage() {
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
                     </div>
-
                 </div>
 
                 {/* ================= MAIN CONTENT AREA ================= */}
@@ -219,8 +225,9 @@ export default function RequestsPage() {
                                             <td className="px-4 md:px-6 py-3 md:py-4 text-center">
                                                 <button
                                                     onClick={() => {
-                                                        setSelectedRequest(req);
-                                                        setIsDetailModalOpen(true);
+                                                        const params = new URLSearchParams(searchParams.toString());
+                                                        params.set("id", req.id);
+                                                        router.replace(`${pathname}?${params.toString()}`, { scroll: false });
                                                     }}
                                                     className="text-blue-600 hover:text-blue-800 font-bold text-[11px] md:text-xs bg-blue-50 px-2.5 py-1.5 md:px-3 md:py-1.5 rounded-lg transition-colors whitespace-nowrap"
                                                 >
@@ -279,8 +286,14 @@ export default function RequestsPage() {
 
                 <RequestDetailModal
                     isOpen={isDetailModalOpen}
-                    onClose={() => setIsDetailModalOpen(false)}
-                    request={selectedRequest}
+                    onClose={() => {
+                        setIsDetailModalOpen(false);
+                        // Đóng Drawer thì chùi ID khỏi URL
+                        const params = new URLSearchParams(searchParams.toString());
+                        params.delete("id");
+                        router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+                    }}
+                    requestId={idParam} // Chỉ cần vứt ID vào, việc còn lại Drawer tự lo!
                     currentUserId={currentUser?.id}
                     onRefresh={fetchRequests}
                 />
