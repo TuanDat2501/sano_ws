@@ -14,7 +14,7 @@ export async function POST(req: Request) {
 
         const userId = (session.user as any).id;
         const body = await req.json();
-        
+
         const { type, teamId, contentData, firstApproverId, secondApproverId } = body;
 
         if (!type || !contentData || !firstApproverId || !teamId) {
@@ -32,9 +32,9 @@ export async function POST(req: Request) {
         const newRequest = await prisma.request.create({
             data: {
                 type,
-                status: "PENDING_1", 
+                status: "PENDING_1",
                 requesterId: userId,
-                teamId, 
+                teamId,
                 firstApproverId,
                 secondApproverId: secondApproverId || null,
                 startDate,
@@ -52,12 +52,22 @@ export async function POST(req: Request) {
             data: {
                 title: "Đơn từ mới cần duyệt",
                 message: `Bạn vừa nhận được một đề xuất ${type} mới cần phê duyệt.`,
-                type: "info", 
+                type: "info",
                 userId: firstApproverId,
                 requestId: newRequest.id
             }
         });
-
+        if (newRequest.secondApproverId) {
+            await prisma.notification.create({
+                data: {
+                    userId: newRequest.secondApproverId,
+                    title: "Có đơn từ sắp tới lượt duyệt",
+                    message: `Một đề xuất ${newRequest.type} vừa được tạo. Sẽ tới lượt bạn sau khi Quản lý cấp 1 duyệt xong.`,
+                    requestId: newRequest.id,
+                    type: "info" // Để type là info cho nhẹ nhàng, không bị nhầm với đơn cần duyệt gấp
+                }
+            });
+        }
         return NextResponse.json(newRequest, { status: 201 });
     } catch (error) {
         console.error("❌ Lỗi API Tạo đơn:", error);
@@ -72,19 +82,19 @@ export async function GET(req: Request) {
 
         const user = session.user as any;
         const { searchParams } = new URL(req.url);
-        
+
         const page = Number(searchParams.get("page")) || 1;
         const limit = Number(searchParams.get("limit")) || 10;
         const skip = (page - 1) * limit;
-        
+
         const tab = searchParams.get("tab") || "MY_REQUESTS";
         // 🚀 Lấy từ khóa tìm kiếm
-        const searchKeyword = searchParams.get("search") || ""; 
-        
-        const isAdmin = user.role === "ADMIN" || user.role === "BAN_GIAM_DOC";
+        const searchKeyword = searchParams.get("search") || "";
+
+        const isAdmin = user.role === "ADMIN" || user.role === "BAN_GIAM_DOC" || user.role === "HR";
 
         let whereClause: any = {};
-        
+
         if (tab === "NEED_APPROVAL") {
             whereClause = {
                 OR: [
