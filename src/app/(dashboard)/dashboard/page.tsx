@@ -20,7 +20,7 @@ export default function DashboardPage() {
 
     const currentUser = session?.user as any;
     const userRole = currentUser?.role || "CONTENT";
-    const isManager = ["LEADER", "BAN_GIAM_DOC", "ADMIN"].includes(userRole);
+    const isManager = ["LEADER", "BAN_GIAM_DOC", "ADMIN","HR"].includes(userRole);
 
     return (
         // Tối ưu Padding: Mobile p-4, Tablet/PC p-8
