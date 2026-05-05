@@ -44,7 +44,7 @@ export default function KanbanBoard() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-
+  const [channels, setChannels] = useState<any[]>([]);
   const [tasks, setTasks] = useState<{ [key: string]: any[] }>({ TODO: [], DOING: [], REVIEW: [], DONE: [] });
   const [rawTasks, setRawTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -169,7 +169,13 @@ export default function KanbanBoard() {
       fetchAndOpenTask();
     }
   }, [searchParams]); // ❌ Xóa bớt socket và selectedTask khỏi dependency
-
+  const loadChannels = async () => {
+    try {
+      const res = await fetch("/api/channels");
+      const data = await res.json();
+      if (Array.isArray(data)) setChannels(data);
+    } catch (error) { }
+  };
   useEffect(() => {
     // 🚀 Kết nối thẳng đến VPS của sếp
     const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "https://socket.sanogroup.tv";
@@ -196,7 +202,7 @@ export default function KanbanBoard() {
     newSocket.on("reload_board", () => {
       setBoardUpdateSignal(prev => prev + 1);
     });
-    loadUsers(); loadTeams(); loadProjects(); fetchTasks();
+    loadUsers(); loadTeams(); loadProjects(); loadChannels(); fetchTasks();
     return () => { newSocket.disconnect(); };
   }, []);
   const isFirstRender = useRef(true);
@@ -803,6 +809,7 @@ export default function KanbanBoard() {
                 setTaskToPush(task);
                 setIsPushModalOpen(true);
               }}
+              channels={channels}
               onDelete={handleDeleteTask}
             />
           )}

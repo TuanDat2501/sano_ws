@@ -16,10 +16,8 @@ export async function GET(req: Request) {
                     include: {
                         tasks: {
                             where: { 
-                                OR: [
-                                    { publishLink: null },
-                                    { publishLink: "" }
-                                ]
+                                OR: [{ publishLink: null },{ publishLink: "" }],
+                                status: { not: "BACKLOG" }
                             },
                             select: {
                                 scriptLink: true,

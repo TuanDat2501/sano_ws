@@ -6,11 +6,13 @@ import { authOptions } from "@/lib/auth";
 export async function GET(req: Request) {
     try {
         const session = await getServerSession(authOptions);
-        if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        if (!session || !session.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
         const { searchParams } = new URL(req.url);
         
-        // 🚀 API TIỆN ÍCH LẤY DATA CHO DROPDOWN
+        // ==========================================================
+        // 🚀 RẼ NHÁNH 1: API TIỆN ÍCH LẤY DATA CHO DROPDOWN (Giữ nguyên)
+        // ==========================================================
         if (searchParams.get('action') === 'get_options') {
             const teams = await prisma.team.findMany({ select: { id: true, name: true } });
             // Lấy danh sách user (có mang theo teamId để UI lọc)
@@ -21,11 +23,34 @@ export async function GET(req: Request) {
             return NextResponse.json({ teams, users });
         }
 
-        // LẤY DANH SÁCH KÊNH
+        // ==========================================================
+        // 🚀 RẼ NHÁNH 2: LẤY DANH SÁCH KÊNH (CÓ TÍCH HỢP PHÂN QUYỀN)
+        // ==========================================================
+        const userData = session.user as any;
+        const role = userData.role?.toUpperCase();
+        const userTeamId = userData.teamId;
+        const queryTeamId = searchParams.get("teamId");
+
+        let whereClause: any = {};
+
+        // TH1: Frontend yêu cầu lấy Kênh của một Team cụ thể (VD: form CreateTaskModal)
+        if (queryTeamId) {
+            whereClause.teamId = queryTeamId;
+        } 
+        // TH2: Trả về danh sách mặc định (Cần phân quyền tránh nhìn trộm Kênh team khác)
+        else {
+            if (role !== "ADMIN" && role !== "BAN_GIAM_DOC") {
+                // Nếu KHÔNG phải Admin/Giám đốc -> Ép cứng chỉ được lấy Kênh của team mình
+                whereClause.teamId = userTeamId;
+            }
+            // Nếu là Admin/Giám đốc thì whereClause giữ nguyên {} -> Lấy ra tất cả Kênh
+        }
+
         const channels = await prisma.channel.findMany({
+            where: whereClause,
             include: {
                 team: { select: { name: true } },
-                members: true // 🚀 Bắt buộc include members để UI render số lượng nhân sự
+                members: true // 🚀 Vẫn giữ members để UI trang Quản lý Kênh không bị lỗi
             },
             orderBy: { createdAt: 'desc' }
         });
