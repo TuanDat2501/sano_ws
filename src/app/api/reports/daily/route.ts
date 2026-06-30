@@ -14,11 +14,9 @@ export async function GET(request: Request) {
         if (!["ADMIN", "BAN_GIAM_DOC", "HR"].includes(currentUser.role)) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
-
         const targetDate = new Date();
         const startOfDay = new Date(targetDate.setHours(0, 0, 0, 0));
         const endOfDay = new Date(targetDate.setHours(23, 59, 59, 999));
-
         // 1. Lấy danh sách nhân sự phòng Sản xuất trước
         const productionUsers = await prisma.user.findMany({
             where: {
