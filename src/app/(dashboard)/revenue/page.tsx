@@ -66,8 +66,6 @@ export default function RevenueEntryPage() {
         });
     }, [days, channels, revenueData]);
 
-
-
     useEffect(() => {
         if (!loading && !hasPermission("MENU_REVENUE")) {
             router.push("/dashboard");
@@ -164,7 +162,8 @@ export default function RevenueEntryPage() {
             setRevenueData(prev => ({ ...prev, [cellKey]: currentData }));
         }
     };
-    // 🚀 BƯỚC 1: SẮP XẾP VÀ ĐẾM SỐ LƯỢNG KÊNH ĐỂ GỘP Ô (BỎ MẢNG MÀU LÒE LOẸT)
+
+    // 🚀 BƯỚC 1: SẮP XẾP VÀ ĐẾM SỐ LƯỢNG KÊNH ĐỂ GỘP Ô
     const sortedChannels = [...channels].sort((a, b) => {
         const nameA = a.team?.name || "ZZZ";
         const nameB = b.team?.name || "ZZZ";
@@ -178,6 +177,7 @@ export default function RevenueEntryPage() {
     });
 
     let currentTeamForRender = "";
+
     return (
         <div className="p-4 md:p-6 bg-slate-50 h-full max-h-[calc(100vh-80px)] flex flex-col overflow-hidden animate-fade-in">
 
@@ -199,19 +199,20 @@ export default function RevenueEntryPage() {
                 </div>
             </div>
 
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm flex-1 overflow-auto custom-scrollbar relative z-0">
-                <table className="w-full text-left border-collapse min-w-[1000px]">
+            {/* 🚀 VÙNG CHỨA BẢNG CÓ THANH CUỘN */}
+            <div className="flex-1 overflow-auto custom-scrollbar relative bg-white border border-slate-200 rounded-2xl shadow-sm">
+                
+                {/* 🚀 THÊM h-full VÀO ĐÂY LÀ CHÌA KHÓA: Bảng luôn cao bằng thẻ div cha, đẩy tfoot xuống đáy */}
+                <table className="w-full h-full text-left border-separate border-spacing-0 min-w-[1000px]">
 
-                    {/* 🚀 HEADER ĐƯỢC CHIA LẠI TOẠ ĐỘ GHIM */}
-                    <thead className="sticky top-0 z-50 bg-slate-100 shadow-[0_2px_4px_rgba(0,0,0,0.05)] border-b-2 border-slate-300">
+                    <thead className="sticky top-0 z-[60] bg-slate-100 shadow-[0_2px_4px_rgba(0,0,0,0.05)] border-b-2 border-slate-300">
                         <tr className="text-slate-700 text-[10px] font-black uppercase tracking-widest">
-                            <th className="p-3 border-b border-r border-slate-300 sticky left-0 top-0 z-[60] bg-slate-200 w-[100px] min-w-[100px] text-center">Team</th>
-                            <th className="p-3 border-b border-r border-slate-300 sticky left-[100px] top-0 z-[60] bg-slate-200 w-[50px] min-w-[50px] text-center">STT</th>
-                            <th className="p-3 border-b border-r border-slate-300 sticky left-[150px] top-0 z-[60] bg-slate-200 w-[200px] min-w-[200px]">Tên Kênh</th>
+                            <th className="p-3 border-r border-slate-300 sticky left-0 z-[70] bg-slate-200 w-[100px] text-center">Team</th>
+                            <th className="p-3 border-r border-slate-300 sticky left-[100px] z-[70] bg-slate-200 w-[50px] text-center">STT</th>
+                            <th className="p-3 border-r border-slate-300 sticky left-[150px] z-[70] bg-slate-200 w-[200px]">Tên Kênh</th>
 
                             {days.map((day, idx) => (
-                                // 🚀 CỘT HEADER SẼ SÁNG LÊN KHI ĐƯỢC FOCUS VÀO ĐÚNG NGÀY ĐÓ
-                                <th key={idx} className={`p-3 border-b border-r border-slate-300 text-center w-[10%] transition-colors duration-300 ${focusedCol === idx ? 'bg-blue-100 border-blue-300 shadow-inner' : 'bg-slate-100'}`}>
+                                <th key={idx} className={`p-3 border-r border-slate-300 text-center w-[10%] transition-colors duration-300 ${focusedCol === idx ? 'bg-blue-100 border-blue-300 shadow-inner' : 'bg-slate-100'}`}>
                                     <div className={`mb-1 transition-colors ${focusedCol === idx ? 'text-blue-700 font-black' : 'text-slate-500'}`}>{['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'][idx]}</div>
                                     <div className={`text-sm ${day.toDateString() === new Date().toDateString() ? 'text-red-600 font-black' : (focusedCol === idx ? 'text-blue-800 font-black' : '')}`}>
                                         {day.getDate()}/{day.getMonth() + 1}
@@ -223,7 +224,7 @@ export default function RevenueEntryPage() {
 
                     <tbody>
                         {sortedChannels.length === 0 ? (
-                            <tr><td colSpan={10} className="p-8 text-center text-slate-400 italic">Chưa có dữ liệu.</td></tr>
+                            <tr><td colSpan={10} className="p-8 h-full text-center align-top pt-20 text-slate-400 italic">Chưa có dữ liệu.</td></tr>
                         ) : (
                             sortedChannels.map((channel, index) => {
                                 const teamName = channel.team?.name || "No Team";
@@ -233,24 +234,19 @@ export default function RevenueEntryPage() {
                                 const rowBgClass = index % 2 === 0 ? "bg-white" : "bg-[#f4f5f7]";
 
                                 return (
-                                    // 🚀 HÀNG (ROW) SẼ SÁNG LÊN KHI NGƯỜI DÙNG CLICK VÀO BẤT KỲ Ô NÀO BÊN TRONG NÓ (focus-within)
-                                    <tr key={channel.id} className={`${rowBgClass} border-b border-slate-200 hover:bg-[#e2e8f0] focus-within:bg-blue-50/50 transition-colors group`}>
+                                    <tr key={channel.id} className={`${rowBgClass} hover:bg-[#e2e8f0] focus-within:bg-blue-50/50 transition-colors group`}>
 
                                         {isFirstRowOfTeam && (
-                                            <td
-                                                rowSpan={rowSpanCount}
-                                                className={`p-2 border-r border-b border-slate-300 sticky left-0 z-40 bg-slate-100 align-middle text-center w-[100px] min-w-[100px] shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)]`}
-                                            >
+                                            <td rowSpan={rowSpanCount} className={`p-2 border-b border-r border-slate-300 sticky left-0 z-40 bg-slate-100 align-middle text-center shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)]`}>
                                                 <span className="font-black text-slate-600 text-xs md:text-sm uppercase tracking-widest">{teamName}</span>
                                             </td>
                                         )}
 
-                                        {/* STT và KÊNH SẼ BẮT MÀU THEO GROUP-FOCUS */}
-                                        <td className={`p-2 border-r border-slate-200 sticky left-[100px] z-30 ${rowBgClass} group-hover:bg-[#e2e8f0] group-focus-within:bg-blue-50/50 transition-colors text-center font-bold text-slate-500 w-[50px] min-w-[50px]`}>
+                                        <td className={`p-2 border-b border-r border-slate-200 sticky left-[100px] z-30 ${rowBgClass} group-hover:bg-[#e2e8f0] group-focus-within:bg-blue-50/50 transition-colors text-center font-bold text-slate-500`}>
                                             {index + 1}
                                         </td>
 
-                                        <td className={`p-3 border-r border-slate-200 sticky left-[150px] z-30 ${rowBgClass} group-hover:bg-[#e2e8f0] group-focus-within:bg-blue-50/50 transition-colors w-[200px] min-w-[200px] shadow-[2px_0_4px_-2px_rgba(0,0,0,0.05)]`}>
+                                        <td className={`p-3 border-b border-r border-slate-200 sticky left-[150px] z-30 ${rowBgClass} group-hover:bg-[#e2e8f0] group-focus-within:bg-blue-50/50 transition-colors shadow-[2px_0_4px_-2px_rgba(0,0,0,0.05)]`}>
                                             <p className="font-bold text-sm text-slate-800 line-clamp-2" title={channel.name}>{channel.name}</p>
                                         </td>
 
@@ -260,21 +256,20 @@ export default function RevenueEntryPage() {
                                             const data = revenueData[cellKey] || { revenue: "", views: "" };
                                             const cellState = savingCells[cellKey];
                                             const isMonetized = channel.monetization;
-                                            // Trong vòng lặp render ô <td>
+                                            
+                                            // 🚀 TOOLTIP LOGIC ĐÃ ĐƯỢC RESTORE
                                             const handleFocus = (e: React.FocusEvent<HTMLInputElement>, channelName: string, day: Date, currentData: any, type: 'views' | 'revenue') => {
                                                 setFocusedCol(idx);
-
                                                 const rect = e.target.getBoundingClientRect();
                                                 const dateStr = `${day.getDate()}/${day.getMonth() + 1}`;
-
-                                                // 🚀 CHỈ HIỂN THỊ THÔNG TIN TƯƠNG ỨNG VỚI Ô ĐANG NHẬP
+                                                
                                                 let info = "";
                                                 if (type === 'views') {
                                                     const views = currentData.views !== "" ? Number(currentData.views).toLocaleString() : "0";
                                                     info = `Views`;
                                                 } else {
                                                     const revenue = currentData.revenue !== "" ? `$${Number(currentData.revenue).toLocaleString()}` : "$0";
-                                                    info = `Doanh thu`; // Có thể thêm tooltip phụ hiển thị views khi focus vào ô doanh thu
+                                                    info = `Doanh thu`;
                                                 }
 
                                                 setActiveTooltip({
@@ -283,26 +278,23 @@ export default function RevenueEntryPage() {
                                                     y: rect.top - 40
                                                 });
                                             };
+
                                             return (
-                                                // 🚀 Ô CỦA CỘT ĐƯỢC FOCUS SẼ NHẬN MÀU NỀN TẠO THÀNH DẢI DỌC
-                                                <td key={idx} className={`p-1.5 border-r border-slate-200/50 last:border-0 relative transition-colors duration-300 ${focusedCol === idx ? 'bg-blue-50/40' : ''}`}>
+                                                <td key={idx} className={`p-1.5 border-b border-r border-slate-200/50 last:border-r-0 relative transition-colors duration-300 ${focusedCol === idx ? 'bg-blue-50/40' : ''}`}>
                                                     <div className="flex flex-col gap-1.5">
                                                         <div className="relative">
                                                             <input
                                                                 type="text"
                                                                 inputMode="numeric"
                                                                 placeholder="0"
-                                                                // Đổi màu border khi hover/focus cho sắc nét hơn
                                                                 className="w-full text-right pr-2 py-1.5 text-xs font-bold bg-transparent border border-slate-200/60 rounded-md focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 outline-none transition-all text-slate-700 hover:bg-black/5"
                                                                 defaultValue={data.views !== "" && data.views !== 0 ? Number(data.views).toLocaleString('en-US') : ""}
-                                                                // 🚀 BẮT SỰ KIỆN FOCUS ĐỂ KÍCH HOẠT TÂM NGẮM
-                                                                onFocus={(e) => handleFocus(e, channel.name, day, data,'views')}
+                                                                onFocus={(e) => handleFocus(e, channel.name, day, data, 'views')}
                                                                 onChange={(e) => {
                                                                     const rawValue = e.target.value.replace(/\D/g, '');
                                                                     e.target.value = rawValue.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
                                                                 }}
                                                                 onBlur={(e) => {
-                                                                    // 🚀 TẮT TÂM NGẮM KHI RỜI Ô
                                                                     setFocusedCol(null);
                                                                     setActiveTooltip(null);
                                                                     const rawVal = e.target.value.replace(/,/g, '');
@@ -321,7 +313,6 @@ export default function RevenueEntryPage() {
                                                                         placeholder="0"
                                                                         className="w-full text-right pr-2 py-1.5 text-xs font-black bg-emerald-50/30 border border-emerald-200/60 rounded-md focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/20 outline-none transition-all text-emerald-700 hover:bg-emerald-50/80"
                                                                         defaultValue={data.revenue !== "" && data.revenue !== 0 ? Number(data.revenue).toLocaleString('en-US', { maximumFractionDigits: 2 }) : ""}
-                                                                        // 🚀 BẮT SỰ KIỆN FOCUS ĐỂ KÍCH HOẠT TÂM NGẮM
                                                                         onFocus={(e) => handleFocus(e, channel.name, day, data, 'revenue')}
                                                                         onChange={(e) => {
                                                                             let rawValue = e.target.value.replace(/[^\d.]/g, '');
@@ -331,7 +322,6 @@ export default function RevenueEntryPage() {
                                                                             e.target.value = parts.join('.');
                                                                         }}
                                                                         onBlur={(e) => {
-                                                                            // 🚀 TẮT TÂM NGẮM KHI RỜI Ô
                                                                             setFocusedCol(null);
                                                                             setActiveTooltip(null);
                                                                             const rawVal = e.target.value.replace(/,/g, '');
@@ -359,24 +349,25 @@ export default function RevenueEntryPage() {
                                 )
                             })
                         )}
+                        {/* Dòng ma để đẩy tbody full height nếu cần thiết (không bắt buộc) */}
+                        {sortedChannels.length > 0 && <tr><td colSpan={10} className="h-full border-0 p-0"></td></tr>}
                     </tbody>
 
-                    <tfoot className="sticky bottom-0 z-40 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
-                        <tr className="bg-slate-800 text-white font-black">
-                            {/* 🚀 ĐÃ GỘP 3 CỘT VÀO NHAU Ở HÀNG TỔNG ĐỂ KHỚP VỚI THEAD */}
-                            <td colSpan={3} className="p-4 border-r border-slate-700 uppercase tracking-widest text-xs sticky left-0 bottom-0 z-50 bg-slate-800 text-center">
+                    {/* 🚀 TFOOT GHIM ĐÁY, CỘT ĐẦU CŨNG GHIM TRÁI */}
+                    <tfoot className="sticky bottom-0 z-[60] shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] bg-slate-800">
+                        <tr className="text-white font-black">
+                            <td colSpan={3} className="p-4 border-r border-slate-700 uppercase tracking-widest text-xs sticky left-0 z-[70] bg-slate-800 text-center">
                                 Tổng Cả Hệ Thống
                             </td>
                             {dailyTotals.map((total, idx) => (
-                                <td key={idx} className="p-2 border-r border-slate-700 last:border-0 bg-slate-800">
+                                <td key={idx} className="p-2 border-r border-slate-700 last:border-r-0 bg-slate-800">
                                     <div className="flex flex-col gap-1.5 text-right pr-2">
                                         <div className="text-[11px] text-blue-300 font-bold tracking-tight flex items-center justify-end gap-1">
-                                            {total.views > 0 ? total.views.toLocaleString() : "0"}
-                                            <Eye size={11} strokeWidth={3} className="opacity-60" />
+                                            {total.views.toLocaleString()} <Eye size={11} strokeWidth={3} className="opacity-60" />
                                         </div>
                                         <div className="text-sm text-emerald-400 font-black tracking-tight drop-shadow-sm">
                                             <span className="text-[10px] font-black opacity-50 uppercase mr-0.5">$</span>
-                                            {total.revenue > 0 ? total.revenue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : "0"}
+                                            {total.revenue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
                                         </div>
                                     </div>
                                 </td>
@@ -385,6 +376,7 @@ export default function RevenueEntryPage() {
                     </tfoot>
                 </table>
             </div>
+
             {/* 🚀 BƯỚC 3: UI TOOLTIP BAY (Dùng Portal hoặc Fixed) */}
             {activeTooltip && (
                 <div

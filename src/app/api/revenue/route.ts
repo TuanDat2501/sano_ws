@@ -6,12 +6,32 @@ import { authOptions } from "@/lib/auth";
 // 1. LẤY DANH SÁCH KÊNH & DOANH THU THEO KHOẢNG THỜI GIAN
 export async function GET(req: Request) {
     try {
+        const session = await getServerSession(authOptions);
+        if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+        const user = session.user as any;
         const { searchParams } = new URL(req.url);
         const startDate = searchParams.get('startDate');
         const endDate = searchParams.get('endDate');
 
-        // Lấy tất cả Kênh kèm theo doanh thu trong mốc thời gian
+        // Khởi tạo bộ lọc cho Prisma
+        let whereClause: any = {};
+
+        // LOGIC PHÂN QUYỀN
+        // Nếu là ADMIN hoặc BAN_GIAM_DOC -> Lấy hết (whereClause = {})
+        // Nếu không -> Lọc theo teamId hoặc managerId (tùy sếp muốn quản lý theo team hay quản lý kênh riêng)
+        if (user.role !== 'ADMIN' && user.role !== 'BAN_GIAM_DOC' && user.role !== 'HR') {
+            // Ví dụ: Leader chỉ thấy kênh thuộc team của mình
+            if (user.teamId) {
+                whereClause = { teamId: user.teamId };
+            } else {
+                // Nếu ko có teamId, chỉ cho thấy kênh mình quản lý (managerId)
+                whereClause = { managerId: user.id };
+            }
+        }
+
         const channels = await prisma.channel.findMany({
+            where: whereClause, // 🚀 ÁP DỤNG BỘ LỌC Ở ĐÂY
             include: {
                 revenues: {
                     where: {
