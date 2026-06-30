@@ -107,11 +107,8 @@ model User {
   tasksEdited        Task[]        @relation("TaskEditor")
   tasksPub           Task[]        @relation("TaskPublisher")
   assignedTasks      Task[]        @relation("TaskAssignee")
-<<<<<<< HEAD
   tasksAnimated      Task[]        @relation("TaskAnimator")
 
-=======
->>>>>>> 4423d6bfa3698fdb5de37ff682b4eb71aa09d5d7
   // Relations khác
   weeklyKPIs         WeeklyKPI[]
   requestsSent       Request[]     @relation("Requester")

@@ -1,9 +1,98 @@
 import { Users, FileSpreadsheet, Loader2 } from "lucide-react";
+import { useState } from "react";
+import ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
+import { useToast } from "@/app/component/ToastProvider"; // Sếp nhớ check xem đường dẫn này đúng với project chưa nhé
 
 export default function KpiTeamTable({ kpiList, handleUpdateTarget, onRowClick, isLoading, month }: any) {
-    
-    const handleExportReport = () => {
-        alert(`Đang xuất báo cáo KPI Tháng ${month}...`);
+    const [isExporting, setIsExporting] = useState(false);
+    const { showToast } = useToast();
+
+    const handleExportReport = async () => {
+        if (!kpiList || kpiList.length === 0) {
+            showToast("error", "Chưa có dữ liệu KPI để xuất!");
+            return;
+        }
+
+        setIsExporting(true);
+        try {
+            const workbook = new ExcelJS.Workbook();
+            const worksheet = workbook.addWorksheet(`KPI Tháng ${month}`);
+
+            // 1. ĐỊNH NGHĨA CỘT
+            worksheet.columns = [
+                { header: 'STT', key: 'stt', width: 5 },
+                { header: 'Họ và tên', key: 'name', width: 30 },
+                { header: 'Vị trí (Role)', key: 'role', width: 20 },
+                { header: 'Chỉ tiêu (Video/Task)', key: 'target', width: 20 },
+                { header: 'Thực đạt', key: 'actual', width: 15 },
+                { header: 'Tiến độ (%)', key: 'percent', width: 15 },
+                { header: 'Đánh giá', key: 'status', width: 20 },
+            ];
+
+            // 2. ĐỔ DỮ LIỆU
+            kpiList.forEach((user: any, idx: number) => {
+                const isCompleted = user.actualValue >= user.targetValue && user.targetValue > 0;
+                worksheet.addRow({
+                    stt: idx + 1,
+                    name: user.fullName || "Chưa cập nhật",
+                    role: user.role || "---",
+                    target: user.targetValue,
+                    actual: user.actualValue,
+                    percent: `${user.percent}%`,
+                    status: isCompleted ? "Đạt chỉ tiêu" : "Chưa đạt"
+                });
+            });
+
+            // 3. THIẾT KẾ STYLE (Chuẩn form Vàng - Đen)
+            const headerRow = worksheet.getRow(1);
+            headerRow.height = 30;
+            headerRow.eachCell((cell) => {
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFF00' } };
+                cell.font = { name: 'Arial', bold: true, size: 11, color: { argb: '000000' } };
+                cell.alignment = { vertical: 'middle', horizontal: 'center' };
+                cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+            });
+
+            worksheet.eachRow((row, rowNumber) => {
+                if (rowNumber > 1) {
+                    row.eachCell((cell, colNumber) => {
+                        cell.border = { 
+                            top: { style: 'thin', color: { argb: 'E2E8F0' } }, 
+                            left: { style: 'thin', color: { argb: 'E2E8F0' } }, 
+                            bottom: { style: 'thin', color: { argb: 'E2E8F0' } }, 
+                            right: { style: 'thin', color: { argb: 'E2E8F0' } } 
+                        };
+                        cell.alignment = { vertical: 'middle', horizontal: colNumber >= 4 ? 'center' : 'left' };
+                        
+                        // Đổi màu text cho cột "Đánh giá"
+                        if (colNumber === 7) {
+                            if (cell.value === "Đạt chỉ tiêu") {
+                                cell.font = { color: { argb: '10B981' }, bold: true }; // Màu Xanh lá
+                            } else {
+                                cell.font = { color: { argb: 'EF4444' }, bold: true }; // Màu Đỏ
+                            }
+                        }
+                    });
+                }
+            });
+
+            // 4. TIỆN ÍCH LỌC VÀ ĐÓNG BĂNG TIÊU ĐỀ
+            worksheet.views = [{ state: 'frozen', ySplit: 1 }];
+            worksheet.autoFilter = 'A1:G1';
+
+            // 5. LƯU FILE XUỐNG MÁY
+            const buffer = await workbook.xlsx.writeBuffer();
+            const fileName = `SanoWS_Bao_Cao_KPI_Thang_${month}_${new Date().getTime()}.xlsx`;
+            saveAs(new Blob([buffer]), fileName);
+
+            showToast("success", `Đã xuất báo cáo KPI tháng ${month} thành công!`);
+        } catch (error) {
+            console.error("Lỗi xuất Excel:", error);
+            showToast("error", "Không thể xuất file Excel lúc này.");
+        } finally {
+            setIsExporting(false);
+        }
     };
 
     return (
@@ -14,15 +103,19 @@ export default function KpiTeamTable({ kpiList, handleUpdateTarget, onRowClick, 
                 <h2 className="text-lg md:text-xl font-black text-slate-800 flex items-center gap-2">
                     <Users className="text-blue-600 w-5 h-5 md:w-6 md:h-6" /> Thành Tích Team
                 </h2>
+                
+                {/* 🚀 ĐÃ CẬP NHẬT: Thêm trạng thái isExporting */}
                 <button 
                     onClick={handleExportReport}
-                    className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white px-4 md:px-5 py-2 md:py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-sm shadow-emerald-600/20 active:scale-95 text-xs md:text-sm"
+                    disabled={isExporting || isLoading}
+                    className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white px-4 md:px-5 py-2 md:py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-sm shadow-emerald-600/20 active:scale-95 text-xs md:text-sm disabled:opacity-50"
                 >
-                    <FileSpreadsheet size={16} className="md:w-[18px] md:h-[18px]" /> Xuất báo cáo
+                    {isExporting ? <Loader2 size={16} className="animate-spin md:w-[18px] md:h-[18px]" /> : <FileSpreadsheet size={16} className="md:w-[18px] md:h-[18px]" />} 
+                    {isExporting ? "Đang xuất..." : "Xuất báo cáo"}
                 </button>
             </div>
 
-            {/* BẢNG CÓ THANH CUỘN */}
+            {/* BẢNG CÓ THANH CUỘN (Phần này giữ nguyên code của sếp) */}
             <div className="flex-1 overflow-y-auto overflow-x-auto custom-scrollbar relative bg-white">
                 {isLoading ? (
                     <div className="h-full flex flex-col items-center justify-center text-slate-400 py-12 gap-3">
