@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { 
   ReactFlow, MiniMap, Controls, Background, useNodesState, useEdgesState, addEdge, 
-  Connection, ReactFlowProvider, useReactFlow ,BackgroundVariant
+  Connection, ReactFlowProvider, useReactFlow ,BackgroundVariant,Node, Edge
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Save, ArrowLeft } from 'lucide-react';
@@ -22,10 +22,10 @@ const initialNodes = [
 
 // 🚀 TÁCH RIÊNG COMPONENT BÀN VẼ ĐỂ SỬ DỤNG ĐƯỢC HOOK useReactFlow()
 function FlowCanvas({ projectId, projectName, isSaving, handleSaveWorkflow }: any) {
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>(initialNodes as Node[]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const { screenToFlowPosition } = useReactFlow(); // Tính tọa độ màn hình sang tọa độ Canvas
-
+  
   // Logic nối dây
   const onConnect = useCallback((params: Connection) => setEdges((eds) => addEdge({ ...params, animated: true, style: { stroke: '#3b82f6', strokeWidth: 2 } }, eds)), [setEdges]);
 
