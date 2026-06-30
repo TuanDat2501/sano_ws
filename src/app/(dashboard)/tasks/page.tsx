@@ -158,115 +158,115 @@ export default function KanbanBoard() {
   const handleExportExcel = async () => {
     setIsExporting(true);
     try {
-        const res = await fetch('/api/tasks/export');
-        const data = await res.json();
-        if (!res.ok) throw new Error("Lỗi tải dữ liệu");
+      const res = await fetch('/api/tasks/export');
+      const data = await res.json();
+      if (!res.ok) throw new Error("Lỗi tải dữ liệu");
 
-        const workbook = new ExcelJS.Workbook();
-        const worksheet = workbook.addWorksheet('Danh sách Task');
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('Danh sách Task');
 
-        // 1. ĐỊNH NGHĨA CỘT (Đúng thứ tự sếp yêu cầu trong ảnh)
-        worksheet.columns = [
-            { header: 'STT', key: 'stt', width: 5 },
-            { header: 'Từ khóa (Key)', key: 'key', width: 25 },
-            { header: 'Tiêu đề Video', key: 'title', width: 35 },
-            { header: 'Video tham khảo', key: 'refLink', width: 20 },
-            { header: 'Text ENG', key: 'eng', width: 20 },
-            { header: 'Bố cục', key: 'story', width: 20 },
-            { header: 'Thumbnail', key: 'thumb', width: 20 },
-            { header: 'Nhân sự Content', key: 'content', width: 20 },
-            { header: 'Audio', key: 'audio', width: 20 },
-            { header: 'Chuyển động (CĐ)', key: 'animator', width: 20 },
-            { header: 'Nhân sự Editor', key: 'editor', width: 20 },
-            { header: 'Video hoàn thành', key: 'video', width: 20 },
-            { header: 'Kênh / Project', key: 'channel', width: 25 },
-            { header: 'LINK YT (Pub)', key: 'pub', width: 20 },
-            { header: 'Ngày đăng', key: 'date', width: 15 },
-            { header: 'Trạng thái', key: 'status', width: 15 },
-        ];
+      // 1. ĐỊNH NGHĨA CỘT (Đúng thứ tự sếp yêu cầu trong ảnh)
+      worksheet.columns = [
+        { header: 'STT', key: 'stt', width: 5 },
+        { header: 'Từ khóa (Key)', key: 'key', width: 25 },
+        { header: 'Tiêu đề Video', key: 'title', width: 35 },
+        { header: 'Video tham khảo', key: 'refLink', width: 20 },
+        { header: 'Text ENG', key: 'eng', width: 20 },
+        { header: 'Bố cục', key: 'story', width: 20 },
+        { header: 'Thumbnail', key: 'thumb', width: 20 },
+        { header: 'Nhân sự Content', key: 'content', width: 20 },
+        { header: 'Audio', key: 'audio', width: 20 },
+        { header: 'Chuyển động (CĐ)', key: 'animator', width: 20 },
+        { header: 'Nhân sự Editor', key: 'editor', width: 20 },
+        { header: 'Video hoàn thành', key: 'video', width: 20 },
+        { header: 'Kênh / Project', key: 'channel', width: 25 },
+        { header: 'LINK YT (Pub)', key: 'pub', width: 20 },
+        { header: 'Ngày đăng', key: 'date', width: 15 },
+        { header: 'Trạng thái', key: 'status', width: 15 },
+      ];
 
-        // 2. ĐỔ DỮ LIỆU VÀO
-        data.forEach((item: any, idx: number) => {
-            worksheet.addRow({
-                stt: idx + 1,
-                key: item["Key (Từ khóa)"],
-                title: item["Tiêu đề Video"],
-                refLink: item["Video tham khảo"],
-                eng: item["Text ENG"],
-                story: item["Bố cục"],
-                thumb: item["Thumbnail"],
-                content: item["Nhân sự Content"],
-                audio: item["Link Audio (AI)"],
-                animator: item["Nhân sự Chuyển động"],
-                editor: item["Nhân sự Editor"],
-                video: item["Video hoàn thành"],
-                channel: `${item["Thuộc Kênh"]} - ${item["Dự án"]}`,
-                pub: item["Link Youtube (Pub)"],
-                date: item["Ngày đăng"],
-                status: item["Trạng thái"]
-            });
+      // 2. ĐỔ DỮ LIỆU VÀO
+      data.forEach((item: any, idx: number) => {
+        worksheet.addRow({
+          stt: idx + 1,
+          key: item["Key (Từ khóa)"],
+          title: item["Tiêu đề Video"],
+          refLink: item["Video tham khảo"],
+          eng: item["Text ENG"],
+          story: item["Bố cục"],
+          thumb: item["Thumbnail"],
+          content: item["Nhân sự Content"],
+          audio: item["Link Audio (AI)"],
+          animator: item["Nhân sự Chuyển động"],
+          editor: item["Nhân sự Editor"],
+          video: item["Video hoàn thành"],
+          channel: `${item["Thuộc Kênh"]} - ${item["Dự án"]}`,
+          pub: item["Link Youtube (Pub)"],
+          date: item["Ngày đăng"],
+          status: item["Trạng thái"]
         });
+      });
 
-        // 3. THIẾT KẾ STYLE (Đây là phần sếp cần nhất)
-        
-        // Style cho Header (Dòng 1)
-        const headerRow = worksheet.getRow(1);
-        headerRow.height = 30; // Cho hàng tiêu đề cao tí nhìn cho sang
-        
-        headerRow.eachCell((cell) => {
-            cell.fill = {
-                type: 'pattern',
-                pattern: 'solid',
-                fgColor: { argb: 'FFFF00' } // Màu vàng rực rỡ như ảnh sếp gửi
-            };
-            cell.font = {
-                name: 'Arial',
-                bold: true,
-                size: 11,
-                color: { argb: '000000' }
-            };
-            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+      // 3. THIẾT KẾ STYLE (Đây là phần sếp cần nhất)
+
+      // Style cho Header (Dòng 1)
+      const headerRow = worksheet.getRow(1);
+      headerRow.height = 30; // Cho hàng tiêu đề cao tí nhìn cho sang
+
+      headerRow.eachCell((cell) => {
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFFF00' } // Màu vàng rực rỡ như ảnh sếp gửi
+        };
+        cell.font = {
+          name: 'Arial',
+          bold: true,
+          size: 11,
+          color: { argb: '000000' }
+        };
+        cell.alignment = { vertical: 'middle', horizontal: 'center' };
+        cell.border = {
+          top: { style: 'thin' }, left: { style: 'thin' },
+          bottom: { style: 'thin' }, right: { style: 'thin' }
+        };
+      });
+
+      // Style cho toàn bộ Data (Kẻ bảng)
+      worksheet.eachRow((row, rowNumber) => {
+        if (rowNumber > 1) {
+          row.eachCell((cell) => {
             cell.border = {
-                top: { style: 'thin' }, left: { style: 'thin' },
-                bottom: { style: 'thin' }, right: { style: 'thin' }
+              top: { style: 'thin', color: { argb: 'E2E8F0' } },
+              left: { style: 'thin', color: { argb: 'E2E8F0' } },
+              bottom: { style: 'thin', color: { argb: 'E2E8F0' } },
+              right: { style: 'thin', color: { argb: 'E2E8F0' } }
             };
-        });
-
-        // Style cho toàn bộ Data (Kẻ bảng)
-        worksheet.eachRow((row, rowNumber) => {
-            if (rowNumber > 1) {
-                row.eachCell((cell) => {
-                    cell.border = {
-                        top: { style: 'thin', color: { argb: 'E2E8F0' } },
-                        left: { style: 'thin', color: { argb: 'E2E8F0' } },
-                        bottom: { style: 'thin', color: { argb: 'E2E8F0' } },
-                        right: { style: 'thin', color: { argb: 'E2E8F0' } }
-                    };
-                    cell.alignment = { vertical: 'middle' };
-                    // Nếu là link thì cho màu xanh dương
-                    if (String(cell.value).startsWith('http')) {
-                        cell.font = { color: { argb: '2563EB' }, underline: true };
-                    }
-                });
+            cell.alignment = { vertical: 'middle' };
+            // Nếu là link thì cho màu xanh dương
+            if (String(cell.value).startsWith('http')) {
+              cell.font = { color: { argb: '2563EB' }, underline: true };
             }
-        });
+          });
+        }
+      });
 
-        // 4. TIỆN ÍCH NÂNG CAO
-        worksheet.views = [{ state: 'frozen', ySplit: 1 }]; // Cố định hàng tiêu đề
-        worksheet.autoFilter = 'A1:P1'; // Thêm bộ lọc cho sếp dễ lọc theo Kênh/User
+      // 4. TIỆN ÍCH NÂNG CAO
+      worksheet.views = [{ state: 'frozen', ySplit: 1 }]; // Cố định hàng tiêu đề
+      worksheet.autoFilter = 'A1:P1'; // Thêm bộ lọc cho sếp dễ lọc theo Kênh/User
 
-        // 5. XUẤT FILE
-        const buffer = await workbook.xlsx.writeBuffer();
-        const fileName = `SanoWS_Export_${new Date().getTime()}.xlsx`;
-        saveAs(new Blob([buffer]), fileName);
-        
-        showToast("success", "Đã xuất file Excel 'siêu đẹp' thành công!");
+      // 5. XUẤT FILE
+      const buffer = await workbook.xlsx.writeBuffer();
+      const fileName = `SanoWS_Export_${new Date().getTime()}.xlsx`;
+      saveAs(new Blob([buffer]), fileName);
+
+      showToast("success", "Đã xuất file Excel 'siêu đẹp' thành công!");
     } catch (error) {
-        showToast("error", "Lỗi xuất file rồi sếp ơi!");
+      showToast("error", "Lỗi xuất file rồi sếp ơi!");
     } finally {
-        setIsExporting(false);
+      setIsExporting(false);
     }
-};
+  };
   // 🚀 LOGIC TỰ ĐỘNG MỞ DRAWER KHI URL CÓ TASKID
   useEffect(() => {
     const taskIdFromUrl = searchParams.get("taskId");
@@ -587,7 +587,10 @@ export default function KanbanBoard() {
         fetchTasks();
         if (socket) socket.emit("board_updated");
         handleCloseDrawer();
-        setTaskLinks({ scriptLink: "", videoLink: "", publishLink: "" });
+        setTaskLinks({
+          scriptLink: "", englishScriptLink: "", storyboardLink: "",
+          audioLink: "", thumbnailLink: "", videoLink: "", publishLink: "", note: ""
+        });
         setLinksError("");
       } else {
         if (data.field) setDrawerErrors({ [data.field]: data.error });
