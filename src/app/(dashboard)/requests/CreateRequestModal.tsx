@@ -219,7 +219,6 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
             setIsSubmitting(false);
         }
     };
-
     const modalContent = (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200">
             <div className="bg-white w-full max-w-2xl rounded-2xl md:rounded-[24px] shadow-2xl flex flex-col max-h-[95vh] md:max-h-[90vh] overflow-hidden">

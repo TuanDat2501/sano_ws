@@ -138,7 +138,6 @@ export async function POST(req: Request) {
     const { title, linkContent, contentId, editorId, teamId } = body;
     const creatorId = (session.user as any).id;
     const rawLink = linkContent;
-
     // 1. RADAR CHẶN TRÙNG LINK THÔNG MINH (So sánh Link Lõi)
     // =========================================================================
     if (rawLink && rawLink.trim() !== "") {
@@ -172,7 +171,6 @@ export async function POST(req: Request) {
         contentId: contentId || undefined,
         editorId: editorId || undefined,
         teamId: teamId || undefined,
-
         creatorId: creatorId,
         projectId: body.projectId || undefined,
         channelId: body.channelId || undefined,
