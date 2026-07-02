@@ -36,8 +36,20 @@ export default function UsersPage() {
 
     // Form Data (Thêm thuộc tính isActive)
     const [formData, setFormData] = useState({
-        username: "", password: "", fullName: "", role: "CONTENT", teamId: "", isActive: true
+        username: "", password: "", fullName: "", role: "CONTENT", teamId: "", isActive: true,
+        employeeCode: "", dob: "", ethnicity: "", 
+        cccdNumber: "", cccdDate: "", cccdPlace: "",
+        permanentAddress: "", currentAddress: "", 
+        phone: "", personalEmail: "",
+        relativeName: "", relativePhone: "", relativeRelation: "",
+        bankAccount: "", bankName: "", joinDate: "", bhxhNumber: ""
     });
+
+    // Tiện ích format ngày cho thẻ input type="date"
+    const formatDateForInput = (dateString: string) => {
+        if (!dateString) return "";
+        return new Date(dateString).toISOString().split('T')[0];
+    };
     useEffect(() => {
         const timer = setTimeout(() => {
             setDebouncedSearch(searchTerm);
@@ -79,7 +91,13 @@ export default function UsersPage() {
     // --- CRUD FUNCTIONS ---
     const openCreateDrawer = () => {
         setEditingUser(null);
-        setFormData({ username: "", password: "", fullName: "", role: "CONTENT", teamId: "", isActive: true });
+        setFormData({ 
+            username: "", password: "", fullName: "", role: "CONTENT", teamId: "", isActive: true,
+            employeeCode: "", dob: "", ethnicity: "", cccdNumber: "", cccdDate: "", cccdPlace: "",
+            permanentAddress: "", currentAddress: "", phone: "", personalEmail: "",
+            relativeName: "", relativePhone: "", relativeRelation: "",
+            bankAccount: "", bankName: "", joinDate: "", bhxhNumber: ""
+        });
         setIsDrawerOpen(true);
     };
 
@@ -91,7 +109,25 @@ export default function UsersPage() {
             fullName: user.fullName, 
             role: user.role, 
             teamId: user.teamId || "",
-            isActive: user.isActive
+            isActive: user.isActive,
+            // 🚀 Đổ dữ liệu HR cũ (nếu có)
+            employeeCode: user.employeeCode || "",
+            dob: formatDateForInput(user.dob),
+            ethnicity: user.ethnicity || "",
+            cccdNumber: user.cccdNumber || "",
+            cccdDate: formatDateForInput(user.cccdDate),
+            cccdPlace: user.cccdPlace || "",
+            permanentAddress: user.permanentAddress || "",
+            currentAddress: user.currentAddress || "",
+            phone: user.phone || "",
+            personalEmail: user.personalEmail || "",
+            relativeName: user.relativeName || "",
+            relativePhone: user.relativePhone || "",
+            relativeRelation: user.relativeRelation || "",
+            bankAccount: user.bankAccount || "",
+            bankName: user.bankName || "",
+            joinDate: formatDateForInput(user.joinDate),
+            bhxhNumber: user.bhxhNumber || ""
         });
         setIsDrawerOpen(true);
     };

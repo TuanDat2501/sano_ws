@@ -5,13 +5,13 @@ import { authOptions } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-// 🚀 SỬA KIỂU DỮ LIỆU: params bây giờ là một Promise
+// [GET] - LẤY CHI TIẾT ĐỀ XUẤT (GIỮ NGUYÊN CODE CỦA BẠN)
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
     try {
         const session = await getServerSession(authOptions);
         if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-        // 🚀 SỬA LỖI Ở ĐÂY: Await toàn bộ params trước rồi mới lấy id
+        // 🚀 Await toàn bộ params trước rồi mới lấy id
         const resolvedParams = await params;
         const requestId = resolvedParams.id;
 
@@ -35,5 +35,50 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     } catch (error) {
         console.error("LỖI LẤY CHI TIẾT ĐƠN TỪ:", error);
         return NextResponse.json({ error: "Lỗi Server" }, { status: 500 });
+    }
+}
+
+// 🚀 THÊM MỚI: [DELETE] - HỦY (XÓA) ĐỀ XUẤT CHO NGƯỜI TẠO
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+    try {
+        const session = await getServerSession(authOptions);
+        const currentUser = session?.user as any;
+        
+        if (!currentUser) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+        const resolvedParams = await params;
+        const requestId = resolvedParams.id;
+
+        if (!requestId) return NextResponse.json({ error: "Thiếu ID đề xuất" }, { status: 400 });
+
+        // 1. Lấy thông tin đơn ra để check quyền
+        const existingRequest = await prisma.request.findUnique({
+            where: { id: requestId },
+            select: { requesterId: true, status: true }
+        });
+
+        if (!existingRequest) return NextResponse.json({ error: "Không tìm thấy đề xuất" }, { status: 404 });
+
+        // 2. Kiểm tra xem có phải chính chủ tạo đơn không
+        if (existingRequest.requesterId !== currentUser.id) {
+            return NextResponse.json({ error: "Bạn không có quyền hủy đề xuất của người khác" }, { status: 403 });
+        }
+
+        // 3. Chỉ cho phép hủy khi đơn vẫn đang ở trạng thái chờ duyệt (PENDING)
+        if (!["PENDING_1", "PENDING_2"].includes(existingRequest.status)) {
+            return NextResponse.json({ error: "Không thể hủy! Đơn này đã được xử lý hoặc đã hủy từ trước." }, { status: 400 });
+        }
+
+        // 4. Cập nhật trạng thái thành CANCELLED thay vì xóa bản ghi
+        const updatedRequest = await prisma.request.update({
+            where: { id: requestId },
+            data: { status: "CANCELLED" }
+        });
+
+        return NextResponse.json({ message: "Đã hủy đề xuất thành công", data: updatedRequest }, { status: 200 });
+
+    } catch (error) {
+        console.error("LỖI HỦY ĐƠN TỪ:", error);
+        return NextResponse.json({ error: "Lỗi Server khi hủy đề xuất" }, { status: 500 });
     }
 }

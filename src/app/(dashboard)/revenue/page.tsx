@@ -201,7 +201,7 @@ export default function RevenueEntryPage() {
 
             {/* 🚀 VÙNG CHỨA BẢNG CÓ THANH CUỘN */}
             <div className="flex-1 overflow-auto custom-scrollbar relative bg-white border border-slate-200 rounded-2xl shadow-sm">
-                
+
                 {/* 🚀 THÊM h-full VÀO ĐÂY LÀ CHÌA KHÓA: Bảng luôn cao bằng thẻ div cha, đẩy tfoot xuống đáy */}
                 <table className="w-full h-full text-left border-separate border-spacing-0 min-w-[1000px]">
 
@@ -256,13 +256,13 @@ export default function RevenueEntryPage() {
                                             const data = revenueData[cellKey] || { revenue: "", views: "" };
                                             const cellState = savingCells[cellKey];
                                             const isMonetized = channel.monetization;
-                                            
+
                                             // 🚀 TOOLTIP LOGIC ĐÃ ĐƯỢC RESTORE
                                             const handleFocus = (e: React.FocusEvent<HTMLInputElement>, channelName: string, day: Date, currentData: any, type: 'views' | 'revenue') => {
                                                 setFocusedCol(idx);
                                                 const rect = e.target.getBoundingClientRect();
                                                 const dateStr = `${day.getDate()}/${day.getMonth() + 1}`;
-                                                
+
                                                 let info = "";
                                                 if (type === 'views') {
                                                     const views = currentData.views !== "" ? Number(currentData.views).toLocaleString() : "0";
@@ -280,10 +280,12 @@ export default function RevenueEntryPage() {
                                             };
 
                                             return (
-                                                <td key={idx} className={`p-1.5 border-b border-r border-slate-200/50 last:border-r-0 relative transition-colors duration-300 ${focusedCol === idx ? 'bg-blue-50/40' : ''}`}>
+                                                <td key={cellKey} className={`p-1.5 border-b border-r border-slate-200/50 last:border-r-0 relative transition-colors duration-300 ${focusedCol === idx ? 'bg-blue-50/40' : ''}`}>
                                                     <div className="flex flex-col gap-1.5">
                                                         <div className="relative">
                                                             <input
+                                                                // 🚀 2. THÊM DÒNG NÀY: Key động bao gồm cả cellKey và giá trị views
+                                                                key={`views_${cellKey}_${data.views}`}
                                                                 type="text"
                                                                 inputMode="numeric"
                                                                 placeholder="0"
@@ -308,6 +310,8 @@ export default function RevenueEntryPage() {
                                                             {isMonetized === 'DA_BAT' ? (
                                                                 <>
                                                                     <input
+                                                                        // 🚀 3. THÊM DÒNG NÀY: Key động cho ô Doanh thu
+                                                                        key={`rev_${cellKey}_${data.revenue}`}
                                                                         type="text"
                                                                         inputMode="decimal"
                                                                         placeholder="0"

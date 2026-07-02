@@ -185,7 +185,7 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
                         <label className="text-[10px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-1.5 mb-1"><MonitorPlay size={12} /> Chuyển Động</label>
                         <select disabled={!newTask.teamId || isLoadingData} className="w-full border rounded-xl p-2.5 outline-none font-bold text-sm bg-white border-emerald-200 disabled:opacity-50" value={newTask.animatorId} onChange={(e) => setNewTask({ ...newTask, animatorId: e.target.value })}>
                           <option value="">-- Ai làm CĐ? --</option>
-                          {teamEditors.map(u => <option key={u.id} value={u.id}>{u.fullName}</option>)}
+                          {teamContents.map(u => <option key={u.id} value={u.id}>{u.fullName}</option>)}
                         </select>
                       </div>
                     </div>

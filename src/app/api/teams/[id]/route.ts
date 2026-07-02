@@ -4,10 +4,10 @@ import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
-// 🚀 Đổi tham số thứ 2 thành context để dễ xử lý Promise
+
 export async function DELETE(req: Request, context: any) {
     try {
-        // 🚀 BƯỚC QUAN TRỌNG: Giải mã params cho Next.js bản mới
+        // Giải mã params cho Next.js bản mới
         const params = await context.params;
         const teamId = params.id;
 
@@ -19,28 +19,34 @@ export async function DELETE(req: Request, context: any) {
         }
 
         const teamToCheck = await prisma.team.findUnique({
-            // 🚀 Dùng biến teamId đã giải mã ở trên
             where: { id: teamId },
             include: { 
-                _count: { select: { users: true, tasks: true } } 
+                // Bỏ đếm users vì chúng ta sẽ giải phóng họ, chỉ giữ lại đếm tasks
+                _count: { select: { tasks: true } } 
             }
         });
 
         if (!teamToCheck) return NextResponse.json({ error: "Team không tồn tại" }, { status: 404 });
 
-        if (teamToCheck._count.users > 0) {
-            return NextResponse.json({ error: `Không thể xóa! Đang có ${teamToCheck._count.users} nhân sự trong team này.` }, { status: 400 });
-        }
+        // Vẫn chặn xóa nếu Team đang chứa Tasks (theo logic cũ của bạn)
         if (teamToCheck._count.tasks > 0) {
             return NextResponse.json({ error: `Không thể xóa! Team này đang có ${teamToCheck._count.tasks} task trên hệ thống.` }, { status: 400 });
         }
 
-        await prisma.team.delete({
-            // 🚀 Dùng biến teamId
-            where: { id: teamId }
-        });
+        // Sử dụng Transaction để đảm bảo tính toàn vẹn dữ liệu
+        await prisma.$transaction([
+            // Bước 1: Giải phóng toàn bộ user trong team (Set teamId = null)
+            prisma.user.updateMany({
+                where: { teamId: teamId },
+                data: { teamId: null }
+            }),
+            // Bước 2: Xóa Team
+            prisma.team.delete({
+                where: { id: teamId }
+            })
+        ]);
 
-        return NextResponse.json({ message: "Xóa Team thành công!" });
+        return NextResponse.json({ message: "Xóa Team và giải phóng nhân sự thành công!" });
 
     } catch (error) {
         console.error("DELETE Team Error:", error);
@@ -48,7 +54,7 @@ export async function DELETE(req: Request, context: any) {
     }
 }
 
-// [PUT] CẬP NHẬT/ĐIỀU CHUYỂN TEAM
+// [PUT] CẬP NHẬT/ĐIỀU CHUYỂN TEAM (Giữ nguyên như cũ)
 export async function PUT(req: Request, context: any) {
     try {
         const params = await context.params;
@@ -64,13 +70,11 @@ export async function PUT(req: Request, context: any) {
         const body = await req.json();
         const { name, description, departmentId } = body;
 
-        // Cập nhật Database
         const updatedTeam = await prisma.team.update({
             where: { id: teamId },
             data: {
                 ...(name && { name: name.trim() }),
                 ...(description !== undefined && { description: description?.trim() }),
-                // 🚀 Nếu FE truyền lên null, nghĩa là đẩy team ra hoạt động độc lập
                 departmentId: departmentId === null ? null : departmentId
             }
         });

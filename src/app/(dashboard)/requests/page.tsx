@@ -67,6 +67,8 @@ export default function RequestsPage() {
                 return <span className="bg-green-100 text-green-700 px-2 py-1 md:px-2.5 md:py-1 rounded-md text-[10px] md:text-xs font-black tracking-wide whitespace-nowrap">ĐÃ DUYỆT</span>;
             case "REJECTED":
                 return <span className="bg-red-100 text-red-700 px-2 py-1 md:px-2.5 md:py-1 rounded-md text-[10px] md:text-xs font-black tracking-wide whitespace-nowrap">TỪ CHỐI</span>;
+            case "CANCELLED":
+                return <span className="bg-slate-100 text-slate-700 px-2 py-1 md:px-2.5 md:py-1 rounded-md text-[10px] md:text-xs font-black tracking-wide whitespace-nowrap">ĐÃ HUỶ</span>;
             default:
                 return <span className="bg-slate-100 text-slate-700 px-2 py-1 md:px-2.5 md:py-1 rounded-md text-[10px] md:text-xs font-black tracking-wide whitespace-nowrap">{status}</span>;
         }

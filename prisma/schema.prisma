@@ -44,6 +44,7 @@ enum RequestStatus {
   PENDING_2 // Cấp 1 đã duyệt, chờ cấp 2 (VD: Giám đốc)
   APPROVED // Đã duyệt hoàn toàn
   REJECTED // Bị từ chối ở bất kỳ cấp nào
+  CANCELLED
 }
 
 enum ApprovalAction {
@@ -100,6 +101,34 @@ model User {
 
   teamId String?
   team   Team?   @relation(fields: [teamId], references: [id])
+
+  // ==========================================
+  // 🚀 THÔNG TIN NHÂN SỰ (HR) BỔ SUNG
+  // ==========================================
+  employeeCode     String?   @unique // Mã nhân viên
+  dob              DateTime? @db.Date // Ngày sinh
+  ethnicity        String?   // Dân tộc
+  
+  cccdNumber       String?   @unique // Số CCCD
+  cccdDate         DateTime? @db.Date // Ngày cấp CCCD
+  cccdPlace        String?   // Nơi cấp CCCD
+  
+  permanentAddress String?   @db.Text // Địa chỉ thường trú
+  currentAddress   String?   @db.Text // Nơi ở hiện nay
+  
+  phone            String?   // SĐT
+  personalEmail    String?   // Email cá nhân
+  
+  // Thông tin người thân (Liên hệ khẩn cấp)
+  relativeName     String?   // Tên người thân
+  relativePhone    String?   // SĐT người thân
+  relativeRelation String?   // Mối quan hệ (Bố/Mẹ/Vợ/Chồng)
+  
+  // Thông tin Thanh toán & Hợp đồng
+  bankAccount      String?   // Số tài khoản
+  bankName         String?   // Ngân hàng
+  joinDate         DateTime? @db.Date // Ngày vào làm
+  bhxhNumber       String?   // Số sổ BHXH
 
   // Relations cho Workflow Task
   tasksCreated       Task[]        @relation("TaskCreator")

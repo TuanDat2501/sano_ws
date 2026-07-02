@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, CheckCircle, XOctagon, Loader2, UserCheck } from "lucide-react";
+import { X, CheckCircle, XOctagon, Loader2, UserCheck, Trash2 } from "lucide-react";
 import { useToast } from "@/app/component/ToastProvider";
 import { createPortal } from "react-dom";
 
@@ -46,12 +46,17 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
         ((request.status === "PENDING_1" && request.firstApproverId === currentUserId) ||
         (request.status === "PENDING_2" && request.secondApproverId === currentUserId));
         
+    const isRequester = request?.requesterId === currentUserId;
+    const canCancel = isRequester && ["PENDING_1", "PENDING_2"].includes(request?.status);
+
+    // 🚀 CẬP NHẬT: Thêm hiển thị cho trạng thái CANCELLED
     const renderStatusBadge = (status: string) => {
         switch (status) {
             case "PENDING_1": return <span className="bg-amber-100 text-amber-700 px-2.5 py-1 rounded-md text-[10px] md:text-xs font-black tracking-wide">CHỜ DUYỆT CẤP 1</span>;
             case "PENDING_2": return <span className="bg-blue-100 text-blue-700 px-2.5 py-1 rounded-md text-[10px] md:text-xs font-black tracking-wide">CHỜ DUYỆT CẤP 2</span>;
             case "APPROVED": return <span className="bg-green-100 text-green-700 px-2.5 py-1 rounded-md text-[10px] md:text-xs font-black tracking-wide">ĐÃ DUYỆT</span>;
             case "REJECTED": return <span className="bg-red-100 text-red-700 px-2.5 py-1 rounded-md text-[10px] md:text-xs font-black tracking-wide">BỊ TỪ CHỐI</span>;
+            case "CANCELLED": return <span className="bg-slate-200 text-slate-600 px-2.5 py-1 rounded-md text-[10px] md:text-xs font-black tracking-wide">ĐÃ HỦY</span>;
             default: return <span className="bg-slate-100 text-slate-700 px-2.5 py-1 rounded-md text-[10px] md:text-xs font-black tracking-wide">{status}</span>;
         }
     };
@@ -71,29 +76,6 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
 
             if (res.ok) {
                 showToast("success", `Đã ${action === 'APPROVE' ? 'duyệt' : 'từ chối'} đơn thành công!`);
-                
-                window.dispatchEvent(new CustomEvent("local_system_noti", {
-                    detail: {
-                        targetId: request.requesterId,
-                        title: action === 'APPROVE' ? "Đơn đã được duyệt" : "Đơn bị từ chối",
-                        message: action === 'APPROVE' 
-                            ? `Đơn ${request.type} của bạn đã được phê duyệt.` 
-                            : `Đơn của bạn đã bị từ chối với lý do: ${comment}`,
-                        type: action === 'APPROVE' ? "success" : "error"
-                    }
-                }));
-
-                if (action === 'APPROVE' && request.status === "PENDING_1" && request.secondApproverId) {
-                    window.dispatchEvent(new CustomEvent("local_system_noti", {
-                        detail: {
-                            targetId: request.secondApproverId,
-                            title: "Đơn từ mới chờ chốt hạ",
-                            message: `Quản lý cấp 1 vừa duyệt một đề xuất, đang chờ bạn phê duyệt cuối cùng.`,
-                            type: "info"
-                        }
-                    }));
-                }
-
                 onRefresh();
                 onClose();
             } else {
@@ -107,17 +89,43 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
         }
     };
 
+    // 🚀 CẬP NHẬT: Thay đổi method từ DELETE thành PATCH để đổi trạng thái đơn
+    const handleCancelRequest = async () => {
+        if (!window.confirm("Bạn có chắc chắn muốn hủy đề xuất này không? Trạng thái sẽ chuyển thành 'Đã hủy'.")) {
+            return;
+        }
+
+        setIsSubmitting(true);
+        try {
+            const res = await fetch(`/api/requests/${request.id}`, {
+                method: 'PATCH', // Bắn method PATCH lên endpoint
+            });
+
+            if (res.ok) {
+                showToast("success", "Đã hủy đề xuất thành công!");
+                onRefresh();
+                onClose();
+            } else {
+                const data = await res.json();
+                showToast("error", data.error || "Không thể hủy đề xuất");
+            }
+        } catch (error) {
+            showToast("error", "Lỗi kết nối server!");
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
     const getVal = (key: string) => {
-        if (!request) return null; // 🚀 THÊM DÒNG NÀY LÀ HẾT LỖI NGAY
+        if (!request) return null;
         if (request[key] !== null && request[key] !== undefined) return request[key];
         if (request.contentData && request.contentData[key] !== undefined) return request.contentData[key];
         return null;
     };
 
-    // Lấy trước các biến để code JSX bên dưới gọn hơn
     const startDate = getVal('startDate');
     const endDate = getVal('endDate');
-    const targetDate = getVal('targetDate') || getVal('date'); // Xử lý trường hợp data cũ ghi là 'date'
+    const targetDate = getVal('targetDate') || getVal('date'); 
     const itemName = getVal('itemName');
     const amount = getVal('amount');
     const reason = getVal('reason');
@@ -142,7 +150,6 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
                         </div>
                     ) : request ? (
                         <div className="space-y-5 md:space-y-6">
-                            {/* BLOCK 1: THÔNG TIN NGƯỜI GỬI & LUỒNG DUYỆT */}
                             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                                 <div className="flex flex-col sm:flex-row divide-y sm:divide-y-0 sm:divide-x divide-slate-200">
                                     <div className="p-4 flex-1">
@@ -174,12 +181,9 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
                                 </div>
                             </div>
 
-                            {/* BLOCK 2: NỘI DUNG CHI TIẾT */}
                             <div>
                                 <h3 className="text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider ml-1">Nội dung chi tiết</h3>
                                 <div className="bg-white p-4 md:p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
-                                    
-                                    {/* 🚀 ĐÃ CẬP NHẬT: Render dựa trên biến getVal() */}
                                     {startDate && endDate && (
                                         <div className="border-b border-slate-50 pb-3">
                                             <p className="text-[11px] text-slate-400 font-bold mb-1">Thời gian xin nghỉ</p>
@@ -188,7 +192,6 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
                                             </p>
                                         </div>
                                     )}
-
                                     {targetDate && (
                                         <div className="border-b border-slate-50 pb-3">
                                             <p className="text-[11px] text-slate-400 font-bold mb-1">Ngày áp dụng</p>
@@ -197,14 +200,12 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
                                             </p>
                                         </div>
                                     )}
-
                                     {itemName && (
                                         <div className="border-b border-slate-50 pb-3">
                                             <p className="text-[11px] text-slate-400 font-bold mb-1">Hạng mục / Thiết bị / Chiến dịch</p>
                                             <p className="text-sm text-slate-900 font-black">{itemName}</p>
                                         </div>
                                     )}
-
                                     {amount !== null && amount !== undefined && (
                                         <div className="border-b border-slate-50 pb-3">
                                             <p className="text-[11px] text-slate-400 font-bold mb-1">Số tiền đề xuất (VNĐ)</p>
@@ -213,7 +214,6 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
                                             </p>
                                         </div>
                                     )}
-
                                     {reason ? (
                                         <div className="bg-slate-50 p-3 md:p-4 rounded-xl border border-slate-100 mt-2">
                                             <p className="text-[11px] text-slate-500 font-bold mb-2 uppercase tracking-wide">Lý do / Mục đích chi tiết</p>
@@ -232,31 +232,45 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
                     )}
                 </div>
 
-                {isMyTurnToApprove && !isFetching && request && (
+                {!isFetching && request && (isMyTurnToApprove || canCancel) && (
                     <div className="shrink-0 p-4 md:p-6 bg-white border-t border-slate-200 shadow-[0_-10px_20px_-10px_rgba(0,0,0,0.05)]">
-                        <label className="block text-xs font-bold text-slate-700 mb-2">Lời phê / Phản hồi (Bắt buộc nếu từ chối) <span className="text-red-500">*</span></label>
-                        <textarea 
-                            rows={2} 
-                            className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm outline-none focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 mb-4 resize-none transition-all"
-                            placeholder="Nhập ý kiến chỉ đạo vào đây..."
-                            value={comment}
-                            onChange={(e) => setComment(e.target.value)}
-                        />
-                        <div className="flex gap-3">
+                        {isMyTurnToApprove && (
+                            <>
+                                <label className="block text-xs font-bold text-slate-700 mb-2">Lời phê / Phản hồi (Bắt buộc nếu từ chối) <span className="text-red-500">*</span></label>
+                                <textarea 
+                                    rows={2} 
+                                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm outline-none focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 mb-4 resize-none transition-all"
+                                    placeholder="Nhập ý kiến chỉ đạo vào đây..."
+                                    value={comment}
+                                    onChange={(e) => setComment(e.target.value)}
+                                />
+                                <div className="flex gap-3">
+                                    <button 
+                                        onClick={() => handleAction('REJECT')} disabled={isSubmitting}
+                                        className="flex-1 flex justify-center items-center gap-2 bg-white border border-red-200 text-red-600 py-3 rounded-xl text-sm font-black hover:bg-red-50 transition-colors active:scale-95"
+                                    >
+                                        <XOctagon size={18} /> Từ chối
+                                    </button>
+                                    <button 
+                                        onClick={() => handleAction('APPROVE')} disabled={isSubmitting}
+                                        className="flex-[1.5] flex justify-center items-center gap-2 bg-emerald-600 text-white py-3 rounded-xl text-sm font-black hover:bg-emerald-700 shadow-xl shadow-emerald-600/20 transition-all active:scale-95"
+                                    >
+                                        {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle size={18} />} 
+                                        Phê duyệt
+                                    </button>
+                                </div>
+                            </>
+                        )}
+
+                        {canCancel && !isMyTurnToApprove && (
                             <button 
-                                onClick={() => handleAction('REJECT')} disabled={isSubmitting}
-                                className="flex-1 flex justify-center items-center gap-2 bg-white border border-red-200 text-red-600 py-3 rounded-xl text-sm font-black hover:bg-red-50 transition-colors active:scale-95"
+                                onClick={handleCancelRequest} disabled={isSubmitting}
+                                className="w-full flex justify-center items-center gap-2 bg-white border border-slate-200 text-slate-700 py-3 rounded-xl text-sm font-black hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors active:scale-95"
                             >
-                                <XOctagon size={18} /> Từ chối
+                                {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={18} />} 
+                                Hủy đề xuất này
                             </button>
-                            <button 
-                                onClick={() => handleAction('APPROVE')} disabled={isSubmitting}
-                                className="flex-[1.5] flex justify-center items-center gap-2 bg-emerald-600 text-white py-3 rounded-xl text-sm font-black hover:bg-emerald-700 shadow-xl shadow-emerald-600/20 transition-all active:scale-95"
-                            >
-                                {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle size={18} />} 
-                                Phê duyệt
-                            </button>
-                        </div>
+                        )}
                     </div>
                 )}
             </div>
