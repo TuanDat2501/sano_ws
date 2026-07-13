@@ -1,13 +1,10 @@
-// src/app/requests/page.tsx
 "use client";
 
 import { useState, useEffect, Suspense } from "react";
 import { useSession } from "next-auth/react";
 import { Plus, FileText, CheckCircle, Clock, XCircle, Search, Filter } from "lucide-react";
 import CreateRequestModal from "./CreateRequestModal";
-// Sếp nhớ đổi tên import nếu đã đổi file thành RequestDetailDrawer nhé
 import RequestDetailModal from "./RequestDetailModal";
-// 🚀 1. Bổ sung useRouter và usePathname
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 
 const REQUEST_TYPES_CONFIG = [
@@ -22,7 +19,6 @@ const REQUEST_TYPES_CONFIG = [
 
 export default function RequestsPage() {
     const searchParams = useSearchParams();
-    // 🚀 2. Khởi tạo router và pathname
     const router = useRouter();
     const pathname = usePathname();
 
@@ -33,12 +29,15 @@ export default function RequestsPage() {
     const currentUser = session?.user as any;
     const userRole = currentUser?.role || "CONTENT";
 
-    const APPROVER_ROLES = ["ADMIN", "BAN_GIAM_DOC", "LEADER", "CHANNEL_MANAGER", "HR"];
-    const isApprover = APPROVER_ROLES.includes(userRole);
-    const isAdmin = userRole === "ADMIN" || userRole === "BAN_GIAM_DOC";
-    const [activeTab, setActiveTab] = useState<'MY_REQUESTS' | 'NEED_APPROVAL'>(
-        (tabParam as 'MY_REQUESTS' | 'NEED_APPROVAL') || 'MY_REQUESTS'
+    // 🚀 PHÂN QUYỀN HIỂN THỊ TAB
+    const canViewAll = ["ADMIN", "BAN_GIAM_DOC", "HR"].includes(userRole); // Ai được xem "Tất cả đề xuất"
+    const isApprover = ["ADMIN", "BAN_GIAM_DOC", "LEADER", "CHANNEL_MANAGER", "HR"].includes(userRole); // Ai được duyệt đơn
+
+    // 🚀 THÊM TRẠNG THÁI 'ALL_REQUESTS'
+    const [activeTab, setActiveTab] = useState<'ALL_REQUESTS' | 'MY_REQUESTS' | 'NEED_APPROVAL'>(
+        (tabParam as 'ALL_REQUESTS' | 'MY_REQUESTS' | 'NEED_APPROVAL') || 'MY_REQUESTS'
     );
+    
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
     const allowedRequestTypes = REQUEST_TYPES_CONFIG.filter(req =>
@@ -75,10 +74,16 @@ export default function RequestsPage() {
     };
 
     useEffect(() => {
-        if (tabParam === "MY_REQUESTS" || tabParam === "NEED_APPROVAL") setActiveTab(tabParam);
-    }, [tabParam]);
+        if (tabParam === "ALL_REQUESTS" || tabParam === "MY_REQUESTS" || tabParam === "NEED_APPROVAL") {
+            // Chống lỗi: Nếu user cố tình gõ tab ALL_REQUESTS lên URL mà không có quyền thì đẩy về MY_REQUESTS
+            if (tabParam === "ALL_REQUESTS" && !canViewAll) {
+                setActiveTab('MY_REQUESTS');
+            } else {
+                setActiveTab(tabParam);
+            }
+        }
+    }, [tabParam, canViewAll]);
 
-    // 🚀 Lắng nghe URL: Tự động mở Modal/Drawer nếu có ID
     useEffect(() => {
         if (idParam && requests.length > 0) {
             const targetRequest = requests.find(r => r.id === idParam);
@@ -88,6 +93,7 @@ export default function RequestsPage() {
             }
         }
     }, [idParam, requests]);
+    
     useEffect(() => {
         if (idParam) {
             setIsDetailModalOpen(true);
@@ -95,6 +101,7 @@ export default function RequestsPage() {
             setIsDetailModalOpen(false);
         }
     }, [idParam]);
+
     useEffect(() => {
         const timer = setTimeout(() => {
             setDebouncedSearch(searchTerm);
@@ -149,21 +156,34 @@ export default function RequestsPage() {
                 {/* ================= TABS NAVIGATION ================= */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 mb-4 md:mb-6 gap-3">
                     <div className="flex items-center gap-4 md:gap-6 overflow-x-auto custom-scrollbar-thin shrink-0">
+                        
+                        {/* Tab 1: Tất cả đề xuất (Chỉ Admin/BGD/HR thấy) */}
+                        {canViewAll && (
+                            <button
+                                onClick={() => setActiveTab('ALL_REQUESTS')}
+                                className={`pb-2.5 md:pb-3 text-sm md:text-[15px] font-bold transition-all relative whitespace-nowrap ${activeTab === 'ALL_REQUESTS' ? 'text-red-600' : 'text-slate-500 hover:text-slate-800'}`}
+                            >
+                                Tất cả đề xuất
+                                {activeTab === 'ALL_REQUESTS' && <div className="absolute bottom-0 left-0 w-full h-1 bg-red-600 rounded-t-full"></div>}
+                            </button>
+                        )}
+
+                        {/* Tab 2: Đơn của tôi (Tất cả mọi người đều thấy) */}
                         <button
                             onClick={() => setActiveTab('MY_REQUESTS')}
                             className={`pb-2.5 md:pb-3 text-sm md:text-[15px] font-bold transition-all relative whitespace-nowrap ${activeTab === 'MY_REQUESTS' ? 'text-red-600' : 'text-slate-500 hover:text-slate-800'}`}
                         >
-                            {isAdmin ? 'Tất cả đề xuất' : 'Đơn của tôi'}
+                            Đơn của tôi
                             {activeTab === 'MY_REQUESTS' && <div className="absolute bottom-0 left-0 w-full h-1 bg-red-600 rounded-t-full"></div>}
                         </button>
 
+                        {/* Tab 3: Cần tôi duyệt (Chỉ những ai có quyền duyệt đơn mới thấy) */}
                         {isApprover && (
                             <button
                                 onClick={() => setActiveTab('NEED_APPROVAL')}
                                 className={`pb-2.5 md:pb-3 text-sm md:text-[15px] font-bold transition-all relative flex items-center gap-1.5 md:gap-2 whitespace-nowrap ${activeTab === 'NEED_APPROVAL' ? 'text-red-600' : 'text-slate-500 hover:text-slate-800'}`}
                             >
                                 Cần tôi duyệt
-                                <span className="bg-red-100 text-red-600 text-[9px] md:text-[10px] px-1.5 py-0.5 rounded-full font-black">3</span>
                                 {activeTab === 'NEED_APPROVAL' && <div className="absolute bottom-0 left-0 w-full h-1 bg-red-600 rounded-t-full"></div>}
                             </button>
                         )}
@@ -177,7 +197,7 @@ export default function RequestsPage() {
                         <input
                             type="text"
                             className="w-full pl-9 pr-4 py-1.5 md:py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 transition-all text-slate-700 font-medium"
-                            placeholder="Tìm theo mã đơn (VD: a1b2c)..."
+                            placeholder="Tìm theo mã đơn..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
@@ -290,12 +310,11 @@ export default function RequestsPage() {
                     isOpen={isDetailModalOpen}
                     onClose={() => {
                         setIsDetailModalOpen(false);
-                        // Đóng Drawer thì chùi ID khỏi URL
                         const params = new URLSearchParams(searchParams.toString());
                         params.delete("id");
                         router.replace(`${pathname}?${params.toString()}`, { scroll: false });
                     }}
-                    requestId={idParam} // Chỉ cần vứt ID vào, việc còn lại Drawer tự lo!
+                    requestId={idParam}
                     currentUserId={currentUser?.id}
                     onRefresh={fetchRequests}
                 />

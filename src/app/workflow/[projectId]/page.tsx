@@ -103,7 +103,7 @@ export default function ProjectWorkflowPage() {
 
   useEffect(() => {
     // Gọi API load tên dự án... (Tạm thời mock ở đây, sếp ráp API thật vào nhé)
-    setProjectName("Dự án Video TikTok");
+    setProjectName("Dự án Video");
   }, [projectId]);
 
   const handleSaveWorkflow = async () => {

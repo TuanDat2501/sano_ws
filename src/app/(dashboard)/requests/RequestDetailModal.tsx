@@ -49,7 +49,6 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
     const isRequester = request?.requesterId === currentUserId;
     const canCancel = isRequester && ["PENDING_1", "PENDING_2"].includes(request?.status);
 
-    // 🚀 CẬP NHẬT: Thêm hiển thị cho trạng thái CANCELLED
     const renderStatusBadge = (status: string) => {
         switch (status) {
             case "PENDING_1": return <span className="bg-amber-100 text-amber-700 px-2.5 py-1 rounded-md text-[10px] md:text-xs font-black tracking-wide">CHỜ DUYỆT CẤP 1</span>;
@@ -89,7 +88,6 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
         }
     };
 
-    // 🚀 CẬP NHẬT: Thay đổi method từ DELETE thành PATCH để đổi trạng thái đơn
     const handleCancelRequest = async () => {
         if (!window.confirm("Bạn có chắc chắn muốn hủy đề xuất này không? Trạng thái sẽ chuyển thành 'Đã hủy'.")) {
             return;
@@ -98,7 +96,7 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
         setIsSubmitting(true);
         try {
             const res = await fetch(`/api/requests/${request.id}`, {
-                method: 'PATCH', // Bắn method PATCH lên endpoint
+                method: 'PATCH',
             });
 
             if (res.ok) {
@@ -150,6 +148,7 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
                         </div>
                     ) : request ? (
                         <div className="space-y-5 md:space-y-6">
+                            {/* BLOCK 1: THÔNG TIN CƠ BẢN */}
                             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                                 <div className="flex flex-col sm:flex-row divide-y sm:divide-y-0 sm:divide-x divide-slate-200">
                                     <div className="p-4 flex-1">
@@ -181,6 +180,7 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
                                 </div>
                             </div>
 
+                            {/* BLOCK 2: NỘI DUNG CHI TIẾT */}
                             <div>
                                 <h3 className="text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider ml-1">Nội dung chi tiết</h3>
                                 <div className="bg-white p-4 md:p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
@@ -224,6 +224,53 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
                                     )}
                                 </div>
                             </div>
+
+                            {/* 🚀 BLOCK 3 THÊM MỚI: LỊCH SỬ PHÊ DUYỆT / Ý KIẾN CHỈ ĐẠO */}
+                            {request.logs && request.logs.length > 0 && (
+                                <div>
+                                    <h3 className="text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider ml-1">Lịch sử phê duyệt / Lời phê</h3>
+                                    <div className="bg-white p-4 md:p-5 rounded-xl border border-slate-200 shadow-sm">
+                                        <div className="space-y-4">
+                                            {request.logs.map((log: any, index: number) => (
+                                                <div key={log.id} className="flex gap-3 relative">
+                                                    <div className="flex flex-col items-center">
+                                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm z-10 ${
+                                                            log.action === 'REJECTED' ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                                                        }`}>
+                                                            {log.action === 'REJECTED' ? <XOctagon size={16} /> : <CheckCircle size={16} />}
+                                                        </div>
+                                                        {/* Đường line nối các bước */}
+                                                        {index < request.logs.length - 1 && <div className="absolute top-8 bottom-[-16px] left-4 w-px bg-slate-200"></div>}
+                                                    </div>
+                                                    <div className="pb-2 flex-1">
+                                                        <p className="text-sm font-bold text-slate-900 flex items-center flex-wrap gap-2">
+                                                            {log.approver?.fullName} 
+                                                            <span className="text-[10px] text-slate-400 font-medium bg-slate-100 px-2 py-0.5 rounded-full">
+                                                                {new Date(log.createdAt).toLocaleString('vi-VN', { hour: '2-digit', minute:'2-digit', day:'2-digit', month:'2-digit', year:'numeric' })}
+                                                            </span>
+                                                        </p>
+                                                        <p className="text-[11px] font-black mt-1 uppercase tracking-wide opacity-80" 
+                                                           style={{ color: log.action === 'REJECTED' ? '#dc2626' : '#059669' }}>
+                                                            {log.action === 'APPROVED_LEVEL_1' && "Đã duyệt (Cấp 1)"}
+                                                            {log.action === 'APPROVED_LEVEL_2' && "Đã chốt duyệt (Cấp 2)"}
+                                                            {log.action === 'REJECTED' && "Đã từ chối"}
+                                                        </p>
+                                                        
+                                                        {/* 🚀 HIỂN THỊ LỜI PHÊ */}
+                                                        {log.comment && (
+                                                            <div className="mt-2 bg-slate-50 p-3 rounded-xl border border-slate-100 text-sm text-slate-700 font-medium relative italic shadow-inner">
+                                                                <div className="absolute -top-1.5 left-4 w-3 h-3 bg-slate-50 border-t border-l border-slate-100 rotate-45"></div>
+                                                                <span className="text-slate-400 mr-1 font-bold">↳ Lời phê:</span> "{log.comment}"
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
                         </div>
                     ) : (
                         <div className="flex flex-col items-center justify-center h-full text-slate-400">

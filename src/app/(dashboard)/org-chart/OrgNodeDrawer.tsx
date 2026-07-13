@@ -49,7 +49,7 @@ export default function OrgNodeDrawer({ isOpen, onClose, nodeData }: { isOpen: b
                                 </div>
                                 <div className="flex items-center gap-2 md:gap-3 text-xs md:text-sm font-medium text-slate-600">
                                     <Briefcase size={16} className="text-slate-400" /> 
-                                    Thuộc team: <span className="font-bold text-slate-900 truncate">{nodeData.fullUserObj.team?.name || "Độc lập"}</span>
+                                    Thuộc team: <span className="font-bold text-slate-900 truncate">{nodeData.fullUserObj.team || "Độc lập"}</span>
                                 </div>
                             </div>
 

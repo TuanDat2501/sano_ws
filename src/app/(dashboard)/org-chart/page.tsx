@@ -53,6 +53,7 @@ export default function OrgChartPage() {
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
     const onNodeClick = useCallback((event: React.MouseEvent, node: any) => {
+        console.log(node)
         setSelectedNodeData(node.data);
         setIsDrawerOpen(true);
     }, []);

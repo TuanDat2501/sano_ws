@@ -238,7 +238,7 @@ export default function TaskDetailDrawer({
                         <label className="text-[10px] font-bold text-red-500 uppercase tracking-widest">7. Link Video Đã Đăng (YT)</label>
                         <input
                             type="url" disabled={!isManager}
-                            placeholder={!isManager ? "Chỉ Quản lý Kênh" : "Dán link YouTube/Tiktok..."}
+                            placeholder={!isManager ? "Chỉ Quản lý Kênh" : "Dán link YouTube..."}
                             className="w-full border rounded-xl p-3 text-[13px] outline-none transition-all bg-white text-slate-800 focus:border-red-500 focus:ring-4 focus:ring-red-500/10"
                             value={taskLinks.publishLink || ""}
                             onChange={e => setTaskLinks({ ...taskLinks, publishLink: e.target.value })}

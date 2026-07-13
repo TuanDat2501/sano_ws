@@ -5,7 +5,7 @@ import { authOptions } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-// [GET] - LẤY CHI TIẾT ĐỀ XUẤT (GIỮ NGUYÊN CODE CỦA BẠN)
+// [GET] - LẤY CHI TIẾT ĐỀ XUẤT
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
     try {
         const session = await getServerSession(authOptions);
@@ -23,7 +23,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
                 requester: { select: { fullName: true } },
                 team: { select: { name: true } },
                 firstApprover: { select: { fullName: true } },
-                secondApprover: { select: { fullName: true } }
+                secondApprover: { select: { fullName: true } },
+                // 🚀 BỔ SUNG: Kéo thêm bảng logs để lấy lịch sử duyệt và lời phê
+                logs: {
+                    include: { approver: { select: { fullName: true, role: true } } },
+                    orderBy: { createdAt: 'asc' } // Sắp xếp theo thời gian duyệt
+                }
             }
         });
 
@@ -38,7 +43,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     }
 }
 
-// 🚀 THÊM MỚI: [DELETE] - HỦY (XÓA) ĐỀ XUẤT CHO NGƯỜI TẠO
+// 🚀 [PATCH] - HỦY (XÓA) ĐỀ XUẤT CHO NGƯỜI TẠO (GIỮ NGUYÊN)
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
     try {
         const session = await getServerSession(authOptions);

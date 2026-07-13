@@ -10,6 +10,7 @@ const ROLES = [
     { id: "ADMIN", name: "Admin", color: "bg-red-100 text-red-700" },
     { id: "BAN_GIAM_DOC", name: "Giám Đốc", color: "bg-purple-100 text-purple-700" },
     { id: "HR", name: "Hành Chính", color: "bg-pink-100 text-pink-700" },
+    { id: "KE_TOAN", name: "Kế Toán", color: "bg-blue-100 text-blue-700" },
     { id: "LEADER", name: "Leader", color: "bg-blue-100 text-blue-700" },
     { id: "CONTENT", name: "Content", color: "bg-orange-100 text-orange-700" },
     { id: "EDITOR", name: "Editor", color: "bg-cyan-100 text-cyan-700" },

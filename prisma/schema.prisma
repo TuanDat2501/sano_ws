@@ -15,6 +15,7 @@ enum Role {
   EDITOR
   CHANNEL_MANAGER
   HR
+  KE_TOAN
   PUBLISHER
 }
 

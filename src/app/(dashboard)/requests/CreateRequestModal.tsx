@@ -11,11 +11,13 @@ interface CreateRequestModalProps {
     onClose: () => void;
     allowedTypes: any[];
     teams: any[];
+    onRefresh?: () => void;
 }
 
-export default function CreateRequestModal({ isOpen, onClose, allowedTypes, teams }: CreateRequestModalProps) {
+export default function CreateRequestModal({ isOpen, onClose, allowedTypes, teams, onRefresh }: CreateRequestModalProps) {
     const [mounted, setMounted] = useState(false);
     useEffect(() => setMounted(true), []);
+    
     const { showToast } = useToast();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [selectedType, setSelectedType] = useState(allowedTypes[0]?.id || "");
@@ -23,29 +25,40 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
     const [firstApproverId, setFirstApproverId] = useState("");
     const [secondApproverId, setSecondApproverId] = useState("");
     const [selectedTeamId, setSelectedTeamId] = useState("");
-    const [approvers, setApprovers] = useState<any[]>([]);
+    
+    const [approversLv1, setApproversLv1] = useState<any[]>([]);
+    const [approversLv2, setApproversLv2] = useState<any[]>([]);
     const [isLoadingApprovers, setIsLoadingApprovers] = useState(false);
+    
+    // 🚀 ĐỌC TRỰC TIẾP ROLE TỪ SESSION ĐỂ CHẮC CHẮN UI NHẬN DIỆN ĐÚNG LEADER
     const { data: session } = useSession();
     const currentUser = session?.user as any;
+    const isLeader = currentUser?.role === "LEADER";
 
     useEffect(() => { setContentData({}); }, [selectedType]);
 
     useEffect(() => {
         if (!selectedTeamId) {
-            setApprovers([]);
+            setApproversLv1([]);
+            setApproversLv2([]);
             return;
         }
+        
         setIsLoadingApprovers(true);
-        fetch(`/api/requests/approvers?teamId=${selectedTeamId}`)
-            .then(res => res.json())
-            .then(data => {
-                if (Array.isArray(data)) setApprovers(data);
-                setIsLoadingApprovers(false);
-            })
-            .catch(err => {
-                console.error("Lỗi fetch:", err);
-                setIsLoadingApprovers(false);
-            });
+        
+        Promise.all([
+            fetch(`/api/requests/approvers?teamId=${selectedTeamId}&lv=1`).then(res => res.json()),
+            fetch(`/api/requests/approvers?teamId=${selectedTeamId}&lv=2`).then(res => res.json())
+        ])
+        .then(([dataLv1, dataLv2]) => {
+            setApproversLv1(Array.isArray(dataLv1) ? dataLv1 : []);
+            setApproversLv2(Array.isArray(dataLv2) ? dataLv2 : []);
+            setIsLoadingApprovers(false);
+        })
+        .catch(err => {
+            console.error("Lỗi fetch approvers:", err);
+            setIsLoadingApprovers(false);
+        });
     }, [selectedTeamId]);
     
     if (!isOpen) return null;
@@ -80,7 +93,6 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
                     </div>
                 );
 
-            // 🚀 ĐÃ TÁCH RIÊNG ĐỀ XUẤT MUA SẮM THIẾT BỊ
             case "MUA_SAM":
                 return (
                     <div className="space-y-3 md:space-y-4 animate-fade-in">
@@ -176,7 +188,6 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
         if (["DI_MUON_VE_SOM", "LAM_REMOTE"].includes(selectedType) && (!contentData.date || !contentData.reason?.trim())) {
             showToast("error", "Chưa chọn ngày hoặc thiếu lý do rồi sếp!"); return;
         }
-        // 🚀 KIỂM TRA ĐIỀU KIỆN RIÊNG CHO MUA SẮM
         if (selectedType === "MUA_SAM") {
             if (!contentData.itemName?.trim() || !contentData.currentStatus?.trim() || !contentData.reason?.trim()) {
                 showToast("error", "Vui lòng nhập Thiết bị đề xuất, Tình trạng hiện tại và Mục đích!"); return;
@@ -190,9 +201,16 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
 
         setIsSubmitting(true);
         try {
+            // 🚀 ĐẨY PAYLOAD THÔNG MINH CHO BACKEND
             const payload = {
-                type: selectedType, teamId: selectedTeamId, contentData: contentData,
-                firstApproverId, secondApproverId: secondApproverId || null
+                type: selectedType, 
+                teamId: selectedTeamId, 
+                contentData: contentData,
+                // Nếu là Leader: Ép ID của họ vào cấp 1, lấy người họ chọn trên UI nhét vào cấp 2
+                firstApproverId: isLeader ? currentUser?.id : firstApproverId,
+                secondApproverId: isLeader ? secondApproverId : (secondApproverId || null),
+                // Gán sẵn status cho Backend biết (phòng trường hợp Backend có đọc trường này)
+                status: isLeader ? "PENDING_2" : "PENDING_1" 
             };
 
             const res = await fetch('/api/requests', {
@@ -202,12 +220,21 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
 
             if (res.ok) {
                 showToast("success", "Đã gửi đề xuất thành công.");
-                window.dispatchEvent(new CustomEvent("local_system_noti", {
-                    detail: {
-                        targetId: firstApproverId, title: "Đơn từ mới cần duyệt",
-                        message: `Bạn vừa nhận được một đề xuất mới cần phê duyệt.`, type: "info"
-                    }
-                }));
+                
+                // Trigger realtime noti tới đúng người duyệt
+                const targetApproverId = isLeader ? secondApproverId : firstApproverId;
+                if (targetApproverId) {
+                    window.dispatchEvent(new CustomEvent("local_system_noti", {
+                        detail: {
+                            targetId: targetApproverId, 
+                            title: "Đơn từ mới cần duyệt",
+                            message: `Bạn vừa nhận được một đề xuất mới cần phê duyệt.`, 
+                            type: "info"
+                        }
+                    }));
+                }
+                
+                onRefresh?.();
                 onClose();
             } else {
                 const data = await res.json();
@@ -219,6 +246,10 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
             setIsSubmitting(false);
         }
     };
+
+    // Vô hiệu hóa nút Submit nếu thiếu thông tin
+    const isSubmitDisabled = isSubmitting || !selectedTeamId || (!isLeader && !firstApproverId) || (isLeader && !secondApproverId);
+
     const modalContent = (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200">
             <div className="bg-white w-full max-w-2xl rounded-2xl md:rounded-[24px] shadow-2xl flex flex-col max-h-[95vh] md:max-h-[90vh] overflow-hidden">
@@ -278,28 +309,62 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
                     <div className={`transition-opacity ${selectedTeamId ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
                         <label className="block text-xs md:text-sm font-bold text-slate-700 mb-1.5 md:mb-2">4. Luồng phê duyệt <span className="text-red-500">*</span></label>
                         {!selectedTeamId && <p className="text-[10px] md:text-xs text-red-500 mb-2 italic">Vui lòng chọn Team ở bước 3 để hiển thị danh sách người duyệt.</p>}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
+                        
+                        {/* 🚀 UI ĐỘNG: 1 SELECT CHO LEADER, 2 SELECT CHO NHÂN VIÊN */}
+                        {isLeader ? (
                             <div className="bg-white border border-slate-200 p-3 md:p-4 rounded-xl">
-                                <span className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 md:mb-2 block">Cấp 1 (Bắt buộc)</span>
-                                <select className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-xs md:text-sm rounded-lg p-2 outline-none" value={firstApproverId} onChange={(e) => setFirstApproverId(e.target.value)}>
-                                    <option value="">{isLoadingApprovers ? "Đang tải..." : "-- Chọn Quản lý --"}</option>
-                                    {approvers.map(u => <option key={u.id} value={u.id}>{u.fullName} ({u.role === 'BAN_GIAM_DOC' ? 'Giám Đốc' : u.team?.name || u.role})</option>)}
+                                <span className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 md:mb-2 block">
+                                    Người phê duyệt (Ban Giám Đốc/Admin) <span className="text-red-500">*</span>
+                                </span>
+                                <select 
+                                    className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-xs md:text-sm rounded-lg p-2 outline-none" 
+                                    value={secondApproverId} 
+                                    onChange={(e) => setSecondApproverId(e.target.value)}
+                                >
+                                    <option value="">{isLoadingApprovers ? "Đang tải..." : "-- Chọn Người phê duyệt (Sẽ tự chuyển sang PENDING_2) --"}</option>
+                                    {approversLv2.map(u => (
+                                        <option key={u.id} value={u.id}>
+                                            {u.fullName} ({u.role === 'BAN_GIAM_DOC' ? 'Giám Đốc' : 'Hành Chính'})
+                                        </option>
+                                    ))}
                                 </select>
                             </div>
-                            <div className="bg-white border border-slate-200 p-3 md:p-4 rounded-xl">
-                                <span className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 md:mb-2 block">Cấp 2 (Tùy chọn)</span>
-                                <select className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-xs md:text-sm rounded-lg p-2 outline-none" value={secondApproverId} onChange={(e) => setSecondApproverId(e.target.value)}>
-                                    <option value="">{isLoadingApprovers ? "Đang tải..." : "-- Chọn Quản lý --"}</option>
-                                    {approvers.map(u => <option key={u.id} value={u.id}>{u.fullName} ({u.role === 'BAN_GIAM_DOC' ? 'Giám Đốc' : u.team?.name || u.role})</option>)}
-                                </select>
+                        ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
+                                <div className="bg-white border border-slate-200 p-3 md:p-4 rounded-xl">
+                                    <span className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 md:mb-2 block">Cấp 1 (Bắt buộc)</span>
+                                    <select className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-xs md:text-sm rounded-lg p-2 outline-none" value={firstApproverId} onChange={(e) => setFirstApproverId(e.target.value)}>
+                                        <option value="">{isLoadingApprovers ? "Đang tải..." : "-- Chọn Quản lý Cấp 1 --"}</option>
+                                        {approversLv1.map(u => (
+                                            <option key={u.id} value={u.id}>
+                                                {u.fullName} (Leader {u.team?.name || ""})
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="bg-white border border-slate-200 p-3 md:p-4 rounded-xl">
+                                    <span className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 md:mb-2 block">Cấp 2 (Tùy chọn)</span>
+                                    <select className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-xs md:text-sm rounded-lg p-2 outline-none" value={secondApproverId} onChange={(e) => setSecondApproverId(e.target.value)}>
+                                        <option value="">{isLoadingApprovers ? "Đang tải..." : "-- Chọn Quản lý Cấp 2 --"}</option>
+                                        {approversLv2.map(u => (
+                                            <option key={u.id} value={u.id}>
+                                                {u.fullName} ({u.role === 'BAN_GIAM_DOC' ? 'Giám Đốc' : 'Hành Chính'})
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
                             </div>
-                        </div>
+                        )}
                     </div>
                 </div>
 
                 <div className="px-4 md:px-6 py-3 md:py-4 border-t border-slate-100 flex flex-col-reverse sm:flex-row justify-end gap-2.5 md:gap-3 bg-slate-50/50 shrink-0">
                     <button onClick={onClose} disabled={isSubmitting} className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-slate-600 font-bold hover:bg-slate-200 transition-colors text-sm md:text-base">Hủy</button>
-                    <button onClick={handleSubmit} disabled={!firstApproverId || !selectedTeamId || isSubmitting} className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-red-600 text-white font-bold hover:bg-red-700 transition-all shadow-md shadow-red-600/20 disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2 text-sm md:text-base">
+                    <button 
+                        onClick={handleSubmit} 
+                        disabled={isSubmitDisabled} 
+                        className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-red-600 text-white font-bold hover:bg-red-700 transition-all shadow-md shadow-red-600/20 disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2 text-sm md:text-base"
+                    >
                         {isSubmitting && <Loader2 size={16} className="animate-spin" />}
                         {isSubmitting ? "Đang gửi..." : "Gửi đề xuất"}
                     </button>
@@ -307,6 +372,7 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
             </div>
         </div>
     );
+    
     if (!mounted) return null;
     return createPortal(modalContent, document.body);
 }

@@ -59,6 +59,7 @@ export default function UserFormDrawer({
                                         <option value="EDITOR">Editor (Dựng Video)</option>
                                         <option value="PUBLISHER">Quản lý Kênh</option>
                                         <option value="HR">Hành Chính / HR</option>
+                                        <option value="KE_TOAN">Kế Toán</option>
                                         <option value="LEADER">Leader</option>
                                         <option value="BAN_GIAM_DOC">Ban Giám Đốc</option>
                                         <option value="ADMIN">Admin</option>
