@@ -1,8 +1,9 @@
 "use client";
 
-import { X, Loader2, Youtube, Check, Edit3, Info, Calendar, Users, Shield, FolderKanban, Plus, UserPlus, UserCheck } from "lucide-react";
-import { useEffect, useState, useMemo } from "react";
+import { X, Loader2, Youtube, Check, Edit3, Info, Calendar, Users, Shield, FolderKanban, Plus, UserPlus, UserCheck, UploadCloud, Image as ImageIcon } from "lucide-react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
+import { useToast } from "@/app/component/ToastProvider"; // Import useToast để hiển thị thông báo
 
 export default function ChannelFormDrawer({
     isOpen,
@@ -13,46 +14,97 @@ export default function ChannelFormDrawer({
     setFormData,
     handleSubmit,
     teams,
-    allUsers = [] // 🚀 Nhận thêm danh sách toàn bộ user từ page.tsx
+    allUsers = []
 }: any) {
+    const { showToast } = useToast();
     const [mounted, setMounted] = useState(false);
     const [isEditMode, setIsEditMode] = useState(!editingId);
-    
-    // Quản lý Tab ở chế độ xem
     const [activeTab, setActiveTab] = useState("tong-quan");
+    
+    // Quản lý upload ảnh
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [previewImage, setPreviewImage] = useState<string | null>(null);
+    const [isUploading, setIsUploading] = useState(false); // 🚀 State loading khi đang up ảnh
 
     useEffect(() => setMounted(true), []);
 
     useEffect(() => {
         if (isOpen) {
             setIsEditMode(!editingId);
-            setActiveTab("tong-quan"); // Reset về tab tổng quan khi mở
+            setActiveTab("tong-quan");
+            
+            if (formData.avatarUrl) {
+                setPreviewImage(formData.avatarUrl);
+            } else {
+                setPreviewImage(null);
+            }
         }
-    }, [isOpen, editingId]);
+    }, [isOpen, editingId, formData.avatarUrl]);
+
+    // 🚀 HÀM MỚI: XỬ LÝ UPLOAD ẢNH QUA API
+    const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        // Validate dung lượng (Max 2MB)
+        if (file.size > 2 * 1024 * 1024) {
+            showToast("error", "Vui lòng chọn ảnh có dung lượng dưới 2MB");
+            return;
+        }
+
+        setIsUploading(true);
+        try {
+            // Đóng gói file vào FormData để gửi lên API
+            const uploadData = new FormData();
+            uploadData.append("file", file);
+
+            // Bắn API upload (Sửa lại URL /api/upload nếu đường dẫn API của bạn khác)
+            const res = await fetch("/api/upload", {
+                method: "POST",
+                body: uploadData,
+            });
+
+            if (!res.ok) {
+                throw new Error("Lỗi khi tải ảnh lên server");
+            }
+
+            const data = await res.json();
+            
+            if (data.url) {
+                setPreviewImage(data.url); // Hiển thị ảnh vừa up
+                setFormData({ ...formData, avatarUrl: data.url }); // Gắn link ảnh vào formData để lưu Kênh
+                showToast("success", "Tải ảnh lên thành công!");
+            } else {
+                throw new Error(data.error || "Không nhận được link ảnh");
+            }
+
+        } catch (error) {
+            console.error("Upload error:", error);
+            showToast("error", "Lỗi tải ảnh lên. Vui lòng thử lại!");
+        } finally {
+            setIsUploading(false);
+            // Reset thẻ input để chọn lại cùng 1 file nếu cần
+            if (fileInputRef.current) fileInputRef.current.value = "";
+        }
+    };
 
     const selectedTeam = teams.find((t: any) => t.id === formData.teamId);
     
-    // 🚀 LOGIC LỌC NHÂN SỰ CHỈ THUỘC TEAM ĐÃ CHỌN
     const teamMembers = useMemo(() => {
         if (!formData.teamId || !allUsers) return [];
-
         return allUsers.filter((u: any) => u.teamId === formData.teamId);
     }, [formData.teamId, allUsers]);
 
-    // 🚀 HÀM XỬ LÝ CHỌN/BỎ CHỌN NHÂN SỰ
     const toggleMember = (userId: string) => {
         const currentMembers = [...(formData.members || [])];
         const index = currentMembers.findIndex(m => m.userId === userId);
 
-        if (index > -1) {
-            currentMembers.splice(index, 1); // Đã có -> Bỏ chọn
-        } else {
-            currentMembers.push({ userId, roleOnChannel: "EDITOR" }); // Chưa có -> Chọn (Mặc định Editor)
-        }
+        if (index > -1) currentMembers.splice(index, 1);
+        else currentMembers.push({ userId, roleOnChannel: "EDITOR" });
+        
         setFormData({ ...formData, members: currentMembers });
     };
 
-    // 🚀 HÀM CẬP NHẬT VAI TRÒ NHÂN SỰ
     const updateMemberRole = (userId: string, role: string) => {
         const currentMembers = (formData.members || []).map((m: any) => 
             m.userId === userId ? { ...m, roleOnChannel: role } : m
@@ -60,15 +112,7 @@ export default function ChannelFormDrawer({
         setFormData({ ...formData, members: currentMembers });
     };
 
-    const mockStats = {
-        subs: "1.240.000",
-        views: "15.4M",
-        revenue: "$4,500",
-        videos: "342",
-        createdAt: "20/05/2022",
-        manager: "Lê Văn A"
-    };
-
+    const mockStats = { subs: "1.240.000", views: "15.4M", revenue: "$4,500", videos: "342", createdAt: "20/05/2022", manager: "Lê Văn A" };
     const mockProjects = [
         { id: "p1", name: "Series Phân Tích Boruto Two Blue Vortex", status: "HOAT_DONG", videos: 12 },
         { id: "p2", name: "Tóm Tắt Nhanh One Piece Arc Egghead", status: "HOAT_DONG", videos: 45 },
@@ -77,9 +121,7 @@ export default function ChannelFormDrawer({
 
     const drawerContent = (
         <>
-            {isOpen && (
-                <div className="fixed inset-0 z-[99998] bg-slate-900/50 backdrop-blur-sm transition-opacity" onClick={onClose}></div>
-            )}
+            {isOpen && <div className="fixed inset-0 z-[99998] bg-slate-900/50 backdrop-blur-sm transition-opacity" onClick={onClose}></div>}
 
             <div className={`fixed top-0 right-0 h-full w-full sm:w-[500px] md:w-[650px] lg:w-[750px] bg-slate-50 shadow-2xl z-[99999] transform transition-transform duration-300 ease-out flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
                 
@@ -87,12 +129,9 @@ export default function ChannelFormDrawer({
                     <X size={20} />
                 </button>
 
-                {/* =======================================================
-                    CHẾ ĐỘ 1: XEM HỒ SƠ KÊNH
-                ======================================================= */}
+                {/* --- CHẾ ĐỘ XEM --- */}
                 {!isEditMode && (
                     <div className="flex flex-col h-full animate-fade-in overflow-hidden">
-                        
                         <div className="p-6 md:p-8 bg-white border-b border-slate-100 shrink-0 pt-16 md:pt-8">
                             <div className="flex flex-col md:flex-row items-center md:items-start gap-6 relative">
                                 {formData.avatarUrl ? (
@@ -105,9 +144,7 @@ export default function ChannelFormDrawer({
                                 
                                 <div className="flex-1 text-center md:text-left mt-2">
                                     <h3 className="text-xl md:text-2xl font-black text-slate-900">{formData.name}</h3>
-                                    <a href={formData.link} target="_blank" className="text-sm font-medium text-slate-500 hover:text-blue-600 mt-0.5 inline-block transition-colors">
-                                        {formData.link || "youtube.com/@..."}
-                                    </a>
+                                    <a href={formData.link} target="_blank" className="text-sm font-medium text-slate-500 hover:text-blue-600 mt-0.5 inline-block transition-colors">{formData.link || "youtube.com/@..."}</a>
                                     
                                     <div className="flex flex-wrap items-center justify-center md:justify-start gap-2.5 mt-3.5">
                                         <div className="px-3 py-1 rounded-full border border-slate-200 text-[10px] font-black tracking-wide flex items-center gap-1.5 bg-white shadow-sm">
@@ -120,29 +157,18 @@ export default function ChannelFormDrawer({
                                         </div>
                                     </div>
                                 </div>
-
-                                <button onClick={() => setIsEditMode(true)} className="absolute top-0 right-0 p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all" title="Chỉnh sửa kênh">
-                                    <Edit3 size={20} />
-                                </button>
+                                <button onClick={() => setIsEditMode(true)} className="absolute top-0 right-0 p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all" title="Chỉnh sửa kênh"><Edit3 size={20} /></button>
                             </div>
                         </div>
 
-                        {/* 🚀 THANH ĐIỀU HƯỚNG 3 TABS */}
                         <div className="flex px-6 md:px-8 border-b border-slate-200 bg-white shrink-0 overflow-x-auto hide-scrollbar">
-                            <button onClick={() => setActiveTab("tong-quan")} className={`px-5 py-4 text-sm font-bold border-b-2 transition-all whitespace-nowrap ${activeTab === "tong-quan" ? "border-red-600 text-red-600" : "border-transparent text-slate-500 hover:text-slate-700"}`}>
-                                Tổng quan
-                            </button>
-                            <button onClick={() => setActiveTab("du-an")} className={`px-5 py-4 text-sm font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === "du-an" ? "border-red-600 text-red-600" : "border-transparent text-slate-500 hover:text-slate-700"}`}>
-                                Dự án (Series) <span className="bg-slate-100 text-slate-600 py-0.5 px-2 rounded-full text-[10px]">{mockProjects.length}</span>
-                            </button>
-                            <button onClick={() => setActiveTab("nhan-su")} className={`px-5 py-4 text-sm font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === "nhan-su" ? "border-red-600 text-red-600" : "border-transparent text-slate-500 hover:text-slate-700"}`}>
-                                Nhân sự <span className="bg-slate-100 text-slate-600 py-0.5 px-2 rounded-full text-[10px]">{formData.members?.length || 0}</span>
-                            </button>
+                            <button onClick={() => setActiveTab("tong-quan")} className={`px-5 py-4 text-sm font-bold border-b-2 transition-all whitespace-nowrap ${activeTab === "tong-quan" ? "border-red-600 text-red-600" : "border-transparent text-slate-500 hover:text-slate-700"}`}>Tổng quan</button>
+                            <button onClick={() => setActiveTab("du-an")} className={`px-5 py-4 text-sm font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === "du-an" ? "border-red-600 text-red-600" : "border-transparent text-slate-500 hover:text-slate-700"}`}>Dự án (Series) <span className="bg-slate-100 text-slate-600 py-0.5 px-2 rounded-full text-[10px]">{mockProjects.length}</span></button>
+                            <button onClick={() => setActiveTab("nhan-su")} className={`px-5 py-4 text-sm font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === "nhan-su" ? "border-red-600 text-red-600" : "border-transparent text-slate-500 hover:text-slate-700"}`}>Nhân sự <span className="bg-slate-100 text-slate-600 py-0.5 px-2 rounded-full text-[10px]">{formData.members?.length || 0}</span></button>
                         </div>
 
                         <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-6 lg:p-8">
                             
-                            {/* TAB 1: TỔNG QUAN */}
                             {activeTab === "tong-quan" && (
                                 <div className="space-y-6 animate-fade-in">
                                     <div className="bg-white rounded-[24px] p-6 md:p-8 shadow-sm border border-slate-100">
@@ -164,7 +190,6 @@ export default function ChannelFormDrawer({
                                 </div>
                             )}
 
-                            {/* TAB 2: DỰ ÁN */}
                             {activeTab === "du-an" && (
                                 <div className="animate-fade-in space-y-4">
                                     {mockProjects.map(proj => (
@@ -192,24 +217,17 @@ export default function ChannelFormDrawer({
                                 </div>
                             )}
 
-                            {/* 🚀 TAB 3: NHÂN SỰ KÊNH (CHẾ ĐỘ XEM) */}
                             {activeTab === "nhan-su" && (
                                 <div className="animate-fade-in space-y-3">
                                     {(!formData.members || formData.members.length === 0) ? (
-                                        <div className="text-center p-8 text-slate-400 text-sm font-medium border-2 border-dashed rounded-2xl">
-                                            Chưa có nhân sự nào được gán vào kênh này.
-                                        </div>
+                                        <div className="text-center p-8 text-slate-400 text-sm font-medium border-2 border-dashed rounded-2xl">Chưa có nhân sự nào được gán vào kênh này.</div>
                                     ) : (
                                         formData.members.map((m: any) => {
                                             const user = allUsers.find((u: any) => u.id === m.userId);
                                             return (
                                                 <div key={m.userId} className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-100 shadow-sm">
                                                     <div className="flex items-center gap-4">
-                                                        {user?.avatarUrl ? (
-                                                            <img src={user.avatarUrl} className="w-10 h-10 rounded-full object-cover" alt="" />
-                                                        ) : (
-                                                            <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-400">{user?.fullName?.charAt(0) || "?"}</div>
-                                                        )}
+                                                        {user?.avatarUrl ? <img src={user.avatarUrl} className="w-10 h-10 rounded-full object-cover" alt="" /> : <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-400">{user?.fullName?.charAt(0) || "?"}</div>}
                                                         <div>
                                                             <p className="font-bold text-slate-800">{user?.fullName || "Người dùng ẩn"}</p>
                                                             <p className="text-[10px] text-red-600 bg-red-50 px-2 py-0.5 rounded w-max uppercase font-black tracking-widest mt-1">{m.roleOnChannel}</p>
@@ -225,20 +243,55 @@ export default function ChannelFormDrawer({
                     </div>
                 )}
 
-                {/* =======================================================
-                    CHẾ ĐỘ 2: SỬA / THÊM MỚI KÊNH (CÓ CHỌN NHÂN SỰ)
-                ======================================================= */}
+                {/* --- CHẾ ĐỘ SỬA / THÊM MỚI --- */}
                 {isEditMode && (
                     <div className="flex flex-col h-full animate-fade-in bg-white">
                         <div className="p-6 md:p-8 border-b border-slate-100 flex items-center bg-slate-50/50 shrink-0 pt-10 md:pt-8">
                             <h2 className="text-xl md:text-2xl font-black text-slate-800 flex items-center gap-3">
-                                <Youtube size={26} className="text-red-600"/> 
-                                {editingId ? "Cập nhật Kênh" : "Thêm Kênh Mới"}
+                                <Youtube size={26} className="text-red-600"/> {editingId ? "Cập nhật Kênh" : "Thêm Kênh Mới"}
                             </h2>
                         </div>
 
                         <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar">
                             <form id="channelForm" onSubmit={handleSubmit} className="flex flex-col h-full space-y-5 md:space-y-6">
+                                
+                                {/* 🚀 GIAO DIỆN UPLOAD ẢNH NẰM Ở ĐẦU */}
+                                <div className="flex flex-col items-center justify-center mb-2">
+                                    <div className="relative group">
+                                        <div 
+                                            onClick={() => !isUploading && fileInputRef.current?.click()}
+                                            className={`w-24 h-24 md:w-28 md:h-28 rounded-full border-2 border-dashed flex flex-col items-center justify-center overflow-hidden transition-all shadow-sm relative ${isUploading ? 'bg-slate-100 border-slate-200 cursor-not-allowed' : 'bg-slate-50 border-slate-300 cursor-pointer group-hover:border-red-500 group-hover:bg-red-50'}`}
+                                        >
+                                            {isUploading ? (
+                                                <Loader2 size={28} className="animate-spin text-red-500" />
+                                            ) : previewImage ? (
+                                                <img src={previewImage} alt="Preview" className="w-full h-full object-cover" />
+                                            ) : (
+                                                <>
+                                                    <ImageIcon size={28} className="text-slate-400 group-hover:text-red-500 mb-1" />
+                                                    <span className="text-[10px] font-bold text-slate-400 group-hover:text-red-500">Avatar Kênh</span>
+                                                </>
+                                            )}
+                                        </div>
+                                        
+                                        {/* Nút upload mờ mờ đè lên ảnh (Chỉ hiện khi đã có ảnh và đang không up) */}
+                                        {previewImage && !isUploading && (
+                                            <div onClick={() => fileInputRef.current?.click()} className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                                                <UploadCloud size={24} className="text-white" />
+                                            </div>
+                                        )}
+                                    </div>
+                                    
+                                    <input 
+                                        type="file" 
+                                        ref={fileInputRef} 
+                                        onChange={handleImageChange} 
+                                        accept="image/png, image/jpeg, image/jpg, image/webp" 
+                                        className="hidden" 
+                                    />
+                                    <p className="text-[10px] text-slate-400 mt-2 font-medium">Click để chọn ảnh (JPG, PNG. Max 2MB)</p>
+                                </div>
+
                                 <div>
                                     <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1 mb-2 inline-block">Tên Kênh <span className="text-red-500">*</span></label>
                                     <input required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full bg-slate-50 border border-slate-200 p-3.5 rounded-2xl text-sm md:text-base font-bold outline-none focus:border-red-500 focus:bg-white focus:ring-4 focus:ring-red-500/10 transition-all text-slate-900" placeholder="VD: BeastLore Anime" />
@@ -250,14 +303,9 @@ export default function ChannelFormDrawer({
                                         <input value={formData.link} onChange={e => setFormData({...formData, link: e.target.value})} className="w-full bg-slate-50 border border-slate-200 p-3.5 rounded-2xl text-sm md:text-base font-medium outline-none focus:border-red-500 focus:bg-white transition-all text-slate-900" placeholder="https://youtube.com/@..." />
                                     </div>
                                     <div>
-                                        <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1 mb-2 inline-block">Link Avatar Kênh</label>
-                                        <input value={formData.avatarUrl} onChange={e => setFormData({...formData, avatarUrl: e.target.value})} className="w-full bg-slate-50 border border-slate-200 p-3.5 rounded-2xl text-sm md:text-base font-medium outline-none focus:border-emerald-500 focus:bg-white transition-all text-slate-900" placeholder="https://i.pravatar.cc/150?img=..." />
+                                        <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1 mb-2 inline-block">Chủ đề / Topic</label>
+                                        <input value={formData.topic} onChange={e => setFormData({...formData, topic: e.target.value})} className="w-full bg-slate-50 border border-slate-200 p-3.5 rounded-2xl text-sm md:text-base font-medium outline-none focus:border-red-500 focus:bg-white transition-all text-slate-900" placeholder="VD: Tóm tắt Anime" />
                                     </div>
-                                </div>
-
-                                <div>
-                                    <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1 mb-2 inline-block">Chủ đề / Topic</label>
-                                    <input value={formData.topic} onChange={e => setFormData({...formData, topic: e.target.value})} className="w-full bg-slate-50 border border-slate-200 p-3.5 rounded-2xl text-sm md:text-base font-medium outline-none focus:border-red-500 focus:bg-white transition-all text-slate-900" placeholder="VD: Tóm tắt Anime" />
                                 </div>
 
                                 <hr className="border-slate-100 my-2" />
@@ -267,7 +315,7 @@ export default function ChannelFormDrawer({
                                     <select 
                                         required 
                                         value={formData.teamId} 
-                                        onChange={e => setFormData({...formData, teamId: e.target.value, members: []})} // Reset members khi đổi team
+                                        onChange={e => setFormData({...formData, teamId: e.target.value, members: []})}
                                         className="w-full bg-slate-50 border border-slate-200 p-3.5 rounded-2xl text-sm md:text-base font-bold outline-none focus:border-indigo-500 focus:bg-white transition-all text-slate-900 cursor-pointer"
                                     >
                                         <option value="">-- Chọn Team để hiện danh sách nhân sự --</option>
@@ -275,7 +323,7 @@ export default function ChannelFormDrawer({
                                     </select>
                                 </div>
 
-                                {/* 🚀 KHU VỰC CHỌN NHÂN SỰ TEAM */}
+                                {/* KHU VỰC CHỌN NHÂN SỰ TEAM */}
                                 {formData.teamId && (
                                     <div className="bg-slate-50 p-4 md:p-5 rounded-2xl border border-slate-100 animate-slide-up">
                                         <div className="flex items-center justify-between mb-4">
@@ -315,6 +363,7 @@ export default function ChannelFormDrawer({
                                                                     <option value="EDITOR">Editor / Dựng</option>
                                                                     <option value="SEO">SEO / Up Kênh</option>
                                                                     <option value="VOICE">Voice / Thu âm</option>
+                                                                    <option value="ANIMATION">Chuyển động</option>
                                                                     <option value="MANAGER">Quản lý Kênh</option>
                                                                 </select>
                                                             )}
@@ -352,8 +401,8 @@ export default function ChannelFormDrawer({
                         </div>
                         
                         <div className="p-4 md:p-6 lg:p-8 bg-white border-t border-slate-100 flex gap-3 md:gap-4 shrink-0">
-                            <button type="button" onClick={() => editingId ? setIsEditMode(false) : onClose()} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3.5 md:py-4 rounded-2xl transition-all text-sm md:text-base">Hủy</button>
-                            <button type="submit" form="channelForm" disabled={isSubmitting} className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-3.5 md:py-4 rounded-2xl transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-70 shadow-xl shadow-red-600/20 text-sm md:text-base">
+                            <button type="button" onClick={() => editingId ? setIsEditMode(false) : onClose()} disabled={isUploading || isSubmitting} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3.5 md:py-4 rounded-2xl transition-all text-sm md:text-base disabled:opacity-50">Hủy</button>
+                            <button type="submit" form="channelForm" disabled={isSubmitting || isUploading} className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-3.5 md:py-4 rounded-2xl transition-all flex items-center justify-center gap-2 active:scale-95 disabled:opacity-70 shadow-xl shadow-red-600/20 text-sm md:text-base">
                                 {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : <><Check size={20} /> {editingId ? "Lưu thay đổi" : "Lưu Kênh Mới"}</>}
                             </button>
                         </div>
