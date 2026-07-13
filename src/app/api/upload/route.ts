@@ -1,7 +1,4 @@
 import { NextResponse } from "next/server";
-import { writeFile, mkdir } from "fs/promises";
-import path from "path";
-import { existsSync } from "fs";
 
 export async function POST(request: Request) {
   try {
@@ -13,38 +10,41 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Không tìm thấy file ảnh!" }, { status: 400 });
     }
 
-    // 2. Chuyển đổi dữ liệu sang dạng Cục nhị phân (Buffer) để Node.js hiểu
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
+    // 2. Lấy API Key của ImgBB
+    // Tốt nhất bạn nên tạo một biến IMGBB_API_KEY trong file .env
+    const apiKey = process.env.IMGBB_API_KEY || "NHẬP_API_KEY_CỦA_BẠN_VÀO_ĐÂY";
 
-    // 3. Đặt tên file chống trùng lặp (dùng thời gian hiện tại + số ngẫu nhiên)
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    // Lấy đuôi file gốc (vd: .png, .jpg)
-    const ext = path.extname(file.name).toLowerCase() || '.png'; 
-    const fileName = `avatar-${uniqueSuffix}${ext}`;
-
-    // 4. Chỉ định thư mục lưu trữ: public/uploads/avatars
-    const uploadDir = path.join(process.cwd(), "public/uploads/avatars");
-    
-    // Nếu thư mục chưa tồn tại thì tự động tạo mới
-    if (!existsSync(uploadDir)) {
-      await mkdir(uploadDir, { recursive: true });
+    if (!apiKey || apiKey === "NHẬP_API_KEY_CỦA_BẠN_VÀO_ĐÂY") {
+      return NextResponse.json({ error: "Chưa cấu hình ImgBB API Key" }, { status: 500 });
     }
 
-    // Đường dẫn đầy đủ để lưu file xuống ổ cứng máy sếp
-    const filePath = path.join(uploadDir, fileName);
+    // 3. Chuẩn bị dữ liệu để gửi sang ImgBB
+    // Tham số bắt buộc của ImgBB cho file ảnh là "image"
+    const imgbbFormData = new FormData();
+    imgbbFormData.append("image", file);
 
-    // 5. Ghi file xuống ổ cứng
-    await writeFile(filePath, buffer);
+    // 4. Gọi fetch API để bắn ảnh sang máy chủ ImgBB
+    const imgbbResponse = await fetch(`https://api.imgbb.com/1/upload?key=${apiKey}`, {
+      method: "POST",
+      body: imgbbFormData,
+    });
 
-    // 6. Trả về Link Public cho Frontend
-    // ĐẶC BIỆT LƯU Ý: Tuyệt đối KHÔNG có chữ "public" trong URL
-    const fileUrl = `/uploads/avatars/${fileName}`;
+    const result = await imgbbResponse.json();
 
+    // 5. Kiểm tra lỗi nếu ImgBB từ chối
+    if (!imgbbResponse.ok || !result.success) {
+      console.error(">>> [IMGBB UPLOAD ERROR]:", result);
+      return NextResponse.json({ error: "Lỗi từ server ImgBB khi tải ảnh lên" }, { status: 500 });
+    }
+
+    // 6. Trích xuất link ảnh trực tiếp (direct link) từ phản hồi của ImgBB
+    const fileUrl = result.data.url;
+
+    // Trả về cho Frontend (Cấu trúc JSON giữ nguyên như code cũ)
     return NextResponse.json({ url: fileUrl });
 
   } catch (error) {
-    console.error(">>> [API UPLOAD LOCAL ERROR]:", error);
+    console.error(">>> [API UPLOAD ERROR]:", error);
     return NextResponse.json({ error: "Lỗi hệ thống khi lưu file" }, { status: 500 });
   }
 }
