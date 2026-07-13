@@ -11,7 +11,20 @@ interface RevenueEntry {
     views?: number | string;
     revenue?: number | string;
 }
-
+const FILTER_OPTIONS = [
+    { label: "7 ngày", days: 7 },
+    { label: "28 ngày", days: 28 },
+    { label: "90 ngày", days: 90 },
+];
+const getDaysArray = (daysCount: number) => {
+    const today = new Date();
+    // Tạo mảng từ ngày hôm nay lùi về sau
+    return Array.from({ length: daysCount }).map((_, i) => {
+        const date = new Date(today);
+        date.setDate(today.getDate() - (daysCount - 1 - i));
+        return date;
+    });
+};
 // Tiện ích lấy ra mảng 7 ngày của 1 tuần (Tính từ ngày đang chọn)
 const getDaysOfWeek = (currentDate: Date) => {
     const startOfWeek = new Date(currentDate);
@@ -38,6 +51,9 @@ export default function RevenueEntryPage() {
         x: number;
         y: number;
     } | null>(null);
+
+    const [filterDays, setFilterDays] = useState(7);
+    // const [days, setDays] = useState(getDaysArray(7));
     const days = getDaysOfWeek(currentDate);
     const startDateStr = days[0].toISOString().split('T')[0];
     const endDateStr = days[6].toISOString().split('T')[0];
@@ -180,7 +196,8 @@ export default function RevenueEntryPage() {
 
     return (
         <div className="p-4 md:p-6 bg-slate-50 h-full max-h-[calc(100vh-80px)] flex flex-col overflow-hidden animate-fade-in">
-
+            {/* Header Bộ lọc mới */}
+            
             {/* Header Bộ lọc giữ nguyên */}
             <div className="mb-4 md:mb-6 shrink-0 flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-4 rounded-2xl shadow-sm border border-slate-200 gap-4 relative z-10">
                 <div>
@@ -189,13 +206,25 @@ export default function RevenueEntryPage() {
                     </h1>
                     <p className="text-xs md:text-sm text-slate-500 font-medium mt-1">Nhập liệu doanh thu hằng ngày (USD).</p>
                 </div>
-
+                <div>
+                {/* <div className="flex items-center gap-2 bg-slate-50 p-1 rounded-xl border border-slate-200">
+                    {FILTER_OPTIONS.map(opt => (
+                        <button
+                            key={opt.days}
+                            onClick={() => setFilterDays(opt.days)}
+                            className={`px-4 py-1.5 rounded-lg text-xs font-black uppercase transition-all ${filterDays === opt.days ? 'bg-white text-red-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                        >
+                            {opt.label}
+                        </button>
+                    ))}
+                </div> */}
                 <div className="flex items-center gap-4 bg-slate-50 p-1.5 rounded-xl border border-slate-200 w-full md:w-auto justify-between">
                     <button onClick={() => changeWeek(-1)} className="p-2 hover:bg-white rounded-lg transition-all shadow-sm"><ChevronLeft size={20} /></button>
                     <div className="text-sm font-black text-slate-700 px-2 uppercase tracking-widest whitespace-nowrap">
                         {days[0].toLocaleDateString('vi-VN')} - {days[6].toLocaleDateString('vi-VN')}
                     </div>
                     <button onClick={() => changeWeek(1)} className="p-2 hover:bg-white rounded-lg transition-all shadow-sm"><ChevronRight size={20} /></button>
+                </div>
                 </div>
             </div>
 
