@@ -49,7 +49,7 @@ export async function POST(req: Request) {
         const newRequest = await prisma.request.create({
             data: {
                 type,
-                status: initialStatus, // Gán PENDING_1 hoặc PENDING_2
+                status: initialStatus as any, // Gán PENDING_1 hoặc PENDING_2
                 requesterId: userId,
                 teamId,
                 firstApproverId: finalFirstApproverId,
