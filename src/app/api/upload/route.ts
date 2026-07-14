@@ -12,9 +12,9 @@ export async function POST(request: Request) {
 
     // 2. Lấy API Key của ImgBB
     // Tốt nhất bạn nên tạo một biến IMGBB_API_KEY trong file .env
-    const apiKey = process.env.IMGBB_API_KEY || "NHẬP_API_KEY_CỦA_BẠN_VÀO_ĐÂY";
+    const apiKey = process.env.IMGBB_API_KEY || "3139895e89f5887a5599b6657e39649f";
 
-    if (!apiKey || apiKey === "NHẬP_API_KEY_CỦA_BẠN_VÀO_ĐÂY") {
+    if (!apiKey || apiKey === "3139895e89f5887a5599b6657e39649f") {
       return NextResponse.json({ error: "Chưa cấu hình ImgBB API Key" }, { status: 500 });
     }
 
