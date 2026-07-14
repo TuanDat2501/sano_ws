@@ -3,19 +3,28 @@ import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
 
-function getWeekDateRangeByMonth(year: number, month: number, weekIndex: number) {
-    const safeWeekIndex = Math.min(Math.max(weekIndex, 1), 4);
-    let startDay = 1 + (safeWeekIndex - 1) * 7;
-    let endDay = startDay + 6;
-    const lastDayOfMonth = new Date(year, month, 0).getDate();
-    if (safeWeekIndex === 4) endDay = lastDayOfMonth;
+// 🚀 ĐÃ ĐỒNG BỘ THUẬT TOÁN TÍNH LỊCH CHUẨN XÁC
+function getWeekDateRangeByMonth(year: number, month: number, weekNumber: number) {
+    const firstDayOfMonth = new Date(year, month - 1, 1);
+    const lastDayOfMonth = new Date(year, month, 0);
 
-    const start = new Date(year, month - 1, startDay);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(year, month - 1, endDay);
-    end.setHours(23, 59, 59, 999);
+    const dayOfWeek = firstDayOfMonth.getDay(); 
+    const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const startOfFirstWeek = new Date(year, month - 1, 1 + diffToMonday);
 
-    return { start, end };
+    const startOfWeek = new Date(startOfFirstWeek);
+    startOfWeek.setDate(startOfFirstWeek.getDate() + (weekNumber - 1) * 7);
+
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+
+    const actualStart = startOfWeek < firstDayOfMonth ? firstDayOfMonth : startOfWeek;
+    const actualEnd = endOfWeek > lastDayOfMonth ? lastDayOfMonth : endOfWeek;
+
+    actualStart.setHours(0, 0, 0, 0);
+    actualEnd.setHours(23, 59, 59, 999);
+
+    return { start: actualStart, end: actualEnd };
 }
 
 export const dynamic = "force-dynamic";
@@ -55,7 +64,7 @@ export async function GET(req: Request) {
         const userIds = users.map(u => u.id);
         const { start, end } = getWeekDateRangeByMonth(year, month, weekIndex);
 
-        // 🚀 TỐI ƯU N+1: GOM 3 CÂU QUERY LỚN LẤY DATA CỦA CẢ 50 NGƯỜI CÙNG LÚC
+        // 🚀 TỐI ƯU N+1: GOM 3 CÂU QUERY LỚN
         const [allKpis, allLogs, allActiveTasks] = await Promise.all([
             prisma.weeklyKPI.findMany({
                 where: { userId: { in: userIds }, year, month, weekNumber: weekIndex }
@@ -64,7 +73,6 @@ export async function GET(req: Request) {
                 where: {
                     userId: { in: userIds },
                     createdAt: { gte: start, lte: end },
-                    // 🚀 THÊM "DAILY_REPORT" VÀO ĐÂY ĐỂ TRUY VẤN
                     action: { in: ["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK", "DAILY_REPORT"] } 
                 },
                 include: { task: { select: { title: true, status: true } } }
@@ -83,39 +91,35 @@ export async function GET(req: Request) {
             })
         ]);
 
-        // 🚀 MAP DATA TRÊN RAM (Siêu nhanh)
+        // 🚀 MAP DATA
         const kpiData = users.map(user => {
             const kpiRecord = allKpis.find(k => k.userId === user.id);
-            const userLogs = allLogs.filter(l => l.userId === user.id);
             const rawUserLogs = allLogs.filter(l => l.userId === user.id);
             const validUserLogs: typeof rawUserLogs = [];
             const dailyReportTracker = new Set<string>();
 
+            // Lọc dữ liệu chống hack (Chỉ tính 1 điểm báo cáo / 1 task / 1 ngày)
             rawUserLogs.forEach(log => {
                 if ((log.action as string) === "DAILY_REPORT") {
-                    // Cắt lấy chuỗi ngày tháng (VD: "2026-07-14")
                     const dateString = new Date(log.createdAt).toISOString().split('T')[0];
-                    // Tạo khóa định danh: "ID-Task_Ngày-tháng"
                     const uniqueKey = `${log.taskId}_${dateString}`;
 
-                    // Nếu trong ngày hôm nay, task này CHƯA được tính điểm báo cáo -> Tính điểm
                     if (!dailyReportTracker.has(uniqueKey)) {
                         dailyReportTracker.add(uniqueKey);
                         validUserLogs.push(log);
                     }
-                    // Nếu đã có rồi thì bỏ qua, không tính điểm KPI nữa (chống spam auto-save)
                 } else {
-                    // Các hành động nộp bài chính thức (SUBMIT_SCRIPT, PUBLISH...) thì LUÔN LUÔN tính điểm
                     validUserLogs.push(log);
                 }
             });
-            const mappedLogs = userLogs.map(log => {
+
+            // 🚀 ĐÃ SỬA: Map dữ liệu từ mảng ĐÃ LỌC thay vì mảng GỐC
+            const mappedLogs = validUserLogs.map(log => {
                 let typeStr = "Khác";
                 if (log.action === "SUBMIT_SCRIPT") typeStr = "Script";
                 else if (log.action === "SUBMIT_VIDEO") typeStr = "Edit";
                 else if (log.action === "PUBLISH_VIDEO") typeStr = "Publish";
                 else if (log.action === "COMPLETE_TASK") typeStr = "Nghiệm thu";
-                // 🚀 THÊM DÒNG NÀY ĐỂ HIỂN THỊ CHỮ TRÊN GIAO DIỆN
                 else if ((log.action as string) === "DAILY_REPORT") typeStr = "Báo cáo";
                 return { ...log, typeStr }; 
             });
@@ -136,13 +140,15 @@ export async function GET(req: Request) {
             });
 
             const allUserLogs = [...mappedLogs, ...pendingLogs].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+            
+            // 🚀 ĐÃ SỬA: Đếm số lượng từ mảng ĐÃ LỌC
             const targetValue = kpiRecord?.targetValue || 0;
-            const actualCount = userLogs.length;
+            const actualCount = validUserLogs.length; 
             const percent = targetValue > 0 ? Math.round((actualCount / targetValue) * 100) : 0;
 
             return {
                 userId: user.id, fullName: user.fullName, role: user.role,
-                targetValue, actualValue: actualCount, percent, logs: allUserLogs,avatarUrl: (user as any).avatarUrl || null
+                targetValue, actualValue: actualCount, percent, logs: allUserLogs, avatarUrl: (user as any).avatarUrl || null
             };
         });
 
@@ -154,7 +160,6 @@ export async function GET(req: Request) {
     }
 }
 
-// (HÀM POST UPDATE SẾP GIỮ NGUYÊN VÌ NÓ ĐANG RẤT TỐT RỒI)
 export async function POST(req: Request) {
     try {
         const session = await getServerSession(authOptions);
