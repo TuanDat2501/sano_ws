@@ -386,35 +386,48 @@ export default function KanbanBoard() {
     }
   };
   const handleOpenTaskDetail = async (task: any) => {
+    // 1. Tạm gán data từ thẻ Kanban để Drawer bật lên lập tức (Optimistic UI)
     setSelectedTask(task);
     setTaskLinks({
       scriptLink: task.scriptLink || "",
-      englishScriptLink: task.englishScriptLink || "", // Thêm mới
-      storyboardLink: task.storyboardLink || "",       // Thêm mới
-      audioLink: task.audioLink || "",                 // Thêm mới
-      thumbnailLink: task.thumbnailLink || "",         // Thêm mới
+      englishScriptLink: task.englishScriptLink || "",
+      storyboardLink: task.storyboardLink || "",
+      audioLink: task.audioLink || "",
+      thumbnailLink: task.thumbnailLink || "",
       videoLink: task.videoLink || "",
       publishLink: task.publishLink || "",
       note: task.note || ""
     });
     setIsDrawerOpen(true);
 
-    if (!task.project || !task.taskLogs) {
-      try {
-        const res = await fetch(`/api/tasks/${task.id}`);
-        if (res.ok) {
-          const fullTask = await res.json();
-          setSelectedTask(fullTask);
-        }
-      } catch (err) {
-        console.error("Lỗi fetch chi tiết task:", err);
+    // 2. 🚀 LUÔN LUÔN GỌI LẠI API ĐỂ KÉO DATA MỚI NHẤT KHI MỞ DRAWER
+    try {
+      const res = await fetch(`/api/tasks/${task.id}`);
+      if (res.ok) {
+        const fullTask = await res.json();
+        setSelectedTask(fullTask); // Cập nhật data cho các tab khác
+
+        // 🚀 BỔ SUNG QUAN TRỌNG NHẤT: Đổ data mới nhất từ Backend vào lại State của Input Links
+        setTaskLinks({
+          scriptLink: fullTask.scriptLink || "",
+          englishScriptLink: fullTask.englishScriptLink || "",
+          storyboardLink: fullTask.storyboardLink || "",
+          audioLink: fullTask.audioLink || "",
+          thumbnailLink: fullTask.thumbnailLink || "",
+          videoLink: fullTask.videoLink || "",
+          publishLink: fullTask.publishLink || "",
+          note: fullTask.note || ""
+        });
       }
+    } catch (err) {
+      console.error("Lỗi fetch chi tiết task:", err);
     }
 
+    // 3. Tải tin nhắn và join Socket
     loadTaskComments(task.id);
     if (socket) socket.emit("join_task", task.id);
 
-    // 🚀 DÙNG searchParams CHUẨN CỦA NEXT.JS
+    // 4. Đồng bộ URL
     const params = new URLSearchParams(searchParams.toString());
     if (params.get("taskId") !== task.id) {
       params.set("taskId", task.id);
