@@ -140,9 +140,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
         // Hàm helper tự động tạo TaskLog ghi nhận tiến độ khi link thay đổi
         const addLinkLog = (fieldName: string, label: string) => {
-            if (body[fieldName] !== undefined && body[fieldName] !== oldTask[fieldName]) {
+            if (body[fieldName] !== undefined && body[fieldName] !== (oldTask as any)[fieldName]) {
                 logsToCreate.push({ 
-                    action: "DAILY_REPORT", // 🚀 Ghi danh thẳng vào Nhật ký báo cáo ngày
+                    action: "DAILY_REPORT", // Ghi danh thẳng vào Nhật ký báo cáo ngày
                     details: body[fieldName] ? `Báo cáo tiến độ: Đã cập nhật ${label}` : `Đã xóa ${label}`, 
                     taskId, userId 
                 });
