@@ -41,7 +41,7 @@ export default function Sidebar({ isSidebarOpen, setSidebarOpen }: SidebarProps)
         { name: "Bảng công việc", icon: <Trello size={20} />, path: "/tasks", show: hasPermission("MENU_TASKS") },
         { name: "Đơn từ & Đề xuất", icon: <FileText size={20} />, path: "/requests", show: hasPermission("MENU_REQUESTS") },
         { name: "Đánh giá KPI", icon: <BarChart3 size={20} />, path: "/kpi", show: hasPermission("MENU_KPI") },
-        { name: "Thảo luận", icon: <MessageSquare size={20} />, path: "/chat", show: true }, // Chat mặc định ai cũng được vào
+        { name: "Thảo luận", icon: <MessageSquare size={20} />, path: "/chat", show: false }, // Chat mặc định ai cũng được vào
         { name: "Hệ thống Kênh", icon: <TvMinimalPlay  size={20} />, path: "/channels", show: hasPermission("MENU_CHANNELS") },
         { name: "Dự án", icon: <FolderKanban size={20} />, path: "/projects", show: hasPermission("MENU_PROJECTS") },
         { name: "Doanh thu", icon: <DollarSign size={20} />, path: "/revenue", show: hasPermission("MENU_REVENUE") },
