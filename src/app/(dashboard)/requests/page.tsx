@@ -299,11 +299,12 @@ export default function RequestsPage() {
                     )}
                 </div>
 
-                <CreateRequestModal
+            <CreateRequestModal
                     isOpen={isCreateModalOpen}
                     onClose={() => setIsCreateModalOpen(false)}
                     allowedTypes={allowedRequestTypes}
                     teams={dbTeams}
+                    onRefresh={fetchRequests} // 🚀 BỔ SUNG DÒNG NÀY ĐỂ GỌI LẠI DATA
                 />
 
                 <RequestDetailModal
