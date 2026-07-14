@@ -1,9 +1,36 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
-
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
+
 export const dynamic = "force-dynamic";
+
+// 🚀 THÊM HÀM TÍNH TUẦN CHUẨN XÁC GIỐNG HỆT FRONTEND
+function getCurrentWeekNumber(date: Date) {
+    const year = date.getFullYear();
+    const month = date.getMonth(); 
+    const firstDayOfMonth = new Date(year, month, 1);
+    
+    const dayOfWeek = firstDayOfMonth.getDay(); 
+    const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const startOfFirstWeek = new Date(year, month, 1 + diffToMonday);
+
+    const targetTime = date.getTime();
+
+    for (let w = 1; w <= 5; w++) {
+        const startOfWeek = new Date(startOfFirstWeek);
+        startOfWeek.setDate(startOfFirstWeek.getDate() + (w - 1) * 7);
+        
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 6);
+        endOfWeek.setHours(23, 59, 59, 999);
+        
+        if (targetTime >= startOfWeek.getTime() && targetTime <= endOfWeek.getTime()) {
+            return w > 4 ? 4 : w; // Max là tuần 4 theo cấu hình của bạn
+        }
+    }
+    return 1;
+}
 
 export async function GET(req: Request) {
     try {
@@ -21,15 +48,20 @@ export async function GET(req: Request) {
         const isLeader = role === "LEADER";
         const isManager = isTopManagement || isLeader;
 
-        // Lấy thời gian mốc (Tuần hiện tại & 7 ngày qua)
+        // Tính chính xác thứ Hai tuần này (00:00:00)
         const today = new Date();
         const startOfWeek = new Date(today);
-        startOfWeek.setDate(today.getDate() - today.getDay() + (today.getDay() === 0 ? -6 : 1)); // Lùi về Thứ 2
+        const dayOfWeek = today.getDay();
+        const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+        startOfWeek.setDate(today.getDate() + diffToMonday);
         startOfWeek.setHours(0, 0, 0, 0);
         
         const sevenDaysAgo = new Date(today);
         sevenDaysAgo.setDate(today.getDate() - 7);
         sevenDaysAgo.setHours(0, 0, 0, 0);
+
+        // 🚀 TÍNH RA SỐ TUẦN HIỆN TẠI ĐỂ QUERY DATABASE
+        const currentWeekNum = getCurrentWeekNumber(today);
 
         // ==========================================
         // 👑 LUỒNG DATA CHO QUẢN LÝ (BGD / ADMIN / LEADER)
@@ -68,20 +100,22 @@ export async function GET(req: Request) {
                         ...taskFilter,
                         isClosed: false,
                         OR: [
-                            { scriptLink: { not: null } },
-                            { videoLink: { not: null } },
-                            { publishLink: { not: null } }
+                            // 🚀 ĐÃ SỬA: Dùng toán tử AND để kết hợp 2 điều kiện
+                            { AND: [{ scriptLink: { not: null } }, { scriptLink: { not: "" } }] },
+                            { AND: [{ videoLink: { not: null } }, { videoLink: { not: "" } }] },
+                            { AND: [{ publishLink: { not: null } }, { publishLink: { not: "" } }] }
                         ]
                     }
                 }),
-
                 prisma.task.count({
                     where: {
                         ...taskFilter,
                         isClosed: false,
-                        scriptLink: { equals: "" },
-                        videoLink: { equals: "" },
-                        publishLink: { equals: "" }
+                        OR: [ { scriptLink: { equals: "" } }, { scriptLink: null } ],
+                        AND: [
+                            { OR: [{ videoLink: { equals: "" } }, { videoLink: null }] },
+                            { OR: [{ publishLink: { equals: "" } }, { publishLink: null }] }
+                        ]
                     }
                 }),
 
@@ -89,7 +123,7 @@ export async function GET(req: Request) {
                     where: {
                         createdAt: { gte: startOfWeek },
                         ...userCondition, 
-                        action: { in: ["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO"] }
+                        action: { in: ["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK", "DAILY_REPORT"] }
                     },
                     include: { user: { select: { fullName: true } } }
                 }),
@@ -98,21 +132,43 @@ export async function GET(req: Request) {
                     where: {
                         year: today.getFullYear(),
                         month: today.getMonth() + 1,
-                        weekNumber: Math.ceil(today.getDate() / 7) > 4 ? 4 : Math.ceil(today.getDate() / 7),
+                        weekNumber: currentWeekNum, // 🚀 ÁP DỤNG WEEK NUM ĐÃ FIX
                         ...userCondition 
                     },
                     include: { user: { select: { fullName: true, role: true } } }
                 })
             ]);
 
-            // 🚀 ĐÃ FIX: Tính tổng số Task độc nhất (Lọc trùng Task ID)
+            // Tính điểm thực tế áp dụng Smart Filter chống hack
             let totalTarget = 0;
             kpiRecords.forEach((k: any) => totalTarget += k.targetValue);
             
-            const uniqueTasksManager = new Set(logsThisWeek.map((log: any) => log.taskId));
-            const totalActual = uniqueTasksManager.size; // Đếm size của Set thay vì length của mảng
+            let totalActual = 0;
+            const dailyReportTrackerManager = new Set<string>();
+            logsThisWeek.forEach((log: any) => {
+                if (log.action === "DAILY_REPORT") {
+                    const dateStr = new Date(log.createdAt).toISOString().split('T')[0];
+                    const uniqueKey = `${log.userId}_${log.taskId}_${dateStr}`;
+                    if (!dailyReportTrackerManager.has(uniqueKey)) {
+                        dailyReportTrackerManager.add(uniqueKey);
+                        totalActual++;
+                    }
+                } else {
+                    totalActual++;
+                }
+            });
             
             const avgKpiPercent = totalTarget > 0 ? Math.round((totalActual / totalTarget) * 100) : 0;
+
+            const mappedLogsThisWeek = logsThisWeek.map((log: any) => {
+                let typeStr = "Khác";
+                if (log.action === "SUBMIT_SCRIPT") typeStr = "Script";
+                else if (log.action === "SUBMIT_VIDEO") typeStr = "Edit";
+                else if (log.action === "PUBLISH_VIDEO") typeStr = "Publish";
+                else if (log.action === "COMPLETE_TASK") typeStr = "Nghiệm thu";
+                else if (log.action === "DAILY_REPORT") typeStr = "Báo cáo ngày";
+                return { ...log, typeStr };
+            });
 
             return NextResponse.json({
                 role: "MANAGER", 
@@ -124,7 +180,7 @@ export async function GET(req: Request) {
                     pendingQC: totalPendingTasks,
                     overdue: totalOverdueTasks
                 },
-                logs: logsThisWeek,
+                logs: mappedLogsThisWeek,
                 kpis: kpiRecords
             });
         }
@@ -135,36 +191,35 @@ export async function GET(req: Request) {
         else {
             const [
                 myActiveTasks,
-                myLogsAllTime,
-                myLogs7Days,
+                myLogsAllTimeRaw,
+                myLogs7DaysRaw,
                 myKpiThisWeek
             ] = await Promise.all([
                 prisma.task.findMany({
                     where: {
                         isClosed: false,
                         OR: [
-                            { contentId: userId, scriptLink: { equals: "" } },
-                            { editorId: userId, videoLink: { equals: "" } },
-                            { publisherId: userId, publishLink: { equals: "" } }
+                            { contentId: userId, OR: [{scriptLink: {equals: ""}}, {scriptLink: null}] },
+                            { editorId: userId, OR: [{videoLink: {equals: ""}}, {videoLink: null}] },
+                            { publisherId: userId, OR: [{publishLink: {equals: ""}}, {publishLink: null}] }
                         ]
                     },
                     select: { id: true, title: true, createdAt: true }
                 }),
 
-                // 🚀 ĐÃ FIX: Góc thành tựu đếm theo số lượng TASK, không phải số lượng LOG
                 prisma.taskLog.findMany({
                     where: { 
                         userId: userId,
-                        action: { in: ["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK"] }
+                        action: { in: ["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK", "DAILY_REPORT"] }
                     },
-                    select: { taskId: true } // Chỉ lấy taskId cho nhẹ
-                }).then(logs => new Set(logs.map(l => l.taskId)).size),
+                    select: { taskId: true, action: true, createdAt: true }
+                }),
 
                 prisma.taskLog.findMany({
                     where: {
                         userId: userId,
                         createdAt: { gte: sevenDaysAgo },
-                        action: { in: ["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK"] }
+                        action: { in: ["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK", "DAILY_REPORT"] }
                     },
                     orderBy: { createdAt: 'desc' },
                     include: { task: { select: { title: true } } }
@@ -175,34 +230,72 @@ export async function GET(req: Request) {
                         userId: userId,
                         year: today.getFullYear(),
                         month: today.getMonth() + 1,
-                        weekNumber: Math.ceil(today.getDate() / 7) > 4 ? 4 : Math.ceil(today.getDate() / 7)
+                        weekNumber: currentWeekNum // 🚀 ÁP DỤNG WEEK NUM ĐÃ FIX
                     }
                 })
             ]);
 
-            // 🚀 ĐÃ FIX: Tính số bài làm được tuần này (Lọc trùng Task ID)
-            const logsThisWeek = myLogs7Days.filter(log => new Date(log.createdAt) >= startOfWeek);
-            const actualThisWeek = new Set(logsThisWeek.map((log: any) => log.taskId)).size;
+            // BỘ LỌC CHỐNG HACK CHO 7 NGÀY
+            const validLogs7Days: any[] = [];
+            const dailyReportTracker7Days = new Set<string>();
+            myLogs7DaysRaw.forEach(log => {
+                if (log.action === "DAILY_REPORT") {
+                    const dateStr = new Date(log.createdAt).toISOString().split('T')[0];
+                    const uniqueKey = `${log.taskId}_${dateStr}`;
+                    if (!dailyReportTracker7Days.has(uniqueKey)) {
+                        dailyReportTracker7Days.add(uniqueKey);
+                        validLogs7Days.push(log);
+                    }
+                } else {
+                    validLogs7Days.push(log);
+                }
+            });
+
+            const logsThisWeek = validLogs7Days.filter(log => new Date(log.createdAt) >= startOfWeek);
+            const actualThisWeek = logsThisWeek.length;
             
             const target = myKpiThisWeek?.targetValue || 0;
             const kpiPercent = target > 0 ? Math.round((actualThisWeek / target) * 100) : 0;
 
-            // 🚀 MỚI: Format sẵn Data cho Biểu đồ Năng suất (Chống hover ra 3)
-            const chartDataMap: Record<string, Set<string>> = {};
-            myLogs7Days.forEach(log => {
+            let myLogsAllTime = 0;
+            const dailyReportTrackerAllTime = new Set<string>();
+            myLogsAllTimeRaw.forEach(log => {
+                if (log.action === "DAILY_REPORT") {
+                    const dateStr = new Date(log.createdAt).toISOString().split('T')[0];
+                    const uniqueKey = `${log.taskId}_${dateStr}`;
+                    if (!dailyReportTrackerAllTime.has(uniqueKey)) {
+                        dailyReportTrackerAllTime.add(uniqueKey);
+                        myLogsAllTime++;
+                    }
+                } else {
+                    myLogsAllTime++;
+                }
+            });
+
+            const chartDataMap: Record<string, number> = {};
+            validLogs7Days.forEach(log => {
                 const dateStr = new Date(log.createdAt).toLocaleDateString('vi-VN', { 
                     day: '2-digit', month: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' 
                 }).replace('/', '-');
                 
-                if (!chartDataMap[dateStr]) chartDataMap[dateStr] = new Set();
-                chartDataMap[dateStr].add(log.taskId); // Add vào Set để tự triệt tiêu trùng lặp
+                if (!chartDataMap[dateStr]) chartDataMap[dateStr] = 0;
+                chartDataMap[dateStr]++;
             });
 
-            // Biến Object thành Array để chart dễ dùng: [{ date: '08-04', done: 1 }, ...]
             const chartDataArray = Object.keys(chartDataMap).map(date => ({
                 date: date,
-                done: chartDataMap[date].size
-            })).reverse(); // Đảo ngược để ngày cũ lên trước, ngày mới xuống sau
+                done: chartDataMap[date]
+            })).reverse();
+
+            const mappedRecentLogs = validLogs7Days.map((log: any) => {
+                let typeStr = "Khác";
+                if (log.action === "SUBMIT_SCRIPT") typeStr = "Script";
+                else if (log.action === "SUBMIT_VIDEO") typeStr = "Edit";
+                else if (log.action === "PUBLISH_VIDEO") typeStr = "Publish";
+                else if (log.action === "COMPLETE_TASK") typeStr = "Nghiệm thu";
+                else if (log.action === "DAILY_REPORT") typeStr = "Báo cáo ngày";
+                return { ...log, typeStr };
+            });
 
             return NextResponse.json({
                 role: "EMPLOYEE", 
@@ -214,8 +307,8 @@ export async function GET(req: Request) {
                     targetThisWeek: target,
                     actualThisWeek: actualThisWeek
                 },
-                recentLogs: myLogs7Days, // Vẫn trả về danh sách log để hiển thị bảng lịch sử
-                chartData: chartDataArray // 👈 TRẢ VỀ CỤC DATA SẠCH NÀY CHO BIỂU ĐỒ
+                recentLogs: mappedRecentLogs, 
+                chartData: chartDataArray 
             });
         }
     } catch (error) {

@@ -64,7 +64,8 @@ export async function GET(req: Request) {
                 where: {
                     userId: { in: userIds },
                     createdAt: { gte: start, lte: end },
-                    action: { in: ["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK"] }
+                    // 🚀 THÊM "DAILY_REPORT" VÀO ĐÂY ĐỂ TRUY VẤN
+                    action: { in: ["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK", "DAILY_REPORT"] } 
                 },
                 include: { task: { select: { title: true, status: true } } }
             }),
@@ -86,13 +87,36 @@ export async function GET(req: Request) {
         const kpiData = users.map(user => {
             const kpiRecord = allKpis.find(k => k.userId === user.id);
             const userLogs = allLogs.filter(l => l.userId === user.id);
-            
+            const rawUserLogs = allLogs.filter(l => l.userId === user.id);
+            const validUserLogs: typeof rawUserLogs = [];
+            const dailyReportTracker = new Set<string>();
+
+            rawUserLogs.forEach(log => {
+                if ((log.action as string) === "DAILY_REPORT") {
+                    // Cắt lấy chuỗi ngày tháng (VD: "2026-07-14")
+                    const dateString = new Date(log.createdAt).toISOString().split('T')[0];
+                    // Tạo khóa định danh: "ID-Task_Ngày-tháng"
+                    const uniqueKey = `${log.taskId}_${dateString}`;
+
+                    // Nếu trong ngày hôm nay, task này CHƯA được tính điểm báo cáo -> Tính điểm
+                    if (!dailyReportTracker.has(uniqueKey)) {
+                        dailyReportTracker.add(uniqueKey);
+                        validUserLogs.push(log);
+                    }
+                    // Nếu đã có rồi thì bỏ qua, không tính điểm KPI nữa (chống spam auto-save)
+                } else {
+                    // Các hành động nộp bài chính thức (SUBMIT_SCRIPT, PUBLISH...) thì LUÔN LUÔN tính điểm
+                    validUserLogs.push(log);
+                }
+            });
             const mappedLogs = userLogs.map(log => {
                 let typeStr = "Khác";
                 if (log.action === "SUBMIT_SCRIPT") typeStr = "Script";
                 else if (log.action === "SUBMIT_VIDEO") typeStr = "Edit";
                 else if (log.action === "PUBLISH_VIDEO") typeStr = "Publish";
                 else if (log.action === "COMPLETE_TASK") typeStr = "Nghiệm thu";
+                // 🚀 THÊM DÒNG NÀY ĐỂ HIỂN THỊ CHỮ TRÊN GIAO DIỆN
+                else if ((log.action as string) === "DAILY_REPORT") typeStr = "Báo cáo";
                 return { ...log, typeStr }; 
             });
 

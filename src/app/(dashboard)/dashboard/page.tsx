@@ -5,7 +5,7 @@ import DashboardEmployee from "./components/DashboardEmployee";
 import DashboardManager from "./components/DashboardManager";
 import { LayoutDashboard, Loader2 } from "lucide-react"; 
 import PermissionGuard from "@/app/component/PermissionGuard";
-
+import { useRouter } from "next/navigation";
 export default function DashboardPage() {
     const { data: session, status } = useSession(); 
 

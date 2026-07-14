@@ -97,19 +97,34 @@ export default function KpiDashboard() {
     }, [isHighLevel]);
 
     const fetchKpiData = async () => {
-        if (!queryTeamId) {
-            setIsLoading(false);
-            return;
-        }
         setIsLoading(true);
         try {
-            const res = await fetch(`/api/kpi?teamId=${queryTeamId}&year=${selectedYear}&month=${selectedMonth}&week=${selectedWeek}`);
-            const data = await res.json();
-            if (res.ok) {
-                setKpiList(data.kpiList || []);
-                setWeekInfo(data.weekData);
+            if (isManager) {
+                // 🚀 QUẢN LÝ GỌI API LẤY DATA CỦA CẢ TEAM
+                if (!queryTeamId) {
+                    setIsLoading(false);
+                    return;
+                }
+                const res = await fetch(`/api/kpi?teamId=${queryTeamId}&year=${selectedYear}&month=${selectedMonth}&week=${selectedWeek}`);
+                const data = await res.json();
+                if (res.ok) {
+                    setKpiList(data.kpiList || []);
+                    setWeekInfo(data.weekData);
+                } else {
+                    showToast("error", data.error || "Không thể tải dữ liệu");
+                }
             } else {
-                showToast("error", data.error || "Không thể tải dữ liệu");
+                // 🚀 NHÂN VIÊN GỌI API RIÊNG THEO ID CỦA CHÍNH HỌ
+                if (!currentUser?.id) return;
+                const res = await fetch(`/api/kpi/${currentUser.id}?year=${selectedYear}&month=${selectedMonth}&week=${selectedWeek}`);
+                const data = await res.json();
+                
+                if (res.ok) {
+                    setKpiList([data]); // Nhét vào mảng 1 phần tử để tận dụng lại luồng hiển thị cũ
+                    setViewingUserId(data.userId); // Focus luôn vào user này
+                } else {
+                    showToast("error", data.error || "Không thể tải dữ liệu");
+                }
             }
         } catch (error) {
             showToast("error", "Lỗi kết nối máy chủ");
@@ -123,8 +138,9 @@ export default function KpiDashboard() {
         if (currentUser) fetchKpiData();
     }, [selectedYear, selectedMonth, selectedWeek, selectedTeamFilter, currentUser]);
 
+    // Đồng bộ viewingUserId cho Manager
     useEffect(() => {
-        if (!isManager && kpiList.length > 0 && !viewingUserId) {
+        if (isManager && kpiList.length > 0 && !viewingUserId) {
             const me = kpiList.find(k => k.userId === currentUser?.id);
             if (me) setViewingUserId(me.userId);
         }
@@ -134,44 +150,38 @@ export default function KpiDashboard() {
         const targetNum = parseInt(newTarget);
         if (isNaN(targetNum) || targetNum < 0) return;
 
-        // 🚀 BƯỚC 1: OPTIMISTIC UPDATE - Cập nhật giao diện ngay lập tức để không bị "Nháy bảng"
         setKpiList(prev => prev.map(k => {
             if (k.userId === userId) {
-                // Tự động tính toán lại phần trăm trên Frontend
                 const newPercent = targetNum > 0 ? Math.round((k.actualValue / targetNum) * 100) : 0;
                 return { ...k, targetValue: targetNum, percent: newPercent };
             }
             return k;
         }));
 
-        // 🚀 BƯỚC 2: Gọi API lưu ngầm dưới nền (Background Sync)
         try {
             const res = await fetch("/api/kpi", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ 
-                    userId, 
-                    year: selectedYear, 
-                    month: selectedMonth, 
-                    weekNumber: selectedWeek, 
-                    targetValue: targetNum 
+                    userId, year: selectedYear, month: selectedMonth, 
+                    weekNumber: selectedWeek, targetValue: targetNum 
                 })
             });
             
             if (res.ok) {
                 showToast("success", "Đã chốt chỉ tiêu!");
-                // Không cần gọi lại fetchKpiData() ở đây nữa để tránh nháy màn hình
             } else {
                 showToast("error", "Lỗi lưu dữ liệu. Đang tải lại bảng...");
-                fetchKpiData(); // Chỉ tải lại nếu lưu bị lỗi
+                fetchKpiData(); 
             }
         } catch (error) {
             showToast("error", "Mất kết nối server");
-            fetchKpiData(); // Trả lại data gốc nếu mất mạng
+            fetchKpiData(); 
         }
     };
 
-    if (!queryTeamId && !isManager) return <div className="h-full flex-1 p-8 text-center text-slate-500 flex items-center justify-center font-medium">Bạn chưa được phân vào Team nào để xem KPI.</div>;
+    // Chặn Leader nếu chưa có Team (Nhân viên thì không cần chặn vì đã lấy qua ID)
+    if (isManager && !isHighLevel && !queryTeamId) return <div className="h-full flex-1 p-8 text-center text-slate-500 flex items-center justify-center font-medium">Bạn chưa được phân vào Team nào để xem KPI.</div>;
 
     const activeKpi = kpiList.find(k => k.userId === viewingUserId);
     const totalPages = Math.ceil(kpiList.length / itemsPerPage);
@@ -191,7 +201,7 @@ export default function KpiDashboard() {
                     </p>
                 </div>
 
-                {/* Khối Filter: Trượt ngang trên mobile */}
+                {/* Khối Filter */}
                 <div className="flex items-center gap-1 md:gap-2 bg-white p-1.5 md:p-2 rounded-xl shadow-sm border border-slate-200 overflow-x-auto w-full xl:w-auto custom-scrollbar-thin">
                     {isHighLevel && (
                         <div className="flex items-center gap-1 px-2 md:px-3 border-r border-slate-200 shrink-0">
@@ -241,7 +251,7 @@ export default function KpiDashboard() {
                             />
                         </div>
 
-                        {/* Phân trang: Ẩn bớt chữ trên Mobile */}
+                        {/* Phân trang */}
                         {!isLoading && kpiList.length > 0 && (
                             <div className="shrink-0 p-3 md:p-4 border-t border-slate-100 flex justify-between items-center bg-slate-50/50">
                                 <span className="text-[10px] md:text-sm text-slate-500 font-medium hidden sm:inline">

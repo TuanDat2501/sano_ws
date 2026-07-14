@@ -4,12 +4,12 @@ import { useState, useEffect } from "react";
 import { Target, Flame, Medal, Clock, CheckCircle2, History, Loader2, Trophy } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { useToast } from "@/app/component/ToastProvider";
-
+import { useRouter } from "next/navigation";
 export default function DashboardEmployee() {
     const [data, setData] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(true);
     const { showToast } = useToast();
-
+    const router = useRouter();
     useEffect(() => {
         const fetchDashboard = async () => {
             try {
@@ -122,9 +122,12 @@ export default function DashboardEmployee() {
                                             <p className="text-[10px] md:text-xs font-bold text-slate-400 mt-1">Giao lúc: {new Date(task.createdAt).toLocaleDateString('vi-VN')}</p>
                                         </div>
                                         {/* Nút bấm tự động dàn ngang 100% trên điện thoại (w-full sm:w-auto) */}
-                                        <button className="w-full sm:w-auto bg-blue-600 text-white px-4 py-2.5 sm:py-2 rounded-lg text-xs md:text-sm font-black whitespace-nowrap hover:bg-blue-700 shadow-md transition-colors active:scale-95 text-center">
-                                            Dán Link Ngay
-                                        </button>
+                                        <button 
+                    onClick={() => router.push(`/tasks?taskId=${task.id}`)}
+                    className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-1.5 px-3 rounded-lg transition-all"
+                >
+                    Dán link ngay
+                </button>
                                     </div>
                                 ))
                             )}
