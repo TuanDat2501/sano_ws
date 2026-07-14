@@ -95,32 +95,54 @@ export default function TaskDetailDrawer({
     }
     setTimeout(() => setIsEvaluating(false), 800);
   };
-
+  // Thêm 2 state để quản lý UI Loading/Thành công
+  const [savingField, setSavingField] = useState<string | null>(null);
+  const [savedField, setSavedField] = useState<string | null>(null);
   if (!selectedTask) return null;
   const isManager = ["ADMIN", "BAN_GIAM_DOC", "LEADER", "HR", "QLK"].includes(userRole);
   
   const isParticipant = isManager || selectedTask.contentId === sessionUserId || selectedTask.editorId === sessionUserId || selectedTask.creatorId === sessionUserId;
+  
+
+  const handleAutoSave = async (fieldKey: string, newValue: string) => {
+    if (newValue === (selectedTask[fieldKey] || "")) return;
+
+    setSavingField(fieldKey); // Bật loading xoay xoay
+    try {
+      const res = await fetch(`/api/tasks/${selectedTask.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [fieldKey]: newValue })
+      });
+      
+      if (res.ok) {
+         selectedTask[fieldKey] = newValue; // Tránh lưu trùng lặp nếu user blur lần 2
+         setSavingField(null);
+         setSavedField(fieldKey); // Bật dấu tick xanh
+         setTimeout(() => setSavedField(null), 2500); // Ẩn tick xanh sau 2.5 giây
+      }
+    } catch (error) {
+      setSavingField(null);
+      console.error("Lỗi auto-save:", error);
+    }
+  };
 
   const drawerContent = (
     <>
       {isOpen && <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[99998] transition-opacity" onClick={onClose} />}
 
       <div className={`fixed top-0 right-0 h-full w-full md:w-[1000px] md:max-w-[95vw] bg-white shadow-2xl z-[99999] transform transition-transform duration-300 flex flex-col ${isOpen ? "translate-x-0" : "translate-x-full"}`}>
-
-        {/* ================= HEADER ================= */}
+        
+        {/* ================= HEADER (Giữ nguyên) ================= */}
         <div className="px-4 md:px-6 py-3 md:py-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shrink-0 bg-white z-10">
-          
-          {/* 🚀 ĐÃ SỬA: CHIA DÒNG BADGE CHO ĐẸP VÀ THÊM THỜI LƯỢNG */}
           <div className="flex flex-col w-full sm:w-auto gap-1">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-[10px] font-black uppercase text-blue-600 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-100">
                 {selectedTask.project?.name || "Dự án ẩn"}
               </span>
-
               <span className="text-[10px] font-black uppercase text-red-600 bg-red-50 px-2.5 py-1 rounded-md border border-red-100 flex items-center gap-1 shadow-sm">
                 <Tv size={12} /> {selectedTask.channel?.name || "Chưa chọn Kênh"}
               </span>
-
               <span className="text-[10px] font-black uppercase text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-100">
                 {selectedTask.team?.name || "Chưa có Team"}
               </span>
@@ -135,26 +157,16 @@ export default function TaskDetailDrawer({
 
           <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
             {isManager && (
-              <button
-                onClick={() => setRightTab(rightTab === 'chat' ? 'evaluate' : 'chat')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${rightTab === 'evaluate' ? 'bg-indigo-600 text-white shadow-md' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'}`}
-              >
-                <ClipboardCheck size={16} />
-                {rightTab === 'evaluate' ? "Quay lại Chat" : "Chấm điểm Video"}
+              <button onClick={() => setRightTab(rightTab === 'chat' ? 'evaluate' : 'chat')} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${rightTab === 'evaluate' ? 'bg-indigo-600 text-white shadow-md' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'}`}>
+                <ClipboardCheck size={16} /> {rightTab === 'evaluate' ? "Quay lại Chat" : "Chấm điểm Video"}
               </button>
             )}
-
             <div className="w-[1px] h-6 bg-slate-200 mx-1 hidden sm:block"></div>
-            
             {(isManager || selectedTask.creatorId === sessionUserId) && (
-              <button 
-                onClick={onEditTask} 
-                className="px-3 md:px-4 py-2 rounded-xl text-sm font-bold bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors"
-              >
+              <button onClick={onEditTask} className="px-3 md:px-4 py-2 rounded-xl text-sm font-bold bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors">
                 Sửa Task
               </button>
             )}
-            
             {canReject && (
               <button onClick={onReject} className="px-3 md:px-4 py-2 rounded-xl text-sm font-bold bg-orange-50 text-orange-600 hover:bg-orange-100 transition-colors">
                 Làm lại
@@ -173,15 +185,13 @@ export default function TaskDetailDrawer({
           <div className="w-full lg:w-[55%] flex flex-col h-full border-r border-slate-200 bg-white">
             <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 custom-scrollbar">
 
-              {/* Link Nguồn */}
+              {/* Link Nguồn & Nhân sự (Giữ nguyên) */}
               <div>
                 <label className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5 mb-2"><LinkIcon size={14} /> Link Tham Khảo / Ý Tưởng</label>
                 <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 font-medium text-sm text-blue-600 break-all hover:bg-blue-50 transition-colors">
                   <a href={selectedTask.linkContent} target="_blank" rel="noreferrer" className="hover:underline">{selectedTask.linkContent}</a>
                 </div>
               </div>
-
-              {/* Nhân sự */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-orange-50/50 border border-orange-100 p-3.5 rounded-2xl flex items-center gap-3">
                   <div className="h-10 w-10 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center font-black border-2 border-white shadow-sm text-base">
@@ -203,12 +213,9 @@ export default function TaskDetailDrawer({
                 </div>
               </div>
 
-
-              {/* Nộp Bài (Link kết quả) */}
+              {/* KHỐI INPUT LINK (Đã tích hợp icon trạng thái lưu ngầm) */}
               <div className="bg-slate-50 border border-slate-200 rounded-[24px] p-5 space-y-4 shadow-inner">
                 <h3 className="font-black text-base text-slate-800 flex items-center gap-2 mb-2"><CheckCircle2 className="text-emerald-500 w-5 h-5" /> Kết Quả Công Việc</h3>
-
-                {/* 🚀 ĐÃ BỔ SUNG ĐẦY ĐỦ CÁC CỘT THEO EXCEL. Bố cục 2 cột cho gọn */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {[
                       { key: 'scriptLink', label: '1. Kịch Bản (VN)', role: 'CONTENT', idField: 'contentId' },
@@ -221,35 +228,49 @@ export default function TaskDetailDrawer({
                       const isAllowed = isManager || (userRole === field.role && selectedTask[field.idField] === sessionUserId) || (field.key === 'scriptLink' && selectedTask.creatorId === sessionUserId);
                       return (
                         <div key={field.key} className="space-y-1.5">
-                          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{field.label}</label>
+                          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                            {field.label}
+                            {/* 🚀 UI phản hồi trực quan khi lưu ngầm */}
+                            {savingField === field.key && <Loader2 size={12} className="animate-spin text-blue-500" />}
+                            {savedField === field.key && <CheckCircle2 size={12} className="text-emerald-500" />}
+                          </label>
                           <input
                             type="url" disabled={!isAllowed}
                             placeholder={!isAllowed ? "Chỉ người phụ trách" : "Dán link..."}
                             className={`w-full border rounded-xl p-3 text-[13px] outline-none transition-all ${!isAllowed ? 'bg-slate-100 text-slate-400 border-slate-200' : 'bg-white text-slate-800 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10'} ${errors[field.key] ? 'border-red-500' : ''}`}
                             value={taskLinks[field.key as keyof typeof taskLinks] || ""}
                             onChange={e => setTaskLinks({ ...taskLinks, [field.key]: e.target.value })}
+                            onBlur={(e) => handleAutoSave(field.key, e.target.value)}
                           />
                         </div>
                       );
                     })}
                     
-                    {/* Link Publish cho full width */}
+                    {/* Link Publish */}
                     <div className="space-y-1.5 col-span-1 md:col-span-2 pt-2 border-t border-slate-200">
-                        <label className="text-[10px] font-bold text-red-500 uppercase tracking-widest">7. Link Video Đã Đăng (YT)</label>
+                        <label className="text-[10px] font-bold text-red-500 uppercase tracking-widest flex items-center gap-1.5">
+                          7. Link Video Đã Đăng (YT)
+                          {savingField === 'publishLink' && <Loader2 size={12} className="animate-spin text-blue-500" />}
+                          {savedField === 'publishLink' && <CheckCircle2 size={12} className="text-emerald-500" />}
+                        </label>
                         <input
                             type="url" disabled={!isManager}
                             placeholder={!isManager ? "Chỉ Quản lý Kênh" : "Dán link YouTube..."}
                             className="w-full border rounded-xl p-3 text-[13px] outline-none transition-all bg-white text-slate-800 focus:border-red-500 focus:ring-4 focus:ring-red-500/10"
                             value={taskLinks.publishLink || ""}
                             onChange={e => setTaskLinks({ ...taskLinks, publishLink: e.target.value })}
+                            onBlur={(e) => handleAutoSave('publishLink', e.target.value)}
                         />
                     </div>
                 </div>
               </div>
-               {/* 🚀 ĐÃ SỬA: KHỐI GHI CHÚ TRẠNG THÁI RIÊNG BIỆT (AMBER) */}
+
+              {/* KHỐI GHI CHÚ TRẠNG THÁI */}
               <div className="bg-amber-50/50 border border-amber-100 rounded-[24px] p-5 space-y-3 shadow-sm">
                 <h3 className="font-black text-sm text-amber-900 flex items-center gap-2">
                   <Tag className="text-amber-500 w-4 h-4" /> Báo Cáo Trạng Thái 
+                  {savingField === 'note' && <Loader2 size={14} className="animate-spin text-blue-500 ml-auto" />}
+                  {savedField === 'note' && <CheckCircle2 size={14} className="text-emerald-500 ml-auto" />}
                 </h3>
                 <p className="text-[11px] text-amber-700/70 font-bold leading-tight">Dùng để cập nhật nhanh tình trạng bài cho QLK nắm bắt (VD: Đang cắt thô, Đang tìm Voice, Lỗi file...)</p>
                 <input
@@ -259,28 +280,20 @@ export default function TaskDetailDrawer({
                   className="w-full border border-amber-200 rounded-xl p-3 text-sm outline-none transition-all focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10 disabled:bg-slate-100 disabled:text-slate-400 font-bold text-amber-900 placeholder:text-amber-300"
                   value={taskLinks.note !== undefined ? taskLinks.note : (selectedTask.note || "")}
                   onChange={e => setTaskLinks({ ...taskLinks, note: e.target.value })}
+                  onBlur={(e) => handleAutoSave('note', e.target.value)}
                 />
               </div>
             </div>
-
-            <div className="p-4 md:p-6 bg-white border-t border-slate-100 shrink-0">
-              <button onClick={onSaveLinks} disabled={isSavingLinks} className="w-full bg-slate-900 hover:bg-black text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 transition-all shadow-xl active:scale-95 text-base">
-                {isSavingLinks ? <Loader2 className="animate-spin" size={18} /> : "Lưu Thông Tin & Tiến Độ"}
-              </button>
-            </div>
           </div>
 
-          {/* CỘT PHẢI: CHAT HOẶC CHẤM ĐIỂM (45%) */}
+          {/* CỘT PHẢI: CHAT HOẶC CHẤM ĐIỂM (Giữ nguyên) */}
           <div className="w-full lg:w-[45%] flex flex-col h-full bg-white relative">
-
-            {/* ----------------- GIAO DIỆN CHAT (Mặc định) ----------------- */}
             {rightTab === 'chat' && (
               <div className="flex flex-col h-full animate-fade-in">
                 <div className="p-4 border-b border-slate-100 bg-white flex items-center gap-2 shrink-0">
                   <MessageSquare className="text-blue-600 w-5 h-5" />
                   <span className="font-black text-slate-800 text-base">Thảo luận nội bộ</span>
                 </div>
-
                 <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4 bg-slate-50/50 custom-scrollbar">
                   {messages.length === 0 ? (
                     <div className="m-auto text-center text-slate-400 text-sm font-medium"><MessageSquare size={32} className="mx-auto mb-2 opacity-50" />Chưa có trao đổi nào.</div>
@@ -295,7 +308,6 @@ export default function TaskDetailDrawer({
                     ))
                   )}
                 </div>
-
                 <div className="p-4 bg-white border-t border-slate-100 shrink-0">
                   <div className="flex items-end gap-2 bg-slate-50 border border-slate-200 rounded-2xl p-1.5 focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-500/10 transition-all">
                     <textarea
@@ -311,17 +323,13 @@ export default function TaskDetailDrawer({
                 </div>
               </div>
             )}
-
-            {/* ----------------- GIAO DIỆN CHẤM ĐIỂM (Chỉ Manager thấy) ----------------- */}
             {isManager && rightTab === 'evaluate' && (
                <div className="absolute inset-0 bg-white z-10 animate-fade-in">
                   <EvaluationPanel 
                      task={selectedTask} 
                      onCancel={() => setRightTab('chat')} 
                      onSubmit={async (score, criteria, note) => {
-                        if (onSubmitEvaluation) {
-                            await onSubmitEvaluation(score, criteria, note);
-                        }
+                        if (onSubmitEvaluation) await onSubmitEvaluation(score, criteria, note);
                      }}
                   />
                </div>
@@ -331,7 +339,6 @@ export default function TaskDetailDrawer({
       </div>
     </>
   );
-
   if (!mounted) return null;
   return createPortal(drawerContent, document.body);
 }

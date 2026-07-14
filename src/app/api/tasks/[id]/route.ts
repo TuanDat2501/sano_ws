@@ -47,11 +47,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             // Sếp được sửa full
             if (rawBody.status !== undefined) body.status = rawBody.status;
             if (rawBody.scriptLink !== undefined) body.scriptLink = rawBody.scriptLink;
+            if (rawBody.englishScriptLink !== undefined) body.englishScriptLink = rawBody.englishScriptLink;
+            if (rawBody.audioLink !== undefined) body.audioLink = rawBody.audioLink;
+            if (rawBody.storyboardLink !== undefined) body.storyboardLink = rawBody.storyboardLink;
+            if (rawBody.thumbnailLink !== undefined) body.thumbnailLink = rawBody.thumbnailLink;
             if (rawBody.videoLink !== undefined) body.videoLink = rawBody.videoLink;
             if (rawBody.publishLink !== undefined) body.publishLink = rawBody.publishLink;
             if (rawBody.isClosed !== undefined) body.isClosed = rawBody.isClosed;
-
-            // 🚀 BỔ SUNG: Cho phép Sếp gán việc từ Kho (Backlog)
             if (rawBody.teamId !== undefined) body.teamId = rawBody.teamId;
             if (rawBody.contentId !== undefined) body.contentId = rawBody.contentId || null;
             if (rawBody.editorId !== undefined) body.editorId = rawBody.editorId || null;
@@ -59,26 +61,37 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             if (rawBody.duration !== undefined) body.duration = rawBody.duration;
             if (rawBody.note !== undefined) body.note = rawBody.note;
             if (rawBody.channelId !== undefined) body.channelId = rawBody.channelId || null;
+            
         } else if (currentUser.role === "CONTENT") {
             if (oldTask.contentId !== currentUser.id && oldTask.creatorId !== currentUser.id) {
                 return NextResponse.json({ error: "Bạn không phụ trách nội dung bài này!" }, { status: 403 });
             }
-            if (rawBody.scriptLink !== undefined) body.scriptLink = rawBody.scriptLink;
             if (rawBody.status !== undefined) body.status = rawBody.status;
+            // 🚀 Mở khóa các trường cho CONTENT
+            if (rawBody.scriptLink !== undefined) body.scriptLink = rawBody.scriptLink;
+            if (rawBody.englishScriptLink !== undefined) body.englishScriptLink = rawBody.englishScriptLink;
+            if (rawBody.audioLink !== undefined) body.audioLink = rawBody.audioLink;
+            if (rawBody.note !== undefined) body.note = rawBody.note;
 
         } else if (currentUser.role === "EDITOR") {
             if (oldTask.editorId !== currentUser.id) {
                 return NextResponse.json({ error: "Bạn không phụ trách dựng bài này!" }, { status: 403 });
             }
-            if (rawBody.videoLink !== undefined) body.videoLink = rawBody.videoLink;
             if (rawBody.status !== undefined) body.status = rawBody.status;
+            // 🚀 Mở khóa các trường cho EDITOR
+            if (rawBody.videoLink !== undefined) body.videoLink = rawBody.videoLink;
+            if (rawBody.storyboardLink !== undefined) body.storyboardLink = rawBody.storyboardLink;
+            if (rawBody.thumbnailLink !== undefined) body.thumbnailLink = rawBody.thumbnailLink;
+            if (rawBody.note !== undefined) body.note = rawBody.note;
 
         } else if (currentUser.role === "CHANNEL_MANAGER") {
             if (oldTask.publisherId !== currentUser.id) {
                 return NextResponse.json({ error: "Bạn không phụ trách đăng bài này!" }, { status: 403 });
             }
-            if (rawBody.publishLink !== undefined) body.publishLink = rawBody.publishLink;
             if (rawBody.status !== undefined) body.status = rawBody.status;
+            if (rawBody.publishLink !== undefined) body.publishLink = rawBody.publishLink;
+            if (rawBody.note !== undefined) body.note = rawBody.note;
+            
         } else {
             return NextResponse.json({ error: "Vai trò của bạn không được phép sửa Task này!" }, { status: 403 });
         }
@@ -124,15 +137,36 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         if (body.status && body.status !== oldTask.status) {
             logsToCreate.push({ action: "UPDATE_STATUS", details: `Từ [${oldTask.status}] sang [${body.status}]`, taskId, userId });
         }
-        if (body.scriptLink !== undefined && body.scriptLink !== oldTask.scriptLink) {
-            logsToCreate.push({ action: (!oldTask.scriptLink && body.scriptLink) ? "SUBMIT_SCRIPT" : "UPDATE_LINK", details: body.scriptLink ? "Đã cập nhật link Kịch bản" : "Đã xóa link Kịch bản", taskId, userId });
+
+        // Hàm helper tự động tạo TaskLog ghi nhận tiến độ khi link thay đổi
+        const addLinkLog = (fieldName: string, label: string) => {
+            if (body[fieldName] !== undefined && body[fieldName] !== oldTask[fieldName]) {
+                logsToCreate.push({ 
+                    action: "DAILY_REPORT", // 🚀 Ghi danh thẳng vào Nhật ký báo cáo ngày
+                    details: body[fieldName] ? `Báo cáo tiến độ: Đã cập nhật ${label}` : `Đã xóa ${label}`, 
+                    taskId, userId 
+                });
+            }
+        };
+
+        // Áp dụng ghi log cho tất cả các field công việc
+        addLinkLog('scriptLink', 'Kịch Bản (VN)');
+        addLinkLog('englishScriptLink', 'Text ENG');
+        addLinkLog('audioLink', 'Link Audio (AI)');
+        addLinkLog('storyboardLink', 'Bố Cục');
+        addLinkLog('thumbnailLink', 'Thumbnail');
+        addLinkLog('videoLink', 'Video Render');
+        addLinkLog('publishLink', 'Link Video Đã Đăng (YT)');
+
+        // Bắt sự kiện người dùng điền ghi chú Trạng thái (note)
+        if (body.note !== undefined && body.note !== oldTask.note) {
+            logsToCreate.push({ 
+                action: "UPDATE_LINK", 
+                details: `Báo cáo trạng thái: ${body.note}`, 
+                taskId, userId 
+            });
         }
-        if (body.videoLink !== undefined && body.videoLink !== oldTask.videoLink) {
-            logsToCreate.push({ action: (!oldTask.videoLink && body.videoLink) ? "SUBMIT_VIDEO" : "UPDATE_LINK", details: body.videoLink ? "Đã cập nhật link Video" : "Đã xóa link Video", taskId, userId });
-        }
-        if (body.publishLink !== undefined && body.publishLink !== oldTask.publishLink) {
-            logsToCreate.push({ action: (!oldTask.publishLink && body.publishLink) ? "PUBLISH_VIDEO" : "UPDATE_LINK", details: body.publishLink ? "Đã cập nhật link Publish" : "Đã xóa link Publish", taskId, userId });
-        }
+
         if (body.isClosed !== undefined && body.isClosed !== oldTask.isClosed) {
             logsToCreate.push({ action: body.isClosed ? "COMPLETE_TASK" : "UPDATE_STATUS", details: body.isClosed ? "Task đã bị khóa (Nghiệm thu)" : "Task được kích hoạt lại", taskId, userId });
         }
@@ -140,7 +174,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         if (body.contentId !== undefined && body.contentId !== oldTask.contentId) {
             logsToCreate.push({ action: "ASSIGN_USER", details: `Đã phân công Content mới`, taskId, userId });
         }
-
         // =========================================================================
         // 4. 🚀 CẬP NHẬT TASK XUỐNG DATABASE (ĐÃ THÊM CÁC TRƯỜNG GÁN VIỆC)
         // =========================================================================

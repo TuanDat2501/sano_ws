@@ -5,42 +5,7 @@ import { Youtube, Plus, ExternalLink, Edit, Trash2, ShieldAlert, Loader2, AlertC
 import { useToast } from "@/app/component/ToastProvider";
 import ChannelFormDrawer from "./ChannelFormDrawer";
 
-const MOCK_CHANNELS = [
-    {
-        id: "mock-1",
-        name: "BeastLore Anime",
-        avatarUrl: "https://i.pravatar.cc/150?img=1",
-        link: "https://youtube.com/@beastloreanime",
-        topic: "Tóm tắt Anime",
-        status: "HOAT_DONG",
-        monetization: "DA_BAT",
-        team: { name: "Team Anime" },
-    },
-    {
-        id: "mock-2",
-        name: "Sano Reacts",
-        avatarUrl: "",
-        link: "https://youtube.com/@sanoreacts",
-        topic: "Reaction / Bình luận",
-        status: "XAY_DUNG",
-        monetization: "CHO_DUYET",
-        team: { name: "Team Action" },
-    }
-];
 
-const MOCK_TEAMS = [
-    { id: "t1", name: "Team Anime" },
-    { id: "t2", name: "Team Action" },
-    { id: "t3", name: "Team Shorts" }
-];
-
-// 🚀 THÊM MOCK DATA NHÂN SỰ ĐỂ TEST UI CHỌN NGƯỜI
-const MOCK_USERS = [
-    { id: "u1", fullName: "Nguyễn Văn A", username: "nva", teamId: "t1", avatarUrl: "" },
-    { id: "u2", fullName: "Trần Thị B", username: "ttb", teamId: "t1", avatarUrl: "https://i.pravatar.cc/150?img=5" },
-    { id: "u3", fullName: "Lê Văn C", username: "lvc", teamId: "t2", avatarUrl: "" },
-    { id: "u4", fullName: "Phạm Văn D", username: "pvd", teamId: "t1", avatarUrl: "" },
-];
 
 export default function ChannelsPage() {
     const { showToast } = useToast();
