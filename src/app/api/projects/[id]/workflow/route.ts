@@ -3,13 +3,12 @@ import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 
-// 🚀 SỬA KIỂU DỮ LIỆU: params bây giờ là một Promise
+// API GET: Tải dữ liệu quy trình cũ
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
     try {
         const session = await getServerSession(authOptions);
         if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-        // 🚀 SỬA LỖI Ở ĐÂY: Await toàn bộ params trước rồi mới lấy id
         const resolvedParams = await params;
         const projectId = resolvedParams.id;
 
@@ -24,19 +23,19 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     }
 }
 
-// 🚀 SỬA KIỂU DỮ LIỆU TƯƠNG TỰ CHO HÀM PATCH
+// API PATCH: Lưu dữ liệu quy trình mới
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
     try {
         const session = await getServerSession(authOptions);
         if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-        // 🚀 AWAIT PARAMS
         const resolvedParams = await params;
         const projectId = resolvedParams.id;
 
         const { nodes, edges } = await req.json();
         
-        const updatedProject = await prisma.project.update({
+        // Lưu thẳng mảng JSON vào database
+        await prisma.project.update({
             where: { id: projectId },
             data: {
                 workflowNodes: nodes,

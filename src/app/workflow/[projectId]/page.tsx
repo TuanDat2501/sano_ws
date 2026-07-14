@@ -1,75 +1,64 @@
 "use client";
 
-import React, { useCallback, useEffect, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { 
   ReactFlow, MiniMap, Controls, Background, useNodesState, useEdgesState, addEdge, 
-  Connection, ReactFlowProvider, useReactFlow ,BackgroundVariant,Node, Edge
+  Connection, ReactFlowProvider, useReactFlow, BackgroundVariant, Node, Edge,
+  ConnectionMode, MarkerType 
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Save, ArrowLeft } from 'lucide-react';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { useToast } from "@/app/component/ToastProvider";
-import { nodeTypes } from '../FlowNodes';
+import { nodeTypes, edgeTypes } from '../FlowNodes';
 import Sidebar from '../Sidebar';
 
-// Import Sidebar và Custom Nodes vừa tạo
-
-
-// Khởi tạo 1 khối ban đầu
-const initialNodes = [
+// Khởi tạo 1 khối ban đầu (Chỉ dùng khi dự án chưa có data)
+const initialNodes: Node[] = [
   { id: 'start', type: 'circle', data: { label: 'Bắt Đầu' }, position: { x: 250, y: 50 } },
 ];
 
-// 🚀 TÁCH RIÊNG COMPONENT BÀN VẼ ĐỂ SỬ DỤNG ĐƯỢC HOOK useReactFlow()
-function FlowCanvas({ projectId, projectName, isSaving, handleSaveWorkflow }: any) {
-  const [nodes, setNodes, onNodesChange] = useNodesState<Node>(initialNodes as Node[]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
-  const { screenToFlowPosition } = useReactFlow(); // Tính tọa độ màn hình sang tọa độ Canvas
+// ==========================================
+// 1. COMPONENT BÀN VẼ (Nhận state từ cha truyền xuống)
+// ==========================================
+function FlowCanvas({ nodes, edges, onNodesChange, onEdgesChange, setNodes, setEdges }: any) {
+  const { screenToFlowPosition } = useReactFlow();
   
-  // Logic nối dây
-  const onConnect = useCallback((params: Connection) => setEdges((eds) => addEdge({ ...params, animated: true, style: { stroke: '#3b82f6', strokeWidth: 2 } }, eds)), [setEdges]);
+  const onConnect = useCallback((params: Connection) => setEdges((eds: Edge[]) => addEdge({ 
+    ...params, 
+    type: 'editable', 
+    data: { label: '' }, 
+    animated: true, 
+    style: { stroke: '#3b82f6', strokeWidth: 2 },
+    markerEnd: { type: MarkerType.ArrowClosed, width: 15, height: 15, color: '#3b82f6' }
+  }, eds)), [setEdges]);
 
-  // Logic kéo thả: Cho phép thẻ div nhận item drop
   const onDragOver = useCallback((event: any) => {
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
   }, []);
 
-  // Logic kéo thả: Bắt item khi thả chuột ra
-  const onDrop = useCallback(
-    (event: any) => {
+  const onDrop = useCallback((event: any) => {
       event.preventDefault();
-
       const type = event.dataTransfer.getData('application/reactflow');
       const label = event.dataTransfer.getData('application/label');
-
-      // Nếu thả bậy bạ thì bỏ qua
       if (typeof type === 'undefined' || !type) return;
 
-      // Tính toán vị trí chuột để đặt khối xuống chính xác
-      const position = screenToFlowPosition({
-        x: event.clientX,
-        y: event.clientY,
-      });
-
+      const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
       const newNode = {
         id: `node_${Date.now()}`,
         type,
         position,
         data: { label: `${label}` },
       };
-
-      setNodes((nds) => nds.concat(newNode));
+      setNodes((nds: Node[]) => nds.concat(newNode));
     },
     [screenToFlowPosition, setNodes],
   );
 
   return (
     <div className="flex flex-1 h-full relative">
-      {/* THANH CÔNG CỤ BÊN TRÁI */}
       <Sidebar />
-
-      {/* BÀN VẼ Ở GIỮA */}
       <div className="flex-1 h-full bg-slate-50 relative" onDragOver={onDragOver} onDrop={onDrop}>
         <ReactFlow
           nodes={nodes}
@@ -77,7 +66,10 @@ function FlowCanvas({ projectId, projectName, isSaving, handleSaveWorkflow }: an
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
-          nodeTypes={nodeTypes} // Nhúng thư viện hình dáng vào đây
+          nodeTypes={nodeTypes} 
+          edgeTypes={edgeTypes} 
+          connectionMode={ConnectionMode.Loose} 
+          deleteKeyCode={['Backspace', 'Delete']} 
           fitView
         >
           <Background color="#e8e8eb" gap={10} size={1} variant={BackgroundVariant.Lines}/>
@@ -90,29 +82,60 @@ function FlowCanvas({ projectId, projectName, isSaving, handleSaveWorkflow }: an
 }
 
 // ==========================================
-// TRANG GIAO DIỆN CHÍNH (BỌC PROVIDER)
+// 2. TRANG GIAO DIỆN CHÍNH (Quản lý State & Gọi API)
 // ==========================================
 export default function ProjectWorkflowPage() {
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams(); 
   const { showToast } = useToast();
   const projectId = params.projectId as string;
+  const passedProjectName = searchParams.get('name') || "Đang tải...";
 
-  const [projectName, setProjectName] = useState("");
+  const [projectName, setProjectName] = useState(passedProjectName);
   const [isSaving, setIsSaving] = useState(false);
 
-  useEffect(() => {
-    // Gọi API load tên dự án... (Tạm thời mock ở đây, sếp ráp API thật vào nhé)
-    setProjectName("Dự án Video");
-  }, [projectId]);
+  // 🚀 QUẢN LÝ STATE TẠI ĐÂY ĐỂ LÚC LƯU CÒN LẤY ĐƯỢC DỮ LIỆU
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
+  // 🚀 GỌI API ĐỂ LẤY DATA CŨ KHI VỪA VÀO TRANG
+  useEffect(() => {
+    if (passedProjectName) setProjectName(passedProjectName);
+
+    const loadWorkflowData = async () => {
+      try {
+        const res = await fetch(`/api/projects/${projectId}/workflow`);
+        if (res.ok) {
+          const data = await res.json();
+          // Nếu có data thì load, không thì load khối "Bắt đầu" mặc định
+          setNodes(data.workflowNodes?.length > 0 ? data.workflowNodes : initialNodes);
+          setEdges(data.workflowEdges?.length > 0 ? data.workflowEdges : []);
+        }
+      } catch (error) {
+        showToast("error", "Không thể tải quy trình cũ!");
+      }
+    };
+    loadWorkflowData();
+  }, [projectId, passedProjectName, setNodes, setEdges, showToast]);
+
+  // 🚀 GỌI API PATCH ĐỂ LƯU DATA
   const handleSaveWorkflow = async () => {
     setIsSaving(true);
-    // Logic gọi API save...
-    setTimeout(() => {
-        showToast("success", "Đã lưu quy trình!");
-        setIsSaving(false);
-    }, 1000);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/workflow`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nodes, edges }), // Gửi toàn bộ bàn vẽ lên server
+      });
+
+      if (!res.ok) throw new Error("Lỗi khi lưu");
+      showToast("success", "Đã lưu quy trình thành công!");
+    } catch (error) {
+      showToast("error", "Lỗi lưu quy trình!");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -125,7 +148,7 @@ export default function ProjectWorkflowPage() {
           </button>
           <div>
             <h1 className="text-sm font-black text-slate-400 uppercase tracking-tighter">Thiết lập quy trình</h1>
-            <p className="text-base font-bold text-slate-900">{projectName || "Đang tải..."}</p>
+            <p className="text-base font-bold text-slate-900">{projectName}</p>
           </div>
         </div>
 
@@ -138,13 +161,11 @@ export default function ProjectWorkflowPage() {
         </button>
       </div>
 
-      {/* 🚀 BẮT BUỘC BỌC REACTFLOWPROVIDER ĐỂ DÙNG DRAG & DROP */}
       <ReactFlowProvider>
         <FlowCanvas 
-            projectId={projectId} 
-            projectName={projectName} 
-            isSaving={isSaving} 
-            handleSaveWorkflow={handleSaveWorkflow} 
+            nodes={nodes} edges={edges} 
+            onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} 
+            setNodes={setNodes} setEdges={setEdges}
         />
       </ReactFlowProvider>
     </div>

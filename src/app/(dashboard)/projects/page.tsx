@@ -180,7 +180,7 @@ export default function ProjectsPage() {
                                                         </div>
                                                         <div>
                                                             <p className="text-xs font-black text-slate-700 leading-none">{proj.supervisor.fullName}</p>
-                                                            
+
                                                         </div>
                                                     </div>
                                                 ) : (
@@ -218,7 +218,7 @@ export default function ProjectsPage() {
                                                         <ListChecks size={14} /> Tiêu chuẩn
                                                     </button>
                                                     {/* 🚀 NÚT VÀO TRANG THIẾT KẾ QUY TRÌNH (WORKFLOW) */}
-                                                    <Link href={`/projects/${proj.id}`}>
+                                                    <Link href={`/workflow/${proj.id}?name=${encodeURIComponent(proj.name)}`}>
                                                         <button
                                                             className="px-3 py-1.5 flex items-center gap-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white hover:shadow-md hover:shadow-indigo-600/20 rounded-lg text-xs font-bold transition-all active:scale-95"
                                                             title="Thiết lập Quy trình (Workflow)"
@@ -277,10 +277,10 @@ export default function ProjectsPage() {
                     }
                 }}
             />
-            <SampleCriteriaDrawer 
-                    isOpen={isSampleDrawerOpen}
-                    onClose={() => setIsSampleDrawerOpen(false)}
-                />
+            <SampleCriteriaDrawer
+                isOpen={isSampleDrawerOpen}
+                onClose={() => setIsSampleDrawerOpen(false)}
+            />
         </PermissionGuard>
     );
 }
