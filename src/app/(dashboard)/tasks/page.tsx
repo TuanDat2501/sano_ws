@@ -961,6 +961,11 @@ export default function KanbanBoard() {
             setIsDrawerOpen(false); // Tạm đóng Drawer chi tiết
             setEditingTask(selectedTask); // Lưu data task hiện tại vào state
             setIsModalOpen(true); // Mở modal Create lên (Nó sẽ tự thành Form Sửa vì đã có editingTask)
+            
+          }}
+          onRefreshBoard={() => {
+            fetchTasks(); // Kéo dữ liệu mới từ Database về
+            if (socket) socket.emit("board_updated"); // Báo mọi người khác cùng reload
           }}
         />
 

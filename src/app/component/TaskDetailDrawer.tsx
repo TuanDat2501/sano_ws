@@ -25,6 +25,7 @@ interface TaskDetailDrawerProps {
   userRole: string;
   onSubmitEvaluation?: (score: number, criteriaData: any, note: string) => void;
   onEditTask?: () => void;
+  onRefreshBoard?: () => void;
 }
 
 // 🚀 BỘ TIÊU CHUẨN MẪU (Mock Data)
@@ -57,7 +58,7 @@ const MOCK_CRITERIA = [
 
 export default function TaskDetailDrawer({
   isOpen, onClose, selectedTask, taskLinks, setTaskLinks, errors, isSavingLinks, userRole,
-  onSaveLinks, onToggleClose, onReject, canReject, messages, chatMessage, setChatMessage, onSendMessage, sessionUserId, onSubmitEvaluation, onEditTask
+  onSaveLinks, onToggleClose, onReject, canReject, messages, chatMessage, setChatMessage, onSendMessage, sessionUserId, onSubmitEvaluation, onEditTask,onRefreshBoard
 }: TaskDetailDrawerProps) {
   const [mounted, setMounted] = useState(false);
 
@@ -120,6 +121,9 @@ export default function TaskDetailDrawer({
          setSavingField(null);
          setSavedField(fieldKey); // Bật dấu tick xanh
          setTimeout(() => setSavedField(null), 2500); // Ẩn tick xanh sau 2.5 giây
+         if (onRefreshBoard) {
+             onRefreshBoard();
+         }
       }
     } catch (error) {
       setSavingField(null);
