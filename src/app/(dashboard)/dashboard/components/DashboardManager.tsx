@@ -37,23 +37,9 @@ export default function DashboardManager() {
 
     if (!data) return null;
 
-    const chartData = [
-        { name: "T2", script: 0, video: 0, publish: 0 },
-        { name: "T3", script: 0, video: 0, publish: 0 },
-        { name: "T4", script: 0, video: 0, publish: 0 },
-        { name: "T5", script: 0, video: 0, publish: 0 },
-        { name: "T6", script: 0, video: 0, publish: 0 },
-        { name: "T7", script: 0, video: 0, publish: 0 },
-        { name: "CN", script: 0, video: 0, publish: 0 },
-    ];
-
-    data.logs?.forEach((log: any) => {
-        const day = new Date(log.createdAt).getDay(); 
-        const index = day === 0 ? 6 : day - 1; 
-        if (log.action === "SUBMIT_SCRIPT") chartData[index].script++;
-        else if (log.action === "SUBMIT_VIDEO") chartData[index].video++;
-        else if (log.action === "PUBLISH_VIDEO") chartData[index].publish++;
-    });
+    // 🚀 LẤY TRỰC TIẾP DỮ LIỆU TỪ BACKEND
+    // Nếu chưa có dữ liệu 7 ngày gần nhất, khởi tạo mảng rỗng để Recharts không bị lỗi
+    const chartData = data.chartData || [];
 
     return (
         <div className="space-y-6 md:space-y-8">
@@ -96,19 +82,28 @@ export default function DashboardManager() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
                 {/* 2. BIỂU ĐỒ SẢN LƯỢNG */}
                 <div className="lg:col-span-2 bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200 min-w-0">
-                    <h2 className="text-base md:text-lg font-black text-slate-800 mb-6 flex items-center gap-2">Biểu đồ Sản lượng Tuần</h2>
+                    <h2 className="text-base md:text-lg font-black text-slate-800 mb-6 flex items-center gap-2">Năng suất Team 7 ngày qua</h2>
                     <div className="h-[250px] md:h-[300px] w-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={chartData} margin={{ top: 10, right: 0, left: -25, bottom: 0 }}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b', fontWeight: 'bold' }} />
-                                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b', fontWeight: 'bold' }} />
-                                <Tooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                                <Bar dataKey="script" name="Kịch bản" stackId="a" fill="#eab308" radius={[0, 0, 4, 4]} />
-                                <Bar dataKey="video" name="Dựng Video" stackId="a" fill="#3b82f6" />
-                                <Bar dataKey="publish" name="Đăng Kênh" stackId="a" fill="#a855f7" radius={[4, 4, 0, 0]} />
-                            </BarChart>
-                        </ResponsiveContainer>
+                        {chartData.length === 0 ? (
+                             <div className="w-full h-full flex items-center justify-center text-slate-400 font-medium text-sm italic">
+                                Team chưa cập nhật công việc trong 7 ngày qua.
+                             </div>
+                        ) : (
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={chartData} margin={{ top: 10, right: 0, left: -25, bottom: 0 }}>
+                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                    <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b', fontWeight: 'bold' }} />
+                                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b', fontWeight: 'bold' }} />
+                                    <Tooltip 
+                                        cursor={{ fill: '#f8fafc' }} 
+                                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                        labelStyle={{ fontWeight: 'bold', color: '#1e293b' }}
+                                    />
+                                    {/* 🚀 ĐÃ SỬA: Map đúng với key "done" trả về từ Backend */}
+                                    <Bar dataKey="done" name="Số bài hoàn thành" fill="#15ff00" radius={[4, 4, 0, 0]} />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        )}
                     </div>
                 </div>
 

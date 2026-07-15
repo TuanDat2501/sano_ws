@@ -73,6 +73,7 @@ enum TaskLogAction {
   REJECT_TASK
   ASSIGN_USER
   DAILY_REPORT
+  MERGE_VIDEO
 }
 
 // ================= MODELS =================
@@ -189,7 +190,7 @@ model Task {
 
   publishDate       DateTime? @db.Date // Ngày pub (Lên lịch)
   duration          Int?     
-  note              String?
+  note              String? @db.Text
 
   creatorId     String
   creator       User    @relation("TaskCreator", fields: [creatorId], references: [id])
@@ -225,6 +226,12 @@ model Task {
   isClosed      Boolean  @default(false)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+  episodeNumber Int?           // Số thứ tự tập (Hệ thống tự đếm)
+  isCompilation Boolean        @default(false) // Đánh dấu đây là video ghép
+  mergeCount    Int?           @default(0)     // Số lượng video gốc được ghép vào
+  sourceTasks   Task[]         @relation("VideoMergeRelation")
+  compiledInto  Task[]         @relation("VideoMergeRelation")
+  usedInMergeCount Int?        @default(0)
 }
 
 model Evaluation {

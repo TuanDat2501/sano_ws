@@ -7,7 +7,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
-import { Plus, Link as LinkIcon, AlertCircle, FileText, CheckCircle2, Clock, PlayCircle, Loader2, X, UsersIcon, Send, MessageSquare, Users, Archive, Download } from "lucide-react";
+import { Plus, Link as LinkIcon, AlertCircle, FileText, CheckCircle2, Clock, PlayCircle, Loader2, X, UsersIcon, Send, MessageSquare, Users, Archive, Download, Video } from "lucide-react";
 import { useToast } from "@/app/component/ToastProvider";
 import { io, Socket } from "socket.io-client";
 import CreateTaskModal from "@/app/component/CreateTaskModal";
@@ -17,6 +17,7 @@ import BoardView from "@/app/component/BoardView/BoardView";
 import PermissionGuard from "@/app/component/PermissionGuard";
 import BacklogView from "./BacklogView";
 import PushTaskModal from "./PushTaskModal";
+import MergeVideoModal from './MergeVideoModal';
 
 const COLUMNS = {
   TODO: { id: "TODO", title: "Chờ Kịch Bản", icon: <FileText size={18} className="text-slate-700" />, color: "text-slate-800", iconBg: "bg-slate-300", columnBg: "bg-slate-200", borderColor: "border-slate-300" },
@@ -108,6 +109,43 @@ export default function KanbanBoard() {
     return matchSearch && matchStatus && matchFrom && matchTo;
   });
 
+  const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
+  const [isMerging, setIsMerging] = useState(false);
+
+  const handleMergeSubmit = async (mergeData: any) => {
+    setIsMerging(true);
+    try {
+        const res = await fetch("/api/tasks/merge", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(mergeData)
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+            showToast("success", "Đã tạo Video Ghép thành công!");
+            setIsMergeModalOpen(false);
+            fetchTasks(); // Kéo lại Kanban board
+            
+            // Bắn socket thông báo cho Editor
+            if (socket) {
+                socket.emit("board_updated");
+                socket.emit("assign_task", {
+                    taskId: data.task?.id,
+                    taskName: data.task?.title,
+                    assigneeId: mergeData.assigneeId,
+                    assignerName: (session?.user as any)?.fullName || "Quản lý"
+                });
+            }
+        } else {
+            showToast("error", data.error || "Có lỗi xảy ra khi gộp");
+        }
+    } catch (error) {
+        showToast("error", "Lỗi kết nối Server");
+    } finally {
+        setIsMerging(false);
+    }
+  };
   const fetchTasks = async () => {
     try {
       const currentStatus = viewMode === 'backlog' ? 'BACKLOG' : filterStatus;
@@ -906,9 +944,16 @@ export default function KanbanBoard() {
                 </button>
               )}
               {canCreateTask && (
-                <button onClick={() => setIsModalOpen(true)} className="flex-1 sm:flex-none bg-red-600 hover:bg-red-700 text-white px-4 md:px-5 py-2.5 md:py-2.5 rounded-xl md:rounded-2xl font-bold flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 text-sm md:text-base">
-                  <Plus size={18} className="md:w-5 md:h-5" /> Tạo yêu cầu Video
-                </button>
+                <div className="flex gap-2">
+                    <button onClick={() => setIsModalOpen(true)} className="flex-1 sm:flex-none bg-red-600 hover:bg-red-700 text-white px-4 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 text-sm md:text-base">
+                      <Plus size={18} /> Tạo Video
+                    </button>
+
+                    {/* 🚀 NÚT MỞ MODAL GỘP VIDEO */}
+                    <button onClick={() => setIsMergeModalOpen(true)} className="flex-1 sm:flex-none bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 text-sm md:text-base">
+                      <Video size={18} /> Video Ghép
+                    </button>
+                </div>
               )}
             </div>
           </div>
@@ -974,7 +1019,7 @@ export default function KanbanBoard() {
             setIsDrawerOpen(false); // Tạm đóng Drawer chi tiết
             setEditingTask(selectedTask); // Lưu data task hiện tại vào state
             setIsModalOpen(true); // Mở modal Create lên (Nó sẽ tự thành Form Sửa vì đã có editingTask)
-            
+
           }}
           onRefreshBoard={() => {
             fetchTasks(); // Kéo dữ liệu mới từ Database về
@@ -991,6 +1036,17 @@ export default function KanbanBoard() {
           onSubmit={handlePushTaskSubmit}
           isSubmitting={isPushing}
 
+        />
+
+        <MergeVideoModal 
+            isOpen={isMergeModalOpen}
+            onClose={() => setIsMergeModalOpen(false)}
+            projects={projects}
+            teams={teams}
+            channels={channels}
+            // users={users}
+            onSubmit={handleMergeSubmit}
+            isSubmitting={isMerging}
         />
       </div>
     </PermissionGuard>

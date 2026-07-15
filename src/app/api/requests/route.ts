@@ -14,13 +14,15 @@ export async function POST(req: Request) {
 
         const user = session.user as any;
         const userId = user.id;
-        const userRole = user.role; // Lấy role của user
+        const userRole = user.role; 
         const isLeader = userRole === "LEADER";
 
         const body = await req.json();
-        const { type, teamId, contentData, firstApproverId, secondApproverId } = body;
+        
+        // 🚀 Bóc tách dữ liệu y hệt như payload frontend gửi lên
+        const { type, teamId, contentData, firstApproverId, secondApproverId, status } = body;
 
-        // Bóc tách dữ liệu
+        // Xử lý dữ liệu contentData
         const targetDate = contentData.date ? new Date(contentData.date) : null;
         const startDate = contentData.startDate ? new Date(contentData.startDate) : null;
         const endDate = contentData.endDate ? new Date(contentData.endDate) : null;
@@ -28,32 +30,33 @@ export async function POST(req: Request) {
         const itemName = contentData.itemName || null;
         const reason = contentData.reason || null;
 
-        // 🚀 LOGIC XỬ LÝ NẾU LÀ LEADER
-        let finalFirstApproverId = firstApproverId;
-        let finalSecondApproverId = secondApproverId;
-        let initialStatus = "PENDING_1";
+        // 🚀 VALIDATE DỮ LIỆU CHẶT CHẼ THEO PHÂN QUYỀN
+        if (!type || !contentData || !teamId) {
+            return NextResponse.json({ error: "Thiếu thông tin cơ bản của đơn" }, { status: 400 });
+        }
 
         if (isLeader) {
-            // Leader tạo: Tự động pass cấp 1 (gán mình là cấp 1), đẩy người duyệt lên cấp 2
-            initialStatus = "PENDING_2";
-            finalFirstApproverId = userId; // Leader tự là cấp 1 của chính mình
-            // Người duyệt Leader chọn từ UI sẽ được gán vào cấp 2
-            finalSecondApproverId = body.approverId; 
+            // Leader tạo thì bắt buộc phải có người duyệt cấp 2 (Giám đốc / Admin)
+            if (!secondApproverId) {
+                return NextResponse.json({ error: "Vui lòng chọn người duyệt (Ban Giám Đốc)" }, { status: 400 });
+            }
+        } else {
+            // Nhân viên tạo thì bắt buộc phải có quản lý cấp 1
+            if (!firstApproverId) {
+                return NextResponse.json({ error: "Vui lòng chọn Quản lý Cấp 1 để duyệt đơn" }, { status: 400 });
+            }
         }
 
-        // Validate
-        if (!type || !contentData || !teamId || (!isLeader && !finalFirstApproverId) || (isLeader && !finalSecondApproverId)) {
-            return NextResponse.json({ error: "Thiếu thông tin bắt buộc" }, { status: 400 });
-        }
-
+        // 🚀 TẠO ĐƠN TRONG DATABASE
         const newRequest = await prisma.request.create({
             data: {
                 type,
-                status: initialStatus as any, // Gán PENDING_1 hoặc PENDING_2
+                // Lấy status từ FE gửi (PENDING_2 cho leader, PENDING_1 cho NV), nếu rỗng thì fallback
+                status: status || (isLeader ? "PENDING_2" : "PENDING_1"), 
                 requesterId: userId,
                 teamId,
-                firstApproverId: finalFirstApproverId,
-                secondApproverId: finalSecondApproverId || null,
+                firstApproverId: firstApproverId,
+                secondApproverId: secondApproverId || null,
                 startDate,
                 endDate,
                 targetDate,
@@ -64,34 +67,35 @@ export async function POST(req: Request) {
             }
         });
 
-        // 🚀 TẠO THÔNG BÁO LINH HOẠT
-        if (isLeader) {
-            // Nếu là Leader, bắn thẳng thông báo cho cấp 2 (Admin/BGD) duyệt ngay
+        // 🚀 TẠO THÔNG BÁO CHO NGƯỜI DUYỆT
+        if (isLeader || status === "PENDING_2") {
+            // Đơn của Leader đẩy thẳng thông báo cho cấp 2 (Vì cấp 1 là chính họ rồi)
             await prisma.notification.create({
                 data: {
                     title: "Đơn từ mới cần duyệt gấp (Từ Leader)",
                     message: `Leader vừa tạo một đề xuất ${type} và đang chờ bạn phê duyệt.`,
                     type: "info",
-                    userId: finalSecondApproverId,
+                    userId: secondApproverId,
                     requestId: newRequest.id
                 }
             });
         } else {
-            // Nhân viên bình thường: Bắn cho cấp 1 trước
+            // Đơn của nhân viên đẩy cho cấp 1
             await prisma.notification.create({
                 data: {
                     title: "Đơn từ mới cần duyệt",
                     message: `Bạn vừa nhận được một đề xuất ${type} mới cần phê duyệt.`,
                     type: "info",
-                    userId: finalFirstApproverId,
+                    userId: firstApproverId,
                     requestId: newRequest.id
                 }
             });
-            // Báo trước cho cấp 2 (nếu có)
-            if (finalSecondApproverId) {
+            
+            // Nếu nhân viên có chọn cấp 2 thì báo trước cho cấp 2 biết để chuẩn bị tinh thần
+            if (secondApproverId) {
                 await prisma.notification.create({
                     data: {
-                        userId: finalSecondApproverId,
+                        userId: secondApproverId,
                         title: "Có đơn từ sắp tới lượt duyệt",
                         message: `Một đề xuất ${type} vừa được tạo. Sẽ tới lượt bạn sau khi Quản lý cấp 1 duyệt.`,
                         requestId: newRequest.id,
@@ -123,14 +127,11 @@ export async function GET(req: Request) {
         const tab = searchParams.get("tab") || "MY_REQUESTS";
         const searchKeyword = searchParams.get("search") || "";
 
-        // 🚀 CẬP NHẬT PHÂN QUYỀN: Xác định rõ role nào được xem "Tất cả"
         const isAdminOrHR = ["ADMIN", "BAN_GIAM_DOC", "HR"].includes(user.role);
 
         let whereClause: any = {};
 
-        // 🚀 LOGIC PHÂN TÁCH TAB
         if (tab === "NEED_APPROVAL") {
-            // Chỉ lấy đơn đang đợi mình duyệt
             whereClause = {
                 OR: [
                     { firstApproverId: user.id, status: "PENDING_1" },
@@ -138,18 +139,14 @@ export async function GET(req: Request) {
                 ]
             };
         } else if (tab === "ALL_REQUESTS") {
-            // Chỉ Admin/BGD/HR mới được vào tab này
             if (!isAdminOrHR) {
                 return NextResponse.json({ error: "Forbidden" }, { status: 403 });
             }
-            // Không set thêm điều kiện gì (lấy tất cả)
             whereClause = {};
         } else {
-            // Mặc định tab MY_REQUESTS: Chỉ lấy đơn của chính user đó
             whereClause = { requesterId: user.id };
         }
 
-        // Đính kèm tìm kiếm nếu có
         if (searchKeyword.trim() !== "") {
             whereClause = {
                 ...whereClause,

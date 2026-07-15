@@ -5,7 +5,6 @@ import { authOptions } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-// 🚀 THÊM HÀM TÍNH TUẦN CHUẨN XÁC GIỐNG HỆT FRONTEND
 function getCurrentWeekNumber(date: Date) {
     const year = date.getFullYear();
     const month = date.getMonth(); 
@@ -26,7 +25,7 @@ function getCurrentWeekNumber(date: Date) {
         endOfWeek.setHours(23, 59, 59, 999);
         
         if (targetTime >= startOfWeek.getTime() && targetTime <= endOfWeek.getTime()) {
-            return w > 4 ? 4 : w; // Max là tuần 4 theo cấu hình của bạn
+            return w > 4 ? 4 : w; 
         }
     }
     return 1;
@@ -48,7 +47,6 @@ export async function GET(req: Request) {
         const isLeader = role === "LEADER";
         const isManager = isTopManagement || isLeader;
 
-        // Tính chính xác thứ Hai tuần này (00:00:00)
         const today = new Date();
         const startOfWeek = new Date(today);
         const dayOfWeek = today.getDay();
@@ -57,11 +55,24 @@ export async function GET(req: Request) {
         startOfWeek.setHours(0, 0, 0, 0);
         
         const sevenDaysAgo = new Date(today);
-        sevenDaysAgo.setDate(today.getDate() - 7);
+        sevenDaysAgo.setDate(today.getDate() - 7); // Tính lùi 7 ngày cho query DB
         sevenDaysAgo.setHours(0, 0, 0, 0);
 
-        // 🚀 TÍNH RA SỐ TUẦN HIỆN TẠI ĐỂ QUERY DATABASE
         const currentWeekNum = getCurrentWeekNumber(today);
+
+        // 🚀 THUẬT TOÁN TẠO SẴN KHUNG 7 NGÀY ĐẦY ĐỦ (Bao gồm cả hôm nay)
+        const generateEmpty7DaysChart = () => {
+            const chartTemplate = [];
+            for (let i = 6; i >= 0; i--) {
+                const d = new Date(today);
+                d.setDate(today.getDate() - i);
+                const dateStr = d.toLocaleDateString('vi-VN', { 
+                    day: '2-digit', month: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' 
+                }).replace('/', '-');
+                chartTemplate.push({ date: dateStr, done: 0 }); // Khởi tạo 0 bài
+            }
+            return chartTemplate;
+        };
 
         // ==========================================
         // 👑 LUỒNG DATA CHO QUẢN LÝ (BGD / ADMIN / LEADER)
@@ -90,7 +101,7 @@ export async function GET(req: Request) {
                 totalActiveTasks,
                 totalPendingTasks,
                 totalOverdueTasks,
-                logsThisWeek,
+                managerLogs7DaysRaw,
                 kpiRecords
             ] = await Promise.all([
                 prisma.task.count({ where: { ...taskFilter, isClosed: false } }),
@@ -100,7 +111,6 @@ export async function GET(req: Request) {
                         ...taskFilter,
                         isClosed: false,
                         OR: [
-                            // 🚀 ĐÃ SỬA: Dùng toán tử AND để kết hợp 2 điều kiện
                             { AND: [{ scriptLink: { not: null } }, { scriptLink: { not: "" } }] },
                             { AND: [{ videoLink: { not: null } }, { videoLink: { not: "" } }] },
                             { AND: [{ publishLink: { not: null } }, { publishLink: { not: "" } }] }
@@ -121,10 +131,11 @@ export async function GET(req: Request) {
 
                 prisma.taskLog.findMany({
                     where: {
-                        createdAt: { gte: startOfWeek },
+                        createdAt: { gte: sevenDaysAgo }, 
                         ...userCondition, 
                         action: { in: ["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK", "DAILY_REPORT"] }
                     },
+                    orderBy: { createdAt: 'desc' }, 
                     include: { user: { select: { fullName: true } } }
                 }),
 
@@ -132,33 +143,48 @@ export async function GET(req: Request) {
                     where: {
                         year: today.getFullYear(),
                         month: today.getMonth() + 1,
-                        weekNumber: currentWeekNum, // 🚀 ÁP DỤNG WEEK NUM ĐÃ FIX
+                        weekNumber: currentWeekNum, 
                         ...userCondition 
                     },
                     include: { user: { select: { fullName: true, role: true } } }
                 })
             ]);
 
-            // Tính điểm thực tế áp dụng Smart Filter chống hack
-            let totalTarget = 0;
-            kpiRecords.forEach((k: any) => totalTarget += k.targetValue);
-            
-            let totalActual = 0;
-            const dailyReportTrackerManager = new Set<string>();
-            logsThisWeek.forEach((log: any) => {
+            const validLogs7Days: any[] = [];
+            const dailyReportTracker7Days = new Set<string>();
+            managerLogs7DaysRaw.forEach((log: any) => {
                 if (log.action === "DAILY_REPORT") {
                     const dateStr = new Date(log.createdAt).toISOString().split('T')[0];
                     const uniqueKey = `${log.userId}_${log.taskId}_${dateStr}`;
-                    if (!dailyReportTrackerManager.has(uniqueKey)) {
-                        dailyReportTrackerManager.add(uniqueKey);
-                        totalActual++;
+                    if (!dailyReportTracker7Days.has(uniqueKey)) {
+                        dailyReportTracker7Days.add(uniqueKey);
+                        validLogs7Days.push(log);
                     }
                 } else {
-                    totalActual++;
+                    validLogs7Days.push(log);
                 }
             });
-            
+
+            const logsThisWeek = validLogs7Days.filter(log => new Date(log.createdAt) >= startOfWeek);
+            const totalActual = logsThisWeek.length;
+
+            let totalTarget = 0;
+            kpiRecords.forEach((k: any) => totalTarget += k.targetValue);
             const avgKpiPercent = totalTarget > 0 ? Math.round((totalActual / totalTarget) * 100) : 0;
+
+            // 🚀 BẢO ĐẢM BIỂU ĐỒ LUÔN CÓ ĐỦ 7 NGÀY
+            const chartDataArray = generateEmpty7DaysChart();
+            validLogs7Days.forEach(log => {
+                const dateStr = new Date(log.createdAt).toLocaleDateString('vi-VN', { 
+                    day: '2-digit', month: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' 
+                }).replace('/', '-');
+                
+                // Tìm ngày tương ứng trong khung và cộng điểm
+                const existingDay = chartDataArray.find(d => d.date === dateStr);
+                if (existingDay) {
+                    existingDay.done++;
+                }
+            });
 
             const mappedLogsThisWeek = logsThisWeek.map((log: any) => {
                 let typeStr = "Khác";
@@ -181,7 +207,8 @@ export async function GET(req: Request) {
                     overdue: totalOverdueTasks
                 },
                 logs: mappedLogsThisWeek,
-                kpis: kpiRecords
+                kpis: kpiRecords,
+                chartData: chartDataArray
             });
         }
 
@@ -230,12 +257,11 @@ export async function GET(req: Request) {
                         userId: userId,
                         year: today.getFullYear(),
                         month: today.getMonth() + 1,
-                        weekNumber: currentWeekNum // 🚀 ÁP DỤNG WEEK NUM ĐÃ FIX
+                        weekNumber: currentWeekNum
                     }
                 })
             ]);
 
-            // BỘ LỌC CHỐNG HACK CHO 7 NGÀY
             const validLogs7Days: any[] = [];
             const dailyReportTracker7Days = new Set<string>();
             myLogs7DaysRaw.forEach(log => {
@@ -272,20 +298,18 @@ export async function GET(req: Request) {
                 }
             });
 
-            const chartDataMap: Record<string, number> = {};
+            // 🚀 BẢO ĐẢM BIỂU ĐỒ LUÔN CÓ ĐỦ 7 NGÀY (NHÂN VIÊN)
+            const chartDataArray = generateEmpty7DaysChart();
             validLogs7Days.forEach(log => {
                 const dateStr = new Date(log.createdAt).toLocaleDateString('vi-VN', { 
                     day: '2-digit', month: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' 
                 }).replace('/', '-');
                 
-                if (!chartDataMap[dateStr]) chartDataMap[dateStr] = 0;
-                chartDataMap[dateStr]++;
+                const existingDay = chartDataArray.find(d => d.date === dateStr);
+                if (existingDay) {
+                    existingDay.done++;
+                }
             });
-
-            const chartDataArray = Object.keys(chartDataMap).map(date => ({
-                date: date,
-                done: chartDataMap[date]
-            })).reverse();
 
             const mappedRecentLogs = validLogs7Days.map((log: any) => {
                 let typeStr = "Khác";

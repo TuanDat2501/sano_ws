@@ -129,7 +129,7 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
                     </div>
                     {/* 🚀 THÊM NGÀY PUB */}
                     <div>
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-1.5"><CalendarDays size={12} /> Ngày Pub</label>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-1.5"><CalendarDays size={12} /> Ngày Hoành Thành</label>
                       <input type="date" className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm outline-none font-bold focus:border-blue-500 focus:bg-white" value={newTask.publishDate} onChange={(e) => setNewTask({ ...newTask, publishDate: e.target.value })} />
                     </div>
                   </div>

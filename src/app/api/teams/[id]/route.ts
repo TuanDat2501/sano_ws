@@ -85,3 +85,42 @@ export async function PUT(req: Request, context: any) {
         return NextResponse.json({ error: "Lỗi hệ thống khi cập nhật Team" }, { status: 500 });
     }
 }
+
+// BỔ SUNG HÀM GET ĐỂ LẤY CHI TIẾT TEAM KÈM DANH SÁCH USER VÀ KÊNH
+export async function GET(req: Request, context: any) {
+    try {
+        const params = await context.params;
+        const teamId = params.id;
+
+        const session = await getServerSession(authOptions);
+        if (!session) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+
+        const team = await prisma.team.findUnique({
+            where: { id: teamId },
+            include: {
+                users: {
+                    where: { isActive: true }, // Chỉ lấy user đang hoạt động
+                    select: {
+                        id: true,
+                        fullName: true,
+                        role: true,
+                        teamId: true
+                    }
+                },
+                channels: true // 🚀 BỔ SUNG: Lấy toàn bộ kênh thuộc sở hữu của Team này
+            }
+        });
+
+        if (!team) {
+            return NextResponse.json({ error: "Team không tồn tại" }, { status: 404 });
+        }
+
+        return NextResponse.json(team);
+
+    } catch (error) {
+        console.error("GET Team Error:", error);
+        return NextResponse.json({ error: "Lỗi hệ thống khi lấy thông tin Team" }, { status: 500 });
+    }
+}

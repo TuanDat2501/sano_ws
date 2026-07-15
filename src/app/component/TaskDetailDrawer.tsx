@@ -1,6 +1,6 @@
 "use client";
 
-import { X, Link as LinkIcon, CheckCircle2, Loader2, MessageSquare, Send, ClipboardCheck, Clock, Tag, Tv } from "lucide-react";
+import { X, Link as LinkIcon, CheckCircle2, Loader2, MessageSquare, Send, ClipboardCheck, Clock, Tag, Tv, Video } from "lucide-react";
 import { useEffect, useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 import EvaluationPanel from "./EvaluationPanel";
@@ -58,7 +58,7 @@ const MOCK_CRITERIA = [
 
 export default function TaskDetailDrawer({
   isOpen, onClose, selectedTask, taskLinks, setTaskLinks, errors, isSavingLinks, userRole,
-  onSaveLinks, onToggleClose, onReject, canReject, messages, chatMessage, setChatMessage, onSendMessage, sessionUserId, onSubmitEvaluation, onEditTask,onRefreshBoard
+  onSaveLinks, onToggleClose, onReject, canReject, messages, chatMessage, setChatMessage, onSendMessage, sessionUserId, onSubmitEvaluation, onEditTask, onRefreshBoard
 }: TaskDetailDrawerProps) {
   const [mounted, setMounted] = useState(false);
 
@@ -96,34 +96,34 @@ export default function TaskDetailDrawer({
     }
     setTimeout(() => setIsEvaluating(false), 800);
   };
+
   // Thêm 2 state để quản lý UI Loading/Thành công
   const [savingField, setSavingField] = useState<string | null>(null);
   const [savedField, setSavedField] = useState<string | null>(null);
   if (!selectedTask) return null;
   const isManager = ["ADMIN", "BAN_GIAM_DOC", "LEADER", "HR", "QLK"].includes(userRole);
-  
+
   const isParticipant = isManager || selectedTask.contentId === sessionUserId || selectedTask.editorId === sessionUserId || selectedTask.creatorId === sessionUserId;
-  
 
   const handleAutoSave = async (fieldKey: string, newValue: string) => {
     if (newValue === (selectedTask[fieldKey] || "")) return;
 
-    setSavingField(fieldKey); // Bật loading xoay xoay
+    setSavingField(fieldKey);
     try {
       const res = await fetch(`/api/tasks/${selectedTask.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ [fieldKey]: newValue })
       });
-      
+
       if (res.ok) {
-         selectedTask[fieldKey] = newValue; // Tránh lưu trùng lặp nếu user blur lần 2
-         setSavingField(null);
-         setSavedField(fieldKey); // Bật dấu tick xanh
-         setTimeout(() => setSavedField(null), 2500); // Ẩn tick xanh sau 2.5 giây
-         if (onRefreshBoard) {
-             onRefreshBoard();
-         }
+        selectedTask[fieldKey] = newValue;
+        setSavingField(null);
+        setSavedField(fieldKey);
+        setTimeout(() => setSavedField(null), 2500);
+        if (onRefreshBoard) {
+          onRefreshBoard();
+        }
       }
     } catch (error) {
       setSavingField(null);
@@ -131,13 +131,42 @@ export default function TaskDetailDrawer({
     }
   };
 
+  // =========================================================================
+  // 🚀 LOGIC TÁCH DỮ LIỆU "NGUYÊN LIỆU GHÉP" VÀ "BÁO CÁO CỦA USER"
+  // =========================================================================
+  const fullNote = taskLinks.note !== undefined ? taskLinks.note : (selectedTask?.note || "");
+  const splitToken = "Nguyên liệu ghép:";
+  const splitIndex = fullNote.indexOf(splitToken);
+
+  // 1. Lấy phần chữ do người dùng gõ (Cắt bỏ phần "Nguyên liệu ghép..." đi)
+  const cleanUserNote = splitIndex !== -1 ? fullNote.substring(0, splitIndex).trim() : fullNote;
+
+  // 2. Lấy riêng cục Text do API sinh ra để bóc tách Link
+  const compilationPart = splitIndex !== -1 ? fullNote.substring(splitIndex) : "";
+
+  // 3. Tự động bóc tách Link ra thành mảng Object để vẽ Giao diện đẹp
+  const parsedLinks: { name: string, url: string }[] = [];
+  if (compilationPart) {
+    compilationPart.split('\n').forEach((line: string) => {
+      if (line.startsWith('- ')) {
+        const parts = line.substring(2).split(': ');
+        if (parts.length >= 2) {
+          parsedLinks.push({
+            name: parts[0],
+            url: parts.slice(1).join(': ').trim()
+          });
+        }
+      }
+    });
+  }
+
   const drawerContent = (
     <>
       {isOpen && <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[99998] transition-opacity" onClick={onClose} />}
 
       <div className={`fixed top-0 right-0 h-full w-full md:w-[1000px] md:max-w-[95vw] bg-white shadow-2xl z-[99999] transform transition-transform duration-300 flex flex-col ${isOpen ? "translate-x-0" : "translate-x-full"}`}>
-        
-        {/* ================= HEADER (Giữ nguyên) ================= */}
+
+        {/* ================= HEADER ================= */}
         <div className="px-4 md:px-6 py-3 md:py-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shrink-0 bg-white z-10">
           <div className="flex flex-col w-full sm:w-auto gap-1">
             <div className="flex items-center gap-2 flex-wrap">
@@ -189,15 +218,48 @@ export default function TaskDetailDrawer({
           <div className="w-full lg:w-[55%] flex flex-col h-full border-r border-slate-200 bg-white">
             <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 custom-scrollbar">
 
-              {/* Link Nguồn & Nhân sự (Giữ nguyên) */}
-              <div>
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5 mb-2"><LinkIcon size={14} /> Link Tham Khảo / Ý Tưởng</label>
-                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 font-medium text-sm text-blue-600 break-all hover:bg-blue-50 transition-colors">
-                  <a href={selectedTask.linkContent} target="_blank" rel="noreferrer" className="hover:underline">{selectedTask.linkContent}</a>
+              {/* 🚀 GIAO DIỆN HIỂN THỊ LINK ĐÃ ĐƯỢC CHIA TRƯỜNG HỢP */}
+              {selectedTask.isCompilation ? (
+                <div className="bg-indigo-50 border border-indigo-100 p-5 rounded-[24px] shadow-sm">
+                  <label className="text-xs font-black text-indigo-800 uppercase tracking-widest flex items-center gap-2 mb-3">
+                    <Video size={16} /> Nguyên Liệu Video Ghép
+                  </label>
+                  <div className="space-y-2.5">
+                    {parsedLinks.length > 0 ? parsedLinks.map((item, idx) => (
+                      <div key={idx} className="flex flex-col sm:flex-row sm:items-center gap-3 bg-white p-3 rounded-xl border border-indigo-100/50 shadow-sm transition-all hover:shadow-md">
+                        <span className="text-xs font-black text-indigo-700 bg-indigo-100/50 px-2.5 py-1.5 rounded-lg shrink-0 min-w-[70px] text-center border border-indigo-100">
+                          {item.name}
+                        </span>
+                        {item.url !== 'Chưa có link' && item.url.startsWith('http') ? (
+                          <a href={item.url} target="_blank" rel="noreferrer" className="text-[13px] font-bold text-blue-600 truncate hover:text-blue-700 hover:underline flex-1">
+                            {item.url}
+                          </a>
+                        ) : (
+                          <span className="text-[13px] font-bold text-slate-400 italic flex-1">
+                            {item.url}
+                          </span>
+                        )}
+                      </div>
+                    )) : (
+                      <p className="text-sm font-medium text-slate-500 italic px-2">Không tìm thấy link nguyên liệu.</p>
+                    )}
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div>
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5 mb-2">
+                    <LinkIcon size={14} /> Link Tham Khảo / Ý Tưởng
+                  </label>
+                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 font-medium text-sm text-blue-600 break-all hover:bg-blue-50 transition-colors">
+                    <a href={selectedTask.linkContent} target="_blank" rel="noreferrer" className="hover:underline">{selectedTask.linkContent}</a>
+                  </div>
+                </div>
+              )}
+
+              {/* NHÂN SỰ */}
               <div className="grid grid-cols-2 gap-4">
-                <div className="bg-orange-50/50 border border-orange-100 p-3.5 rounded-2xl flex items-center gap-3">
+                {selectedTask.contentUser && 
+                  <div className="bg-orange-50/50 border border-orange-100 p-3.5 rounded-2xl flex items-center gap-3">
                   <div className="h-10 w-10 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center font-black border-2 border-white shadow-sm text-base">
                     {selectedTask.contentUser?.fullName?.charAt(0) || "?"}
                   </div>
@@ -206,7 +268,11 @@ export default function TaskDetailDrawer({
                     <p className="text-sm font-bold text-slate-800 truncate">{selectedTask.contentUser?.fullName || "Chưa giao"}</p>
                   </div>
                 </div>
-                <div className="bg-blue-50/50 border border-blue-100 p-3.5 rounded-2xl flex items-center gap-3">
+                }
+                
+                {
+                  selectedTask.editorUser && 
+                  <div className="bg-blue-50/50 border border-blue-100 p-3.5 rounded-2xl flex items-center gap-3">
                   <div className="h-10 w-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center font-black border-2 border-white shadow-sm text-base">
                     {selectedTask.editorUser?.fullName?.charAt(0) || "?"}
                   </div>
@@ -215,73 +281,77 @@ export default function TaskDetailDrawer({
                     <p className="text-sm font-bold text-slate-800 truncate">{selectedTask.editorUser?.fullName || "Chưa giao"}</p>
                   </div>
                 </div>
-                <div className="bg-blue-50/50 border border-blue-100 p-3.5 rounded-2xl flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center font-black border-2 border-white shadow-sm text-base">
-                    {selectedTask.animatorUser?.fullName?.charAt(0) || "?"}
+                }
+                
+
+                {selectedTask.animatorUser &&
+                  <div className="bg-blue-50/50 border border-blue-100 p-3.5 rounded-2xl flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center font-black border-2 border-white shadow-sm text-base">
+                      {selectedTask.animatorUser?.fullName?.charAt(0) || "?"}
+                    </div>
+                    <div className="overflow-hidden">
+                      <p className="text-[10px] font-bold text-blue-500 uppercase tracking-widest">Animator</p>
+                      <p className="text-sm font-bold text-slate-800 truncate">{selectedTask.animatorUser?.fullName || "Chưa giao"}</p>
+                    </div>
                   </div>
-                  <div className="overflow-hidden">
-                    <p className="text-[10px] font-bold text-blue-500 uppercase tracking-widest">Editor</p>
-                    <p className="text-sm font-bold text-slate-800 truncate">{selectedTask.animatorUser?.fullName || "Chưa giao"}</p>
-                  </div>
-                </div>
+                }
+
               </div>
 
-              {/* KHỐI INPUT LINK (Đã tích hợp icon trạng thái lưu ngầm) */}
+              {/* KHỐI INPUT LINK */}
               <div className="bg-slate-50 border border-slate-200 rounded-[24px] p-5 space-y-4 shadow-inner">
                 <h3 className="font-black text-base text-slate-800 flex items-center gap-2 mb-2"><CheckCircle2 className="text-emerald-500 w-5 h-5" /> Kết Quả Công Việc</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {[
-                      { key: 'scriptLink', label: '1. Kịch Bản (VN)', role: 'CONTENT', idField: 'contentId' },
-                      { key: 'englishScriptLink', label: '2. Text ENG', role: 'CONTENT', idField: 'contentId' },
-                      { key: 'audioLink', label: '3. Link Audio (AI)', role: 'CONTENT', idField: 'contentId' },
-                      { key: 'storyboardLink', label: '4. Bố Cục', role: 'EDITOR', idField: 'editorId' },
-                      { key: 'thumbnailLink', label: '5. Thumbnail', role: 'EDITOR', idField: 'editorId' },
-                      { key: 'videoLink', label: '6. Video Render', role: 'EDITOR', idField: 'editorId' },
-                    ].map((field) => {
-                      const isAllowed = isManager || (userRole === field.role && selectedTask[field.idField] === sessionUserId) || (field.key === 'scriptLink' && selectedTask.creatorId === sessionUserId);
-                      return (
-                        <div key={field.key} className="space-y-1.5">
-                          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-                            {field.label}
-                            {/* 🚀 UI phản hồi trực quan khi lưu ngầm */}
-                            {savingField === field.key && <Loader2 size={12} className="animate-spin text-blue-500" />}
-                            {savedField === field.key && <CheckCircle2 size={12} className="text-emerald-500" />}
-                          </label>
-                          <input
-                            type="url" disabled={!isAllowed}
-                            placeholder={!isAllowed ? "Chỉ người phụ trách" : "Dán link..."}
-                            className={`w-full border rounded-xl p-3 text-[13px] outline-none transition-all ${!isAllowed ? 'bg-slate-100 text-slate-400 border-slate-200' : 'bg-white text-slate-800 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10'} ${errors[field.key] ? 'border-red-500' : ''}`}
-                            value={taskLinks[field.key as keyof typeof taskLinks] || ""}
-                            onChange={e => setTaskLinks({ ...taskLinks, [field.key]: e.target.value })}
-                            onBlur={(e) => handleAutoSave(field.key, e.target.value)}
-                          />
-                        </div>
-                      );
-                    })}
-                    
-                    {/* Link Publish */}
-                    <div className="space-y-1.5 col-span-1 md:col-span-2 pt-2 border-t border-slate-200">
-                        <label className="text-[10px] font-bold text-red-500 uppercase tracking-widest flex items-center gap-1.5">
-                          7. Link Video Đã Đăng (YT)
-                          {savingField === 'publishLink' && <Loader2 size={12} className="animate-spin text-blue-500" />}
-                          {savedField === 'publishLink' && <CheckCircle2 size={12} className="text-emerald-500" />}
+                  {[
+                    { key: 'scriptLink', label: '1. Kịch Bản (VN)', role: 'CONTENT', idField: 'contentId' },
+                    { key: 'englishScriptLink', label: '2. Text ENG', role: 'CONTENT', idField: 'contentId' },
+                    { key: 'audioLink', label: '3. Link Audio (AI)', role: 'CONTENT', idField: 'contentId' },
+                    { key: 'storyboardLink', label: '4. Bố Cục', role: 'EDITOR', idField: 'editorId' },
+                    { key: 'thumbnailLink', label: '5. Thumbnail', role: 'EDITOR', idField: 'editorId' },
+                    { key: 'videoLink', label: '6. Video Render', role: 'EDITOR', idField: 'editorId' },
+                  ].map((field) => {
+                    const isAllowed = isManager || (userRole === field.role && selectedTask[field.idField] === sessionUserId) || (field.key === 'scriptLink' && selectedTask.creatorId === sessionUserId);
+                    return (
+                      <div key={field.key} className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                          {field.label}
+                          {savingField === field.key && <Loader2 size={12} className="animate-spin text-blue-500" />}
+                          {savedField === field.key && <CheckCircle2 size={12} className="text-emerald-500" />}
                         </label>
                         <input
-                            type="url" disabled={!isManager}
-                            placeholder={!isManager ? "Chỉ Quản lý Kênh" : "Dán link YouTube..."}
-                            className="w-full border rounded-xl p-3 text-[13px] outline-none transition-all bg-white text-slate-800 focus:border-red-500 focus:ring-4 focus:ring-red-500/10"
-                            value={taskLinks.publishLink || ""}
-                            onChange={e => setTaskLinks({ ...taskLinks, publishLink: e.target.value })}
-                            onBlur={(e) => handleAutoSave('publishLink', e.target.value)}
+                          type="url" disabled={!isAllowed}
+                          placeholder={!isAllowed ? "Chỉ người phụ trách" : "Dán link..."}
+                          className={`w-full border rounded-xl p-3 text-[13px] outline-none transition-all ${!isAllowed ? 'bg-slate-100 text-slate-400 border-slate-200' : 'bg-white text-slate-800 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10'} ${errors[field.key] ? 'border-red-500' : ''}`}
+                          value={taskLinks[field.key as keyof typeof taskLinks] || ""}
+                          onChange={e => setTaskLinks({ ...taskLinks, [field.key]: e.target.value })}
+                          onBlur={(e) => handleAutoSave(field.key, e.target.value)}
                         />
-                    </div>
+                      </div>
+                    );
+                  })}
+
+                  <div className="space-y-1.5 col-span-1 md:col-span-2 pt-2 border-t border-slate-200">
+                    <label className="text-[10px] font-bold text-red-500 uppercase tracking-widest flex items-center gap-1.5">
+                      7. Link Video Đã Đăng (YT)
+                      {savingField === 'publishLink' && <Loader2 size={12} className="animate-spin text-blue-500" />}
+                      {savedField === 'publishLink' && <CheckCircle2 size={12} className="text-emerald-500" />}
+                    </label>
+                    <input
+                      type="url" disabled={!isManager}
+                      placeholder={!isManager ? "Chỉ Quản lý Kênh" : "Dán link YouTube..."}
+                      className="w-full border rounded-xl p-3 text-[13px] outline-none transition-all bg-white text-slate-800 focus:border-red-500 focus:ring-4 focus:ring-red-500/10"
+                      value={taskLinks.publishLink || ""}
+                      onChange={e => setTaskLinks({ ...taskLinks, publishLink: e.target.value })}
+                      onBlur={(e) => handleAutoSave('publishLink', e.target.value)}
+                    />
+                  </div>
                 </div>
               </div>
 
-              {/* KHỐI GHI CHÚ TRẠNG THÁI */}
+              {/* 🚀 KHỐI GHI CHÚ TRẠNG THÁI: Chỉ hiển thị nội dung người dùng tự gõ */}
               <div className="bg-amber-50/50 border border-amber-100 rounded-[24px] p-5 space-y-3 shadow-sm">
                 <h3 className="font-black text-sm text-amber-900 flex items-center gap-2">
-                  <Tag className="text-amber-500 w-4 h-4" /> Báo Cáo Trạng Thái 
+                  <Tag className="text-amber-500 w-4 h-4" /> Báo Cáo Trạng Thái
                   {savingField === 'note' && <Loader2 size={14} className="animate-spin text-blue-500 ml-auto" />}
                   {savedField === 'note' && <CheckCircle2 size={14} className="text-emerald-500 ml-auto" />}
                 </h3>
@@ -291,9 +361,18 @@ export default function TaskDetailDrawer({
                   disabled={!isParticipant}
                   placeholder={!isParticipant ? "Không có quyền" : "Nhập tiến độ hiện tại..."}
                   className="w-full border border-amber-200 rounded-xl p-3 text-sm outline-none transition-all focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10 disabled:bg-slate-100 disabled:text-slate-400 font-bold text-amber-900 placeholder:text-amber-300"
-                  value={taskLinks.note !== undefined ? taskLinks.note : (selectedTask.note || "")}
-                  onChange={e => setTaskLinks({ ...taskLinks, note: e.target.value })}
-                  onBlur={(e) => handleAutoSave('note', e.target.value)}
+                  value={cleanUserNote} // Chỉ hiển thị chữ user gõ
+                  onChange={e => {
+                    const val = e.target.value;
+                    // Tự động gắn cái "Nguyên liệu ghép" ẩn nối vào đuôi
+                    const newFullNote = compilationPart ? (val ? `${val}\n\n${compilationPart}` : compilationPart) : val;
+                    setTaskLinks({ ...taskLinks, note: newFullNote });
+                  }}
+                  onBlur={(e) => {
+                    const val = e.target.value;
+                    const newFullNote = compilationPart ? (val ? `${val}\n\n${compilationPart}` : compilationPart) : val;
+                    handleAutoSave('note', newFullNote);
+                  }}
                 />
               </div>
             </div>
@@ -337,15 +416,15 @@ export default function TaskDetailDrawer({
               </div>
             )}
             {isManager && rightTab === 'evaluate' && (
-               <div className="absolute inset-0 bg-white z-10 animate-fade-in">
-                  <EvaluationPanel 
-                     task={selectedTask} 
-                     onCancel={() => setRightTab('chat')} 
-                     onSubmit={async (score, criteria, note) => {
-                        if (onSubmitEvaluation) await onSubmitEvaluation(score, criteria, note);
-                     }}
-                  />
-               </div>
+              <div className="absolute inset-0 bg-white z-10 animate-fade-in">
+                <EvaluationPanel
+                  task={selectedTask}
+                  onCancel={() => setRightTab('chat')}
+                  onSubmit={async (score, criteria, note) => {
+                    if (onSubmitEvaluation) await onSubmitEvaluation(score, criteria, note);
+                  }}
+                />
+              </div>
             )}
           </div>
         </div>

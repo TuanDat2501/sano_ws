@@ -137,7 +137,7 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { title, linkContent, contentId, editorId, teamId } = body;
+    const { title, linkContent, contentId, editorId, teamId, projectId } = body;
     const creatorId = (session.user as any).id;
     const rawLink = linkContent;
     // 1. RADAR CHẶN TRÙNG LINK THÔNG MINH (So sánh Link Lõi)
@@ -164,17 +164,36 @@ export async function POST(req: Request) {
       }
     }
 
+    // 🚀 LOGIC TỰ ĐỘNG TÍNH SỐ TẬP (EPISODE NUMBER)
+    let nextEpisodeNumber = null;
+
+    if (projectId) {
+        // Nếu Task thuộc về 1 Project (Series), tìm số tập to nhất hiện tại
+        const lastTask = await prisma.task.findFirst({
+            where: { 
+                projectId: projectId,
+                episodeNumber: { not: null }
+            },
+            orderBy: { episodeNumber: 'desc' },
+            select: { episodeNumber: true }
+        });
+        
+        // Tự động cộng 1, nếu là video đầu tiên thì bắt đầu từ 1
+        nextEpisodeNumber = (lastTask?.episodeNumber || 0) + 1;
+    }
+
     // 2. TẠO TASK MỚI
     const newTask = await prisma.task.create({
       data: {
         title,
         linkContent: rawLink,
         status: body.status ? body.status : "TODO",
+        episodeNumber: nextEpisodeNumber, // 🚀 Bổ sung episodeNumber
         contentId: contentId || undefined,
         editorId: editorId || undefined,
         teamId: teamId || undefined,
         creatorId: creatorId,
-        projectId: body.projectId || undefined,
+        projectId: projectId || undefined,
         channelId: body.channelId || undefined,
         duration: body.duration || undefined,
         note: body.note || undefined,

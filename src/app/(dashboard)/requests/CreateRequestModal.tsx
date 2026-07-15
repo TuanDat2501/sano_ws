@@ -321,7 +321,7 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
                                     value={secondApproverId} 
                                     onChange={(e) => setSecondApproverId(e.target.value)}
                                 >
-                                    <option value="">{isLoadingApprovers ? "Đang tải..." : "-- Chọn Người phê duyệt (Sẽ tự chuyển sang PENDING_2) --"}</option>
+                                    <option value="">{isLoadingApprovers ? "Đang tải..." : "-- Chọn Người phê duyệt --"}</option>
                                     {approversLv2.map(u => (
                                         <option key={u.id} value={u.id}>
                                             {u.fullName} ({u.role === 'BAN_GIAM_DOC' ? 'Giám Đốc' : 'Hành Chính'})
@@ -348,7 +348,7 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
                                         <option value="">{isLoadingApprovers ? "Đang tải..." : "-- Chọn Quản lý Cấp 2 --"}</option>
                                         {approversLv2.map(u => (
                                             <option key={u.id} value={u.id}>
-                                                {u.fullName} ({u.role === 'BAN_GIAM_DOC' ? 'Giám Đốc' : 'Hành Chính'})
+                                                {u.fullName} ({u.role === 'HR' && 'Hành Chính'})
                                             </option>
                                         ))}
                                     </select>
