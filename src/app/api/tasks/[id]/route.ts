@@ -293,6 +293,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
                 contentUser: { select: { fullName: true } },
                 editorUser: { select: { fullName: true } },
                 publisherUser: { select: { fullName: true } },
+                animatorUser:{ select: { fullName: true } },
                 project: {
                     select: {
                         id: true,

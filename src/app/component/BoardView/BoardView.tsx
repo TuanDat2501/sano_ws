@@ -102,6 +102,12 @@ export default function BoardView({ tasks, columns, getTeamColor, onDragEnd, onO
                                   </div>
                                   <div className={`absolute -bottom-0.5 -right-0.5 md:-bottom-1 md:-right-1 h-3 w-3 md:h-3.5 md:w-3.5 rounded-full border md:border-2 border-white flex items-center justify-center text-[6px] md:text-[8px] font-black text-white shadow-sm ${isDragDisabled ? 'bg-slate-400' : 'bg-blue-500'}`}>E</div>
                                 </div>
+                                <div className="relative ml-0.5 md:ml-1" title={`Editor: ${task.animatorUser?.fullName || "Chưa phân công"}`}>
+                                  <div className={`h-6 w-6 md:h-8 md:w-8 rounded-full flex items-center justify-center font-black text-[10px] md:text-xs shrink-0 border border-white shadow-md ${isDragDisabled ? 'bg-slate-200 text-slate-400' : 'bg-blue-100 text-blue-600'}`}>
+                                    {task.editorUser ? task.animatorUser?.fullName.charAt(0) : "?"}
+                                  </div>
+                                  <div className={`absolute -bottom-0.5 -right-0.5 md:-bottom-1 md:-right-1 h-3 w-3 md:h-3.5 md:w-3.5 rounded-full border md:border-2 border-white flex items-center justify-center text-[6px] md:text-[8px] font-black text-white shadow-sm ${isDragDisabled ? 'bg-slate-400' : 'bg-blue-500'}`}>E</div>
+                                </div>
                               </div>
                             </div>
                           );

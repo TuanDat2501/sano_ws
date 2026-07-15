@@ -68,7 +68,8 @@ export async function GET(req: Request) {
           team: { select: { name: true } },
           contentUser: { select: { fullName: true } },
           editorUser: { select: { fullName: true } },
-          channel: { select: { name: true } }
+          channel: { select: { name: true } },
+          animatorUser:{ select: { fullName: true } },
         },
         orderBy: { createdAt: "desc" },
       });
@@ -88,6 +89,7 @@ export async function GET(req: Request) {
             contentUser: { select: { fullName: true } },
             editorUser: { select: { fullName: true } },
             channel: { select: { name: true } }
+            
           },
           orderBy: { createdAt: "desc" },
           skip: skip,
@@ -190,6 +192,7 @@ export async function POST(req: Request) {
         team: { select: { name: true } },
         contentUser: { select: { fullName: true } },
         editorUser: { select: { fullName: true } },
+        
       }
     });
 

@@ -215,6 +215,15 @@ export default function TaskDetailDrawer({
                     <p className="text-sm font-bold text-slate-800 truncate">{selectedTask.editorUser?.fullName || "Chưa giao"}</p>
                   </div>
                 </div>
+                <div className="bg-blue-50/50 border border-blue-100 p-3.5 rounded-2xl flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center font-black border-2 border-white shadow-sm text-base">
+                    {selectedTask.animatorUser?.fullName?.charAt(0) || "?"}
+                  </div>
+                  <div className="overflow-hidden">
+                    <p className="text-[10px] font-bold text-blue-500 uppercase tracking-widest">Editor</p>
+                    <p className="text-sm font-bold text-slate-800 truncate">{selectedTask.animatorUser?.fullName || "Chưa giao"}</p>
+                  </div>
+                </div>
               </div>
 
               {/* KHỐI INPUT LINK (Đã tích hợp icon trạng thái lưu ngầm) */}
