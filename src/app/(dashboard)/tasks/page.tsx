@@ -805,22 +805,30 @@ export default function KanbanBoard() {
     }
   };
 
-  // Xóa Task Kho
   const handleDeleteTask = async (taskId: string) => {
-    if (!confirm("Sếp có chắc muốn xóa ý tưởng này khỏi kho không?")) return;
     try {
-      const res = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
-      if (res.ok) {
-        showToast("success", "Đã xóa thành công!");
-        fetchTasks();
-        if (socket) socket.emit("board_updated");
-      } else {
-        showToast("error", "Lỗi khi xóa ý tưởng");
-      }
+        const res = await fetch(`/api/tasks/${taskId}`, {
+            method: 'DELETE',
+        });
+
+        if (res.ok) {
+            showToast("success", "Đã xóa Task thành công!");
+            
+            // 1. Đóng Drawer chi tiết (Bạn thay bằng tên state đóng Modal của bạn nếu khác)
+            // VD: setIsDrawerOpen(false) hoặc setSelectedTask(null)
+            setSelectedTask(null); 
+            
+            // 2. Refresh lại dữ liệu bảng Kanban
+            fetchTasks(); 
+        } else {
+            const data = await res.json();
+            showToast("error", data.error || "Lỗi khi xóa Task.");
+        }
     } catch (error) {
-      showToast("error", "Lỗi kết nối Server");
+        console.error("Lỗi gọi API xóa task:", error);
+        showToast("error", "Mất kết nối đến máy chủ, vui lòng thử lại!");
     }
-  };
+};
 
   // ==========================================
   // XỬ LÝ CHAT TRONG TASK CHUẨN API & SOCKET
@@ -1025,6 +1033,7 @@ export default function KanbanBoard() {
             fetchTasks(); // Kéo dữ liệu mới từ Database về
             if (socket) socket.emit("board_updated"); // Báo mọi người khác cùng reload
           }}
+          onDeleteTask={handleDeleteTask}
         />
 
         <PushTaskModal

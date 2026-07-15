@@ -171,7 +171,30 @@ export default function KanbanBoard() {
     } catch (error) { console.error(error); }
     finally { setIsSavingLinks(false); }
   };
+  const handleDeleteTask = async (taskId: string) => {
+    try {
+        const res = await fetch(`/api/tasks/${taskId}`, {
+            method: 'DELETE',
+        });
 
+        if (res.ok) {
+            showToast("success", "Đã xóa Task thành công!");
+            
+            // 1. Đóng Drawer chi tiết (Bạn thay bằng tên state đóng Modal của bạn nếu khác)
+            // VD: setIsDrawerOpen(false) hoặc setSelectedTask(null)
+            setSelectedTask(null); 
+            
+            // 2. Refresh lại dữ liệu bảng Kanban
+            fetchTasks(); 
+        } else {
+            const data = await res.json();
+            showToast("error", data.error || "Lỗi khi xóa Task.");
+        }
+    } catch (error) {
+        console.error("Lỗi gọi API xóa task:", error);
+        showToast("error", "Mất kết nối đến máy chủ, vui lòng thử lại!");
+    }
+};
   const handleToggleCloseTask = async () => {
     if (!selectedTask) return;
     const newClosedState = !selectedTask.isClosed;
@@ -538,7 +561,7 @@ export default function KanbanBoard() {
 
         <CreateTaskModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} users={users} teams={teams} onSubmit={handleCreateTaskSubmit} isSubmitting={isSubmitting} errors={modalErrors} projects={projects}/>
 
-        <TaskDetailDrawer isOpen={isDrawerOpen} onClose={handleCloseDrawer} selectedTask={selectedTask} taskLinks={taskLinks} setTaskLinks={setTaskLinks} errors={drawerErrors} isSavingLinks={isSavingLinks} onSaveLinks={handleSaveLinks} onToggleClose={handleToggleCloseTask} onReject={handleRejectTask} canReject={canReject} messages={messages} chatMessage={chatMessage} setChatMessage={setChatMessage} onSendMessage={handleSendMessage} userRole={userRole} sessionUserId={(session?.user as any)?.id} onSubmitEvaluation={handleEvaluationSubmit} />
+        <TaskDetailDrawer isOpen={isDrawerOpen} onClose={handleCloseDrawer} selectedTask={selectedTask} taskLinks={taskLinks} setTaskLinks={setTaskLinks} errors={drawerErrors} isSavingLinks={isSavingLinks} onSaveLinks={handleSaveLinks} onToggleClose={handleToggleCloseTask} onReject={handleRejectTask} canReject={canReject} messages={messages} chatMessage={chatMessage} setChatMessage={setChatMessage} onSendMessage={handleSendMessage} userRole={userRole} sessionUserId={(session?.user as any)?.id} onSubmitEvaluation={handleEvaluationSubmit} onDeleteTask={handleDeleteTask} />
       </div>
     </PermissionGuard>
   );

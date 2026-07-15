@@ -1,6 +1,6 @@
 "use client";
 
-import { X, Link as LinkIcon, CheckCircle2, Loader2, MessageSquare, Send, ClipboardCheck, Clock, Tag, Tv, Video } from "lucide-react";
+import { X, Link as LinkIcon, CheckCircle2, Loader2, MessageSquare, Send, ClipboardCheck, Clock, Tag, Tv, Video, Trash2 } from "lucide-react";
 import { useEffect, useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 import EvaluationPanel from "./EvaluationPanel";
@@ -26,6 +26,7 @@ interface TaskDetailDrawerProps {
   onSubmitEvaluation?: (score: number, criteriaData: any, note: string) => void;
   onEditTask?: () => void;
   onRefreshBoard?: () => void;
+  onDeleteTask?: (taskId: string) => void; // 🚀 THÊM PROP XÓA TASK
 }
 
 // 🚀 BỘ TIÊU CHUẨN MẪU (Mock Data)
@@ -58,7 +59,7 @@ const MOCK_CRITERIA = [
 
 export default function TaskDetailDrawer({
   isOpen, onClose, selectedTask, taskLinks, setTaskLinks, errors, isSavingLinks, userRole,
-  onSaveLinks, onToggleClose, onReject, canReject, messages, chatMessage, setChatMessage, onSendMessage, sessionUserId, onSubmitEvaluation, onEditTask, onRefreshBoard
+  onSaveLinks, onToggleClose, onReject, canReject, messages, chatMessage, setChatMessage, onSendMessage, sessionUserId, onSubmitEvaluation, onEditTask, onRefreshBoard, onDeleteTask
 }: TaskDetailDrawerProps) {
   const [mounted, setMounted] = useState(false);
 
@@ -66,6 +67,9 @@ export default function TaskDetailDrawer({
   const [checkedStandards, setCheckedStandards] = useState<Record<string, boolean>>({});
   const [kaizenNote, setKaizenNote] = useState('');
   const [isEvaluating, setIsEvaluating] = useState(false);
+  
+  // 🚀 State để quay tròn lúc đang call API xóa
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => setMounted(true), []);
 
@@ -97,9 +101,9 @@ export default function TaskDetailDrawer({
     setTimeout(() => setIsEvaluating(false), 800);
   };
 
-  // Thêm 2 state để quản lý UI Loading/Thành công
   const [savingField, setSavingField] = useState<string | null>(null);
   const [savedField, setSavedField] = useState<string | null>(null);
+  
   if (!selectedTask) return null;
   const isManager = ["ADMIN", "BAN_GIAM_DOC", "LEADER", "HR", "QLK"].includes(userRole);
 
@@ -131,20 +135,27 @@ export default function TaskDetailDrawer({
     }
   };
 
+  // 🚀 HÀM XỬ LÝ KHI BẤM XÓA TASK
+  const handleDeleteClick = async () => {
+    if (confirm("Bạn có chắc chắn muốn xóa Task này? Hành động này không thể hoàn tác và sẽ xóa toàn bộ nội dung liên quan.")) {
+        setIsDeleting(true);
+        if (onDeleteTask) {
+             await onDeleteTask(selectedTask.id);
+        }
+        setIsDeleting(false);
+    }
+  };
+
   // =========================================================================
-  // 🚀 LOGIC TÁCH DỮ LIỆU "NGUYÊN LIỆU GHÉP" VÀ "BÁO CÁO CỦA USER"
+  // LOGIC TÁCH DỮ LIỆU "NGUYÊN LIỆU GHÉP" VÀ "BÁO CÁO CỦA USER"
   // =========================================================================
   const fullNote = taskLinks.note !== undefined ? taskLinks.note : (selectedTask?.note || "");
   const splitToken = "Nguyên liệu ghép:";
   const splitIndex = fullNote.indexOf(splitToken);
 
-  // 1. Lấy phần chữ do người dùng gõ (Cắt bỏ phần "Nguyên liệu ghép..." đi)
   const cleanUserNote = splitIndex !== -1 ? fullNote.substring(0, splitIndex).trim() : fullNote;
-
-  // 2. Lấy riêng cục Text do API sinh ra để bóc tách Link
   const compilationPart = splitIndex !== -1 ? fullNote.substring(splitIndex) : "";
 
-  // 3. Tự động bóc tách Link ra thành mảng Object để vẽ Giao diện đẹp
   const parsedLinks: { name: string, url: string }[] = [];
   if (compilationPart) {
     compilationPart.split('\n').forEach((line: string) => {
@@ -189,6 +200,18 @@ export default function TaskDetailDrawer({
           </div>
 
           <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+             {/* 🚀 NÚT XÓA TASK */}
+             {(isManager || selectedTask.creatorId === sessionUserId) && (
+              <button 
+                  onClick={handleDeleteClick} 
+                  disabled={isDeleting}
+                  className="px-3 md:px-4 py-2 rounded-xl text-sm font-bold bg-red-50 text-red-600 hover:bg-red-100 transition-colors flex items-center gap-2 disabled:opacity-50"
+              >
+                 {isDeleting ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />} 
+                 Xóa
+              </button>
+            )}
+
             {isManager && (
               <button onClick={() => setRightTab(rightTab === 'chat' ? 'evaluate' : 'chat')} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${rightTab === 'evaluate' ? 'bg-indigo-600 text-white shadow-md' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'}`}>
                 <ClipboardCheck size={16} /> {rightTab === 'evaluate' ? "Quay lại Chat" : "Chấm điểm Video"}
@@ -218,7 +241,7 @@ export default function TaskDetailDrawer({
           <div className="w-full lg:w-[55%] flex flex-col h-full border-r border-slate-200 bg-white">
             <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 custom-scrollbar">
 
-              {/* 🚀 GIAO DIỆN HIỂN THỊ LINK ĐÃ ĐƯỢC CHIA TRƯỜNG HỢP */}
+              {/* GIAO DIỆN HIỂN THỊ LINK ĐÃ ĐƯỢC CHIA TRƯỜNG HỢP */}
               {selectedTask.isCompilation ? (
                 <div className="bg-indigo-50 border border-indigo-100 p-5 rounded-[24px] shadow-sm">
                   <label className="text-xs font-black text-indigo-800 uppercase tracking-widest flex items-center gap-2 mb-3">
@@ -348,7 +371,7 @@ export default function TaskDetailDrawer({
                 </div>
               </div>
 
-              {/* 🚀 KHỐI GHI CHÚ TRẠNG THÁI: Chỉ hiển thị nội dung người dùng tự gõ */}
+              {/* KHỐI GHI CHÚ TRẠNG THÁI */}
               <div className="bg-amber-50/50 border border-amber-100 rounded-[24px] p-5 space-y-3 shadow-sm">
                 <h3 className="font-black text-sm text-amber-900 flex items-center gap-2">
                   <Tag className="text-amber-500 w-4 h-4" /> Báo Cáo Trạng Thái
@@ -361,10 +384,9 @@ export default function TaskDetailDrawer({
                   disabled={!isParticipant}
                   placeholder={!isParticipant ? "Không có quyền" : "Nhập tiến độ hiện tại..."}
                   className="w-full border border-amber-200 rounded-xl p-3 text-sm outline-none transition-all focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10 disabled:bg-slate-100 disabled:text-slate-400 font-bold text-amber-900 placeholder:text-amber-300"
-                  value={cleanUserNote} // Chỉ hiển thị chữ user gõ
+                  value={cleanUserNote} 
                   onChange={e => {
                     const val = e.target.value;
-                    // Tự động gắn cái "Nguyên liệu ghép" ẩn nối vào đuôi
                     const newFullNote = compilationPart ? (val ? `${val}\n\n${compilationPart}` : compilationPart) : val;
                     setTaskLinks({ ...taskLinks, note: newFullNote });
                   }}
