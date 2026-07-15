@@ -13,9 +13,9 @@ interface BoardViewProps {
 }
 
 export default function BoardView({ tasks, columns, getTeamColor, onDragEnd, onOpenTaskDetail, userRole }: BoardViewProps) {
-  
+
   const isManager = ["ADMIN", "BAN_GIAM_DOC", "LEADER"].includes(userRole);
-  
+
   return (
     <DragDropContext onDragEnd={onDragEnd}>
       {/* Giảm gap trên mobile để các cột gần nhau hơn */}
@@ -23,7 +23,7 @@ export default function BoardView({ tasks, columns, getTeamColor, onDragEnd, onO
         {Object.values(columns).map((column: any) => (
           // Bóp width của cột từ 320px (w-80) xuống 280px trên mobile để lộ một phần cột bên cạnh
           <div key={column.id} className={`w-[280px] md:w-80 flex flex-col h-full ${column.columnBg} rounded-2xl md:rounded-[32px] border ${column.borderColor} shadow-sm shrink-0`}>
-            
+
             <div className={`p-3 md:p-5 flex items-center justify-between bg-white/40 backdrop-blur-sm border-b ${column.borderColor} shrink-0`}>
               <div className="flex items-center gap-1.5 md:gap-2">
                 <span className={`${column.iconBg} ${column.color} p-1 md:p-1.5 rounded-lg md:rounded-xl scale-90 md:scale-100`}>{column.icon}</span>
@@ -42,16 +42,16 @@ export default function BoardView({ tasks, columns, getTeamColor, onDragEnd, onO
                   className={`flex-1 overflow-y-auto min-h-0 p-3 md:p-4 space-y-3 md:space-y-4 custom-scrollbar transition-colors ${snapshot.isDraggingOver ? "bg-black/5" : ""}`}
                 >
                   {tasks[column.id]?.map((task: any, index: number) => {
-                    const isDragDisabled = 
-                      !isManager && 
+                    const isDragDisabled =
+                      !isManager &&
                       !(userRole === "CONTENT" && task.status === "TODO") &&
                       !(userRole === "EDITOR" && task.status === "DOING") &&
                       !(userRole === "CHANNEL_MANAGER" && task.status === "REVIEW");
 
                     return (
-                      <Draggable 
-                        key={task.id} 
-                        draggableId={task.id} 
+                      <Draggable
+                        key={task.id}
+                        draggableId={task.id}
                         index={index}
                         isDragDisabled={isDragDisabled}
                       >
@@ -76,7 +76,7 @@ export default function BoardView({ tasks, columns, getTeamColor, onDragEnd, onO
                                   {task.team?.name || "Team Sano"}
                                 </span>
                               </div>
-                              
+
                               <h4 className={`font-bold text-sm md:text-base leading-snug mb-2 md:mb-3 ${task.isClosed ? 'line-through text-slate-400' : 'text-slate-900'}`}>
                                 {task.title}
                               </h4>
@@ -102,12 +102,15 @@ export default function BoardView({ tasks, columns, getTeamColor, onDragEnd, onO
                                   </div>
                                   <div className={`absolute -bottom-0.5 -right-0.5 md:-bottom-1 md:-right-1 h-3 w-3 md:h-3.5 md:w-3.5 rounded-full border md:border-2 border-white flex items-center justify-center text-[6px] md:text-[8px] font-black text-white shadow-sm ${isDragDisabled ? 'bg-slate-400' : 'bg-blue-500'}`}>E</div>
                                 </div>
-                                <div className="relative ml-0.5 md:ml-1" title={`Editor: ${task.animatorUser?.fullName || "Chưa phân công"}`}>
-                                  <div className={`h-6 w-6 md:h-8 md:w-8 rounded-full flex items-center justify-center font-black text-[10px] md:text-xs shrink-0 border border-white shadow-md ${isDragDisabled ? 'bg-slate-200 text-slate-400' : 'bg-blue-100 text-blue-600'}`}>
-                                    {task.editorUser ? task.animatorUser?.fullName.charAt(0) : "?"}
+                                {task.animatorUser &&
+                                  <div className="relative ml-0.5 md:ml-1" title={`Chuyển động: ${task.animatorUser?.fullName || "Chưa phân công"}`}>
+                                    <div className={`h-6 w-6 md:h-8 md:w-8 rounded-full flex items-center justify-center font-black text-[10px] md:text-xs shrink-0 border border-white shadow-md ${isDragDisabled ? 'bg-slate-200 text-slate-400' : 'bg-blue-100 text-blue-600'}`}>
+                                      {task.animatorUser ? task.animatorUser?.fullName.charAt(0) : "?"}
+                                    </div>
+                                    <div className={`absolute -bottom-0.5 -right-0.5 md:-bottom-1 md:-right-1 h-3 w-3 md:h-3.5 md:w-3.5 rounded-full border md:border-2 border-white flex items-center justify-center text-[6px] md:text-[8px] font-black text-white shadow-sm ${isDragDisabled ? 'bg-slate-400' : 'bg-blue-500'}`}>A</div>
                                   </div>
-                                  <div className={`absolute -bottom-0.5 -right-0.5 md:-bottom-1 md:-right-1 h-3 w-3 md:h-3.5 md:w-3.5 rounded-full border md:border-2 border-white flex items-center justify-center text-[6px] md:text-[8px] font-black text-white shadow-sm ${isDragDisabled ? 'bg-slate-400' : 'bg-blue-500'}`}>E</div>
-                                </div>
+                                }
+
                               </div>
                             </div>
                           );
