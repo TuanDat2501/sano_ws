@@ -166,7 +166,7 @@ export default function ChannelsPage() {
                                                 <div className="flex items-center gap-2 relative z-10 group/link">
                                                     <p className="font-black text-slate-800 text-sm md:text-base">{ch.name}</p>
                                                     {ch.link && (
-                                                        <a href={ch.link} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-700 active:scale-95 transition-all" title="Mở kênh YouTube"><ExternalLink size={14} className="md:w-4 md:h-4"/></a>
+                                                        <a href={`https:/${ch.link}`} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-700 active:scale-95 transition-all" title="Mở kênh YouTube"><ExternalLink size={14} className="md:w-4 md:h-4"/></a>
                                                     )}
                                                 </div>
                                                 <p className="text-[10px] md:text-xs font-bold text-slate-400 mt-0.5 md:mt-1 truncate max-w-[120px] md:max-w-[180px]">{ch.topic || "Chưa phân loại"}</p>
