@@ -101,11 +101,42 @@ export default function AnalyticsPage() {
     }
 
     const stats = data?.stats || {};
-    // CÁC CONFIG CHART.JS GIỮ NGUYÊN (Để tránh code dài)
-    // ... [Copy nguyên khối Config DualAxis, TopViews, LineData của bạn vào đây] ...
 
-    // Tạm copy một Chart mẫu để UI không bị lỗi
-    const dualAxisData = { labels: data?.overallTrend?.map((t: any) => t.date) || [], datasets: [{ label: 'Tổng Doanh Thu ($)', data: data?.overallTrend?.map((t: any) => t.revenue) || [], borderColor: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.1)', yAxisID: 'y', borderWidth: 3, pointRadius: 2, pointHoverRadius: 6, tension: 0.3, fill: true }, { label: 'Tổng Lượt Xem', data: data?.overallTrend?.map((t: any) => t.views) || [], borderColor: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.05)', yAxisID: 'y1', borderWidth: 2, borderDash: [5, 5], pointRadius: 2, pointHoverRadius: 6, tension: 0.3, fill: false }] };
+    // 🚀 ĐÃ SỬA: Tách riêng 2 cục Data cho Doanh thu và Views
+    const revenueChartData = {
+        labels: data?.overallTrend?.map((t: any) => t.date) || [],
+        datasets: [{
+            label: 'Tổng Doanh Thu ($)',
+            data: data?.overallTrend?.map((t: any) => t.revenue) || [],
+            borderColor: '#10b981',
+            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+            borderWidth: 3, pointRadius: 2, pointHoverRadius: 6, tension: 0.3, fill: true
+        }]
+    };
+
+    const viewsChartData = {
+        labels: data?.overallTrend?.map((t: any) => t.date) || [],
+        datasets: [{
+            label: 'Tổng Lượt Xem',
+            data: data?.overallTrend?.map((t: any) => t.views) || [],
+            borderColor: '#3b82f6',
+            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+            borderWidth: 3, pointRadius: 2, pointHoverRadius: 6, tension: 0.3, fill: true
+        }]
+    };
+
+    // 🚀 Thêm options ẩn các số nham nhở trên line chart
+    const lineChartOptions = {
+        maintainAspectRatio: false,
+        plugins: {
+            datalabels: { display: false }, // Ẩn số trên line để biểu đồ sạch sẽ
+            tooltip: commonTooltipOptions
+        },
+        scales: {
+            y: { beginAtZero: true }
+        }
+    };
+
     const monetizationDonutData = { labels: data?.monetizationStatus?.map((d: any) => d.name) || [], datasets: [{ data: data?.monetizationStatus?.map((d: any) => d.value) || [], backgroundColor: data?.monetizationStatus?.map((d: any) => d.fill) || [], borderWidth: 0 }] };
     const leadTimeBarData = { labels: data?.leadTimeData?.map((d: any) => d.name) || [], datasets: [{ label: "Số ngày xử lý TB", data: data?.leadTimeData?.map((d: any) => d.days) || [], backgroundColor: ['#3b82f6', '#8b5cf6', '#ec4899', '#10b981'], borderRadius: 4, barThickness: 24 }] };
 
@@ -115,7 +146,8 @@ export default function AnalyticsPage() {
             {/* ================================================== */}
             {/* KHU VỰC HEADER - BỘ LỌC TẦNG 1 (DOANH THU KÊNH) */}
             {/* ================================================== */}
-            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200 top-0 z-50">
+            {/* 🚀 ĐÃ SỬA: Thêm class 'relative' vào thẻ div cha */}
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-white p-4 rounded-xl shadow-sm border border-slate-200 top-0 z-50 relative">
                 <div>
                     <h1 className="text-xl md:text-2xl font-black text-slate-900 flex items-center gap-2">
                         <PieChartIcon className="text-blue-600 w-5 h-5 md:w-6 md:h-6" /> Báo Cáo Chiến Lược
@@ -151,18 +183,18 @@ export default function AnalyticsPage() {
                     </button>
                 </div>
 
-                {/* POPUP CHỌN NGÀY TÙY CHỈNH */}
+                {/* 🚀 ĐÃ SỬA CSS POPUP: Bổ sung z-[999], flex-wrap và đổ bóng (shadow-2xl) để hiển thị nổi bật, không bị vỡ bố cục */}
                 {isCustomDate && (
-                    <div className="absolute top-full right-0 mt-2 bg-white p-4 rounded-xl shadow-xl border border-slate-200 z-50 flex items-end gap-3 animate-fade-in">
-                        <div>
+                    <div className="absolute top-full right-0 mt-2 bg-white p-4 rounded-xl shadow-2xl border border-slate-200 z-[999] flex flex-wrap sm:flex-nowrap items-end gap-3 animate-fade-in w-full sm:w-auto">
+                        <div className="w-full sm:w-auto">
                             <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">Từ ngày</label>
-                            <input type="date" className="border border-slate-200 rounded-md text-sm p-1.5 outline-none font-bold text-slate-700" value={customStartStr} onChange={(e) => setCustomStartStr(e.target.value)} />
+                            <input type="date" className="w-full border border-slate-200 rounded-md text-sm p-1.5 outline-none font-bold text-slate-700" value={customStartStr} onChange={(e) => setCustomStartStr(e.target.value)} />
                         </div>
-                        <div>
+                        <div className="w-full sm:w-auto">
                             <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">Đến ngày</label>
-                            <input type="date" className="border border-slate-200 rounded-md text-sm p-1.5 outline-none font-bold text-slate-700" value={customEndStr} onChange={(e) => setCustomEndStr(e.target.value)} />
+                            <input type="date" className="w-full border border-slate-200 rounded-md text-sm p-1.5 outline-none font-bold text-slate-700" value={customEndStr} onChange={(e) => setCustomEndStr(e.target.value)} />
                         </div>
-                        <button onClick={handleApplyCustomDate} className="bg-blue-600 text-white px-4 py-1.5 rounded-md text-sm font-bold hover:bg-blue-700">Áp dụng</button>
+                        <button onClick={handleApplyCustomDate} className="w-full sm:w-auto bg-blue-600 text-white px-4 py-1.5 rounded-md text-sm font-bold hover:bg-blue-700 shadow-sm">Áp dụng</button>
                     </div>
                 )}
             </div>
@@ -194,13 +226,66 @@ export default function AnalyticsPage() {
                     icon={<Tv size={16} className="text-purple-500" />}
                 />
             </div>
+            
+            {/* 🚀 ĐÃ SỬA BỐ CỤC: Xếp chồng Doanh thu và Views ở cột trái, Donut ở cột phải */}
             <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-4 md:gap-6 mt-4">
-                <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col h-[300px]"><h2 className="text-xs font-black text-slate-800 uppercase mb-2">Doanh thu và Views</h2><div className="flex-1 w-full min-h-0 relative"><Line data={dualAxisData} options={{ maintainAspectRatio: false }} /></div></div>
-                <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col h-[300px]"><h2 className="text-xs font-black text-slate-800 uppercase mb-4">Nuôi Kênh & Bật Kiếm Tiền</h2><div className="flex-1 relative flex justify-center items-center"><Doughnut data={monetizationDonutData} options={{ maintainAspectRatio: false, cutout: '70%' }} /></div></div>
+                
+                {/* Cột trái: Chứa 2 biểu đồ */}
+                <div className="flex flex-col gap-4 md:gap-6">
+                    <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col h-[280px]">
+                        <h2 className="text-xs font-black text-slate-800 uppercase mb-2">Biểu Đồ Doanh Thu ($)</h2>
+                        <div className="flex-1 w-full min-h-0 relative">
+                            <Line data={revenueChartData} options={lineChartOptions} />
+                        </div>
+                    </div>
+                    
+                    <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col h-[280px]">
+                        <h2 className="text-xs font-black text-slate-800 uppercase mb-2">Biểu Đồ Lượt Xem (Views)</h2>
+                        <div className="flex-1 w-full min-h-0 relative">
+                            <Line data={viewsChartData} options={lineChartOptions} />
+                        </div>
+                    </div>
+                </div>
+
+                {/* Cột phải: Nuôi kênh */}
+                <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col h-full">
+                    <h2 className="text-xs font-black text-slate-800 uppercase mb-4">Nuôi Kênh & Bật Kiếm Tiền</h2>
+                    
+                    <div className="flex-1 flex justify-center items-center lg:items-start lg:pt-4">
+                        <div className="relative w-full max-w-[300px] aspect-square">
+                            <Doughnut 
+                                data={monetizationDonutData} 
+                                options={{ 
+                                    maintainAspectRatio: false, 
+                                    cutout: '70%', 
+                                    plugins: { 
+                                        tooltip: commonTooltipOptions,
+                                        // 🚀 ĐÃ SỬA: Đẩy chú thích xuống dưới đáy
+                                        legend: {
+                                            position: 'bottom',
+                                            labels: {
+                                                usePointStyle: true,
+                                                padding: 20,
+                                                font: { family: 'inherit', weight: 'bold', size: 12 }
+                                            }
+                                        },
+                                        // 🚀 ĐÃ SỬA: Làm nổi bật số (Màu trắng, to và in đậm)
+                                        datalabels: {
+                                            color: '#ffffff',
+                                            font: { weight: 'bold', size: 18, family: 'inherit' },
+                                            formatter: (value: number) => value > 0 ? value : "",
+                                            display: (context: any) => context.dataset.data[context.dataIndex] > 0
+                                        }
+                                    } 
+                                }} 
+                            />
+                        </div>
+                    </div>
+                </div>
             </div>
 
             {/* BẢNG XẾP HẠNG KÊNH YOUTUBE */}
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden shrink-0">
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden shrink-0 mt-4">
                 <div className="p-3 md:p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
                     <h2 className="text-sm font-black text-slate-800 uppercase tracking-wider flex items-center gap-2"><DollarSign size={16} className="text-emerald-600" /> Bảng Vàng Doanh Thu Từng Kênh</h2>
                 </div>
