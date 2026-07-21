@@ -8,7 +8,8 @@ import { useToast } from "@/app/component/ToastProvider";
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler } from 'chart.js';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import ChartDataLabels from 'chartjs-plugin-datalabels';
-
+import ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler, ChartDataLabels);
 
 const commonTooltipOptions = { backgroundColor: 'rgba(255, 255, 255, 0.95)', titleColor: '#1e293b', bodyColor: '#475569', borderColor: '#e2e8f0', borderWidth: 1, padding: 12, boxPadding: 6, usePointStyle: true, titleFont: { family: 'inherit', size: 13, weight: 'bold' as const }, bodyFont: { family: 'inherit', size: 12, weight: 'bold' as const }, bodySpacing: 6, };
@@ -42,6 +43,8 @@ export default function AnalyticsPage() {
     const [isFetching, setIsFetching] = useState(true);
     const [selectedChartChannel, setSelectedChartChannel] = useState("ALL");
 
+
+    const [isExporting, setIsExporting] = useState(false);
     // Xử lý Logic Ngày Tầng 1
     useEffect(() => {
         if (timeRange === "custom") return;
@@ -78,6 +81,87 @@ export default function AnalyticsPage() {
         };
         fetchAnalytics();
     }, [startDateObj, endDateObj, kpiWeek, kpiMonth, kpiYear, selectedTeam, status]);
+
+    const handleExportReport = async () => {
+        if (!data) {
+            showToast("error", "Chưa có dữ liệu để xuất!");
+            return;
+        }
+        setIsExporting(true);
+        try {
+            const workbook = new ExcelJS.Workbook();
+
+            // --- Sheet 1: Bảng Vàng Kênh ---
+            if (data.channelGrid && data.channelGrid.length > 0) {
+                const wsChannels = workbook.addWorksheet('Doanh Thu Kênh');
+                wsChannels.columns = [
+                    { header: 'STT', key: 'stt', width: 5 },
+                    { header: 'Tên Kênh', key: 'name', width: 35 },
+                    { header: 'Đội Nhóm', key: 'team', width: 20 },
+                    { header: 'Lượt Xem', key: 'views', width: 15 },
+                    { header: 'Doanh Thu ($)', key: 'revenue', width: 18 },
+                    { header: 'RPM ($)', key: 'rpm', width: 15 },
+                    { header: 'Trạng Thái', key: 'status', width: 20 },
+                ];
+                
+                data.channelGrid.forEach((c: any, index: number) => {
+                    wsChannels.addRow({
+                        stt: index + 1,
+                        name: c.name,
+                        team: c.team,
+                        views: c.views,
+                        revenue: c.revenue,
+                        rpm: c.rpm,
+                        status: c.monetizationLabel
+                    });
+                });
+
+                // Style Header
+                wsChannels.getRow(1).eachCell((cell) => {
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
+                    cell.font = { bold: true };
+                });
+            }
+
+            // --- Sheet 2: KPI Nhân Sự ---
+            if (data.hrGrid && data.hrGrid.length > 0) {
+                const wsHR = workbook.addWorksheet('KPI Nhân Sự');
+                wsHR.columns = [
+                    { header: 'STT', key: 'stt', width: 5 },
+                    { header: 'Họ & Tên', key: 'name', width: 30 },
+                    { header: 'Vị Trí', key: 'role', width: 20 },
+                    { header: 'Sản Lượng (Task)', key: 'output', width: 20 },
+                    { header: 'KPI (%)', key: 'kpi', width: 15 },
+                    { header: 'Điểm Lượng (Sao)', key: 'avgScore', width: 20 },
+                ];
+                
+                data.hrGrid.forEach((u: any, index: number) => {
+                    wsHR.addRow({
+                        stt: index + 1,
+                        name: u.name,
+                        role: u.role,
+                        output: u.output,
+                        kpi: u.kpi,
+                        avgScore: u.avgScore
+                    });
+                });
+
+                // Style Header
+                wsHR.getRow(1).eachCell((cell) => {
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
+                    cell.font = { bold: true };
+                });
+            }
+
+            const buffer = await workbook.xlsx.writeBuffer();
+            saveAs(new Blob([buffer]), `BaoCao_TongHop_${new Date().getTime()}.xlsx`);
+            showToast("success", "Đã tải báo cáo thành công!");
+        } catch (error) {
+            showToast("error", "Lỗi khi xuất báo cáo!");
+        } finally {
+            setIsExporting(false);
+        }
+    };
 
     const handleApplyCustomDate = () => {
         if (!customStartStr || !customEndStr) { showToast("error", "Vui lòng chọn đủ 2 ngày!"); return; }
@@ -178,8 +262,13 @@ export default function AnalyticsPage() {
                         </select>
                     </div>
 
-                    <button className="flex justify-center items-center gap-2 bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-lg text-xs md:text-sm font-black shadow-sm transition-all active:scale-95 sm:w-auto w-full">
-                        <Download size={16} /> Báo Cáo
+                    <button 
+                        onClick={handleExportReport}
+                        disabled={isExporting}
+                        className="flex justify-center items-center gap-2 bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-lg text-xs md:text-sm font-black shadow-sm transition-all active:scale-95 sm:w-auto w-full disabled:opacity-70"
+                    >
+                        {isExporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />} 
+                        Báo Cáo
                     </button>
                 </div>
 
