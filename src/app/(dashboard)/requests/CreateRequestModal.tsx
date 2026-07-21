@@ -30,10 +30,31 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
     const [approversLv2, setApproversLv2] = useState<any[]>([]);
     const [isLoadingApprovers, setIsLoadingApprovers] = useState(false);
     
-    // 🚀 ĐỌC TRỰC TIẾP ROLE TỪ SESSION ĐỂ CHẮC CHẮN UI NHẬN DIỆN ĐÚNG LEADER
     const { data: session } = useSession();
     const currentUser = session?.user as any;
-    const isLeader = currentUser?.role === "LEADER";
+    
+    // 🚀 NHẬN DIỆN CHUẨN CÁC CẤP QUẢN LÝ
+    const isLeader = currentUser?.isTeamLeader || currentUser?.role === "LEADER";
+    const isHRLeader = currentUser?.role === "HR" && currentUser?.isTeamLeader;
+
+    // 🚀 HÀM TIỆN ÍCH: Dịch chức danh hiển thị chuẩn nhất
+    const getRoleLabel = (u: any) => {
+        if (u.role === 'BAN_GIAM_DOC') return 'Giám Đốc';
+        if (u.role === 'ADMIN') return 'Admin';
+        if (u.role === 'HR') return u.isTeamLeader ? 'Trưởng phòng HC' : 'Hành Chính';
+        if (u.role === 'KE_TOAN') return u.isTeamLeader ? 'Kế toán trưởng' : 'Kế toán';
+        if (u.isTeamLeader) return `Leader ${u.team?.name || ''}`;
+        return u.role;
+    };
+
+    // 🚀 LỌC NGƯỜI DUYỆT THÔNG MINH CHO CẤP LEADER
+    const leaderApproverOptions = approversLv2.filter(u => {
+        if (isHRLeader) return u.role === 'HR'; // Trưởng phòng HC chỉ chọn HR
+        return ['ADMIN', 'BAN_GIAM_DOC'].includes(u.role); // Các Leader khác chọn BGD/Admin
+    });
+
+    // Lọc người duyệt Cấp 2 cho Nhân viên bình thường
+    const employeeLv2Options = approversLv2.filter(u => ['HR', 'ADMIN', 'BAN_GIAM_DOC'].includes(u.role));
 
     useEffect(() => { setContentData({}); }, [selectedType]);
 
@@ -201,15 +222,12 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
 
         setIsSubmitting(true);
         try {
-            // 🚀 ĐẨY PAYLOAD THÔNG MINH CHO BACKEND
             const payload = {
                 type: selectedType, 
                 teamId: selectedTeamId, 
                 contentData: contentData,
-                // Nếu là Leader: Ép ID của họ vào cấp 1, lấy người họ chọn trên UI nhét vào cấp 2
                 firstApproverId: isLeader ? currentUser?.id : firstApproverId,
                 secondApproverId: isLeader ? secondApproverId : (secondApproverId || null),
-                // Gán sẵn status cho Backend biết (phòng trường hợp Backend có đọc trường này)
                 status: isLeader ? "PENDING_2" : "PENDING_1" 
             };
 
@@ -221,7 +239,6 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
             if (res.ok) {
                 showToast("success", "Đã gửi đề xuất thành công.");
                 
-                // Trigger realtime noti tới đúng người duyệt
                 const targetApproverId = isLeader ? secondApproverId : firstApproverId;
                 if (targetApproverId) {
                     window.dispatchEvent(new CustomEvent("local_system_noti", {
@@ -247,7 +264,6 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
         }
     };
 
-    // Vô hiệu hóa nút Submit nếu thiếu thông tin
     const isSubmitDisabled = isSubmitting || !selectedTeamId || (!isLeader && !firstApproverId) || (isLeader && !secondApproverId);
 
     const modalContent = (
@@ -310,11 +326,11 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
                         <label className="block text-xs md:text-sm font-bold text-slate-700 mb-1.5 md:mb-2">4. Luồng phê duyệt <span className="text-red-500">*</span></label>
                         {!selectedTeamId && <p className="text-[10px] md:text-xs text-red-500 mb-2 italic">Vui lòng chọn Team ở bước 3 để hiển thị danh sách người duyệt.</p>}
                         
-                        {/* 🚀 UI ĐỘNG: 1 SELECT CHO LEADER, 2 SELECT CHO NHÂN VIÊN */}
+                        {/* 🚀 UI HIỂN THỊ CHUẨN XÁC DỰA VÀO LOẠI LEADER */}
                         {isLeader ? (
                             <div className="bg-white border border-slate-200 p-3 md:p-4 rounded-xl">
                                 <span className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 md:mb-2 block">
-                                    Người phê duyệt (Ban Giám Đốc/Admin) <span className="text-red-500">*</span>
+                                    Người phê duyệt {isHRLeader ? "(Hành Chính)" : "(Ban Giám Đốc/Admin)"} <span className="text-red-500">*</span>
                                 </span>
                                 <select 
                                     className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-xs md:text-sm rounded-lg p-2 outline-none" 
@@ -322,9 +338,9 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
                                     onChange={(e) => setSecondApproverId(e.target.value)}
                                 >
                                     <option value="">{isLoadingApprovers ? "Đang tải..." : "-- Chọn Người phê duyệt --"}</option>
-                                    {approversLv2.map(u => (
+                                    {leaderApproverOptions.map(u => (
                                         <option key={u.id} value={u.id}>
-                                            {u.fullName} ({u.role === 'BAN_GIAM_DOC' ? 'Giám Đốc' : 'Hành Chính'})
+                                            {u.fullName} ({getRoleLabel(u)})
                                         </option>
                                     ))}
                                 </select>
@@ -337,7 +353,7 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
                                         <option value="">{isLoadingApprovers ? "Đang tải..." : "-- Chọn Quản lý Cấp 1 --"}</option>
                                         {approversLv1.map(u => (
                                             <option key={u.id} value={u.id}>
-                                                {u.fullName} (Leader {u.team?.name || ""})
+                                                {u.fullName} ({getRoleLabel(u)})
                                             </option>
                                         ))}
                                     </select>
@@ -346,9 +362,9 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
                                     <span className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 md:mb-2 block">Cấp 2 (Tùy chọn)</span>
                                     <select className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-xs md:text-sm rounded-lg p-2 outline-none" value={secondApproverId} onChange={(e) => setSecondApproverId(e.target.value)}>
                                         <option value="">{isLoadingApprovers ? "Đang tải..." : "-- Chọn Quản lý Cấp 2 --"}</option>
-                                        {approversLv2.map(u => (
+                                        {employeeLv2Options.map(u => (
                                             <option key={u.id} value={u.id}>
-                                                {u.fullName} ({u.role === 'HR' && 'Hành Chính'})
+                                                {u.fullName} ({getRoleLabel(u)})
                                             </option>
                                         ))}
                                     </select>

@@ -31,12 +31,11 @@ export async function GET(req: Request) {
       roleConditions.push({ teamId: teamId, role: "LEADER" });
     } else if (lv === "2") {
       // Nếu lv = 2: Chỉ lấy Ban Giám Đốc và Hành Chính Nhân Sự
-      roleConditions.push({ role: "BAN_GIAM_DOC" }, { role: "HR" });
+      roleConditions.push({ role: "HR" });
     } else {
       // (Dự phòng) Nếu không có lv truyền lên, lấy tất cả như cũ
       roleConditions.push(
         { teamId: teamId, role: "LEADER" }, 
-        { role: "BAN_GIAM_DOC" },
         { role: "HR" }
       );
     }

@@ -31,7 +31,7 @@ export default function RequestsPage() {
 
     // 🚀 PHÂN QUYỀN HIỂN THỊ TAB
     const canViewAll = ["ADMIN", "BAN_GIAM_DOC", "HR"].includes(userRole); // Ai được xem "Tất cả đề xuất"
-    const isApprover = ["ADMIN", "BAN_GIAM_DOC", "LEADER", "CHANNEL_MANAGER", "HR"].includes(userRole); // Ai được duyệt đơn
+    const isApprover = ["ADMIN", , "LEADER", "CHANNEL_MANAGER", "HR"].includes(userRole); // Ai được duyệt đơn
 
     // 🚀 THÊM TRẠNG THÁI 'ALL_REQUESTS'
     const [activeTab, setActiveTab] = useState<'ALL_REQUESTS' | 'MY_REQUESTS' | 'NEED_APPROVAL'>(

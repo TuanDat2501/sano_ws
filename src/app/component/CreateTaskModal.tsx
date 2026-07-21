@@ -32,7 +32,7 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
           id: initialData.id,
           title: initialData.title || "",
           keywords: initialData.keywords || "",
-          linkContent: initialData.linkContent || "",
+          linkContent: initialData.linkContent || "Chưa có",
           contentId: initialData.contentId || "",
           editorId: initialData.editorId || "",
           animatorId: initialData.animatorId || "",
@@ -119,8 +119,8 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
                     <input type="text" className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm outline-none transition-all font-medium focus:border-blue-500 focus:bg-white" placeholder="VD: prehistoric creatures..." value={newTask.keywords} onChange={(e) => setNewTask({ ...newTask, keywords: e.target.value })} />
                   </div>
                   <div>
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-1.5"><LinkIcon size={12} /> Link Tham Khảo <span className="text-red-500">*</span></label>
-                    <input required type="url" className="w-full mt-1 border rounded-xl p-2.5 text-sm outline-none font-medium bg-slate-50 border-slate-200 focus:border-blue-500" value={newTask.linkContent} onChange={(e) => setNewTask({ ...newTask, linkContent: e.target.value })} />
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-1.5"><LinkIcon size={12} /> Link Tham Khảo</label>
+                    <input type="text" className="w-full mt-1 border rounded-xl p-2.5 text-sm outline-none font-medium bg-slate-50 border-slate-200 focus:border-blue-500" value={newTask.linkContent} onChange={(e) => setNewTask({ ...newTask, linkContent: e.target.value })} />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>

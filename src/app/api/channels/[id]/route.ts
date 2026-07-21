@@ -1,3 +1,4 @@
+// channels/[id]/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
@@ -11,13 +12,22 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
         const body = await req.json();
         const resolvedParams = await params;
         const channelId = resolvedParams.id;
-        const { name, link, topic, teamId, avatarUrl, status, monetization, members } = body;
+        
+        // 🚀 MỚI: Bổ sung trường category vào payload destructuring
+        const { name, link, topic, teamId, avatarUrl, status, monetization, category, members } = body;
 
         // 🚀 CẬP NHẬT KÊNH VÀ LÀM MỚI DANH SÁCH NHÂN SỰ
         const updatedChannel = await prisma.channel.update({
             where: { id: channelId },
             data: {
-                name, link, topic, teamId, avatarUrl, status, monetization,
+                name, 
+                link, 
+                topic, 
+                teamId, 
+                avatarUrl, 
+                status, 
+                monetization,
+                category, // 🚀 MỚI: Truyền category xuống Database để cập nhật
                 members: {
                     deleteMany: {}, // Xóa toàn bộ nhân sự cũ của kênh này
                     create: members?.map((m: any) => ({

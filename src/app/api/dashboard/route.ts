@@ -91,11 +91,16 @@ export async function GET(req: Request) {
                 OR: [
                     { contentId: { in: teamUserIds } },
                     { editorId: { in: teamUserIds } },
-                    { publisherId: { in: teamUserIds } }
+                    { publisherId: { in: teamUserIds } },
+                    { teamId: teamId } // Chặn thêm đầu rễ cho chắc chắn
                 ]
             };
 
             const userCondition = isTopManagement ? {} : { userId: { in: teamUserIds } };
+
+            // 🚀 ĐỊNH NGHĨA LẠI THẾ NÀO LÀ "TỒN ĐỌNG": Đã tạo quá 3 ngày mà chưa xong
+            const threeDaysAgo = new Date(today);
+            threeDaysAgo.setDate(today.getDate() - 3);
 
             const [
                 totalActiveTasks,
@@ -104,28 +109,31 @@ export async function GET(req: Request) {
                 managerLogs7DaysRaw,
                 kpiRecords
             ] = await Promise.all([
+                // 1. Task Đang Chạy: Tất cả task chưa chốt sổ
                 prisma.task.count({ where: { ...taskFilter, isClosed: false } }),
                 
+                // 2. 🚀 ĐÃ SỬA LOGIC "CHỜ NGHIỆM THU": 
+                // Cập nhật các trạng thái Review mới (Content, Animation, Edit) thay vì "REVIEW" cũ
                 prisma.task.count({
                     where: {
                         ...taskFilter,
                         isClosed: false,
-                        OR: [
-                            { AND: [{ scriptLink: { not: null } }, { scriptLink: { not: "" } }] },
-                            { AND: [{ videoLink: { not: null } }, { videoLink: { not: "" } }] },
-                            { AND: [{ publishLink: { not: null } }, { publishLink: { not: "" } }] }
+                        status: { in: ["CONTENT_REVIEW", "ANIMATION_REVIEW", "EDIT_REVIEW", "DONE"] },
+                        NOT: [
+                            { videoLink: null },
+                            { videoLink: "" }
                         ]
                     }
                 }),
+                
+                // 3. 🚀 ĐÃ SỬA LOGIC "TỒN ĐỌNG": 
+                // Cập nhật các trạng thái Doing mới thay vì "BACKLOG", "TODO", "DOING" cũ
                 prisma.task.count({
                     where: {
                         ...taskFilter,
                         isClosed: false,
-                        OR: [ { scriptLink: { equals: "" } }, { scriptLink: null } ],
-                        AND: [
-                            { OR: [{ videoLink: { equals: "" } }, { videoLink: null }] },
-                            { OR: [{ publishLink: { equals: "" } }, { publishLink: null }] }
-                        ]
+                        status: { in: ["TODO", "CONTENT_DOING", "ANIMATION_DOING", "EDIT_DOING"] },
+                        createdAt: { lt: threeDaysAgo } 
                     }
                 }),
 
@@ -133,7 +141,7 @@ export async function GET(req: Request) {
                     where: {
                         createdAt: { gte: sevenDaysAgo }, 
                         ...userCondition, 
-                        action: { in: ["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK", "DAILY_REPORT"] }
+                        action: { in: ["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK", "DAILY_REPORT", "MERGE_VIDEO"] }
                     },
                     orderBy: { createdAt: 'desc' }, 
                     include: { user: { select: { fullName: true } } }
@@ -149,7 +157,6 @@ export async function GET(req: Request) {
                     include: { user: { select: { fullName: true, role: true } } }
                 })
             ]);
-
             const validLogs7Days: any[] = [];
             const dailyReportTracker7Days = new Set<string>();
             managerLogs7DaysRaw.forEach((log: any) => {

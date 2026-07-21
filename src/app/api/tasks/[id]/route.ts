@@ -55,6 +55,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             if (rawBody.publishLink !== undefined) body.publishLink = rawBody.publishLink;
             if (rawBody.isClosed !== undefined) body.isClosed = rawBody.isClosed;
             if (rawBody.teamId !== undefined) body.teamId = rawBody.teamId;
+            if (rawBody.animatorId !== undefined) body.animatorId = rawBody.animatorId || null;
             if (rawBody.contentId !== undefined) body.contentId = rawBody.contentId || null;
             if (rawBody.editorId !== undefined) body.editorId = rawBody.editorId || null;
             if (rawBody.projectId !== undefined) body.projectId = rawBody.projectId || null;
@@ -63,22 +64,22 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             if (rawBody.channelId !== undefined) body.channelId = rawBody.channelId || null;
             
         } else if (currentUser.role === "CONTENT") {
-            if (oldTask.contentId !== currentUser.id && oldTask.creatorId !== currentUser.id) {
-                return NextResponse.json({ error: "Bạn không phụ trách nội dung bài này!" }, { status: 403 });
+            // 🚀 ĐÃ SỬA: Cho phép kéo thẻ nếu nhân sự đang đóng vai trò Content, Creator HOẶC có tên trong cột Animator
+            if (oldTask.contentId !== currentUser.id && oldTask.creatorId !== currentUser.id && oldTask.animatorId !== currentUser.id) {
+                return NextResponse.json({ error: "Bạn không phụ trách nội dung/chuyển động bài này!" }, { status: 403 });
             }
             if (rawBody.status !== undefined) body.status = rawBody.status;
-            // 🚀 Mở khóa các trường cho CONTENT
             if (rawBody.scriptLink !== undefined) body.scriptLink = rawBody.scriptLink;
             if (rawBody.englishScriptLink !== undefined) body.englishScriptLink = rawBody.englishScriptLink;
             if (rawBody.audioLink !== undefined) body.audioLink = rawBody.audioLink;
             if (rawBody.note !== undefined) body.note = rawBody.note;
 
         } else if (currentUser.role === "EDITOR") {
-            if (oldTask.editorId !== currentUser.id) {
-                return NextResponse.json({ error: "Bạn không phụ trách dựng bài này!" }, { status: 403 });
+            // 🚀 ĐÃ SỬA: Cho phép kéo thẻ nếu nhân sự đang đóng vai trò Editor HOẶC có tên trong cột Animator
+            if (oldTask.editorId !== currentUser.id && oldTask.animatorId !== currentUser.id) {
+                return NextResponse.json({ error: "Bạn không phụ trách dựng/chuyển động bài này!" }, { status: 403 });
             }
             if (rawBody.status !== undefined) body.status = rawBody.status;
-            // 🚀 Mở khóa các trường cho EDITOR
             if (rawBody.videoLink !== undefined) body.videoLink = rawBody.videoLink;
             if (rawBody.storyboardLink !== undefined) body.storyboardLink = rawBody.storyboardLink;
             if (rawBody.thumbnailLink !== undefined) body.thumbnailLink = rawBody.thumbnailLink;
@@ -141,10 +142,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         // Hàm helper tự động tạo TaskLog ghi nhận tiến độ khi link thay đổi
         const addLinkLog = (fieldName: string, label: string) => {
             if (body[fieldName] !== undefined && body[fieldName] !== (oldTask as any)[fieldName]) {
-                logsToCreate.push({ 
+                logsToCreate.push({
                     action: "DAILY_REPORT", // Ghi danh thẳng vào Nhật ký báo cáo ngày
-                    details: body[fieldName] ? `Báo cáo tiến độ: Đã cập nhật ${label}` : `Đã xóa ${label}`, 
-                    taskId, userId 
+                    details: body[fieldName] ? `Báo cáo tiến độ: Đã cập nhật ${label}` : `Đã xóa ${label}`,
+                    taskId, userId
                 });
             }
         };
@@ -160,10 +161,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
         // Bắt sự kiện người dùng điền ghi chú Trạng thái (note)
         if (body.note !== undefined && body.note !== oldTask.note) {
-            logsToCreate.push({ 
-                action: "UPDATE_LINK", 
-                details: `Báo cáo trạng thái: ${body.note}`, 
-                taskId, userId 
+            logsToCreate.push({
+                action: "UPDATE_LINK",
+                details: `Báo cáo trạng thái: ${body.note}`,
+                taskId, userId
             });
         }
 
@@ -193,6 +194,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 duration: body.duration !== undefined ? body.duration : undefined,
                 note: body.note !== undefined ? body.note : undefined,
                 channelId: body.channelId !== undefined ? body.channelId : undefined,
+                animatorId:body.animatorId !== undefined ? body.animatorId : undefined
             }
         });
 
@@ -225,12 +227,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         }
 
         // --- 5.2. BÁO CHO NHÂN SỰ KHI REJECT / ĐÓNG TASK ---
-        const involvedIds = [oldTask.contentId, oldTask.editorId, oldTask.publisherId];
+        const involvedIds = [oldTask.contentId, oldTask.editorId, oldTask.animatorId, oldTask.publisherId];
         const targetWorkerIds = [...new Set(involvedIds.filter(id => id && id !== userId))];
 
         if (targetWorkerIds.length > 0) {
             for (const wId of targetWorkerIds) {
-                if (body.status === "DOING" && oldTask.status !== "DOING") {
+                if (body.status === "TODO" && oldTask.status !== "TODO") {
                     const notif = await prisma.notification.create({ data: { userId: wId as string, taskId: taskId, title: "Task bị từ chối ⚠️", message: `${currentUser.fullName || "Quản lý"} đã yêu cầu làm lại Task "${oldTask.title}".`, type: "error" } });
                     createdNotifications.push({ ...notif, type: "error" });
                     userIdsToNotify.push(wId as string);
@@ -293,7 +295,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
                 contentUser: { select: { fullName: true } },
                 editorUser: { select: { fullName: true } },
                 publisherUser: { select: { fullName: true } },
-                animatorUser:{ select: { fullName: true } },
+                animatorUser: { select: { fullName: true } },
                 project: {
                     select: {
                         id: true,

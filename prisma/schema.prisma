@@ -19,12 +19,17 @@ enum Role {
   PUBLISHER
 }
 
+// 🚀 ĐÃ SỬA: Chẻ nhỏ trạng thái Task theo từng trạm
 enum TaskStatus {
-  BACKLOG
   TODO
-  DOING
-  REVIEW
+  CONTENT_DOING
+  CONTENT_REVIEW
+  ANIMATION_DOING
+  ANIMATION_REVIEW
+  EDIT_DOING
+  EDIT_REVIEW
   DONE 
+  BACKLOG
 }
 
 enum RequestType {
@@ -61,7 +66,7 @@ enum RoomType {
   COMPANY
 }
 
-// Thêm Enum này vào khu vực ENUMS ở trên cùng
+// 🚀 ĐÃ SỬA: Thêm các action duyệt/từ chối từng khâu
 enum TaskLogAction {
   CREATE_TASK
   UPDATE_STATUS
@@ -74,7 +79,37 @@ enum TaskLogAction {
   ASSIGN_USER
   DAILY_REPORT
   MERGE_VIDEO
+  APPROVE_CONTENT
+  REJECT_CONTENT
+  APPROVE_ANIMATION
+  REJECT_ANIMATION
+  APPROVE_EDIT
+  REJECT_EDIT
 }
+
+// 🚀 ĐÃ THÊM: Phân loại Kênh (AI hoặc Tổng hợp)
+enum ChannelCategory {
+  AI
+  TONG_HOP
+}
+
+// 🚀 CÁC ENUM TRẠNG THÁI CHO YOUTUBE
+enum MonetizationStatus {
+  CHUA_DAT          // Đang cày thông số
+  DA_DU_DIEU_KIEN   // Đã đạt 1k Sub/4k Giờ hoặc 10M View Shorts
+  CHO_DUYET         // Đang đợi YouTube xem xét đơn
+  DA_BAT            // Đã có biểu tượng $ xanh
+  TAT_KIEM_TIEN     // Bị tắt do vi phạm hoặc nội dung dùng lại
+}
+
+enum ChannelStatus {
+  XAY_DUNG      // Kênh mới, đang nuôi
+  HOAT_DONG     // Đang up video đều
+  CANH_BAO      // Dính gậy bản quyền / Nguyên tắc CĐ
+  BAY_KENH      // Bị khoá (Suspended)
+  DUNG_HOAT_DONG
+}
+
 
 // ================= MODELS =================
 
@@ -101,12 +136,12 @@ model User {
   fullName     String
   role         Role    @default(CONTENT)
   isActive     Boolean @default(true)
-
+  isTeamLeader Boolean @default(false)
   teamId String?
   team   Team?   @relation(fields: [teamId], references: [id])
 
   // ==========================================
-  // 🚀 THÔNG TIN NHÂN SỰ (HR) BỔ SUNG
+  // THÔNG TIN NHÂN SỰ (HR) BỔ SUNG
   // ==========================================
   employeeCode     String?   @unique // Mã nhân viên
   dob              DateTime? @db.Date // Ngày sinh
@@ -164,12 +199,11 @@ model User {
 }
 
 model Permission {
-  id        String  @id @default(uuid()) // Đổi sang uuid() chuẩn của MySQL/PostgreSQL
-  role      String // Tên chức vụ: "CONTENT", "EDITOR", "LEADER",...
-  moduleId  String // Mã tính năng: "MENU_DASHBOARD", "ACTION_CREATE_TASK",...
+  id        String  @id @default(uuid()) 
+  role      String 
+  moduleId  String 
   isAllowed Boolean @default(false)
 
-  // Đảm bảo mỗi chức vụ chỉ có 1 trạng thái cho 1 module
   @@unique([role, moduleId])
 }
 
@@ -188,7 +222,7 @@ model Task {
   videoLink         String? @db.Text 
   publishLink       String? @db.Text 
 
-  publishDate       DateTime? @db.Date // Ngày pub (Lên lịch)
+  publishDate       DateTime? @db.Date 
   duration          Int?     
   note              String? @db.Text
 
@@ -226,9 +260,9 @@ model Task {
   isClosed      Boolean  @default(false)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
-  episodeNumber Int?           // Số thứ tự tập (Hệ thống tự đếm)
-  isCompilation Boolean        @default(false) // Đánh dấu đây là video ghép
-  mergeCount    Int?           @default(0)     // Số lượng video gốc được ghép vào
+  episodeNumber Int?           
+  isCompilation Boolean        @default(false) 
+  mergeCount    Int?           @default(0)     
   sourceTasks   Task[]         @relation("VideoMergeRelation")
   compiledInto  Task[]         @relation("VideoMergeRelation")
   usedInMergeCount Int?        @default(0)
@@ -243,10 +277,8 @@ model Evaluation {
 
   criteria Json
 
-  // Nhận xét để Editor/Content vào đọc rồi Kaizen
   kaizenNote String? @db.Text
 
-  // Ai là người chấm (Chỉ QLK hoặc Leader mới có quyền)
   evaluatorId String
   evaluator   User   @relation(fields: [evaluatorId], references: [id])
 
@@ -256,10 +288,10 @@ model Evaluation {
 
 model Department {
   id          String  @id @default(uuid())
-  name        String  @unique // VD: Phòng Sản Xuất Nội Dung, Phòng Marketing, Phòng Hành Chính
+  name        String  @unique 
   description String?
 
-  teams Team[] // Một phòng ban quản lý nhiều Team nhỏ bên dưới
+  teams Team[] 
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -270,7 +302,7 @@ model WeeklyKPI {
   year        Int
   month       Int
   weekNumber  Int
-  targetValue Int // Chỉ tiêu tuần (Leader giao)
+  targetValue Int 
 
   userId String
   user   User   @relation(fields: [userId], references: [id])
@@ -283,17 +315,13 @@ model Request {
   type   RequestType
   status RequestStatus @default(PENDING_1)
 
-  // ==========================================
-  // 🚀 CÁC CỘT VẬT LÝ MỚI (Tối ưu truy vấn)
-  // ==========================================
-  startDate  DateTime? // Dành cho Nghỉ phép
-  endDate    DateTime? // Dành cho Nghỉ phép
-  targetDate DateTime? // Dành cho Đi muộn / Về sớm / Remote
-  amount     Int? // Tiền (VNĐ) cho Tạm ứng, Mua sắm, Thưởng...
-  itemName   String? // Tên món đồ/chiến dịch
-  reason     String?   @db.Text // Lý do chi tiết
+  startDate  DateTime? 
+  endDate    DateTime? 
+  targetDate DateTime? 
+  amount     Int? 
+  itemName   String? 
+  reason     String?   @db.Text 
 
-  // Vẫn giữ lại Json để sơ cua cho các form đặc thù phát sinh sau này
   contentData Json?
 
   attachmentUrl String? @db.Text
@@ -318,14 +346,12 @@ model Request {
 
 model ApprovalLog {
   id      String         @id @default(uuid())
-  action  ApprovalAction // Hành động đã làm
-  comment String?        @db.Text // Lý do từ chối hoặc lời phê (Bắt buộc khi Reject)
+  action  ApprovalAction 
+  comment String?        @db.Text 
 
-  // Thuộc về Đơn nào?
   requestId String
   request   Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
 
-  // Ai là người thực hiện hành động này?
   approverId String
   approver   User   @relation("LogApprover", fields: [approverId], references: [id])
 
@@ -380,11 +406,9 @@ model TaskComment {
   text      String   @db.Text
   createdAt DateTime @default(now())
 
-  // Liên kết với Task
   taskId String
   task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
-  // Liên kết với Người gửi
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
@@ -396,18 +420,17 @@ model Notification {
   isRead    Boolean  @default(false)
   createdAt DateTime @default(now())
 
-  // Liên kết tới người nhận thông báo
   userId    String
   user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   taskId    String?
-  type      String  @default("info") // Các giá trị: "info", "success", "error", "warning"
+  type      String  @default("info") 
   requestId String?
 }
 
 model TaskLog {
   id        String        @id @default(uuid())
-  action    TaskLogAction // 🚀 Sửa từ String thành Enum
-  details   String // Ví dụ: "Từ Chờ dựng -> Chờ đăng"
+  action    TaskLogAction 
+  details   String 
   createdAt DateTime      @default(now())
 
   taskId String
@@ -418,10 +441,10 @@ model TaskLog {
 
 model Attachment {
   id       String @id @default(uuid())
-  url      String @db.Text // Link S3, Cloudinary hoặc thư mục local
-  fileType String // Loại file (Ví dụ: 'image', 'pdf', 'docx', 'video')
-  fileName String // Tên file gốc (Ví dụ: "Kich-ban-Sano.docx")
-  fileSize Int? // Dung lượng file (bytes) để validate FE
+  url      String @db.Text 
+  fileType String 
+  fileName String 
+  fileSize Int? 
 
   messageId String
   message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
@@ -435,14 +458,12 @@ model Project {
   description  String?
   teamId       String?
   team         Team?   @relation(fields: [teamId], references: [id])
-  supervisorId String? // Người giám sát dự án
+  supervisorId String? 
   supervisor   User?   @relation("ProjectSupervisor", fields: [supervisorId], references: [id])
   status       String  @default("ACTIVE")
 
-  // 🚀 LƯU TRỮ QUY TRÌNH (Workflow) DẠY DẠNG JSON
-  // Lưu vị trí các nút (Canva-style) và các bước checklist
-  workflowNodes Json? // Lưu mảng các Node (vị trí X, Y, Loại trạm)
-  workflowEdges Json? // Lưu các đường nối (Logic luồng)
+  workflowNodes Json? 
+  workflowEdges Json? 
   criteria      Json?
   
   createdAt   DateTime     @default(now())
@@ -455,11 +476,13 @@ model Project {
 model Channel {
   id              String   @id @default(uuid())
   name            String   @unique
-  
-  // 🚀 Mới: Lưu URL kênh để sếp hoặc nhân sự click xem nhanh
   link            String?  @db.Text 
-  startedAt   DateTime? @db.Date
+  startedAt       DateTime? @db.Date
   topic           String?
+  
+  // 🚀 ĐÃ THÊM: Kênh sẽ lưu cứng trạng thái là AI hay Tổng hợp
+  category        ChannelCategory    @default(TONG_HOP)
+
   status          ChannelStatus      @default(XAY_DUNG)
   monetization    MonetizationStatus @default(CHUA_DAT)
 
@@ -495,24 +518,6 @@ model DailyRevenue {
   @@unique([channelId, date]) 
 }
 
-// 🚀 1. THÊM CÁC ENUM TRẠNG THÁI CHO YOUTUBE
-enum MonetizationStatus {
-  CHUA_DAT          // Đang cày thông số
-  DA_DU_DIEU_KIEN   // 🚀 Mới: Đã đạt 1k Sub/4k Giờ hoặc 10M View Shorts
-  CHO_DUYET         // Đang đợi YouTube xem xét đơn
-  DA_BAT            // Đã có biểu tượng $ xanh
-  TAT_KIEM_TIEN     // Bị tắt do vi phạm hoặc nội dung dùng lại
-}
-
-enum ChannelStatus {
-  XAY_DUNG      // Kênh mới, đang nuôi
-  HOAT_DONG     // Đang up video đều
-  CANH_BAO      // Dính gậy bản quyền / Nguyên tắc CĐ
-  BAY_KENH      // Bị khoá (Suspended)
-  DUNG_HOAT_DONG
-}
-
-
 model ChannelMember {
   channelId       String
   channel         Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
@@ -520,18 +525,16 @@ model ChannelMember {
   userId          String
   user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   
-  // Vai trò CỤ THỂ trên kênh này (VD: "Trưởng nhóm Nội dung", "Voice Talent chính")
   roleOnChannel   String  
 
   assignedAt      DateTime @default(now())
 
-  @@id([channelId, userId]) // 1 người chỉ có 1 chức danh chính trên 1 kênh
+  @@id([channelId, userId]) 
 }
-
 
 model SystemSetting {
   id           String   @id @default(uuid())
-  settingKey   String   @unique // VD: "SAMPLE_CRITERIA"
-  settingValue Json?    // Dữ liệu JSON (Sườn điểm, cấu hình...)
+  settingKey   String   @unique 
+  settingValue Json?    
   updatedAt    DateTime @updatedAt
 }

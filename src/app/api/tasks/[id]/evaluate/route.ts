@@ -14,18 +14,20 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
         const user = session.user as any;
         
-        if (!["ADMIN", "BAN_GIAM_DOC", "LEADER", "QLK"].includes(user.role)) {
+        // 🚀 ĐÃ SỬA: Đổi "QLK" thành "CHANNEL_MANAGER" cho khớp với schema
+        if (!["ADMIN", "BAN_GIAM_DOC", "LEADER", "CHANNEL_MANAGER"].includes(user.role)) {
              return NextResponse.json({ error: "Không có quyền chấm điểm!" }, { status: 403 });
         }
 
         const body = await req.json();
         const resolvedParams = await params;
         
-        // 🚀 Đã sửa 'criteriaData' thành 'criteria' để hứng chuẩn dữ liệu từ Frontend
         const { score, criteria, note } = body;
 
         const isPass = score >= 7;
-        const newStatus = isPass ? "DONE" : "DOING"; 
+        
+        // 🚀 ĐÃ SỬA: Thay "DOING" bằng "TODO" (Hoặc sếp có thể đổi thành "EDIT_DOING" tùy quy trình)
+        const newStatus = isPass ? "DONE" : "TODO"; 
 
         const [evaluation, updatedTask, systemComment] = await prisma.$transaction([
             // Lệnh 1: Lưu phiếu chấm điểm
@@ -33,7 +35,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                 data: {
                     taskId: resolvedParams.id,
                     score: score,
-                    criteria: criteria, // 🚀 Lưu vào DB
+                    criteria: criteria, 
                     kaizenNote: note,
                     evaluatorId: user.id
                 }

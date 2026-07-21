@@ -5,8 +5,6 @@ import { Youtube, Plus, ExternalLink, Edit, Trash2, ShieldAlert, Loader2, AlertC
 import { useToast } from "@/app/component/ToastProvider";
 import ChannelFormDrawer from "./ChannelFormDrawer";
 
-
-
 export default function ChannelsPage() {
     const { showToast } = useToast();
     const [channels, setChannels] = useState<any[]>([]);
@@ -14,20 +12,20 @@ export default function ChannelsPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     
     const [teams, setTeams] = useState<any[]>([]);
-    const [allUsers, setAllUsers] = useState<any[]>([]); // 🚀 STATE LƯU USER
+    const [allUsers, setAllUsers] = useState<any[]>([]); 
 
     const [editingId, setEditingId] = useState<string | null>(null);
     const [formData, setFormData] = useState({
         name: "", link: "", topic: "", teamId: "", avatarUrl: "", 
         status: "XAY_DUNG", monetization: "CHUA_DAT",
-        members: [] // 🚀 Khởi tạo mảng members rỗng
+        category: "TONG_HOP", // 🚀 MỚI: Thêm category
+        members: [] 
     });
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
     const fetchData = async () => {
         setIsLoading(true);
         try {
-            // 🚀 BẬT LẠI API THẬT
             const [chRes, optRes] = await Promise.all([
                 fetch('/api/channels'),
                 fetch('/api/channels?action=get_options')
@@ -40,7 +38,7 @@ export default function ChannelsPage() {
 
             setChannels(Array.isArray(channelsData) ? channelsData : []);
             setTeams(options.teams || []);
-            setAllUsers(options.users || []); // Lấy data nhân sự để bắn xuống Modal
+            setAllUsers(options.users || []); 
 
         } catch (error) {
             console.error("LỖI FETCH CHANNELS:", error);
@@ -59,9 +57,6 @@ export default function ChannelsPage() {
             const url = editingId ? `/api/channels/${editingId}` : '/api/channels';
             const method = editingId ? 'PUT' : 'POST';
             
-            // Console log để sếp thấy list members được truyền đi rất chuẩn
-            console.log("Dữ liệu submit:", formData);
-
             const res = await fetch(url, {
                 method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formData)
             });
@@ -88,13 +83,15 @@ export default function ChannelsPage() {
                 name: channel.name, link: channel.link || "", topic: channel.topic || "", 
                 teamId: channel.teamId, avatarUrl: channel.avatarUrl || "",
                 status: channel.status, monetization: channel.monetization,
-                members: channel.members || [] // Lấy members cũ nếu có
+                category: channel.category || "TONG_HOP", // 🚀 MỚI: Gán category khi sửa
+                members: channel.members || [] 
             });
         } else {
             setEditingId(null);
             setFormData({ 
                 name: "", link: "", topic: "", teamId: teams[0]?.id || "", 
                 avatarUrl: "", status: "XAY_DUNG", monetization: "CHUA_DAT",
+                category: "TONG_HOP", // 🚀 MỚI: Reset lại TONG_HOP khi tạo mới
                 members: [] 
             });
         }
@@ -115,10 +112,7 @@ export default function ChannelsPage() {
     };
 
     return (
-        // 🚀 1. Thêm flex-col, h-full và overflow-hidden để khoá chặt view trong 1 màn hình
         <div className="p-4 md:p-6 bg-slate-50 h-full max-h-[calc(100vh-80px)] flex flex-col overflow-hidden">
-            
-            {/* 🚀 2. Thêm shrink-0 để cái khối Header này không bị bóp méo khi bảng quá dài */}
             <div className="mb-4 md:mb-6 shrink-0 flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-slate-200 relative z-10">
                 <div>
                     <h1 className="text-xl md:text-2xl font-black text-slate-900 flex items-center gap-2">
@@ -134,16 +128,12 @@ export default function ChannelsPage() {
             {isLoading ? (
                 <div className="flex justify-center items-center flex-1"><Loader2 className="animate-spin text-red-500" size={32} /></div>
             ) : (
-                // 🚀 3. Container của bảng chiếm hết phần còn lại (flex-1) và tự động sinh thanh cuộn (overflow-auto)
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm flex-1 overflow-auto custom-scrollbar relative z-0">
-                    
-                    {/* 🚀 Thêm min-w-[700px] để bảng cuộn ngang mượt mà trên Mobile mà không bị ép chữ */}
                     <table className="w-full text-left border-collapse min-w-[700px]">
-                        
-                        {/* 🚀 4. Ghim Header của Bảng lên nóc (sticky top-0) */}
                         <thead className="sticky top-0 z-20 bg-slate-100/95 backdrop-blur-md shadow-[0_1px_3px_rgba(0,0,0,0.05)]">
                             <tr className="text-slate-500 text-[10px] font-black uppercase tracking-widest">
                                 <th className="p-4 border-b border-slate-200">Thông tin Kênh</th>
+                                <th className="p-4 border-b border-slate-200">Phân loại</th>
                                 <th className="p-4 border-b border-slate-200">Trạng thái HĐ</th>
                                 <th className="p-4 border-b border-slate-200">Kiếm tiền</th>
                                 <th className="p-4 border-b border-slate-200 text-right">Thao tác</th>
@@ -172,6 +162,14 @@ export default function ChannelsPage() {
                                                 <p className="text-[10px] md:text-xs font-bold text-slate-400 mt-0.5 md:mt-1 truncate max-w-[120px] md:max-w-[180px]">{ch.topic || "Chưa phân loại"}</p>
                                             </div>
                                         </div>
+                                    </td>
+                                    <td className="p-4">
+                                        {/* 🚀 MỚI: Hiển thị nhãn AI hoặc Tổng Hợp */}
+                                        {ch.category === 'AI' ? (
+                                            <span className="bg-purple-100 text-purple-700 px-2.5 py-1 rounded-md text-[10px] font-black uppercase border border-purple-200">🤖 Kênh AI</span>
+                                        ) : (
+                                            <span className="bg-blue-100 text-blue-700 px-2.5 py-1 rounded-md text-[10px] font-black uppercase border border-blue-200">🎬 Tổng hợp</span>
+                                        )}
                                     </td>
                                     <td className="p-4">
                                         {ch.status === 'XAY_DUNG' && <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded-md text-[10px] font-black uppercase">Đang xây</span>}

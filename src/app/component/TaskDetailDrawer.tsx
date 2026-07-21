@@ -270,12 +270,13 @@ export default function TaskDetailDrawer({
                 </div>
               ) : (
                 <div>
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5 mb-2">
+                  
+                  {selectedTask.linkContent && <><label className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5 mb-2">
                     <LinkIcon size={14} /> Link Tham Khảo / Ý Tưởng
                   </label>
                   <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 font-medium text-sm text-blue-600 break-all hover:bg-blue-50 transition-colors">
                     <a href={selectedTask.linkContent} target="_blank" rel="noreferrer" className="hover:underline">{selectedTask.linkContent}</a>
-                  </div>
+                  </div></>}
                 </div>
               )}
 

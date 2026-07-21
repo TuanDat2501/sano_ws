@@ -7,7 +7,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
-import { Plus, Link as LinkIcon, AlertCircle, FileText, CheckCircle2, Clock, PlayCircle, Loader2, X, UsersIcon, Send, MessageSquare, Users, Archive, Download, Video } from "lucide-react";
+import { Plus, Link as LinkIcon, AlertCircle, FileText, CheckCircle2, Clock, PlayCircle, Loader2, X, UsersIcon, Send, MessageSquare, Users, Archive, Download, Video, Filter } from "lucide-react";
 import { useToast } from "@/app/component/ToastProvider";
 import { io, Socket } from "socket.io-client";
 import CreateTaskModal from "@/app/component/CreateTaskModal";
@@ -19,10 +19,17 @@ import BacklogView from "./BacklogView";
 import PushTaskModal from "./PushTaskModal";
 import MergeVideoModal from './MergeVideoModal';
 
+// FULL 7 CỘT MẶC ĐỊNH
 const COLUMNS = {
   TODO: { id: "TODO", title: "Chờ Kịch Bản", icon: <FileText size={18} className="text-slate-700" />, color: "text-slate-800", iconBg: "bg-slate-300", columnBg: "bg-slate-200", borderColor: "border-slate-300" },
-  DOING: { id: "DOING", title: "Chờ Dựng", icon: <PlayCircle size={18} className="text-blue-700" />, color: "text-blue-800", iconBg: "bg-blue-300", columnBg: "bg-blue-100", borderColor: "border-blue-300" },
-  REVIEW: { id: "REVIEW", title: "Chờ Đăng", icon: <Clock size={18} className="text-orange-700" />, color: "text-orange-800", iconBg: "bg-orange-300", columnBg: "bg-orange-100", borderColor: "border-orange-300" },
+  CONTENT_REVIEW: { id: "CONTENT_REVIEW", title: "Duyệt Kịch Bản", icon: <CheckCircle2 size={18} className="text-orange-700"/>, color: "text-orange-800", iconBg: "bg-orange-300", columnBg: "bg-orange-50", borderColor: "border-orange-200" },
+  
+  ANIMATION_DOING: { id: "ANIMATION_DOING", title: "Đang làm CĐ", icon: <PlayCircle size={18} className="text-purple-700" />, color: "text-purple-800", iconBg: "bg-purple-300", columnBg: "bg-purple-50", borderColor: "border-purple-200" },
+  ANIMATION_REVIEW: { id: "ANIMATION_REVIEW", title: "Duyệt CĐ", icon: <Clock size={18} className="text-pink-700" />, color: "text-pink-800", iconBg: "bg-pink-300", columnBg: "bg-pink-50", borderColor: "border-pink-200" },
+  
+  EDIT_DOING: { id: "EDIT_DOING", title: "Đang Dựng", icon: <Video size={18} className="text-cyan-700" />, color: "text-cyan-800", iconBg: "bg-cyan-300", columnBg: "bg-cyan-50", borderColor: "border-cyan-200" },
+  EDIT_REVIEW: { id: "EDIT_REVIEW", title: "Chờ Đăng", icon: <Clock size={18} className="text-indigo-700" />, color: "text-indigo-800", iconBg: "bg-indigo-300", columnBg: "bg-indigo-50", borderColor: "border-indigo-200" },
+  
   DONE: { id: "DONE", title: "Hoàn Thành", icon: <CheckCircle2 size={18} className="text-green-700" />, color: "text-green-800", iconBg: "bg-green-300", columnBg: "bg-green-100", borderColor: "border-green-300" },
 };
 
@@ -49,7 +56,11 @@ export default function KanbanBoard() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [channels, setChannels] = useState<any[]>([]);
-  const [tasks, setTasks] = useState<{ [key: string]: any[] }>({ TODO: [], DOING: [], REVIEW: [], DONE: [] });
+  const [tasks, setTasks] = useState<{ [key: string]: any[] }>({ 
+      TODO: [], CONTENT_REVIEW: [], 
+      ANIMATION_DOING: [], ANIMATION_REVIEW: [], 
+      EDIT_DOING: [], EDIT_REVIEW: [], DONE: [] 
+  });
   const [rawTasks, setRawTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
@@ -76,6 +87,7 @@ export default function KanbanBoard() {
   const [viewMode, setViewMode] = useState<'board' | 'list' | 'backlog'>((searchParams.get("viewMode") as 'board' | 'list' | 'backlog') || 'board');
   const [searchTerm, setSearchTerm] = useState(searchParams.get("search") || "");
   const [filterStatus, setFilterStatus] = useState(searchParams.get("status") || "ALL");
+  const [filterChannel, setFilterChannel] = useState(searchParams.get("channelId") || "ALL"); // 🚀 MỚI: State lọc kênh
   const [fromDate, setFromDate] = useState(searchParams.get("fromDate") || "");
   const [toDate, setToDate] = useState(searchParams.get("toDate") || "");
   const [currentPage, setCurrentPage] = useState(Number(searchParams.get("page")) || 1);
@@ -99,18 +111,33 @@ export default function KanbanBoard() {
 
   const backlogTasks = rawTasks.filter(t => t.status === 'BACKLOG');
   const [editingTask, setEditingTask] = useState<any>(null);
+  
+  // Lọc dữ liệu danh sách
   const filteredTasks = rawTasks.filter((task) => {
     if (task.status === 'BACKLOG') return false;
     const matchSearch = task.title.toLowerCase().includes(searchTerm.toLowerCase());
     const matchStatus = filterStatus === "ALL" || task.status === filterStatus;
+    const matchChannel = filterChannel === "ALL" || task.channelId === filterChannel; // 🚀 MỚI: Khớp Kênh
     const taskDate = new Date(task.createdAt).toISOString().split('T')[0];
     const matchFrom = fromDate === "" || taskDate >= fromDate;
     const matchTo = toDate === "" || taskDate <= toDate;
-    return matchSearch && matchStatus && matchFrom && matchTo;
+    return matchSearch && matchStatus && matchChannel && matchFrom && matchTo;
   });
 
   const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
   const [isMerging, setIsMerging] = useState(false);
+
+  // 🚀 LOGIC ĐỘNG: QUYẾT ĐỊNH ẨN HIỆN CỘT ANIMATION TRÊN BOARD
+  const activeChannelObj = channels.find(c => c.id === filterChannel);
+  const isTongHopChannel = activeChannelObj?.category === 'TONG_HOP';
+  
+  // Clone COLUMNS gốc ra để thao tác cắt bớt
+  const BOARD_COLUMNS = { ...COLUMNS };
+  if (isTongHopChannel) {
+    // Nếu chọn kênh Tổng Hợp -> Xoá 2 cột Chuyển động
+    delete (BOARD_COLUMNS as any).ANIMATION_DOING;
+    delete (BOARD_COLUMNS as any).ANIMATION_REVIEW;
+  }
 
   const handleMergeSubmit = async (mergeData: any) => {
     setIsMerging(true);
@@ -125,9 +152,7 @@ export default function KanbanBoard() {
         if (res.ok) {
             showToast("success", "Đã tạo Video Ghép thành công!");
             setIsMergeModalOpen(false);
-            fetchTasks(); // Kéo lại Kanban board
-            
-            // Bắn socket thông báo cho Editor
+            fetchTasks(); 
             if (socket) {
                 socket.emit("board_updated");
                 socket.emit("assign_task", {
@@ -146,14 +171,17 @@ export default function KanbanBoard() {
         setIsMerging(false);
     }
   };
+
   const fetchTasks = async () => {
     try {
       const currentStatus = viewMode === 'backlog' ? 'BACKLOG' : filterStatus;
       const currentLimit = viewMode === 'backlog' ? "50" : ITEMS_PER_PAGE.toString();
 
+      // Truyền thêm channelId vào API nếu sau này Backend muốn dùng
       const params = new URLSearchParams({
         viewMode, page: currentPage.toString(), limit: currentLimit,
-        search: searchTerm, status: currentStatus, fromDate, toDate
+        search: searchTerm, status: currentStatus, fromDate, toDate,
+        ...(filterChannel !== "ALL" && { channelId: filterChannel })
       });
 
       const res = await fetch(`/api/tasks?${params}`);
@@ -162,8 +190,12 @@ export default function KanbanBoard() {
       if (!data.tasks) { setLoading(false); return; }
 
       if (viewMode === 'board') {
-        const groupedTasks = { TODO: [], DOING: [], REVIEW: [], DONE: [] };
+        const groupedTasks = { TODO: [], CONTENT_REVIEW: [], ANIMATION_DOING: [], ANIMATION_REVIEW: [], EDIT_DOING: [], EDIT_REVIEW: [], DONE: [] };
+        
         data.tasks.forEach((task: any) => {
+          // 🚀 Lọc cứng ở Frontend: Chỉ thả Task vào cột nếu nó thuộc kênh đang chọn (Hoặc All)
+          if (filterChannel !== "ALL" && task.channelId !== filterChannel) return;
+
           if (groupedTasks[task.status as keyof typeof groupedTasks]) {
             (groupedTasks[task.status as keyof typeof groupedTasks] as any[]).push(task);
           }
@@ -174,8 +206,6 @@ export default function KanbanBoard() {
         setTotalPages(data.totalPages || 1);
         setTotalItems(data.total || 0);
       }
-
-      // ❌ ĐÃ XÓA BỎ ĐOẠN AUTO-OPEN Ở ĐÂY ĐỂ TRÁNH XUNG ĐỘT GÂY NHÁY
 
       setLoading(false);
     } catch (err) { setLoading(false); }
@@ -193,123 +223,16 @@ export default function KanbanBoard() {
     try { const res = await fetch("/api/teams"); const data = await res.json(); if (Array.isArray(data)) setTeams(data); } catch (error) { }
   };
 
-  const handleExportExcel = async () => {
-    setIsExporting(true);
+  const loadChannels = async () => {
     try {
-      const res = await fetch('/api/tasks/export');
+      const res = await fetch("/api/channels");
       const data = await res.json();
-      if (!res.ok) throw new Error("Lỗi tải dữ liệu");
-
-      const workbook = new ExcelJS.Workbook();
-      const worksheet = workbook.addWorksheet('Danh sách Task');
-
-      // 1. ĐỊNH NGHĨA CỘT (Đúng thứ tự sếp yêu cầu trong ảnh)
-      worksheet.columns = [
-        { header: 'STT', key: 'stt', width: 5 },
-        { header: 'Từ khóa (Key)', key: 'key', width: 25 },
-        { header: 'Tiêu đề Video', key: 'title', width: 35 },
-        { header: 'Video tham khảo', key: 'refLink', width: 20 },
-        { header: 'Text ENG', key: 'eng', width: 20 },
-        { header: 'Bố cục', key: 'story', width: 20 },
-        { header: 'Thumbnail', key: 'thumb', width: 20 },
-        { header: 'Nhân sự Content', key: 'content', width: 20 },
-        { header: 'Audio', key: 'audio', width: 20 },
-        { header: 'Chuyển động (CĐ)', key: 'animator', width: 20 },
-        { header: 'Nhân sự Editor', key: 'editor', width: 20 },
-        { header: 'Video hoàn thành', key: 'video', width: 20 },
-        { header: 'Kênh / Project', key: 'channel', width: 25 },
-        { header: 'LINK YT (Pub)', key: 'pub', width: 20 },
-        { header: 'Ngày đăng', key: 'date', width: 15 },
-        { header: 'Trạng thái', key: 'status', width: 15 },
-      ];
-
-      // 2. ĐỔ DỮ LIỆU VÀO
-      data.forEach((item: any, idx: number) => {
-        worksheet.addRow({
-          stt: idx + 1,
-          key: item["Key (Từ khóa)"],
-          title: item["Tiêu đề Video"],
-          refLink: item["Video tham khảo"],
-          eng: item["Text ENG"],
-          story: item["Bố cục"],
-          thumb: item["Thumbnail"],
-          content: item["Nhân sự Content"],
-          audio: item["Link Audio (AI)"],
-          animator: item["Nhân sự Chuyển động"],
-          editor: item["Nhân sự Editor"],
-          video: item["Video hoàn thành"],
-          channel: `${item["Thuộc Kênh"]} - ${item["Dự án"]}`,
-          pub: item["Link Youtube (Pub)"],
-          date: item["Ngày đăng"],
-          status: item["Trạng thái"]
-        });
-      });
-
-      // 3. THIẾT KẾ STYLE (Đây là phần sếp cần nhất)
-
-      // Style cho Header (Dòng 1)
-      const headerRow = worksheet.getRow(1);
-      headerRow.height = 30; // Cho hàng tiêu đề cao tí nhìn cho sang
-
-      headerRow.eachCell((cell) => {
-        cell.fill = {
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: 'FFFF00' } // Màu vàng rực rỡ như ảnh sếp gửi
-        };
-        cell.font = {
-          name: 'Arial',
-          bold: true,
-          size: 11,
-          color: { argb: '000000' }
-        };
-        cell.alignment = { vertical: 'middle', horizontal: 'center' };
-        cell.border = {
-          top: { style: 'thin' }, left: { style: 'thin' },
-          bottom: { style: 'thin' }, right: { style: 'thin' }
-        };
-      });
-
-      // Style cho toàn bộ Data (Kẻ bảng)
-      worksheet.eachRow((row, rowNumber) => {
-        if (rowNumber > 1) {
-          row.eachCell((cell) => {
-            cell.border = {
-              top: { style: 'thin', color: { argb: 'E2E8F0' } },
-              left: { style: 'thin', color: { argb: 'E2E8F0' } },
-              bottom: { style: 'thin', color: { argb: 'E2E8F0' } },
-              right: { style: 'thin', color: { argb: 'E2E8F0' } }
-            };
-            cell.alignment = { vertical: 'middle' };
-            // Nếu là link thì cho màu xanh dương
-            if (String(cell.value).startsWith('http')) {
-              cell.font = { color: { argb: '2563EB' }, underline: true };
-            }
-          });
-        }
-      });
-
-      // 4. TIỆN ÍCH NÂNG CAO
-      worksheet.views = [{ state: 'frozen', ySplit: 1 }]; // Cố định hàng tiêu đề
-      worksheet.autoFilter = 'A1:P1'; // Thêm bộ lọc cho sếp dễ lọc theo Kênh/User
-
-      // 5. XUẤT FILE
-      const buffer = await workbook.xlsx.writeBuffer();
-      const fileName = `SanoWS_Export_${new Date().getTime()}.xlsx`;
-      saveAs(new Blob([buffer]), fileName);
-
-      showToast("success", "Đã xuất file Excel 'siêu đẹp' thành công!");
-    } catch (error) {
-      showToast("error", "Lỗi xuất file rồi sếp ơi!");
-    } finally {
-      setIsExporting(false);
-    }
+      if (Array.isArray(data)) setChannels(data);
+    } catch (error) { }
   };
-  // 🚀 LOGIC TỰ ĐỘNG MỞ DRAWER KHI URL CÓ TASKID
+
   useEffect(() => {
     const taskIdFromUrl = searchParams.get("taskId");
-
-    // Chỉ chạy nếu URL có ID, chưa có task được chọn, VÀ Drawer đang đóng
     if (taskIdFromUrl && !selectedTask && !isDrawerOpen) {
       const fetchAndOpenTask = async () => {
         try {
@@ -318,66 +241,46 @@ export default function KanbanBoard() {
             const taskData = await res.json();
             handleOpenTaskDetail(taskData);
           }
-        } catch (err) {
-          console.error("Lỗi khi tự động mở task từ URL:", err);
-        }
+        } catch (err) { console.error("Lỗi khi tự động mở task:", err); }
       };
-
       fetchAndOpenTask();
     }
-  }, [searchParams]); // ❌ Xóa bớt socket và selectedTask khỏi dependency
-  const loadChannels = async () => {
-    try {
-      const res = await fetch("/api/channels");
-      const data = await res.json();
-      if (Array.isArray(data)) setChannels(data);
-    } catch (error) { }
-  };
+  }, [searchParams]);
+
   useEffect(() => {
-    // 🚀 Kết nối thẳng đến VPS của sếp
     const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "https://socket.sanogroup.tv";
-
-    const newSocket = io(socketUrl, {
-      transports: ['websocket', 'polling']
-    });
-
+    const newSocket = io(socketUrl, { transports: ['websocket', 'polling'] });
     setSocket(newSocket);
     newSocket.on("receive_message", (data: any) => {
       setMessages((prev) => {
-        // Tránh bị lặp tin nhắn nếu mình chính là người vừa bấm gửi
         if (prev.some(m => m.id === data.id)) return prev;
-
         return [...prev, {
-          id: data.id,
-          sender: data.sender,
-          text: data.text,
+          id: data.id, sender: data.sender, text: data.text,
           time: data.time || new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
           isMine: data.senderId === (session?.user as any)?.id
         }];
       });
     });
-    newSocket.on("reload_board", () => {
-      setBoardUpdateSignal(prev => prev + 1);
-    });
+    newSocket.on("reload_board", () => { setBoardUpdateSignal(prev => prev + 1); });
+    
     loadUsers(); loadTeams(); loadProjects(); loadChannels(); fetchTasks();
     return () => { newSocket.disconnect(); };
   }, []);
+
   const isFirstRender = useRef(true);
   useEffect(() => {
     if (isFirstRender.current) { isFirstRender.current = false; return; }
 
-    // 🚀 LẤY GỐC TỪ searchParams CỦA NEXT.JS (An toàn tuyệt đối)
     const params = new URLSearchParams(searchParams.toString());
-
     params.set("viewMode", viewMode);
     params.set("page", currentPage.toString());
 
     if (searchTerm) params.set("search", searchTerm); else params.delete("search");
     if (filterStatus !== "ALL") params.set("status", filterStatus); else params.delete("status");
+    if (filterChannel !== "ALL") params.set("channelId", filterChannel); else params.delete("channelId"); // Đồng bộ channelId URL
     if (fromDate) params.set("fromDate", fromDate); else params.delete("fromDate");
     if (toDate) params.set("toDate", toDate); else params.delete("toDate");
 
-    // 🚀 CHỈ THAY ĐỔI URL NẾU CÓ SỰ KHÁC BIỆT THỰC SỰ
     const newQueryString = params.toString();
     if (searchParams.toString() !== newQueryString) {
       router.replace(`${pathname}?${newQueryString}`, { scroll: false });
@@ -385,13 +288,96 @@ export default function KanbanBoard() {
 
     const timeoutId = setTimeout(() => { fetchTasks(); }, 300);
     return () => clearTimeout(timeoutId);
-  }, [currentPage, searchTerm, filterStatus, fromDate, toDate, viewMode, boardUpdateSignal]);
-  // ❌ ĐÃ XÓA router và pathname khỏi dependency để chống loop vô tận
+  }, [currentPage, searchTerm, filterStatus, filterChannel, fromDate, toDate, viewMode, boardUpdateSignal]);
 
-
-  // =========================================================================
-  // 🚀 CÁC HÀM XỬ LÝ (ĐÃ ĐƯỢC PHỤC HỒI TOÀN BỘ)
-  // =========================================================================
+  const handleExportExcel = async () => {
+      // (Giữ nguyên logic Export Excel của sếp)
+      setIsExporting(true);
+      try {
+        const res = await fetch('/api/tasks/export');
+        const data = await res.json();
+        if (!res.ok) throw new Error("Lỗi tải dữ liệu");
+  
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Danh sách Task');
+  
+        worksheet.columns = [
+          { header: 'STT', key: 'stt', width: 5 },
+          { header: 'Từ khóa (Key)', key: 'key', width: 25 },
+          { header: 'Tiêu đề Video', key: 'title', width: 35 },
+          { header: 'Video tham khảo', key: 'refLink', width: 20 },
+          { header: 'Text ENG', key: 'eng', width: 20 },
+          { header: 'Bố cục', key: 'story', width: 20 },
+          { header: 'Thumbnail', key: 'thumb', width: 20 },
+          { header: 'Nhân sự Content', key: 'content', width: 20 },
+          { header: 'Audio', key: 'audio', width: 20 },
+          { header: 'Chuyển động (CĐ)', key: 'animator', width: 20 },
+          { header: 'Nhân sự Editor', key: 'editor', width: 20 },
+          { header: 'Video hoàn thành', key: 'video', width: 20 },
+          { header: 'Kênh / Project', key: 'channel', width: 25 },
+          { header: 'LINK YT (Pub)', key: 'pub', width: 20 },
+          { header: 'Ngày đăng', key: 'date', width: 15 },
+          { header: 'Trạng thái', key: 'status', width: 15 },
+        ];
+  
+        data.forEach((item: any, idx: number) => {
+          worksheet.addRow({
+            stt: idx + 1,
+            key: item["Key (Từ khóa)"],
+            title: item["Tiêu đề Video"],
+            refLink: item["Video tham khảo"],
+            eng: item["Text ENG"],
+            story: item["Bố cục"],
+            thumb: item["Thumbnail"],
+            content: item["Nhân sự Content"],
+            audio: item["Link Audio (AI)"],
+            animator: item["Nhân sự Chuyển động"],
+            editor: item["Nhân sự Editor"],
+            video: item["Video hoàn thành"],
+            channel: `${item["Thuộc Kênh"]} - ${item["Dự án"]}`,
+            pub: item["Link Youtube (Pub)"],
+            date: item["Ngày đăng"],
+            status: item["Trạng thái"]
+          });
+        });
+  
+        const headerRow = worksheet.getRow(1);
+        headerRow.height = 30;
+        headerRow.eachCell((cell) => {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFF00' } };
+          cell.font = { name: 'Arial', bold: true, size: 11, color: { argb: '000000' } };
+          cell.alignment = { vertical: 'middle', horizontal: 'center' };
+          cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+        });
+  
+        worksheet.eachRow((row, rowNumber) => {
+          if (rowNumber > 1) {
+            row.eachCell((cell) => {
+              cell.border = {
+                top: { style: 'thin', color: { argb: 'E2E8F0' } }, left: { style: 'thin', color: { argb: 'E2E8F0' } },
+                bottom: { style: 'thin', color: { argb: 'E2E8F0' } }, right: { style: 'thin', color: { argb: 'E2E8F0' } }
+              };
+              cell.alignment = { vertical: 'middle' };
+              if (String(cell.value).startsWith('http')) {
+                cell.font = { color: { argb: '2563EB' }, underline: true };
+              }
+            });
+          }
+        });
+  
+        worksheet.views = [{ state: 'frozen', ySplit: 1 }];
+        worksheet.autoFilter = 'A1:P1'; 
+        const buffer = await workbook.xlsx.writeBuffer();
+        const fileName = `SanoWS_Export_${new Date().getTime()}.xlsx`;
+        saveAs(new Blob([buffer]), fileName);
+  
+        showToast("success", "Đã xuất file Excel 'siêu đẹp' thành công!");
+      } catch (error) {
+        showToast("error", "Lỗi xuất file rồi sếp ơi!");
+      } finally {
+        setIsExporting(false);
+      }
+  };
 
   const handleFilterChange = (setter: any, value: any) => { setter(value); setCurrentPage(1); };
 
@@ -400,72 +386,50 @@ export default function KanbanBoard() {
     setCurrentPage(1);
     setSearchTerm("");
   };
+
   const loadTaskComments = async (taskId: string) => {
     try {
       const res = await fetch(`/api/tasks/${taskId}/comments`);
       if (res.ok) {
         const data = await res.json();
         const formattedMessages = data.map((c: any) => ({
-          id: c.id,
-          sender: c.user?.fullName || "Ẩn danh",
-          text: c.text,
+          id: c.id, sender: c.user?.fullName || "Ẩn danh", text: c.text,
           time: new Date(c.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
           isMine: c.userId === (session?.user as any)?.id
         }));
-
-        // Đặt lại danh sách tin nhắn (Giữ lại câu chào hệ thống trên cùng)
         setMessages([
           { id: "system", sender: "Hệ thống", text: "Chào mừng đến với không gian thảo luận Task!", time: "", isMine: false },
           ...formattedMessages
         ]);
       }
-    } catch (error) {
-      console.error("Lỗi tải lịch sử comment:", error);
-    }
+    } catch (error) {}
   };
+
   const handleOpenTaskDetail = async (task: any) => {
-    // 1. Tạm gán data từ thẻ Kanban để Drawer bật lên lập tức (Optimistic UI)
     setSelectedTask(task);
     setTaskLinks({
-      scriptLink: task.scriptLink || "",
-      englishScriptLink: task.englishScriptLink || "",
-      storyboardLink: task.storyboardLink || "",
-      audioLink: task.audioLink || "",
-      thumbnailLink: task.thumbnailLink || "",
-      videoLink: task.videoLink || "",
-      publishLink: task.publishLink || "",
-      note: task.note || ""
+      scriptLink: task.scriptLink || "", englishScriptLink: task.englishScriptLink || "", storyboardLink: task.storyboardLink || "",
+      audioLink: task.audioLink || "", thumbnailLink: task.thumbnailLink || "", videoLink: task.videoLink || "",
+      publishLink: task.publishLink || "", note: task.note || ""
     });
     setIsDrawerOpen(true);
 
-    // 2. 🚀 LUÔN LUÔN GỌI LẠI API ĐỂ KÉO DATA MỚI NHẤT KHI MỞ DRAWER
     try {
       const res = await fetch(`/api/tasks/${task.id}`);
       if (res.ok) {
         const fullTask = await res.json();
-        setSelectedTask(fullTask); // Cập nhật data cho các tab khác
-
-        // 🚀 BỔ SUNG QUAN TRỌNG NHẤT: Đổ data mới nhất từ Backend vào lại State của Input Links
+        setSelectedTask(fullTask); 
         setTaskLinks({
-          scriptLink: fullTask.scriptLink || "",
-          englishScriptLink: fullTask.englishScriptLink || "",
-          storyboardLink: fullTask.storyboardLink || "",
-          audioLink: fullTask.audioLink || "",
-          thumbnailLink: fullTask.thumbnailLink || "",
-          videoLink: fullTask.videoLink || "",
-          publishLink: fullTask.publishLink || "",
-          note: fullTask.note || ""
+          scriptLink: fullTask.scriptLink || "", englishScriptLink: fullTask.englishScriptLink || "", storyboardLink: fullTask.storyboardLink || "",
+          audioLink: fullTask.audioLink || "", thumbnailLink: fullTask.thumbnailLink || "", videoLink: fullTask.videoLink || "",
+          publishLink: fullTask.publishLink || "", note: fullTask.note || ""
         });
       }
-    } catch (err) {
-      console.error("Lỗi fetch chi tiết task:", err);
-    }
+    } catch (err) {}
 
-    // 3. Tải tin nhắn và join Socket
     loadTaskComments(task.id);
     if (socket) socket.emit("join_task", task.id);
 
-    // 4. Đồng bộ URL
     const params = new URLSearchParams(searchParams.toString());
     if (params.get("taskId") !== task.id) {
       params.set("taskId", task.id);
@@ -476,8 +440,6 @@ export default function KanbanBoard() {
   const handleCloseDrawer = () => {
     setIsDrawerOpen(false);
     setTimeout(() => setSelectedTask(null), 300);
-
-    // 🚀 DÙNG searchParams CHUẨN CỦA NEXT.JS
     const params = new URLSearchParams(searchParams.toString());
     if (params.has("taskId")) {
       params.delete("taskId");
@@ -490,7 +452,6 @@ export default function KanbanBoard() {
     const { source, destination, draggableId } = result;
     if (source.droppableId === destination.droppableId) return;
 
-    // Cập nhật UI ngay lập tức (Optimistic UI)
     const sourceCol = [...tasks[source.droppableId]];
     const destCol = [...tasks[destination.droppableId]];
     const [movedTask] = sourceCol.splice(source.index, 1);
@@ -499,7 +460,6 @@ export default function KanbanBoard() {
 
     setTasks({ ...tasks, [source.droppableId]: sourceCol, [destination.droppableId]: destCol });
 
-    // Bắn API lưu Database
     try {
       const res = await fetch(`/api/tasks/${draggableId}`, {
         method: 'PATCH',
@@ -507,44 +467,71 @@ export default function KanbanBoard() {
         body: JSON.stringify({ status: destination.droppableId })
       });
 
-      const data = await res.json(); // 🚀 Đọc response từ API để lấy Data chuẩn
+      const data = await res.json();
 
       if (res.ok) {
         if (socket) {
-          // 1. Báo mọi người tải lại bảng Kanban
           socket.emit("board_updated");
-
-          // 🚀 2. XỬ LÝ NOTIFICATION REAL-TIME
-          // Ưu tiên 1: Nếu Backend của Sếp có sinh ra Noti (lưu DB) thì bắn Socket luôn
           if (data && data.userIdsToNotify && data.userIdsToNotify.length > 0) {
-            socket.emit("send_notification", {
-              userIds: data.userIdsToNotify,
-              notification: data.notifications[0]
-            });
-          }
-          // Ưu tiên 2: Nếu Backend chưa kịp làm Noti, Frontend sẽ tự suy luận để bắn (Fallback)
+            socket.emit("send_notification", { userIds: data.userIdsToNotify, notification: data.notifications[0] });
+          } 
           else {
             const currentUserId = (session?.user as any)?.id;
             const currentUserName = (session?.user as any)?.name || (session?.user as any)?.fullName || "Ai đó";
-
+            
             // Dùng Set để lọc trùng lặp ID
             const targetIds = new Set<string>();
 
-            // 🔥 Quan trọng: Báo cho Người tạo Task (Sếp/Leader) biết để vào nghiệm thu
-            if (movedTask.creatorId && movedTask.creatorId !== currentUserId) targetIds.add(movedTask.creatorId);
-            // Báo cho Content (Nếu Editor kéo)
-            if (movedTask.contentId && movedTask.contentId !== currentUserId) targetIds.add(movedTask.contentId);
-            // Báo cho Editor (Nếu Content/Sếp kéo)
-            if (movedTask.editorId && movedTask.editorId !== currentUserId) targetIds.add(movedTask.editorId);
+            // 🚀 LOGIC THÔNG BÁO THÔNG MINH (Chỉ ping người cần thiết)
+            switch (destination.droppableId) {
+                case "CONTENT_REVIEW":
+                case "ANIMATION_REVIEW":
+                case "EDIT_REVIEW":
+                    // 1. Khi nhân viên nộp bài (Kéo vào cột REVIEW) -> CHỈ BÁO CHO QUẢN LÝ (Creator) ĐỂ VÀO DUYỆT
+                    if (movedTask.creatorId && movedTask.creatorId !== currentUserId) {
+                        targetIds.add(movedTask.creatorId);
+                    }
+                    break;
+
+                case "ANIMATION_DOING":
+                    // 2. Khi Leader đẩy từ Duyệt Kịch bản -> Đang làm CĐ -> CHỈ PING ANIMATOR vào nhận việc
+                    if (movedTask.animatorId && movedTask.animatorId !== currentUserId) {
+                        targetIds.add(movedTask.animatorId);
+                    }
+                    break;
+
+                case "EDIT_DOING":
+                    // 3. Khi Leader đẩy từ Duyệt CĐ (hoặc Content) -> Đang dựng -> CHỈ PING EDITOR vào nhận việc
+                    if (movedTask.editorId && movedTask.editorId !== currentUserId) {
+                        targetIds.add(movedTask.editorId);
+                    }
+                    break;
+
+                case "DONE":
+                    // 4. Khi nghiệm thu xong -> PING TẤT CẢ mọi người để họ biết video đã xong & KPI đã được tính
+                    if (movedTask.creatorId && movedTask.creatorId !== currentUserId) targetIds.add(movedTask.creatorId);
+                    if (movedTask.contentId && movedTask.contentId !== currentUserId) targetIds.add(movedTask.contentId);
+                    if (movedTask.animatorId && movedTask.animatorId !== currentUserId) targetIds.add(movedTask.animatorId);
+                    if (movedTask.editorId && movedTask.editorId !== currentUserId) targetIds.add(movedTask.editorId);
+                    break;
+
+                default:
+                    // 5. Nếu kéo ngược lại về TODO (Reject trả về làm lại) -> Báo cho người tạo hoặc người đang bị trả
+                    if (movedTask.creatorId && movedTask.creatorId !== currentUserId) targetIds.add(movedTask.creatorId);
+                    if (destination.droppableId === "CONTENT_DOING" && movedTask.contentId !== currentUserId) targetIds.add(movedTask.contentId);
+                    break;
+            }
 
             const targets = Array.from(targetIds);
 
             if (targets.length > 0) {
-              // Tuỳ biến câu chữ mượt mà theo từng cột thả vào
               let actionText = "đã cập nhật trạng thái";
-              if (destination.droppableId === "DOING") actionText = "đã chuyển sang Chờ Dựng 🎬";
-              if (destination.droppableId === "REVIEW") actionText = "đã chuyển sang Chờ Đăng ⏳";
-              if (destination.droppableId === "DONE") actionText = "đã Hoàn Thành 🎉";
+              if (destination.droppableId === "CONTENT_REVIEW") actionText = "đã nộp kịch bản, chờ duyệt ⏳";
+              if (destination.droppableId === "ANIMATION_DOING") actionText = "đã giao việc làm chuyển động cho bạn 🎬";
+              if (destination.droppableId === "ANIMATION_REVIEW") actionText = "đã nộp bản chuyển động ⏳";
+              if (destination.droppableId === "EDIT_DOING") actionText = "đã giao việc dựng video cho bạn 🎞️";
+              if (destination.droppableId === "EDIT_REVIEW") actionText = "đã nộp video, chờ duyệt đăng 🚀";
+              if (destination.droppableId === "DONE") actionText = "đã nghiệm thu Hoàn Thành 🎉";
 
               socket.emit("send_notification", {
                 userIds: targets,
@@ -561,7 +548,7 @@ export default function KanbanBoard() {
         }
       } else {
         showToast('error', data.error || 'Lỗi chuyển trạng thái');
-        fetchTasks(); // Giật lại data cũ nếu lỗi
+        fetchTasks();
       }
     } catch (e) {
       showToast('error', 'Lỗi kết nối tới Server');
@@ -569,12 +556,11 @@ export default function KanbanBoard() {
     }
   };
 
-  // Tạo hoặc Sửa Task
   const handleCreateTaskSubmit = async (taskData: any) => {
     setIsSubmitting(true);
     setModalErrors({});
     try {
-      const isEditMode = !!taskData.id; // 🚀 Xác định xem là đang tạo hay sửa
+      const isEditMode = !!taskData.id; 
       const url = isEditMode ? `/api/tasks/${taskData.id}` : "/api/tasks";
       const method = isEditMode ? "PATCH" : "POST";
 
@@ -589,18 +575,16 @@ export default function KanbanBoard() {
       if (res.ok) {
         showToast("success", isEditMode ? "Đã cập nhật Task thành công!" : (taskData.status === 'BACKLOG' ? "Đã thêm ý tưởng vào kho!" : "Đã tạo Yêu cầu Video!"));
         setIsModalOpen(false);
-        setEditingTask(null); // 🚀 Xóa state sau khi xong
+        setEditingTask(null); 
         setCurrentPage(1);
         fetchTasks();
 
-        // 🚀 PHỤC HỒI SOCKET
         if (socket) {
           socket.emit("board_updated");
           if (data.userIdsToNotify && data.userIdsToNotify.length > 0) {
             socket.emit("send_notification", { userIds: data.userIdsToNotify, notification: data.notifications[0] });
           } else if (!isEditMode) {
-            // Chỉ báo assign task nếu là tạo mới
-            const targetUserId = taskData.contentId || taskData.editorId;
+            const targetUserId = taskData.contentId || taskData.editorId || taskData.animatorId;
             if (targetUserId) {
               socket.emit("assign_task", {
                 taskId: data.task?.id,
@@ -622,7 +606,6 @@ export default function KanbanBoard() {
     }
   };
 
-  // Lưu link báo cáo trong Task Detail
   const handleSaveLinks = async () => {
     setIsSavingLinks(true);
     setDrawerErrors({});
@@ -654,8 +637,6 @@ export default function KanbanBoard() {
     }
   };
 
-  // Đóng / Mở lại Task (Nghiệm thu)
-  // Đóng / Mở lại Task (Nghiệm thu)
   const handleToggleCloseTask = async () => {
     if (!confirm(`Bạn chắc chắn muốn ${selectedTask.isClosed ? 'MỞ LẠI' : 'ĐÓNG (Nghiệm thu)'} task này?`)) return;
     const newClosedState = !selectedTask.isClosed;
@@ -671,7 +652,6 @@ export default function KanbanBoard() {
         setIsDrawerOpen(false);
         fetchTasks();
 
-        // 🚀 PHỤC HỒI SOCKET NGHIỆM THU
         if (socket) {
           socket.emit("board_updated");
           if (newClosedState) {
@@ -690,21 +670,19 @@ export default function KanbanBoard() {
           }
         }
       }
-    } catch (error) {
-      showToast("error", "Lỗi thao tác");
-    }
+    } catch (error) { showToast("error", "Lỗi thao tác"); }
   };
 
-  // Đánh Reject (Trả về làm lại)
   const handleRejectTask = async () => {
     const reason = window.prompt("Nhập lý do yêu cầu làm lại (hoặc để trống):") || "Cần chỉnh sửa thêm theo yêu cầu Sếp.";
-    if (!reason) return; // Nếu user bấm Cancel ở prompt thì hủy
+    if (!reason) return; 
 
+    // Đẩy task về bước trước đó (Hoặc Tự config trạng thái mặc định sếp muốn)
     try {
       const res = await fetch(`/api/tasks/${selectedTask.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isClosed: false, status: "DOING" })
+        body: JSON.stringify({ isClosed: false, status: "TODO" }) 
       });
       const data = await res.json();
       if (res.ok) {
@@ -712,7 +690,6 @@ export default function KanbanBoard() {
         setIsDrawerOpen(false);
         fetchTasks();
 
-        // 🚀 PHỤC HỒI SOCKET REJECT
         if (socket) {
           socket.emit("board_updated");
           if (data.userIdsToNotify && data.userIdsToNotify.length > 0) {
@@ -731,9 +708,7 @@ export default function KanbanBoard() {
           }
         }
       }
-    } catch (error) {
-      showToast("error", "Lỗi thao tác");
-    }
+    } catch (error) { showToast("error", "Lỗi thao tác"); }
   };
 
   const handleClearDoneTasks = async () => {
@@ -746,17 +721,11 @@ export default function KanbanBoard() {
         showToast('success', `Đã cất ${data.count} task vào kho lưu trữ!`);
         fetchTasks();
         if (socket) socket.emit("board_updated");
-      } else {
-        showToast('error', data.error || 'Có lỗi xảy ra!');
-      }
-    } catch (error) {
-      showToast('error', 'Lỗi kết nối!');
-    } finally {
-      setIsClearing(false);
-    }
+      } else { showToast('error', data.error || 'Có lỗi xảy ra!'); }
+    } catch (error) { showToast('error', 'Lỗi kết nối!'); } 
+    finally { setIsClearing(false); }
   };
 
-  // Giao việc từ kho
   const handlePushTaskSubmit = async (pushData: { teamId: string, projectId: string, contentId: string, editorId: string }) => {
     if (!taskToPush) return;
     setIsPushing(true);
@@ -778,7 +747,6 @@ export default function KanbanBoard() {
         setIsPushModalOpen(false);
         fetchTasks();
 
-        // 🚀 PHỤC HỒI SOCKET REAL-TIME GIAO VIỆC
         if (socket) {
           socket.emit("board_updated");
           if (data.userIdsToNotify && data.userIdsToNotify.length > 0) {
@@ -795,55 +763,36 @@ export default function KanbanBoard() {
             }
           }
         }
-      } else {
-        showToast('error', data.error || 'Lỗi giao việc');
-      }
-    } catch (error) {
-      showToast('error', 'Lỗi kết nối Server');
-    } finally {
-      setIsPushing(false);
-    }
+      } else { showToast('error', data.error || 'Lỗi giao việc'); }
+    } catch (error) { showToast('error', 'Lỗi kết nối Server'); } 
+    finally { setIsPushing(false); }
   };
 
   const handleDeleteTask = async (taskId: string) => {
     try {
-        const res = await fetch(`/api/tasks/${taskId}`, {
-            method: 'DELETE',
-        });
-
+        const res = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
         if (res.ok) {
             showToast("success", "Đã xóa Task thành công!");
-            
-            // 1. Đóng Drawer chi tiết (Bạn thay bằng tên state đóng Modal của bạn nếu khác)
-            // VD: setIsDrawerOpen(false) hoặc setSelectedTask(null)
             setSelectedTask(null); 
-            
-            // 2. Refresh lại dữ liệu bảng Kanban
             fetchTasks(); 
         } else {
             const data = await res.json();
             showToast("error", data.error || "Lỗi khi xóa Task.");
         }
     } catch (error) {
-        console.error("Lỗi gọi API xóa task:", error);
         showToast("error", "Mất kết nối đến máy chủ, vui lòng thử lại!");
     }
-};
+  };
 
-  // ==========================================
-  // XỬ LÝ CHAT TRONG TASK CHUẨN API & SOCKET
-  // ==========================================
   const handleSendMessage = async () => {
     if (chatMessage.trim() !== '' && socket && selectedTask) {
       const textToSend = chatMessage;
       setChatMessage("");
-
       try {
         const res = await fetch(`/api/tasks/${selectedTask.id}/comments`, {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text: textToSend }),
         });
-
         if (res.ok) {
           const data = await res.json();
           const savedComment = data.comment;
@@ -853,7 +802,6 @@ export default function KanbanBoard() {
             time: new Date(savedComment.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
           };
           socket.emit("send_message", newMsg);
-
           if (data.userIdsToNotify.length > 0) {
             socket.emit("send_notification", { userIds: data.userIdsToNotify, notification: data.notifications[0] });
           }
@@ -862,34 +810,16 @@ export default function KanbanBoard() {
     }
   };
 
-  // ==========================================
-  // XỬ LÝ NỘP ĐÁNH GIÁ KPI CHUẨN API & SOCKET
-  // ==========================================
   const handleEvaluationSubmit = async (score: number, criteriaData: any, note: string) => {
     try {
-      // 🚀 1. Đổi URL gọi vào đúng file API sếp đã tạo
       const res = await fetch(`/api/tasks/${selectedTask.id}/evaluate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          score: score,
-          criteria: criteriaData, // Gửi lên với key là 'criteria'
-          note: note
-        })
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ score, criteria: criteriaData, note })
       });
-
-      const contentType = res.headers.get("content-type");
-      if (contentType && contentType.includes("text/html")) {
-        showToast("error", "Lỗi 404: Không tìm thấy API Endpoint!");
-        return;
-      }
-
       const data = await res.json();
-
       if (res.ok) {
         showToast("success", "Đã lưu đánh giá KPI thành công!");
         fetchTasks();
-
         if (socket) {
           socket.emit("board_updated");
           const targetUserId = selectedTask.editorId || selectedTask.contentId;
@@ -899,21 +829,14 @@ export default function KanbanBoard() {
               notification: {
                 title: "Đánh giá Task 🌟",
                 message: `Task "${selectedTask.title}" của bạn vừa được đánh giá ${score} điểm!`,
-                type: "success",
-                taskId: selectedTask.id,
-                time: new Date().toISOString()
+                type: "success", taskId: selectedTask.id, time: new Date().toISOString()
               }
             });
           }
         }
-
         handleCloseDrawer();
-      } else {
-        showToast("error", data.error || "Lỗi khi lưu đánh giá");
-      }
-    } catch (error) {
-      showToast("error", "Lỗi kết nối tới Server");
-    }
+      } else { showToast("error", data.error || "Lỗi khi lưu đánh giá"); }
+    } catch (error) { showToast("error", "Lỗi kết nối tới Server"); }
   };
 
   if (loading) return <div className="flex h-full items-center justify-center animate-pulse text-slate-400"><Loader2 size={32} className="animate-spin text-blue-500" /></div>;
@@ -930,7 +853,6 @@ export default function KanbanBoard() {
 
             <div className="flex w-full sm:w-auto items-center gap-2 md:gap-3">
               {canCreateTask && (
-
                 <button
                   onClick={handleExportExcel}
                   disabled={isExporting}
@@ -957,7 +879,6 @@ export default function KanbanBoard() {
                       <Plus size={18} /> Tạo Video
                     </button>
 
-                    {/* 🚀 NÚT MỞ MODAL GỘP VIDEO */}
                     <button onClick={() => setIsMergeModalOpen(true)} className="flex-1 sm:flex-none bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 text-sm md:text-base">
                       <Video size={18} /> Video Ghép
                     </button>
@@ -975,23 +896,48 @@ export default function KanbanBoard() {
               )}
             </div>
 
-            {viewMode === 'list' && (
+            {viewMode !== 'backlog' && (
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 md:gap-3 w-full lg:w-auto">
-                <input type="text" placeholder="Tìm tên task..." className="bg-slate-50 border border-slate-200 text-xs md:text-sm font-medium px-3 md:px-4 py-2 rounded-lg md:rounded-xl outline-none focus:border-blue-500 w-full sm:w-48 lg:w-64" value={searchTerm} onChange={(e) => handleFilterChange(setSearchTerm, e.target.value)} />
-                <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg md:rounded-xl px-2 md:px-3 py-1.5 md:py-1 shadow-sm w-full sm:w-auto overflow-x-auto custom-scrollbar-thin">
+                {/* 🚀 MỚI: BỘ LỌC KÊNH */}
+                <div className="relative w-full sm:w-auto flex items-center bg-slate-50 border border-slate-200 rounded-lg md:rounded-xl">
+                    <div className="pl-3 py-2 shrink-0">
+                        <Filter size={16} className="text-slate-400"/>
+                    </div>
+                    <select 
+                        className="bg-transparent text-xs md:text-sm font-bold text-slate-700 px-2 py-2 w-full outline-none" 
+                        value={filterChannel} 
+                        onChange={(e) => handleFilterChange(setFilterChannel, e.target.value)}
+                    >
+                        <option value="ALL">Tất cả Kênh / Dự án</option>
+                        {channels.map((ch: any) => (
+                            <option key={ch.id} value={ch.id}>
+                                {ch.name} {ch.category === 'AI' ? '(AI)' : '(Tổng hợp)'}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+
+                <input type="text" placeholder="Tìm tên task..." className="bg-slate-50 border border-slate-200 text-xs md:text-sm font-medium px-3 md:px-4 py-2 rounded-lg md:rounded-xl outline-none focus:border-blue-500 w-full sm:w-48 lg:w-48" value={searchTerm} onChange={(e) => handleFilterChange(setSearchTerm, e.target.value)} />
+                <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg md:rounded-xl px-2 md:px-3 py-1.5 md:py-1 shadow-sm w-full sm:w-auto overflow-x-auto custom-scrollbar-thin hidden lg:flex">
                   <span className="text-[10px] font-black text-slate-400 uppercase shrink-0">Từ</span>
                   <input type="date" className="bg-transparent text-xs md:text-sm font-bold text-slate-600 outline-none" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
                   <div className="w-[1px] h-4 bg-slate-300 mx-1 shrink-0"></div>
                   <span className="text-[10px] font-black text-slate-400 uppercase shrink-0">Đến</span>
                   <input type="date" className="bg-transparent text-xs md:text-sm font-bold text-slate-600 outline-none" value={toDate} onChange={(e) => setToDate(e.target.value)} />
                 </div>
-                <select className="bg-slate-50 border border-slate-200 text-xs md:text-sm font-medium px-3 md:px-4 py-2 rounded-lg md:rounded-xl outline-none focus:border-blue-500 w-full sm:w-auto" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
-                  <option value="ALL">Tất cả trạng thái</option>
-                  <option value="TODO">Chờ Kịch bản</option>
-                  <option value="DOING">Chờ Dựng</option>
-                  <option value="REVIEW">Chờ Đăng</option>
-                  <option value="DONE">Hoàn thành</option>
-                </select>
+                
+                {viewMode === 'list' && (
+                    <select className="bg-slate-50 border border-slate-200 text-xs md:text-sm font-bold text-slate-600 px-3 md:px-4 py-2 rounded-lg md:rounded-xl outline-none focus:border-blue-500 w-full sm:w-auto" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+                      <option value="ALL">Mọi trạng thái</option>
+                      <option value="TODO">Chờ Kịch bản</option>
+                      <option value="CONTENT_REVIEW">Chờ duyệt Content</option>
+                      <option value="ANIMATION_DOING">Đang làm CĐ</option>
+                      <option value="ANIMATION_REVIEW">Chờ duyệt CĐ</option>
+                      <option value="EDIT_DOING">Đang Dựng Video</option>
+                      <option value="EDIT_REVIEW">Chờ Đăng (QC)</option>
+                      <option value="DONE">Hoàn thành</option>
+                    </select>
+                )}
               </div>
             )}
           </div>
@@ -999,7 +945,16 @@ export default function KanbanBoard() {
 
         <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden pb-2">
           {viewMode === 'board' && (
-            <BoardView tasks={tasks} columns={COLUMNS} getTeamColor={getTeamColor} onDragEnd={onDragEnd} onOpenTaskDetail={handleOpenTaskDetail} userRole={userRole} />
+            // 🚀 MỚI: Truyền thêm currentUserId để khóa/mở kéo thả chuẩn xác theo người được gán việc
+            <BoardView 
+                tasks={tasks} 
+                columns={BOARD_COLUMNS} 
+                getTeamColor={getTeamColor} 
+                onDragEnd={onDragEnd} 
+                onOpenTaskDetail={handleOpenTaskDetail} 
+                userRole={userRole} 
+                currentUserId={(session?.user as any)?.id} 
+            />
           )}
 
           {viewMode === 'list' && (
@@ -1024,14 +979,14 @@ export default function KanbanBoard() {
 
         <TaskDetailDrawer isOpen={isDrawerOpen} onClose={handleCloseDrawer} selectedTask={selectedTask} taskLinks={taskLinks} setTaskLinks={setTaskLinks} errors={drawerErrors} isSavingLinks={isSavingLinks} onSaveLinks={handleSaveLinks} onToggleClose={handleToggleCloseTask} onReject={handleRejectTask} canReject={canReject} messages={messages} chatMessage={chatMessage} setChatMessage={setChatMessage} onSendMessage={handleSendMessage} userRole={userRole} sessionUserId={(session?.user as any)?.id} onSubmitEvaluation={handleEvaluationSubmit}
           onEditTask={() => {
-            setIsDrawerOpen(false); // Tạm đóng Drawer chi tiết
-            setEditingTask(selectedTask); // Lưu data task hiện tại vào state
-            setIsModalOpen(true); // Mở modal Create lên (Nó sẽ tự thành Form Sửa vì đã có editingTask)
+            setIsDrawerOpen(false); 
+            setEditingTask(selectedTask); 
+            setIsModalOpen(true); 
 
           }}
           onRefreshBoard={() => {
-            fetchTasks(); // Kéo dữ liệu mới từ Database về
-            if (socket) socket.emit("board_updated"); // Báo mọi người khác cùng reload
+            fetchTasks(); 
+            if (socket) socket.emit("board_updated"); 
           }}
           onDeleteTask={handleDeleteTask}
         />
@@ -1044,7 +999,6 @@ export default function KanbanBoard() {
           session={session}
           onSubmit={handlePushTaskSubmit}
           isSubmitting={isPushing}
-
         />
 
         <MergeVideoModal 
@@ -1053,7 +1007,6 @@ export default function KanbanBoard() {
             projects={projects}
             teams={teams}
             channels={channels}
-            // users={users}
             onSubmit={handleMergeSubmit}
             isSubmitting={isMerging}
         />

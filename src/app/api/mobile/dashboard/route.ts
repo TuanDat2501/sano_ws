@@ -130,7 +130,7 @@ export async function GET(req: Request) {
                 prisma.task.findMany({
                     where: { 
                        ...userInvolvedCondition, 
-                        status: { in: ['TODO', 'DOING', 'REVIEW'] } 
+                       status: { in: ['TODO', 'CONTENT_DOING', 'CONTENT_REVIEW', 'ANIMATION_DOING', 'ANIMATION_REVIEW', 'EDIT_DOING', 'EDIT_REVIEW'] } 
                     },
                     take: 3,
                     orderBy: { updatedAt: 'desc' }

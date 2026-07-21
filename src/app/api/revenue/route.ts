@@ -20,7 +20,7 @@ export async function GET(req: Request) {
         // LOGIC PHÂN QUYỀN
         // Nếu là ADMIN hoặc BAN_GIAM_DOC -> Lấy hết (whereClause = {})
         // Nếu không -> Lọc theo teamId hoặc managerId (tùy sếp muốn quản lý theo team hay quản lý kênh riêng)
-        if (user.role !== 'ADMIN' && user.role !== 'BAN_GIAM_DOC' && user.role !== 'HR') {
+        if (user.role !== 'ADMIN' && user.role !== 'BAN_GIAM_DOC' && user.role !== 'HR'&& user.role !== 'KE_TOAN') {
             // Ví dụ: Leader chỉ thấy kênh thuộc team của mình
             if (user.teamId) {
                 whereClause = { teamId: user.teamId };

@@ -36,7 +36,7 @@ export async function GET(req: Request) {
     } else if (role === "LEADER") {
       whereClause = { teamId: teamId };
     } else if (role === "CONTENT" || role === "EDITOR") {
-      whereClause = { OR: [{ contentId: userId }, { editorId: userId }, { creatorId: userId }] };
+      whereClause = { OR: [{ contentId: userId }, { editorId: userId }, { animatorId: userId }, { creatorId: userId }] };
     } else {
       whereClause = { id: "none" };
     }
@@ -66,10 +66,10 @@ export async function GET(req: Request) {
         include: {
           creator: { select: { fullName: true } },
           team: { select: { name: true } },
-          contentUser: { select: { fullName: true } },
-          editorUser: { select: { fullName: true } },
-          channel: { select: { name: true } },
-          animatorUser:{ select: { fullName: true } },
+          contentUser: { select: { fullName: true,avatarUrl:true } },
+          editorUser: { select: { fullName: true,avatarUrl:true } },
+          channel: { select: { name: true} },
+          animatorUser:{ select: { fullName: true,avatarUrl:true } },
         },
         orderBy: { createdAt: "desc" },
       });
@@ -86,8 +86,8 @@ export async function GET(req: Request) {
           include: {
             creator: { select: { fullName: true } },
             team: { select: { name: true } },
-            contentUser: { select: { fullName: true } },
-            editorUser: { select: { fullName: true } },
+            contentUser: { select: { fullName: true,avatarUrl:true } },
+            editorUser: { select: { fullName: true,avatarUrl:true } },
             channel: { select: { name: true } }
             
           },

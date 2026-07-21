@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 
 // =====================================================================
-// 🚀 DẠY TYPE-SCRIPT BIẾT RẰNG USER CÓ THÊM QUYỀN (PERMISSIONS)
+// 🚀 DẠY TYPE-SCRIPT BIẾT RẰNG USER CÓ THÊM QUYỀN (PERMISSIONS) VÀ isTeamLeader
 // =====================================================================
 declare module "next-auth" {
   interface Session {
@@ -15,6 +15,7 @@ declare module "next-auth" {
       teamId: string | null;
       avatarUrl: string | null;
       permissions: string[]; // Bổ sung mảng quyền
+      isTeamLeader: boolean; // 🚀 BỔ SUNG: Cờ xác định quản lý
     } & DefaultSession["user"];
   }
 
@@ -24,6 +25,7 @@ declare module "next-auth" {
     role: string;
     teamId: string | null;
     avatarUrl: string | null;
+    isTeamLeader: boolean; // 🚀 BỔ SUNG
   }
 }
 
@@ -35,6 +37,7 @@ declare module "next-auth/jwt" {
     teamId: string | null;
     avatarUrl: string | null;
     permissions: string[]; // Bổ sung mảng quyền
+    isTeamLeader: boolean; // 🚀 BỔ SUNG
   }
 }
 // =====================================================================
@@ -68,6 +71,7 @@ export const authOptions: NextAuthOptions = {
             role: user.role,
             teamId: user.teamId,
             avatarUrl: user.avatarUrl,
+            isTeamLeader: user.isTeamLeader || false, // 🚀 Kéo từ DB lên
           };
         } catch (error) {
           console.error(">>> [AUTH ERROR]:", error);
@@ -85,6 +89,7 @@ export const authOptions: NextAuthOptions = {
         token.teamId = user.teamId;
         token.username = user.username;
         token.avatarUrl = user.avatarUrl;
+        token.isTeamLeader = user.isTeamLeader; // 🚀 Nạp vào JWT Token
 
         // 🚀 CHỌC DATABASE 1 LẦN DUY NHẤT LẤY QUYỀN NẠP VÀO TOKEN
         try {
@@ -111,6 +116,7 @@ export const authOptions: NextAuthOptions = {
         session.user.teamId = token.teamId;
         session.user.username = token.username;
         session.user.avatarUrl = token.avatarUrl;
+        session.user.isTeamLeader = token.isTeamLeader; // 🚀 Nạp từ Token sang Session
         session.user.permissions = token.permissions; // Đẩy ra Session cho Frontend dùng
       }
       return session;
