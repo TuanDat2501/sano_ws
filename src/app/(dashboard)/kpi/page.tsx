@@ -64,8 +64,8 @@ export default function KpiDashboard() {
     const teamId = currentUser?.teamId;
     const { showToast } = useToast();
 
-    const isHighLevel = ["BAN_GIAM_DOC", "ADMIN", "HR"].includes(userRole);
-    const isManager = ["LEADER", "BAN_GIAM_DOC", "ADMIN", "HR"].includes(userRole);
+    const isHighLevel = ["BAN_GIAM_DOC", "ADMIN", "HR","KE_TOAN"].includes(userRole);
+    const isManager = ["LEADER", "BAN_GIAM_DOC", "ADMIN", "HR","KE_TOAN"].includes(userRole);
 
     const [teams, setTeams] = useState<any[]>([]);
     const [selectedTeamFilter, setSelectedTeamFilter] = useState<string>("ALL");

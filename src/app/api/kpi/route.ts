@@ -45,7 +45,7 @@ export async function GET(req: Request) {
 
         if (currentUserRole === "ADMIN") {
             if (teamId && teamId !== "ALL") userWhere.teamId = teamId;
-        } else if (currentUserRole === "BAN_GIAM_DOC" || currentUserRole === "HR") {
+        } else if (currentUserRole === "BAN_GIAM_DOC" || currentUserRole === "HR" || currentUserRole === "KE_TOAN") {
             userWhere.role = { not: "ADMIN" };
             if (teamId && teamId !== "ALL") userWhere.teamId = teamId;
         } else {
