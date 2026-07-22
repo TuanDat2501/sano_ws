@@ -14,9 +14,10 @@ export async function GET(req: Request) {
         const user = session.user as any;
         const { searchParams } = new URL(req.url);
         const teamIdParam = searchParams.get("teamId");
-
+        const channelIdParam = searchParams.get("channelId");
         let whereCondition: any = {};
-
+        if (teamIdParam) whereCondition.teamId = teamIdParam;
+        if (channelIdParam) whereCondition.channelId = channelIdParam;
         // Phân quyền hiển thị
         if (user.role === "ADMIN" || user.role === "BAN_GIAM_DOC") {
             if (teamIdParam) whereCondition = { teamId: teamIdParam };

@@ -4,7 +4,7 @@ import { useSession } from "next-auth/react";
 import { PieChart as PieChartIcon, Lock, Loader2, Calendar, Filter, Download, DollarSign, Star, Eye, TrendingUp, Users, Tv } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useToast } from "@/app/component/ToastProvider";
-
+import { usePermission } from "@/app/component/PermissionProvider";
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler } from 'chart.js';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import ChartDataLabels from 'chartjs-plugin-datalabels';
@@ -19,7 +19,7 @@ const TEAM_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06
 export default function AnalyticsPage() {
     const { data: session, status } = useSession();
     const { showToast } = useToast();
-
+    const { hasPermission, loading: permLoading } = usePermission();
     // ==================================================
     // TẦNG 1: TRẠNG THÁI DOANH THU & KÊNH (Dải ngày)
     // ==================================================
@@ -170,16 +170,17 @@ export default function AnalyticsPage() {
         setIsCustomDate(false);
     }
 
-    if (status === "loading" || (!data && isFetching)) {
+    if (status === "loading" || permLoading || (!data && isFetching)) {
         return <div className="h-full flex items-center justify-center"><Loader2 className="animate-spin text-blue-600" size={40} /></div>;
     }
 
-    const currentUser = session?.user as any;
-    if (!["ADMIN", "BAN_GIAM_DOC","KE_TOAN"].includes(currentUser?.role || "CONTENT")) {
+    // 🚀 ĐÃ SỬA: Check quyền ĐỘNG theo mã MENU_ANALYTICS từ Database
+    if (!hasPermission("MENU_ANALYTICS")) {
         return (
             <div className="h-full bg-slate-50 flex flex-col items-center justify-center">
                 <div className="bg-red-50 p-6 rounded-full mb-6 text-red-500"><Lock size={64} /></div>
                 <h1 className="text-2xl md:text-3xl font-black text-slate-800 mb-2">Khu Vực Tuyệt Mật</h1>
+                <p className="text-slate-500 mt-2 font-medium">Bạn không có quyền xem Báo cáo chiến lược.</p>
             </div>
         );
     }

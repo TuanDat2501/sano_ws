@@ -1,9 +1,42 @@
-// channels/[id]/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 
+// ==============================================================
+// 1. LẤY CHI TIẾT KÊNH (GET)
+// ==============================================================
+export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
+    try {
+        const session = await getServerSession(authOptions);
+        if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+        const resolvedParams = await params;
+        const channelId = resolvedParams.id;
+
+        const channel = await prisma.channel.findUnique({
+            where: { id: channelId },
+            include: {
+                // 🚀 Lấy kèm danh sách thành viên để hiển thị lên form sửa
+                members: true,
+                team: { select: { name: true } }
+            }
+        });
+
+        if (!channel) {
+            return NextResponse.json({ error: "Không tìm thấy kênh" }, { status: 404 });
+        }
+
+        return NextResponse.json(channel);
+    } catch (error) {
+        console.error("LỖI LẤY THÔNG TIN KÊNH:", error);
+        return NextResponse.json({ error: "Lỗi hệ thống" }, { status: 500 });
+    }
+}
+
+// ==============================================================
+// 2. CẬP NHẬT KÊNH (PUT)
+// ==============================================================
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
     try {
         const session = await getServerSession(authOptions);
@@ -45,6 +78,9 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     }
 }
 
+// ==============================================================
+// 3. XÓA KÊNH (DELETE)
+// ==============================================================
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
     try {
         const session = await getServerSession(authOptions);

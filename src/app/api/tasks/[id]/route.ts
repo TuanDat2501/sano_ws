@@ -303,7 +303,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
                         criteria: true
                     }
                 },
-                channel: { select: { name: true } },
+                channel: { select: { name: true,category: true } },
                 evaluations: {
                     include: {
                         evaluator: { select: { fullName: true } }

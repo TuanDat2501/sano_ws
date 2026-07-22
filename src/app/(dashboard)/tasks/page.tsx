@@ -18,6 +18,7 @@ import PermissionGuard from "@/app/component/PermissionGuard";
 import BacklogView from "./BacklogView";
 import PushTaskModal from "./PushTaskModal";
 import MergeVideoModal from './MergeVideoModal';
+import SurplusView from "./SurplusView"; // 🚀 MỚI: Thêm component Bài dư
 
 // FULL 7 CỘT MẶC ĐỊNH
 const COLUMNS = {
@@ -84,10 +85,12 @@ export default function KanbanBoard() {
   const [teams, setTeams] = useState<any[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
 
-  const [viewMode, setViewMode] = useState<'board' | 'list' | 'backlog'>((searchParams.get("viewMode") as 'board' | 'list' | 'backlog') || 'board');
+  // 🚀 MỚI: Bổ sung "surplus" vào biến State
+  const [viewMode, setViewMode] = useState<'board' | 'list' | 'backlog' | 'surplus'>((searchParams.get("viewMode") as 'board' | 'list' | 'backlog' | 'surplus') || 'board');
+  
   const [searchTerm, setSearchTerm] = useState(searchParams.get("search") || "");
   const [filterStatus, setFilterStatus] = useState(searchParams.get("status") || "ALL");
-  const [filterChannel, setFilterChannel] = useState(searchParams.get("channelId") || "ALL"); // 🚀 MỚI: State lọc kênh
+  const [filterChannel, setFilterChannel] = useState(searchParams.get("channelId") || "ALL");
   const [fromDate, setFromDate] = useState(searchParams.get("fromDate") || "");
   const [toDate, setToDate] = useState(searchParams.get("toDate") || "");
   const [currentPage, setCurrentPage] = useState(Number(searchParams.get("page")) || 1);
@@ -117,7 +120,7 @@ export default function KanbanBoard() {
     if (task.status === 'BACKLOG') return false;
     const matchSearch = task.title.toLowerCase().includes(searchTerm.toLowerCase());
     const matchStatus = filterStatus === "ALL" || task.status === filterStatus;
-    const matchChannel = filterChannel === "ALL" || task.channelId === filterChannel; // 🚀 MỚI: Khớp Kênh
+    const matchChannel = filterChannel === "ALL" || task.channelId === filterChannel;
     const taskDate = new Date(task.createdAt).toISOString().split('T')[0];
     const matchFrom = fromDate === "" || taskDate >= fromDate;
     const matchTo = toDate === "" || taskDate <= toDate;
@@ -127,14 +130,11 @@ export default function KanbanBoard() {
   const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
   const [isMerging, setIsMerging] = useState(false);
 
-  // 🚀 LOGIC ĐỘNG: QUYẾT ĐỊNH ẨN HIỆN CỘT ANIMATION TRÊN BOARD
   const activeChannelObj = channels.find(c => c.id === filterChannel);
   const isTongHopChannel = activeChannelObj?.category === 'TONG_HOP';
   
-  // Clone COLUMNS gốc ra để thao tác cắt bớt
   const BOARD_COLUMNS = { ...COLUMNS };
   if (isTongHopChannel) {
-    // Nếu chọn kênh Tổng Hợp -> Xoá 2 cột Chuyển động
     delete (BOARD_COLUMNS as any).ANIMATION_DOING;
     delete (BOARD_COLUMNS as any).ANIMATION_REVIEW;
   }
@@ -174,10 +174,15 @@ export default function KanbanBoard() {
 
   const fetchTasks = async () => {
     try {
+      // 🚀 MỚI: Nếu đang ở Tab Bài dư thì không cần gọi API Kanban (tiết kiệm băng thông)
+      if (viewMode === 'surplus') {
+        setLoading(false);
+        return;
+      }
+
       const currentStatus = viewMode === 'backlog' ? 'BACKLOG' : filterStatus;
       const currentLimit = viewMode === 'backlog' ? "50" : ITEMS_PER_PAGE.toString();
 
-      // Truyền thêm channelId vào API nếu sau này Backend muốn dùng
       const params = new URLSearchParams({
         viewMode, page: currentPage.toString(), limit: currentLimit,
         search: searchTerm, status: currentStatus, fromDate, toDate,
@@ -193,9 +198,7 @@ export default function KanbanBoard() {
         const groupedTasks = { TODO: [], CONTENT_REVIEW: [], ANIMATION_DOING: [], ANIMATION_REVIEW: [], EDIT_DOING: [], EDIT_REVIEW: [], DONE: [] };
         
         data.tasks.forEach((task: any) => {
-          // 🚀 Lọc cứng ở Frontend: Chỉ thả Task vào cột nếu nó thuộc kênh đang chọn (Hoặc All)
           if (filterChannel !== "ALL" && task.channelId !== filterChannel) return;
-
           if (groupedTasks[task.status as keyof typeof groupedTasks]) {
             (groupedTasks[task.status as keyof typeof groupedTasks] as any[]).push(task);
           }
@@ -277,7 +280,7 @@ export default function KanbanBoard() {
 
     if (searchTerm) params.set("search", searchTerm); else params.delete("search");
     if (filterStatus !== "ALL") params.set("status", filterStatus); else params.delete("status");
-    if (filterChannel !== "ALL") params.set("channelId", filterChannel); else params.delete("channelId"); // Đồng bộ channelId URL
+    if (filterChannel !== "ALL") params.set("channelId", filterChannel); else params.delete("channelId"); 
     if (fromDate) params.set("fromDate", fromDate); else params.delete("fromDate");
     if (toDate) params.set("toDate", toDate); else params.delete("toDate");
 
@@ -291,7 +294,6 @@ export default function KanbanBoard() {
   }, [currentPage, searchTerm, filterStatus, filterChannel, fromDate, toDate, viewMode, boardUpdateSignal]);
 
   const handleExportExcel = async () => {
-      // (Giữ nguyên logic Export Excel của sếp)
       setIsExporting(true);
       try {
         const res = await fetch('/api/tasks/export');
@@ -381,7 +383,7 @@ export default function KanbanBoard() {
 
   const handleFilterChange = (setter: any, value: any) => { setter(value); setCurrentPage(1); };
 
-  const handleSwitchTab = (mode: 'board' | 'list' | 'backlog') => {
+  const handleSwitchTab = (mode: 'board' | 'list' | 'backlog' | 'surplus') => {
     setViewMode(mode);
     setCurrentPage(1);
     setSearchTerm("");
@@ -479,44 +481,33 @@ export default function KanbanBoard() {
             const currentUserId = (session?.user as any)?.id;
             const currentUserName = (session?.user as any)?.name || (session?.user as any)?.fullName || "Ai đó";
             
-            // Dùng Set để lọc trùng lặp ID
             const targetIds = new Set<string>();
 
-            // 🚀 LOGIC THÔNG BÁO THÔNG MINH (Chỉ ping người cần thiết)
             switch (destination.droppableId) {
                 case "CONTENT_REVIEW":
                 case "ANIMATION_REVIEW":
                 case "EDIT_REVIEW":
-                    // 1. Khi nhân viên nộp bài (Kéo vào cột REVIEW) -> CHỈ BÁO CHO QUẢN LÝ (Creator) ĐỂ VÀO DUYỆT
                     if (movedTask.creatorId && movedTask.creatorId !== currentUserId) {
                         targetIds.add(movedTask.creatorId);
                     }
                     break;
-
                 case "ANIMATION_DOING":
-                    // 2. Khi Leader đẩy từ Duyệt Kịch bản -> Đang làm CĐ -> CHỈ PING ANIMATOR vào nhận việc
                     if (movedTask.animatorId && movedTask.animatorId !== currentUserId) {
                         targetIds.add(movedTask.animatorId);
                     }
                     break;
-
                 case "EDIT_DOING":
-                    // 3. Khi Leader đẩy từ Duyệt CĐ (hoặc Content) -> Đang dựng -> CHỈ PING EDITOR vào nhận việc
                     if (movedTask.editorId && movedTask.editorId !== currentUserId) {
                         targetIds.add(movedTask.editorId);
                     }
                     break;
-
                 case "DONE":
-                    // 4. Khi nghiệm thu xong -> PING TẤT CẢ mọi người để họ biết video đã xong & KPI đã được tính
                     if (movedTask.creatorId && movedTask.creatorId !== currentUserId) targetIds.add(movedTask.creatorId);
                     if (movedTask.contentId && movedTask.contentId !== currentUserId) targetIds.add(movedTask.contentId);
                     if (movedTask.animatorId && movedTask.animatorId !== currentUserId) targetIds.add(movedTask.animatorId);
                     if (movedTask.editorId && movedTask.editorId !== currentUserId) targetIds.add(movedTask.editorId);
                     break;
-
                 default:
-                    // 5. Nếu kéo ngược lại về TODO (Reject trả về làm lại) -> Báo cho người tạo hoặc người đang bị trả
                     if (movedTask.creatorId && movedTask.creatorId !== currentUserId) targetIds.add(movedTask.creatorId);
                     if (destination.droppableId === "CONTENT_DOING" && movedTask.contentId !== currentUserId) targetIds.add(movedTask.contentId);
                     break;
@@ -677,7 +668,6 @@ export default function KanbanBoard() {
     const reason = window.prompt("Nhập lý do yêu cầu làm lại (hoặc để trống):") || "Cần chỉnh sửa thêm theo yêu cầu Sếp.";
     if (!reason) return; 
 
-    // Đẩy task về bước trước đó (Hoặc Tự config trạng thái mặc định sếp muốn)
     try {
       const res = await fetch(`/api/tasks/${selectedTask.id}`, {
         method: "PATCH",
@@ -894,11 +884,15 @@ export default function KanbanBoard() {
               {canCreateTask && (
                 <button onClick={() => handleSwitchTab('backlog')} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg font-bold text-xs md:text-sm transition-all flex items-center gap-1.5 whitespace-nowrap ${viewMode === 'backlog' ? 'bg-indigo-600 text-white shadow-sm' : 'text-indigo-600 hover:bg-indigo-50'}`}>Kho Ý Tưởng</button>
               )}
+              {/* 🚀 MỚI: Nút chuyển sang Tab Bài dư */}
+              {canCreateTask && (
+                <button onClick={() => handleSwitchTab('surplus')} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg font-bold text-xs md:text-sm transition-all flex items-center gap-1.5 whitespace-nowrap ${viewMode === 'surplus' ? 'bg-emerald-600 text-white shadow-sm' : 'text-emerald-600 hover:bg-emerald-50'}`}>Kiểm Soát Bài Dư</button>
+              )}
             </div>
 
-            {viewMode !== 'backlog' && (
+            {/* 🚀 Ẩn thanh tìm kiếm & Lọc khi ở Kho Ý Tưởng HOẶC Tab Bài dư */}
+            {viewMode !== 'backlog' && viewMode !== 'surplus' && (
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 md:gap-3 w-full lg:w-auto">
-                {/* 🚀 MỚI: BỘ LỌC KÊNH */}
                 <div className="relative w-full sm:w-auto flex items-center bg-slate-50 border border-slate-200 rounded-lg md:rounded-xl">
                     <div className="pl-3 py-2 shrink-0">
                         <Filter size={16} className="text-slate-400"/>
@@ -945,7 +939,6 @@ export default function KanbanBoard() {
 
         <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden pb-2">
           {viewMode === 'board' && (
-            // 🚀 MỚI: Truyền thêm currentUserId để khóa/mở kéo thả chuẩn xác theo người được gán việc
             <BoardView 
                 tasks={tasks} 
                 columns={BOARD_COLUMNS} 
@@ -972,6 +965,11 @@ export default function KanbanBoard() {
               channels={channels}
               onDelete={handleDeleteTask}
             />
+          )}
+
+          {/* 🚀 MỚI: Render View Bài dư */}
+          {viewMode === 'surplus' && (
+            <SurplusView />
           )}
         </div>
 

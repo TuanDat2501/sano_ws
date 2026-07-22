@@ -27,6 +27,19 @@ export default function ProjectsPage() {
     const [selectedProjectForCriteria, setSelectedProjectForCriteria] = useState<any>(null);
     const [isSampleDrawerOpen, setIsSampleDrawerOpen] = useState(false);
     const isAdmin = (session?.user as any)?.role === "ADMIN";
+    const [channels, setChannels] = useState<any[]>([]);
+
+    const fetchChannels = async () => {
+          try {
+              const res = await fetch("/api/channels");
+              if (res.ok) {
+                  const data = await res.json();
+                  setChannels(data);
+              }
+          } catch (error) {
+              console.error("Lỗi lấy danh sách kênh", error);
+          }
+      };
     const loadData = async () => {
         setLoading(true);
         try {
@@ -39,6 +52,7 @@ export default function ProjectsPage() {
             const resTeam = await fetch("/api/teams");
             const dataTeam = await resTeam.json();
             if (Array.isArray(dataTeam)) setTeams(dataTeam);
+            fetchChannels()
         } catch (error) {
             showToast("error", "Lỗi tải dữ liệu!");
         }
@@ -256,6 +270,7 @@ export default function ProjectsPage() {
                 isOpen={isModalOpen}
                 onClose={() => { setIsModalOpen(false); setEditingProject(null); }}
                 teams={teams}
+                channels={channels}
                 initialData={editingProject}
                 onSubmit={handleSaveProject}
             />

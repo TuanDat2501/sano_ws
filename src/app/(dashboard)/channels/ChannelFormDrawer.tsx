@@ -107,11 +107,6 @@ export default function ChannelFormDrawer({
     };
 
     const mockStats = { subs: "1.240.000", views: "15.4M", revenue: "$4,500", videos: "342", createdAt: "20/05/2022", manager: "Lê Văn A" };
-    const mockProjects = [
-        { id: "p1", name: "Series Phân Tích Boruto Two Blue Vortex", status: "HOAT_DONG", videos: 12 },
-        { id: "p2", name: "Tóm Tắt Nhanh One Piece Arc Egghead", status: "HOAT_DONG", videos: 45 },
-        { id: "p3", name: "Review Manga Kinh Dị", status: "DUNG_HOAT_DONG", videos: 8 }
-    ];
 
     const drawerContent = (
         <>
@@ -143,7 +138,6 @@ export default function ChannelFormDrawer({
                                     <a href={`https:/${formData.link}`} target="_blank" className="text-sm font-medium text-slate-500 hover:text-blue-600 mt-0.5 inline-block transition-colors">{formData.link || "youtube.com/@..."}</a>
                                     
                                     <div className="flex flex-wrap items-center justify-center md:justify-start gap-2.5 mt-3.5">
-                                        {/* 🚀 MỚI: HIỂN THỊ LOẠI KÊNH */}
                                         <div className={`px-3 py-1 rounded-full border text-[10px] font-black tracking-wide flex items-center gap-1.5 shadow-sm ${formData.category === 'AI' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
                                             {formData.category === 'AI' ? '🤖 KÊNH AI' : '🎬 TỔNG HỢP'}
                                         </div>
@@ -160,9 +154,10 @@ export default function ChannelFormDrawer({
                             </div>
                         </div>
 
+                        {/* 🚀 ĐÃ CẬP NHẬT: Lấy trực tiếp số lượng dự án từ mảng formData.projects */}
                         <div className="flex px-6 md:px-8 border-b border-slate-200 bg-white shrink-0 overflow-x-auto hide-scrollbar">
                             <button onClick={() => setActiveTab("tong-quan")} className={`px-5 py-4 text-sm font-bold border-b-2 transition-all whitespace-nowrap ${activeTab === "tong-quan" ? "border-red-600 text-red-600" : "border-transparent text-slate-500 hover:text-slate-700"}`}>Tổng quan</button>
-                            <button onClick={() => setActiveTab("du-an")} className={`px-5 py-4 text-sm font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === "du-an" ? "border-red-600 text-red-600" : "border-transparent text-slate-500 hover:text-slate-700"}`}>Dự án (Series) <span className="bg-slate-100 text-slate-600 py-0.5 px-2 rounded-full text-[10px]">{mockProjects.length}</span></button>
+                            <button onClick={() => setActiveTab("du-an")} className={`px-5 py-4 text-sm font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === "du-an" ? "border-red-600 text-red-600" : "border-transparent text-slate-500 hover:text-slate-700"}`}>Dự án (Series) <span className="bg-slate-100 text-slate-600 py-0.5 px-2 rounded-full text-[10px]">{formData.projects?.length || 0}</span></button>
                             <button onClick={() => setActiveTab("nhan-su")} className={`px-5 py-4 text-sm font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === "nhan-su" ? "border-red-600 text-red-600" : "border-transparent text-slate-500 hover:text-slate-700"}`}>Nhân sự <span className="bg-slate-100 text-slate-600 py-0.5 px-2 rounded-full text-[10px]">{formData.members?.length || 0}</span></button>
                         </div>
 
@@ -193,30 +188,35 @@ export default function ChannelFormDrawer({
                                 </div>
                             )}
 
+                            {/* 🚀 ĐÃ CẬP NHẬT: Render trực tiếp mảng formData.projects */}
                             {activeTab === "du-an" && (
                                 <div className="animate-fade-in space-y-4">
-                                    {mockProjects.map(proj => (
-                                        <div key={proj.id} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 group hover:border-blue-300 transition-colors cursor-pointer">
-                                            <div className="flex items-start gap-4">
-                                                <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-                                                    <FolderKanban size={20} />
-                                                </div>
-                                                <div>
-                                                    <h4 className="font-bold text-slate-800 group-hover:text-blue-600 transition-colors">{proj.name}</h4>
-                                                    <div className="flex items-center gap-4 mt-1.5">
-                                                        <span className="text-[11px] font-medium text-slate-500">{proj.videos} Videos</span>
-                                                        <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md ${proj.status === 'HOAT_DONG' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-                                                            {proj.status === 'HOAT_DONG' ? 'Đang chạy' : 'Đã đóng'}
-                                                        </span>
+                                    {(!formData.projects || formData.projects.length === 0) ? (
+                                        <div className="text-center p-8 text-slate-400 text-sm font-medium border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50/50">
+                                            Kênh này hiện chưa có dự án / series nào.
+                                        </div>
+                                    ) : (
+                                        formData.projects.map((proj: any) => (
+                                            <div key={proj.id} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 group hover:border-blue-300 transition-colors cursor-pointer">
+                                                <div className="flex items-start gap-4">
+                                                    <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                                                        <FolderKanban size={20} />
+                                                    </div>
+                                                    <div>
+                                                        <h4 className="font-bold text-slate-800 group-hover:text-blue-600 transition-colors">{proj.name}</h4>
+                                                        <div className="flex items-center gap-4 mt-1.5">
+                                                            <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md ${proj.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                                                                {proj.status === 'ACTIVE' ? 'Đang chạy' : 'Đã đóng'}
+                                                            </span>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
-                                            <button className="text-sm font-bold text-slate-400 hover:text-blue-600 whitespace-nowrap self-start md:self-center">Xem chi tiết &rarr;</button>
-                                        </div>
-                                    ))}
-                                    <button className="w-full py-4 border-2 border-dashed border-slate-200 rounded-2xl text-slate-500 font-bold hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-all flex items-center justify-center gap-2">
-                                        <Plus size={18} /> Mở dự án mới cho Kênh này
-                                    </button>
+                                        ))
+                                    )}
+                                    <a href={`/projects?channelId=${formData.id}`} className="w-full py-4 border-2 border-dashed border-slate-200 rounded-2xl text-slate-500 font-bold hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-all flex items-center justify-center gap-2 text-center">
+                                        <Plus size={18} /> Đi tới Quản lý Dự án
+                                    </a>
                                 </div>
                             )}
 
@@ -297,7 +297,6 @@ export default function ChannelFormDrawer({
                                     <input required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full bg-slate-50 border border-slate-200 p-3.5 rounded-2xl text-sm md:text-base font-bold outline-none focus:border-red-500 focus:bg-white focus:ring-4 focus:ring-red-500/10 transition-all text-slate-900" placeholder="VD: BeastLore Anime" />
                                 </div>
 
-                                {/* 🚀 MỚI: CHỌN LOẠI KÊNH BẰNG NÚT BẤM (RADIO) */}
                                 <div>
                                     <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1 mb-2 inline-block">Định hướng nội dung (Loại kênh) <span className="text-red-500">*</span></label>
                                     <div className="flex gap-4">
@@ -374,7 +373,6 @@ export default function ChannelFormDrawer({
                                                                     className="text-[10px] font-black uppercase bg-red-50 border-transparent text-red-600 px-3 py-2 rounded-lg outline-none focus:ring-2 focus:ring-red-100 transition-all cursor-pointer"
                                                                 >
                                                                     <option value="CONTENT">Content / Kịch bản</option>
-                                                                    {/* 🚀 MỚI: CHỈ HIỂN THỊ ANIMATION NẾU KÊNH LÀ KÊNH AI */}
                                                                     {formData.category === 'AI' && (
                                                                         <option value="ANIMATION">Chuyển động (AI)</option>
                                                                     )}

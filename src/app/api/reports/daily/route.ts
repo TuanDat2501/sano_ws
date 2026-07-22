@@ -11,7 +11,18 @@ export async function GET(request: Request) {
         if (!session || !session.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
         const currentUser = session.user as any;
-        if (!["ADMIN", "BAN_GIAM_DOC", "HR"].includes(currentUser.role)) {
+        
+        // 🚀 ĐÃ SỬA: Kiểm tra quyền trực tiếp từ Database
+        const userPermission = await prisma.permission.findFirst({
+            where: {
+                role: currentUser.role,
+                moduleId: "MENU_DAILY_REPORT",
+                isAllowed: true
+            }
+        });
+
+        // ADMIN và BAN_GIAM_DOC luôn có quyền, các Role khác phải được tích xanh trên bảng Ma trận
+        if (currentUser.role !== "ADMIN" && currentUser.role !== "BAN_GIAM_DOC" && !userPermission) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
         

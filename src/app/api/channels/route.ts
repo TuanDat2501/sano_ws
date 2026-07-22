@@ -39,7 +39,9 @@ export async function GET(req: Request) {
             where: whereClause,
             include: {
                 team: { select: { name: true } },
-                members: true 
+                members: true,
+                // 🚀 ĐÃ BỔ SUNG: Kéo mảng dự án (projects) thuộc về kênh này
+                projects: true 
             },
             orderBy: { createdAt: 'desc' }
         });

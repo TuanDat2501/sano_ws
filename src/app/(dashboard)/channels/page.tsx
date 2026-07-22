@@ -16,7 +16,7 @@ export default function ChannelsPage() {
 
     const [editingId, setEditingId] = useState<string | null>(null);
     const [formData, setFormData] = useState({
-        name: "", link: "", topic: "", teamId: "", avatarUrl: "", 
+        name: "", link: "", topic: "", teamId: "", avatarUrl: "", projects:[] ,
         status: "XAY_DUNG", monetization: "CHUA_DAT",
         category: "TONG_HOP", // 🚀 MỚI: Thêm category
         members: [] 
@@ -83,16 +83,20 @@ export default function ChannelsPage() {
                 name: channel.name, link: channel.link || "", topic: channel.topic || "", 
                 teamId: channel.teamId, avatarUrl: channel.avatarUrl || "",
                 status: channel.status, monetization: channel.monetization,
-                category: channel.category || "TONG_HOP", // 🚀 MỚI: Gán category khi sửa
-                members: channel.members || [] 
+                category: channel.category || "TONG_HOP",
+                members: channel.members || [],
+                // 🚀 ĐÃ BỔ SUNG TRƯỜNG NÀY ĐỂ TRUYỀN DỮ LIỆU XUỐNG DRAWER
+                projects: channel.projects || [] 
             });
         } else {
             setEditingId(null);
             setFormData({ 
                 name: "", link: "", topic: "", teamId: teams[0]?.id || "", 
                 avatarUrl: "", status: "XAY_DUNG", monetization: "CHUA_DAT",
-                category: "TONG_HOP", // 🚀 MỚI: Reset lại TONG_HOP khi tạo mới
-                members: [] 
+                category: "TONG_HOP",
+                members: [],
+                // 🚀 TẠO MỚI THÌ CHO NÓ LÀ MẢNG RỖNG
+                projects: [] 
             });
         }
         setIsDrawerOpen(true);

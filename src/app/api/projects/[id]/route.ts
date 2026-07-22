@@ -8,7 +8,6 @@ import { authOptions } from "@/lib/auth";
 // ==============================================================
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
     try {
-        // 🚀 CHỐT GÁC 1: Kiểm tra đăng nhập
         const session = await getServerSession(authOptions);
         if (!session || !session.user) {
             return NextResponse.json({ error: "Chưa đăng nhập!" }, { status: 401 });
@@ -40,7 +39,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 // ==============================================================
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
     try {
-        // 🚀 CHỐT GÁC 2: Kiểm tra đăng nhập
         const session = await getServerSession(authOptions);
         if (!session || !session.user) {
             return NextResponse.json({ error: "Chưa đăng nhập!" }, { status: 401 });
@@ -68,6 +66,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
                 ...(body.description !== undefined && { description: body.description }),
                 ...(body.teamId && { teamId: body.teamId }),
                 ...(body.supervisorId && { supervisorId: body.supervisorId }),
+                // 🚀 ĐÃ BỔ SUNG: Lưu channelId khi Edit
+                ...(body.channelId !== undefined && { channelId: body.channelId || null }),
                 ...(body.status && { status: body.status }),
                 ...(parsedNodes !== undefined && { workflowNodes: parsedNodes }),
                 ...(parsedEdges !== undefined && { workflowEdges: parsedEdges }),
@@ -88,7 +88,6 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 // ==============================================================
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
     try {
-        // 🚀 CHỐT GÁC 3: Phân quyền gắt gao
         const session = await getServerSession(authOptions);
         if (!session || !session.user) {
             return NextResponse.json({ error: "Chưa đăng nhập!" }, { status: 401 });
