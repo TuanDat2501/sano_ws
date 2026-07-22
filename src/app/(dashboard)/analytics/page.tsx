@@ -175,7 +175,7 @@ export default function AnalyticsPage() {
     }
 
     const currentUser = session?.user as any;
-    if (!["ADMIN", "BAN_GIAM_DOC"].includes(currentUser?.role || "CONTENT")) {
+    if (!["ADMIN", "BAN_GIAM_DOC","KE_TOAN"].includes(currentUser?.role || "CONTENT")) {
         return (
             <div className="h-full bg-slate-50 flex flex-col items-center justify-center">
                 <div className="bg-red-50 p-6 rounded-full mb-6 text-red-500"><Lock size={64} /></div>
