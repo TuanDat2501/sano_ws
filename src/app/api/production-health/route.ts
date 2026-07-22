@@ -20,6 +20,8 @@ export async function GET(req: Request) {
                                 status: { not: "BACKLOG" }
                             },
                             select: {
+                                id: true,       // 🚀 BỔ SUNG LẤY ID
+                                title: true,    // 🚀 BỔ SUNG LẤY TIÊU ĐỀ
                                 scriptLink: true,
                                 videoLink: true,
                                 publishLink: true,
@@ -66,18 +68,25 @@ export async function GET(req: Request) {
                     const durationGroups: Record<string, any> = {};
                     
                     surplusTasks.forEach((t: any) => {
-                        const d = t.duration || "Không rõ"; // Nếu Task không nhập thời lượng
+                        const d = t.duration || "Không rõ";
                         if (!durationGroups[d]) {
-                            durationGroups[d] = { videoCount: 0, contentCount: 0, notesCount: {} };
+                            // 🚀 Thêm mảng videoTasks và contentTasks để chứa thông tin chi tiết
+                            durationGroups[d] = { videoCount: 0, contentCount: 0, notesCount: {}, videoTasks: [], contentTasks: [] };
                         }
                         
                         const isContent = t.scriptLink && t.scriptLink.trim() !== "" && (!t.videoLink || t.videoLink.trim() === "");
                         const isVideo = t.videoLink && t.videoLink.trim() !== "" && (!t.publishLink || t.publishLink.trim() === "");
                         
-                        if (isContent) durationGroups[d].contentCount++;
-                        if (isVideo) durationGroups[d].videoCount++;
+                        // 🚀 Vừa đếm số lượng, vừa nhét thông tin bài vào mảng chi tiết
+                        if (isContent) {
+                            durationGroups[d].contentCount++;
+                            durationGroups[d].contentTasks.push({ id: t.id, title: t.title });
+                        }
+                        if (isVideo) {
+                            durationGroups[d].videoCount++;
+                            durationGroups[d].videoTasks.push({ id: t.id, title: t.title });
+                        }
                         
-                        // Đếm chú thích (Cắt thô, Chuyển động...)
                         if (t.note && t.note.trim() !== "") {
                             const cleanNote = t.note.trim();
                             durationGroups[d].notesCount[cleanNote] = (durationGroups[d].notesCount[cleanNote] || 0) + 1;
@@ -99,12 +108,17 @@ export async function GET(req: Request) {
                         teamRows.push({
                             id: `${channel.id}-${d}`,
                             channelName: channel.name,
-                            isFirstOfChannel: dIdx === 0, // Đánh dấu dòng đầu tiên của Kênh để gộp ô
-                            channelRowSpan: durations.length, // Cột Kênh sẽ gộp bao nhiêu dòng
+                            isFirstOfChannel: dIdx === 0, 
+                            channelRowSpan: durations.length, 
+                            
                             videoCount: group.videoCount,
+                            videoTasks: group.videoTasks, // 🚀 Trả về danh sách chi tiết Video dư
                             videoDuration: d === "Không rõ" ? "" : d,
+                            
                             contentCount: group.contentCount,
+                            contentTasks: group.contentTasks, // 🚀 Trả về danh sách chi tiết Content dư
                             contentDuration: d === "Không rõ" ? "" : d,
+                            
                             notes: noteStrings
                         });
                     });

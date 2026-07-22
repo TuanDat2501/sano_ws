@@ -1,15 +1,21 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Loader2, Activity } from "lucide-react";
+import { Loader2, Activity, X, Video, FileText } from "lucide-react";
 import { useToast } from "@/app/component/ToastProvider";
+import { createPortal } from "react-dom";
 
 export default function SurplusView() {
     const [data, setData] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const { showToast } = useToast();
+    
+    // 🚀 BỔ SUNG: State quản lý việc mở Drawer và lưu dữ liệu dòng được chọn
+    const [selectedRow, setSelectedRow] = useState<any>(null);
+    const [mounted, setMounted] = useState(false);
 
     useEffect(() => {
+        setMounted(true);
         const fetchData = async () => {
             try {
                 const res = await fetch("/api/production-health");
@@ -28,18 +34,73 @@ export default function SurplusView() {
         fetchData();
     }, []);
 
+    // 🚀 GIAO DIỆN DRAWER (Sẽ được đẩy ra ngoài bằng Portal)
+    const drawerContent = selectedRow && (
+        <>
+            <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[99998] transition-opacity" onClick={() => setSelectedRow(null)} />
+            
+            <div className={`fixed top-0 right-0 h-full w-full sm:w-[400px] md:w-[500px] bg-white shadow-2xl z-[99999] transform transition-transform duration-300 flex flex-col ${selectedRow ? "translate-x-0" : "translate-x-full"}`}>
+                
+                <div className="p-4 md:p-6 border-b border-slate-100 flex justify-between items-start bg-slate-50 shrink-0">
+                    <div>
+                        <h2 className="text-lg font-black text-slate-800">Chi tiết Bài Dư</h2>
+                        <p className="text-xs text-slate-500 font-medium mt-1">
+                            Kênh: <span className="font-bold text-slate-700">{selectedRow.channelName}</span> 
+                            <span className="mx-2">•</span> 
+                            Thời lượng: <span className="font-bold text-slate-700">{selectedRow.videoDuration || selectedRow.contentDuration || "Không rõ"} phút</span>
+                        </p>
+                    </div>
+                    <button onClick={() => setSelectedRow(null)} className="p-2 bg-white rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors shadow-sm border border-slate-200 active:scale-95">
+                        <X size={20} />
+                    </button>
+                </div>
+                
+                <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-slate-50/50 space-y-6 custom-scrollbar">
+                    
+                    {/* KHỐI CONTENT DƯ */}
+                    <div>
+                        <h3 className="text-[11px] font-black text-orange-600 flex items-center gap-2 mb-3 uppercase tracking-widest bg-orange-50 w-max px-3 py-1.5 rounded-lg border border-orange-100 shadow-sm">
+                            <FileText size={14} /> Kịch bản / Content Dư ({selectedRow.contentCount || 0})
+                        </h3>
+                        {selectedRow.contentTasks && selectedRow.contentTasks.length > 0 ? (
+                            <div className="space-y-2">
+                                {selectedRow.contentTasks.map((task: any, idx: number) => (
+                                    <div key={task.id} className="bg-white p-3.5 rounded-xl border border-orange-100 shadow-sm flex gap-3 items-start transition-colors hover:border-orange-300">
+                                        <span className="bg-orange-100 text-orange-600 text-[10px] font-black px-2 py-0.5 rounded mt-0.5 shrink-0">{idx + 1}</span>
+                                        <span className="text-sm font-bold text-slate-700 leading-snug">{task.title}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-sm text-slate-400 italic font-medium p-4 text-center border-2 border-dashed border-slate-200 rounded-xl">Không có Kịch bản dư ở mốc thời gian này.</div>
+                        )}
+                    </div>
+
+                    {/* KHỐI VIDEO DƯ */}
+                    <div>
+                        <h3 className="text-[11px] font-black text-blue-600 flex items-center gap-2 mb-3 uppercase tracking-widest bg-blue-50 w-max px-3 py-1.5 rounded-lg border border-blue-100 shadow-sm">
+                            <Video size={14} /> Video Dư ({selectedRow.videoCount || 0})
+                        </h3>
+                        {selectedRow.videoTasks && selectedRow.videoTasks.length > 0 ? (
+                            <div className="space-y-2">
+                                {selectedRow.videoTasks.map((task: any, idx: number) => (
+                                    <div key={task.id} className="bg-white p-3.5 rounded-xl border border-blue-100 shadow-sm flex gap-3 items-start transition-colors hover:border-blue-300">
+                                        <span className="bg-blue-100 text-blue-600 text-[10px] font-black px-2 py-0.5 rounded mt-0.5 shrink-0">{idx + 1}</span>
+                                        <span className="text-sm font-bold text-slate-700 leading-snug">{task.title}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-sm text-slate-400 italic font-medium p-4 text-center border-2 border-dashed border-slate-200 rounded-xl">Không có Video dư ở mốc thời gian này.</div>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </>
+    );
+
     return (
         <div className="h-full flex flex-col bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden animate-fade-in">
-            {/* <div className="p-4 md:p-5 border-b border-slate-200 bg-slate-50 flex items-center gap-3 shrink-0">
-                <div className="p-2 bg-emerald-100 text-emerald-600 rounded-lg">
-                    <Activity size={20} />
-                </div>
-                <div>
-                    <h2 className="text-lg font-black text-slate-800 tracking-tight">Kiểm Soát Năng Suất (Bài Dư)</h2>
-                    <p className="text-xs font-medium text-slate-500 mt-0.5">Hệ thống tự động quét và đếm bài dư dựa trên tiến độ công việc thực tế.</p>
-                </div>
-            </div> */}
-            
             <div className="flex-1 overflow-auto custom-scrollbar">
                 <table className="w-full text-center border-collapse min-w-[900px]">
                     <thead className="sticky top-0 z-10">
@@ -66,16 +127,21 @@ export default function SurplusView() {
                             </tr>
                         ) : (
                             data.map((row, index) => (
-                                <tr key={`${row.id}-${index}`} className="hover:bg-slate-50/50 transition-colors text-sm font-medium text-slate-700">
+                                <tr 
+                                    key={`${row.id}-${index}`} 
+                                    // 🚀 BỔ SUNG: Cho phép click vào dòng và đổi hiệu ứng trỏ chuột
+                                    className="hover:bg-emerald-50/50 transition-colors text-sm font-medium text-slate-700 cursor-pointer"
+                                    onClick={() => setSelectedRow(row)}
+                                >
                                     {row.isFirstChannelOfTeam && (
                                         <>
-                                            <td rowSpan={row.teamRowSpan} className="p-3 border-r border-slate-100 bg-white font-bold">{row.stt}</td>
-                                            <td rowSpan={row.teamRowSpan} className="p-3 border-r border-slate-100 bg-slate-50 font-black uppercase text-slate-600">{row.teamName}</td>
+                                            <td rowSpan={row.teamRowSpan} className="p-3 border-r border-slate-100 bg-white font-bold cursor-default" onClick={e => e.stopPropagation()}>{row.stt}</td>
+                                            <td rowSpan={row.teamRowSpan} className="p-3 border-r border-slate-100 bg-slate-50 font-black uppercase text-slate-600 cursor-default" onClick={e => e.stopPropagation()}>{row.teamName}</td>
                                         </>
                                     )}
 
                                     {row.isFirstOfChannel && (
-                                        <td rowSpan={row.channelRowSpan} className="p-3 border-r border-slate-100 text-left font-bold">{row.channelName}</td>
+                                        <td rowSpan={row.channelRowSpan} className="p-3 border-r border-slate-100 text-left font-bold cursor-default" onClick={e => e.stopPropagation()}>{row.channelName}</td>
                                     )}
 
                                     <td className="p-3 border-r border-slate-100 font-black text-blue-600">{row.videoCount > 0 ? row.videoCount : "-"}</td>
@@ -101,6 +167,9 @@ export default function SurplusView() {
                     </tbody>
                 </table>
             </div>
+
+            {/* 🚀 Render Drawer thông qua Portal */}
+            {mounted && createPortal(drawerContent, document.body)}
         </div>
     );
 }
