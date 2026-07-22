@@ -87,7 +87,7 @@ export default function KanbanBoard() {
 
   // 🚀 MỚI: Bổ sung "surplus" vào biến State
   const [viewMode, setViewMode] = useState<'board' | 'list' | 'backlog' | 'surplus'>((searchParams.get("viewMode") as 'board' | 'list' | 'backlog' | 'surplus') || 'board');
-  
+  const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [searchTerm, setSearchTerm] = useState(searchParams.get("search") || "");
   const [filterStatus, setFilterStatus] = useState(searchParams.get("status") || "ALL");
   const [filterChannel, setFilterChannel] = useState(searchParams.get("channelId") || "ALL");
@@ -408,18 +408,24 @@ export default function KanbanBoard() {
   };
 
   const handleOpenTaskDetail = async (task: any) => {
+    // 🚀 BẬT LOADING VÀ MỞ LUÔN DRAWER CÓ KHUNG XƯƠNG
+    setIsLoadingDetail(true);
+    setIsDrawerOpen(true);
+    
+    // Nạp tạm dữ liệu vỏ ngoài để hiện tiêu đề, project... 
     setSelectedTask(task);
     setTaskLinks({
       scriptLink: task.scriptLink || "", englishScriptLink: task.englishScriptLink || "", storyboardLink: task.storyboardLink || "",
       audioLink: task.audioLink || "", thumbnailLink: task.thumbnailLink || "", videoLink: task.videoLink || "",
       publishLink: task.publishLink || "", note: task.note || ""
     });
-    setIsDrawerOpen(true);
 
     try {
+      // Bắt đầu gọi API lấy chi tiết task thật sự (gồm user, team, etc)
       const res = await fetch(`/api/tasks/${task.id}`);
       if (res.ok) {
         const fullTask = await res.json();
+        // Đè dữ liệu đầy đủ lên
         setSelectedTask(fullTask); 
         setTaskLinks({
           scriptLink: fullTask.scriptLink || "", englishScriptLink: fullTask.englishScriptLink || "", storyboardLink: fullTask.storyboardLink || "",
@@ -427,8 +433,14 @@ export default function KanbanBoard() {
           publishLink: fullTask.publishLink || "", note: fullTask.note || ""
         });
       }
-    } catch (err) {}
+    } catch (err) {
+       console.error(err);
+    } finally {
+       // 🚀 TẮT LOADING KHI ĐÃ CÓ DATA XONG
+       setIsLoadingDetail(false);
+    }
 
+    // Các tác vụ nền (comments, socket...) vẫn chạy bình thường
     loadTaskComments(task.id);
     if (socket) socket.emit("join_task", task.id);
 
@@ -980,13 +992,14 @@ export default function KanbanBoard() {
             setIsDrawerOpen(false); 
             setEditingTask(selectedTask); 
             setIsModalOpen(true); 
-
+            
           }}
           onRefreshBoard={() => {
             fetchTasks(); 
             if (socket) socket.emit("board_updated"); 
           }}
           onDeleteTask={handleDeleteTask}
+          isLoading={isLoadingDetail}
         />
 
         <PushTaskModal
