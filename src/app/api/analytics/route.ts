@@ -11,7 +11,7 @@ export async function GET(req: Request) {
         if (!session || !session.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
         const currentUser = session.user as any;
-        if (!["ADMIN", "BAN_GIAM_DOC"].includes(currentUser.role)) {
+        if (!["ADMIN", "BAN_GIAM_DOC","KE_TOAN"].includes(currentUser.role)) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
 
