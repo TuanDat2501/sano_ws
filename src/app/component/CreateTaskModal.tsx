@@ -12,7 +12,6 @@ interface CreateTaskModalProps {
 export default function CreateTaskModal({ isOpen, onClose, teams, initialData, onSubmit, isSubmitting, errors }: CreateTaskModalProps) {
   const [mounted, setMounted] = useState(false);
 
-  // 🚀 BỔ SUNG: keywords, publishDate, animatorId
   const [newTask, setNewTask] = useState({
     id: "", title: "", keywords: "", linkContent: "", contentId: "", editorId: "", animatorId: "", teamId: "", projectId: "", duration: "", publishDate: "", channelId: ""
   });
@@ -83,6 +82,15 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
     onSubmit(payload);
   };
 
+  // 🚀 TÌM KÊNH ĐANG ĐƯỢC CHỌN ĐỂ XÁC ĐỊNH LÀ AI HAY TỔNG HỢP
+  const selectedChannel = teamChannels.find(c => c.id === newTask.channelId);
+  const isTongHopChannel = selectedChannel?.category === 'TONG_HOP';
+
+  // 🚀 LỌC DANH SÁCH DỰ ÁN THEO KÊNH ĐANG CHỌN
+  const filteredProjects = newTask.channelId 
+    ? teamProjects.filter(p => p.channelId === newTask.channelId) 
+    : teamProjects;
+
   const modalContent = (
     <>
       <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100000] animate-fade-in" onClick={onClose} />
@@ -113,7 +121,6 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tiêu đề / Ý tưởng <span className="text-red-500">*</span></label>
                     <textarea required autoFocus rows={2} className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm outline-none transition-all font-bold focus:border-blue-500 focus:bg-white resize-none" value={newTask.title} onChange={(e) => setNewTask({ ...newTask, title: e.target.value })} />
                   </div>
-                  {/* 🚀 THÊM TỪ KHÓA */}
                   <div>
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-1.5"><Key size={12} /> Từ khóa (Key)</label>
                     <input type="text" className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm outline-none transition-all font-medium focus:border-blue-500 focus:bg-white" placeholder="VD: prehistoric creatures..." value={newTask.keywords} onChange={(e) => setNewTask({ ...newTask, keywords: e.target.value })} />
@@ -127,7 +134,6 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-1.5"><Clock size={12} /> Phút <span className="text-red-500">*</span></label>
                       <input required type="number" min="1" className="w-full mt-1 bg-indigo-50 border border-indigo-100 rounded-xl p-2.5 text-sm outline-none font-black focus:border-indigo-500 focus:bg-white" value={newTask.duration} onChange={(e) => setNewTask({ ...newTask, duration: e.target.value })} />
                     </div>
-                    {/* 🚀 THÊM NGÀY PUB */}
                     <div>
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-1.5"><CalendarDays size={12} /> Ngày Hoành Thành</label>
                       <input type="date" className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm outline-none font-bold focus:border-blue-500 focus:bg-white" value={newTask.publishDate} onChange={(e) => setNewTask({ ...newTask, publishDate: e.target.value })} />
@@ -150,7 +156,16 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
                     </div>
                     <div>
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Kênh <span className="text-red-500">*</span></label>
-                      <select required disabled={!newTask.teamId || isLoadingData} className="w-full border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-sm bg-slate-50 disabled:opacity-50" value={newTask.channelId} onChange={(e) => setNewTask({ ...newTask, channelId: e.target.value })}>
+                      <select required disabled={!newTask.teamId || isLoadingData} className="w-full border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-sm bg-slate-50 disabled:opacity-50" value={newTask.channelId} onChange={(e) => {
+                          const newChannelId = e.target.value;
+                          const newChan = teamChannels.find(c => c.id === newChannelId);
+                          setNewTask({ 
+                              ...newTask, 
+                              channelId: newChannelId,
+                              projectId: "", // 🚀 TỰ ĐỘNG RESET DỰ ÁN KHI ĐỔI KÊNH KHÁC
+                              animatorId: newChan?.category === 'TONG_HOP' ? "" : newTask.animatorId 
+                          });
+                      }}>
                         <option value="">-- Chọn --</option>
                         {teamChannels.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                       </select>
@@ -158,8 +173,9 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
                     <div>
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Dự án <span className="text-red-500">*</span></label>
                       <select required disabled={!newTask.teamId || isLoadingData} className="w-full border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-sm bg-slate-50 disabled:opacity-50" value={newTask.projectId} onChange={(e) => setNewTask({ ...newTask, projectId: e.target.value })}>
-                        <option value="">-- Chọn --</option>
-                        {teamProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                        <option value="">{newTask.channelId && filteredProjects.length === 0 ? "-- Kênh trống --" : "-- Chọn --"}</option>
+                        {/* 🚀 ĐÃ CẬP NHẬT RENDER TỪ DANH SÁCH ĐÃ LỌC */}
+                        {filteredProjects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
                       </select>
                     </div>
                   </div>
@@ -172,7 +188,7 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
                         {teamContents.map(u => <option key={u.id} value={u.id}>{u.fullName}</option>)}
                       </select>
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className={`grid ${isTongHopChannel ? 'grid-cols-1' : 'grid-cols-2'} gap-3`}>
                       <div>
                         <label className="text-[10px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-1.5 mb-1"><Film size={12} /> Editor</label>
                         <select disabled={!newTask.teamId || isLoadingData} className="w-full border rounded-xl p-2.5 outline-none font-bold text-sm bg-white border-emerald-200 disabled:opacity-50" value={newTask.editorId} onChange={(e) => setNewTask({ ...newTask, editorId: e.target.value })}>
@@ -180,14 +196,16 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
                           {teamEditors.map(u => <option key={u.id} value={u.id}>{u.fullName}</option>)}
                         </select>
                       </div>
-                      {/* 🚀 THÊM ANIMATOR */}
-                      <div>
-                        <label className="text-[10px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-1.5 mb-1"><MonitorPlay size={12} /> Chuyển Động</label>
-                        <select disabled={!newTask.teamId || isLoadingData} className="w-full border rounded-xl p-2.5 outline-none font-bold text-sm bg-white border-emerald-200 disabled:opacity-50" value={newTask.animatorId} onChange={(e) => setNewTask({ ...newTask, animatorId: e.target.value })}>
-                          <option value="">-- Ai làm CĐ? --</option>
-                          {teamContents.map(u => <option key={u.id} value={u.id}>{u.fullName}</option>)}
-                        </select>
-                      </div>
+                      
+                      {!isTongHopChannel && (
+                        <div>
+                          <label className="text-[10px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-1.5 mb-1"><MonitorPlay size={12} /> Chuyển Động</label>
+                          <select disabled={!newTask.teamId || isLoadingData} className="w-full border rounded-xl p-2.5 outline-none font-bold text-sm bg-white border-emerald-200 disabled:opacity-50" value={newTask.animatorId} onChange={(e) => setNewTask({ ...newTask, animatorId: e.target.value })}>
+                            <option value="">-- Ai làm CĐ? --</option>
+                            {teamContents.map(u => <option key={u.id} value={u.id}>{u.fullName}</option>)}
+                          </select>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

@@ -38,6 +38,7 @@ export async function GET(req: Request) {
                 name: true,
                 status: true,
                 updatedAt: true,
+                channelId: true,
                 team: { select: { name: true } },
                 // 🚀 LẤY THÊM THÔNG TIN GIÁM SÁT TẠI ĐÂY
                 supervisor: {
