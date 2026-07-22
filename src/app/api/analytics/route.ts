@@ -76,7 +76,7 @@ export async function GET(req: Request) {
         ] = await Promise.all([
             prisma.team.findMany({ select: { id: true, name: true } }),
             prisma.user.findMany({
-                where: { ...teamFilter, role: { notIn: ["ADMIN", "BAN_GIAM_DOC", "HR"] } },
+                where: { ...teamFilter, role: { notIn: ["ADMIN", "BAN_GIAM_DOC", "HR","KE_TOAN"] } },
                 select: { id: true, fullName: true, role: true, isActive: true, createdAt: true, teamId: true }
             }),
             prisma.channel.findMany({ where: teamFilter, include: { team: { select: { name: true } } } }),
