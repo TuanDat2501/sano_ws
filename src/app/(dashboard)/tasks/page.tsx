@@ -840,7 +840,27 @@ export default function KanbanBoard() {
     } catch (error) { showToast('error', 'Lỗi kết nối Server'); } 
     finally { setIsPushing(false); }
   };
+  // Hàm này đẩy file ảnh lên server/cloud và trả về cái link ảnh
+  const handleUploadImage = async (file: File): Promise<string | null> => {
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      
+      // GỌI API UPLOAD CỦA SẾP Ở ĐÂY (Ví dụ: /api/upload)
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
 
+      if (!res.ok) throw new Error("Upload failed");
+      const data = await res.json();
+      
+      return data.imageUrl; // Trả về link ảnh thành công
+    } catch (error) {
+      showToast("error", "Lỗi tải ảnh lên!");
+      return null;
+    }
+  };
   const handleDeleteTask = async (taskId: string) => {
     try {
         const res = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
@@ -1089,6 +1109,7 @@ export default function KanbanBoard() {
           }}
           onDeleteTask={handleDeleteTask}
           isLoading={isLoadingDetail}
+          onUploadImage={handleUploadImage}
         />
 
         <PushTaskModal

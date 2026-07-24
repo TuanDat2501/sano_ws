@@ -405,7 +405,7 @@ model TaskComment {
   id        String   @id @default(uuid())
   text      String   @db.Text
   createdAt DateTime @default(now())
-
+  imageUrl  String?  @db.Text
   taskId String
   task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
