@@ -569,7 +569,14 @@ export default function TaskDetailDrawer({
                           <div className={`px-4 py-2.5 rounded-2xl text-sm font-medium max-w-[85%] shadow-sm ${msg.senderId === sessionUserId ? "bg-blue-600 text-white rounded-tr-sm" : "bg-white border border-slate-200 text-slate-700 rounded-tl-sm"}`}>
                             {/* Hiển thị hình ảnh nếu có */}
                             {msg.imageUrl && (
-                              <img src={msg.imageUrl} alt="Đính kèm" className="max-w-full h-auto rounded-md mb-2" />
+                              <img
+                                src={msg.imageUrl}
+                                alt="Đính kèm"
+                                // 🚀 BỔ SUNG: Giới hạn chiều rộng và chiều cao tối đa, bo góc xịn xò
+                                className="max-w-[200px] sm:max-w-[250px] max-h-[250px] object-cover rounded-xl mb-2 border border-slate-200 shadow-sm hover:opacity-90 cursor-pointer"
+                                // Tùy chọn: Thêm onclick để mở ảnh to nếu sếp muốn
+                                onClick={() => window.open(msg.imageUrl, '_blank')}
+                              />
                             )}
                             {/* Hiển thị văn bản tin nhắn */}
                             {msg.text && <div>{msg.text}</div>}

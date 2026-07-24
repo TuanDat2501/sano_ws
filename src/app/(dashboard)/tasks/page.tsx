@@ -259,7 +259,10 @@ export default function KanbanBoard() {
       setMessages((prev) => {
         if (prev.some(m => m.id === data.id)) return prev;
         return [...prev, {
-          id: data.id, sender: data.sender, text: data.text,
+          id: data.id, 
+          sender: data.sender, 
+          text: data.text,
+          imageUrl: data.imageUrl, // 🚀 BỔ SUNG DÒNG NÀY ĐỂ NHẬN ẢNH REALTIME
           time: data.time || new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
           isMine: data.senderId === (session?.user as any)?.id
         }];
@@ -466,7 +469,10 @@ export default function KanbanBoard() {
       if (res.ok) {
         const data = await res.json();
         const formattedMessages = data.map((c: any) => ({
-          id: c.id, sender: c.user?.fullName || "Ẩn danh", text: c.text,
+          id: c.id, 
+          sender: c.user?.fullName || "Ẩn danh", 
+          text: c.text,
+          imageUrl: c.imageUrl, // 🚀 BỔ SUNG DÒNG NÀY LÀ CỰC KỲ QUAN TRỌNG
           time: new Date(c.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
           isMine: c.userId === (session?.user as any)?.id
         }));
@@ -855,7 +861,7 @@ export default function KanbanBoard() {
       if (!res.ok) throw new Error("Upload failed");
       const data = await res.json();
       
-      return data.imageUrl; // Trả về link ảnh thành công
+      return data.url; // Trả về link ảnh thành công
     } catch (error) {
       showToast("error", "Lỗi tải ảnh lên!");
       return null;
@@ -877,29 +883,45 @@ export default function KanbanBoard() {
     }
   };
 
-  const handleSendMessage = async () => {
-    if (chatMessage.trim() !== '' && socket && selectedTask) {
+  const handleSendMessage = async (imageUrl?: string) => {
+    // 🚀 Cho phép gửi nếu có chữ HOẶC có ảnh
+    if ((chatMessage.trim() !== '' || imageUrl) && socket && selectedTask) {
       const textToSend = chatMessage;
-      setChatMessage("");
+      setChatMessage(""); // Reset ô nhập liệu ngay lập tức
+      
       try {
         const res = await fetch(`/api/tasks/${selectedTask.id}/comments`, {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: textToSend }),
+          method: "POST", 
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: textToSend, imageUrl: imageUrl }),
         });
+        
         if (res.ok) {
           const data = await res.json();
           const savedComment = data.comment;
+          
+          // 🚀 CÁCH CỔ ĐIỂN: Gọi lại thẳng hàm lấy Comment để vẽ lại UI ngay lập tức
+          await loadTaskComments(selectedTask.id);
+          
           const newMsg = {
-            id: savedComment.id, taskId: selectedTask.id, sender: savedComment.user.fullName,
-            senderId: savedComment.userId, text: savedComment.text,
+            id: savedComment.id, 
+            taskId: selectedTask.id, 
+            sender: savedComment.user.fullName,
+            senderId: savedComment.userId, 
+            text: savedComment.text,
+            imageUrl: savedComment.imageUrl, 
             time: new Date(savedComment.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
           };
+          
+          // Vẫn bắn Socket để đồng nghiệp nhận được tin nhắn nhảy lên realtime
           socket.emit("send_message", newMsg);
           if (data.userIdsToNotify.length > 0) {
             socket.emit("send_notification", { userIds: data.userIdsToNotify, notification: data.notifications[0] });
           }
         }
-      } catch (error) { showToast('error', 'Lỗi gửi tin nhắn!'); }
+      } catch (error) { 
+        showToast('error', 'Lỗi gửi tin nhắn!'); 
+      }
     }
   };
 
