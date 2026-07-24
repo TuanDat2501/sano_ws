@@ -213,7 +213,7 @@ model Task {
   keywords    String?    @db.Text 
   linkContent String     @unique 
   status      TaskStatus @default(TODO)
-
+  priority   String?   @default("NORMAL")
   scriptLink        String? @db.Text 
   englishScriptLink String? @db.Text
   storyboardLink    String? @db.Text 

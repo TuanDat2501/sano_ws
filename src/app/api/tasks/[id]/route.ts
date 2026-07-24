@@ -62,7 +62,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             if (rawBody.duration !== undefined) body.duration = rawBody.duration;
             if (rawBody.note !== undefined) body.note = rawBody.note;
             if (rawBody.channelId !== undefined) body.channelId = rawBody.channelId || null;
-            
+            if (rawBody.priority !== undefined) body.priority = rawBody.priority;
         } else if (currentUser.role === "CONTENT") {
             // 🚀 ĐÃ SỬA: Cho phép kéo thẻ nếu nhân sự đang đóng vai trò Content, Creator HOẶC có tên trong cột Animator
             if (oldTask.contentId !== currentUser.id && oldTask.creatorId !== currentUser.id && oldTask.animatorId !== currentUser.id) {
@@ -194,7 +194,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 duration: body.duration !== undefined ? body.duration : undefined,
                 note: body.note !== undefined ? body.note : undefined,
                 channelId: body.channelId !== undefined ? body.channelId : undefined,
-                animatorId:body.animatorId !== undefined ? body.animatorId : undefined
+                animatorId:body.animatorId !== undefined ? body.animatorId : undefined,
+                priority:body.priority !== undefined ? body.priority : undefined,
+                
             }
         });
 

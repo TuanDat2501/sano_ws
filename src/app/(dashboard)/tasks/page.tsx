@@ -7,7 +7,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
-import { Plus, Link as LinkIcon, AlertCircle, FileText, CheckCircle2, Clock, PlayCircle, Loader2, X, UsersIcon, Send, MessageSquare, Users, Archive, Download, Video, Filter } from "lucide-react";
+import { Plus, Link as LinkIcon, AlertCircle, FileText, CheckCircle2, Clock, PlayCircle, Loader2, X, UsersIcon, Send, MessageSquare, Users, Archive, Download, Video, Filter, Upload } from "lucide-react";
 import { useToast } from "@/app/component/ToastProvider";
 import { io, Socket } from "socket.io-client";
 import CreateTaskModal from "@/app/component/CreateTaskModal";
@@ -114,7 +114,8 @@ export default function KanbanBoard() {
 
   const backlogTasks = rawTasks.filter(t => t.status === 'BACKLOG');
   const [editingTask, setEditingTask] = useState<any>(null);
-  
+  const [isImporting, setIsImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   // Lọc dữ liệu danh sách
   const filteredTasks = rawTasks.filter((task) => {
     if (task.status === 'BACKLOG') return false;
@@ -292,6 +293,76 @@ export default function KanbanBoard() {
     const timeoutId = setTimeout(() => { fetchTasks(); }, 300);
     return () => clearTimeout(timeoutId);
   }, [currentPage, searchTerm, filterStatus, filterChannel, fromDate, toDate, viewMode, boardUpdateSignal]);
+
+  const handleImportExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsImporting(true);
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data, { type: 'array' });
+      const firstSheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[firstSheetName];
+      
+      // Chuyển đổi dữ liệu Sheet thành mảng JSON
+      const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+      if (jsonData.length === 0) {
+        showToast("error", "File Excel trống không có dữ liệu!");
+        return;
+      }
+
+      let successCount = 0;
+      let failCount = 0;
+
+      // Lặp qua từng dòng để tạo Task (Có thể tùy chỉnh lại tên cột cho khớp với file Sheet của sếp)
+      for (const row of jsonData as any[]) {
+        try {
+          // 🚀 MAPPING CỘT TỪ EXCEL SANG DATA CỦA HỆ THỐNG
+          // Lưu ý: Tên property (VD: row["Tiêu đề Video"]) phải gõ CHÍNH XÁC như tiêu đề cột trong file Excel
+          const payload = {
+            title: row["Tiêu đề Video"] || row["Megar Science"] || "Task không tên",
+            keywords: row["Từ khóa"] || row["Key"] || row["Từ khoá: prehistoric creatures"] || "",
+            linkContent: row["Video tham khảo"] || "",
+            englishScriptLink: row["Text ENG"] || "",
+            thumbnailLink:row["Thumb"] || "",
+            videoLink:row["Video Hoàn Thành"] || "",
+            publishLink:row["publishLink"] || "",
+
+            status: "BACKLOG", // Mặc định ném hết vào Kho ý tưởng (Backlog) cho an toàn
+            // Nếu sếp có cột ID của Team, Kênh trong Excel thì map vào đây:
+            // teamId: row["Team ID"] || teams[0]?.id, 
+            // channelId: row["Channel ID"] || "",
+          };
+
+          const res = await fetch("/api/tasks", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
+
+          if (res.ok) successCount++;
+          else failCount++;
+        } catch (err) {
+          failCount++;
+        }
+      }
+
+      showToast("success", `Đã import thành công ${successCount} tasks! ${failCount > 0 ? `(Lỗi ${failCount} dòng)` : ''}`);
+      
+      // Reset lại file input và tải lại bảng
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      fetchTasks();
+      if (socket) socket.emit("board_updated");
+
+    } catch (error) {
+      console.error(error);
+      showToast("error", "Lỗi đọc file Excel. Vui lòng kiểm tra lại định dạng.");
+    } finally {
+      setIsImporting(false);
+    }
+  };
 
   const handleExportExcel = async () => {
       setIsExporting(true);
@@ -854,6 +925,24 @@ export default function KanbanBoard() {
             </div>
 
             <div className="flex w-full sm:w-auto items-center gap-2 md:gap-3">
+              {/* <input 
+                type="file" 
+                ref={fileInputRef} 
+                onChange={handleImportExcel} 
+                accept=".xlsx, .xls, .csv" 
+                className="hidden" 
+              />
+
+              {canCreateTask && (
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isImporting}
+                  className="flex-1 sm:flex-none bg-blue-50 border-2 border-blue-200 hover:bg-blue-100 text-blue-700 px-4 py-2.5 rounded-xl md:rounded-2xl font-bold flex items-center justify-center gap-2 transition-all active:scale-95 text-sm md:text-base"
+                >
+                  {isImporting ? <Loader2 size={18} className="animate-spin" /> : <Upload size={18} />}
+                  <span>Nhập Excel</span>
+                </button>
+              )} */}
               {canCreateTask && (
                 <button
                   onClick={handleExportExcel}

@@ -1,6 +1,6 @@
 "use client";
 
-import { X, Link as LinkIcon, CheckCircle2, Loader2, MessageSquare, Send, ClipboardCheck, Clock, Tag, Tv, Video, Trash2, Key, Layers } from "lucide-react";
+import { X, Link as LinkIcon, CheckCircle2, Loader2, MessageSquare, Send, ClipboardCheck, Clock, Tag, Tv, Video, Trash2, Key, Layers, ImageIcon } from "lucide-react";
 import { useEffect, useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 import EvaluationPanel from "./EvaluationPanel";
@@ -21,13 +21,14 @@ interface TaskDetailDrawerProps {
   messages: any[];
   chatMessage: string;
   setChatMessage: (msg: string) => void;
-  onSendMessage: () => void;
+  onSendMessage: (imageUrl?: string) => void;
   sessionUserId: string;
   userRole: string;
   onSubmitEvaluation?: (score: number, criteriaData: any, note: string) => void;
   onEditTask?: () => void;
   onRefreshBoard?: () => void;
   onDeleteTask?: (taskId: string) => void;
+  onUploadImage?: (file: File) => Promise<string | null>;
 }
 
 const MOCK_CRITERIA = [
@@ -59,7 +60,7 @@ const MOCK_CRITERIA = [
 
 export default function TaskDetailDrawer({
   isOpen, isLoading, onClose, selectedTask, taskLinks, setTaskLinks, errors, isSavingLinks, userRole,
-  onSaveLinks, onToggleClose, onReject, canReject, messages, chatMessage, setChatMessage, onSendMessage, sessionUserId, onSubmitEvaluation, onEditTask, onRefreshBoard, onDeleteTask
+  onSaveLinks, onToggleClose, onReject, canReject, messages, chatMessage, setChatMessage, onSendMessage, sessionUserId, onSubmitEvaluation, onEditTask, onRefreshBoard, onDeleteTask, onUploadImage
 }: TaskDetailDrawerProps) {
   const [mounted, setMounted] = useState(false);
   const [rightTab, setRightTab] = useState<'chat' | 'evaluate'>('chat');
@@ -67,7 +68,9 @@ export default function TaskDetailDrawer({
   const [kaizenNote, setKaizenNote] = useState('');
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-
+  const [chatImageFile, setChatImageFile] = useState<File | null>(null);
+  const [chatImagePreview, setChatImagePreview] = useState<string | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
   useEffect(() => setMounted(true), []);
 
   useEffect(() => {
@@ -89,7 +92,48 @@ export default function TaskDetailDrawer({
     });
     return totalScore.toFixed(1);
   }, [checkedStandards]);
+  // Hàm xử lý chọn file ảnh
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setChatImageFile(file);
+      const previewUrl = URL.createObjectURL(file);
+      setChatImagePreview(previewUrl);
+    }
+  };
 
+  // Hàm xử lý xóa ảnh đang chọn
+  const handleRemoveImage = () => {
+    setChatImageFile(null);
+    setChatImagePreview(null);
+  };
+
+  // Sửa hàm xử lý việc gửi tin nhắn bao gồm quá trình tải ảnh
+  const handleSendMessageWrapper = async () => {
+    let imageUrl = undefined;
+
+    if (chatImageFile && onUploadImage) {
+      setIsUploadingImage(true);
+      try {
+        const url = await onUploadImage(chatImageFile);
+        if (url) {
+          imageUrl = url;
+        }
+      } catch (error) {
+        console.error("Lỗi khi tải ảnh lên:", error);
+      } finally {
+        setIsUploadingImage(false);
+      }
+    }
+
+    // Gọi hàm onSendMessage truyền vào imageUrl (và text sẽ do props cha quản lý)
+    // Chú ý: bạn cần đảm bảo cha (hoặc hàm onSendMessage này) có khả năng gửi tin nhắn chỉ có ảnh (text rỗng)
+    if (chatMessage.trim() !== '' || imageUrl) {
+      onSendMessage(imageUrl);
+      setChatImageFile(null);
+      setChatImagePreview(null);
+    }
+  };
   const submitEvaluation = () => {
     setIsEvaluating(true);
     if (onSubmitEvaluation) {
@@ -100,7 +144,7 @@ export default function TaskDetailDrawer({
 
   const [savingField, setSavingField] = useState<string | null>(null);
   const [savedField, setSavedField] = useState<string | null>(null);
-  
+
   if (!selectedTask) return null;
   const isManager = ["ADMIN", "BAN_GIAM_DOC", "LEADER", "HR", "KE_TOAN"].includes(userRole);
 
@@ -134,11 +178,11 @@ export default function TaskDetailDrawer({
 
   const handleDeleteClick = async () => {
     if (confirm("Bạn có chắc chắn muốn xóa Task này? Hành động này không thể hoàn tác và sẽ xóa toàn bộ nội dung liên quan.")) {
-        setIsDeleting(true);
-        if (onDeleteTask) {
-             await onDeleteTask(selectedTask.id);
-        }
-        setIsDeleting(false);
+      setIsDeleting(true);
+      if (onDeleteTask) {
+        await onDeleteTask(selectedTask.id);
+      }
+      setIsDeleting(false);
     }
   };
 
@@ -164,8 +208,8 @@ export default function TaskDetailDrawer({
     });
   }
 
-  const channelCategory = selectedTask?.channel?.category || 'AI'; 
-  
+  const channelCategory = selectedTask?.channel?.category || 'AI';
+
   const allLinkFields = [
     { key: 'scriptLink', label: 'Kịch Bản (VN)', role: 'CONTENT', idField: 'contentId', categories: ['AI', 'TONG_HOP'] },
     { key: 'englishScriptLink', label: 'Text ENG', role: 'CONTENT', idField: 'contentId', categories: ['AI'] },
@@ -174,12 +218,12 @@ export default function TaskDetailDrawer({
     { key: 'thumbnailLink', label: 'Thumbnail', role: 'EDITOR', idField: 'editorId', categories: ['AI', 'TONG_HOP'] },
     { key: 'videoLink', label: 'Video Render', role: 'EDITOR', idField: 'editorId', categories: ['AI', 'TONG_HOP'] },
   ];
-  
+
   let visibleLinkFields = allLinkFields.filter(f => f.categories.includes(channelCategory));
   if (selectedTask?.isCompilation) {
-      visibleLinkFields = visibleLinkFields.filter(f => ['thumbnailLink', 'videoLink'].includes(f.key));
+    visibleLinkFields = visibleLinkFields.filter(f => ['thumbnailLink', 'videoLink'].includes(f.key));
   }
-  
+
   const drawerContent = (
     <>
       {isOpen && <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[99998] transition-opacity" onClick={onClose} />}
@@ -190,6 +234,18 @@ export default function TaskDetailDrawer({
         <div className="px-4 md:px-6 py-3 md:py-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shrink-0 bg-white z-10">
           <div className="flex flex-col w-full sm:w-auto gap-1.5">
             <div className="flex items-center gap-2 flex-wrap">
+              <span
+                className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-md border shadow-sm ${selectedTask.priority === 'URGENT' ? 'bg-red-600 text-white border-red-700 animate-pulse' :
+                  selectedTask.priority === 'HIGH' ? 'bg-orange-100 text-orange-700 border-orange-200' :
+                    selectedTask.priority === 'LOW' ? 'bg-slate-100 text-slate-500 border-slate-200' :
+                      'bg-blue-50 text-blue-600 border-blue-200'
+                  }`}
+              >
+                {selectedTask.priority === 'URGENT' ? 'GẤP' :
+                  selectedTask.priority === 'HIGH' ? 'Ưu tiên Cao' :
+                    selectedTask.priority === 'LOW' ? 'Thấp' :
+                      'Bình thường'}
+              </span>
               <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-md border shadow-sm ${channelCategory === 'AI' ? 'text-pink-600 bg-pink-50 border-pink-100' : 'text-slate-600 bg-slate-100 border-slate-200'}`}>
                 {channelCategory === 'AI' ? 'KÊNH AI' : 'KÊNH TỔNG HỢP'}
               </span>
@@ -197,7 +253,7 @@ export default function TaskDetailDrawer({
               <span className="text-[10px] font-black uppercase text-blue-600 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-100">
                 {selectedTask.project?.name || "Dự án ẩn"}
               </span>
-              
+
               <span className="text-[10px] font-black uppercase text-red-600 bg-red-50 px-2.5 py-1 rounded-md border border-red-100 flex items-center gap-1 shadow-sm">
                 <Tv size={12} /> {selectedTask.channel?.name || "Chưa chọn Kênh"}
               </span>
@@ -205,6 +261,26 @@ export default function TaskDetailDrawer({
               <span className="text-[10px] font-black uppercase text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-100">
                 {selectedTask.team?.name || "Chưa có Team"}
               </span>
+              {/* <select
+                disabled={!isManager}
+                value={selectedTask.priority || "NORMAL"}
+                onChange={(e) => {
+                  // 🚀 Lập tức lưu vào state local và gọi API AutoSave
+                  selectedTask.priority = e.target.value;
+                  handleAutoSave("priority", e.target.value);
+                }}
+                className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-md border shadow-sm outline-none cursor-pointer${selectedTask.priority === 'URGENT' ? 'bg-red-600 text-white border-red-700 animate-pulse' :
+                    selectedTask.priority === 'HIGH' ? 'bg-orange-100 text-orange-700 border-orange-200' :
+                      selectedTask.priority === 'LOW' ? 'bg-slate-100 text-slate-500 border-slate-200' :
+                        'bg-blue-50 text-blue-600 border-blue-200'}`}
+              >
+                <option value="LOW">Thấp</option>
+                <option value="NORMAL">Bình thường</option>
+                <option value="HIGH">Ưu tiên Cao</option>
+                <option value="URGENT">GẤP</option>
+              </select> */}
+
+
 
               {selectedTask.duration && (
                 <span className="text-[10px] font-black uppercase text-purple-600 bg-purple-50 px-2.5 py-1 rounded-md border border-purple-100 flex items-center gap-1 shadow-sm">
@@ -222,14 +298,14 @@ export default function TaskDetailDrawer({
           </div>
 
           <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-             {(isManager || selectedTask.creatorId === sessionUserId) && (
-              <button 
-                  onClick={handleDeleteClick} 
-                  disabled={isDeleting || isLoading}
-                  className="px-3 md:px-4 py-2 rounded-xl text-sm font-bold bg-red-50 text-red-600 hover:bg-red-100 transition-colors flex items-center gap-2 disabled:opacity-50"
+            {(isManager || selectedTask.creatorId === sessionUserId) && (
+              <button
+                onClick={handleDeleteClick}
+                disabled={isDeleting || isLoading}
+                className="px-3 md:px-4 py-2 rounded-xl text-sm font-bold bg-red-50 text-red-600 hover:bg-red-100 transition-colors flex items-center gap-2 disabled:opacity-50"
               >
-                 {isDeleting ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />} 
-                 Xóa
+                {isDeleting ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                Xóa
               </button>
             )}
 
@@ -259,10 +335,10 @@ export default function TaskDetailDrawer({
         {isLoading ? (
           <div className="flex flex-col lg:flex-row flex-1 overflow-hidden bg-slate-50 relative">
             <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white/40 backdrop-blur-[1px]">
-               <Loader2 size={40} className="animate-spin text-blue-600 mb-3 drop-shadow-md" />
-               <p className="text-sm font-black text-blue-600 uppercase tracking-widest animate-pulse">Đang tải chi tiết bài...</p>
+              <Loader2 size={40} className="animate-spin text-blue-600 mb-3 drop-shadow-md" />
+              <p className="text-sm font-black text-blue-600 uppercase tracking-widest animate-pulse">Đang tải chi tiết bài...</p>
             </div>
-            
+
             {/* Cột trái Skeleton */}
             <div className="w-full lg:w-[55%] flex flex-col h-full border-r border-slate-200 bg-white p-4 md:p-6 space-y-6">
               <div className="h-24 w-full bg-slate-100/80 rounded-[24px] animate-pulse border border-slate-200"></div>
@@ -271,34 +347,34 @@ export default function TaskDetailDrawer({
                 <div className="h-16 w-full bg-slate-100/80 rounded-2xl animate-pulse border border-slate-200"></div>
               </div>
               <div className="h-64 w-full bg-slate-50 rounded-[24px] animate-pulse border border-slate-200 p-5">
-                 <div className="h-5 w-40 bg-slate-200 rounded-lg mb-4"></div>
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="h-14 bg-white border border-slate-200 rounded-xl"></div>
-                    <div className="h-14 bg-white border border-slate-200 rounded-xl"></div>
-                    <div className="h-14 bg-white border border-slate-200 rounded-xl"></div>
-                    <div className="h-14 bg-white border border-slate-200 rounded-xl"></div>
-                 </div>
+                <div className="h-5 w-40 bg-slate-200 rounded-lg mb-4"></div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="h-14 bg-white border border-slate-200 rounded-xl"></div>
+                  <div className="h-14 bg-white border border-slate-200 rounded-xl"></div>
+                  <div className="h-14 bg-white border border-slate-200 rounded-xl"></div>
+                  <div className="h-14 bg-white border border-slate-200 rounded-xl"></div>
+                </div>
               </div>
             </div>
 
             {/* Cột phải Skeleton */}
             <div className="w-full lg:w-[45%] flex flex-col h-full bg-white">
               <div className="p-4 border-b border-slate-100 bg-white flex items-center gap-2 shrink-0 animate-pulse">
-                 <div className="h-5 w-5 bg-slate-200 rounded-full"></div>
-                 <div className="h-5 w-32 bg-slate-200 rounded-lg"></div>
+                <div className="h-5 w-5 bg-slate-200 rounded-full"></div>
+                <div className="h-5 w-32 bg-slate-200 rounded-lg"></div>
               </div>
               <div className="flex-1 p-4 flex flex-col gap-6 bg-slate-50/50">
-                 <div className="flex flex-col items-start w-full animate-pulse">
-                   <div className="h-3 w-24 bg-slate-200 rounded mb-1.5"></div>
-                   <div className="h-12 w-3/4 max-w-[250px] bg-white border border-slate-200 rounded-2xl rounded-tl-sm shadow-sm"></div>
-                 </div>
-                 <div className="flex flex-col items-end w-full animate-pulse mt-4">
-                   <div className="h-3 w-24 bg-slate-200 rounded mb-1.5"></div>
-                   <div className="h-12 w-3/4 max-w-[250px] bg-blue-100 rounded-2xl rounded-tr-sm shadow-sm"></div>
-                 </div>
+                <div className="flex flex-col items-start w-full animate-pulse">
+                  <div className="h-3 w-24 bg-slate-200 rounded mb-1.5"></div>
+                  <div className="h-12 w-3/4 max-w-[250px] bg-white border border-slate-200 rounded-2xl rounded-tl-sm shadow-sm"></div>
+                </div>
+                <div className="flex flex-col items-end w-full animate-pulse mt-4">
+                  <div className="h-3 w-24 bg-slate-200 rounded mb-1.5"></div>
+                  <div className="h-12 w-3/4 max-w-[250px] bg-blue-100 rounded-2xl rounded-tr-sm shadow-sm"></div>
+                </div>
               </div>
               <div className="p-4 bg-white border-t border-slate-100 shrink-0">
-                 <div className="h-12 w-full bg-slate-50 border border-slate-200 rounded-2xl animate-pulse"></div>
+                <div className="h-12 w-full bg-slate-50 border border-slate-200 rounded-2xl animate-pulse"></div>
               </div>
             </div>
           </div>
@@ -361,29 +437,29 @@ export default function TaskDetailDrawer({
                 )}
 
                 <div className="grid grid-cols-2 gap-4">
-                  {selectedTask.contentUser && 
+                  {selectedTask.contentUser &&
                     <div className="bg-orange-50/50 border border-orange-100 p-3.5 rounded-2xl flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center font-black border-2 border-white shadow-sm text-base">
-                      {selectedTask.contentUser?.fullName?.charAt(0) || "?"}
+                      <div className="h-10 w-10 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center font-black border-2 border-white shadow-sm text-base">
+                        {selectedTask.contentUser?.fullName?.charAt(0) || "?"}
+                      </div>
+                      <div className="overflow-hidden">
+                        <p className="text-[10px] font-bold text-orange-500 uppercase tracking-widest">Content</p>
+                        <p className="text-sm font-bold text-slate-800 truncate">{selectedTask.contentUser?.fullName || "Chưa giao"}</p>
+                      </div>
                     </div>
-                    <div className="overflow-hidden">
-                      <p className="text-[10px] font-bold text-orange-500 uppercase tracking-widest">Content</p>
-                      <p className="text-sm font-bold text-slate-800 truncate">{selectedTask.contentUser?.fullName || "Chưa giao"}</p>
-                    </div>
-                  </div>
                   }
-                  
+
                   {
-                    selectedTask.editorUser && 
+                    selectedTask.editorUser &&
                     <div className="bg-blue-50/50 border border-blue-100 p-3.5 rounded-2xl flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center font-black border-2 border-white shadow-sm text-base">
-                      {selectedTask.editorUser?.fullName?.charAt(0) || "?"}
+                      <div className="h-10 w-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center font-black border-2 border-white shadow-sm text-base">
+                        {selectedTask.editorUser?.fullName?.charAt(0) || "?"}
+                      </div>
+                      <div className="overflow-hidden">
+                        <p className="text-[10px] font-bold text-blue-500 uppercase tracking-widest">Editor</p>
+                        <p className="text-sm font-bold text-slate-800 truncate">{selectedTask.editorUser?.fullName || "Chưa giao"}</p>
+                      </div>
                     </div>
-                    <div className="overflow-hidden">
-                      <p className="text-[10px] font-bold text-blue-500 uppercase tracking-widest">Editor</p>
-                      <p className="text-sm font-bold text-slate-800 truncate">{selectedTask.editorUser?.fullName || "Chưa giao"}</p>
-                    </div>
-                  </div>
                   }
 
                   {selectedTask.animatorUser &&
@@ -401,13 +477,13 @@ export default function TaskDetailDrawer({
 
                 <div className="bg-slate-50 border border-slate-200 rounded-[24px] p-5 space-y-4 shadow-inner">
                   <h3 className="font-black text-base text-slate-800 flex items-center gap-2 mb-2">
-                    <CheckCircle2 className="text-emerald-500 w-5 h-5" /> Kết Quả Công Việc 
+                    <CheckCircle2 className="text-emerald-500 w-5 h-5" /> Kết Quả Công Việc
                     <span className="text-xs font-medium text-slate-400 ml-auto">(Tự động lưu)</span>
                   </h3>
-                  
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {visibleLinkFields.map((field, idx) => {
-                     const isAssigned = selectedTask[field.idField] === sessionUserId;
+                      const isAssigned = selectedTask[field.idField] === sessionUserId;
                       const isCreator = selectedTask.creatorId === sessionUserId && field.key === 'scriptLink';
                       const isAllowed = isManager || isAssigned || isCreator;
 
@@ -460,7 +536,7 @@ export default function TaskDetailDrawer({
                     disabled={!isParticipant}
                     placeholder={!isParticipant ? "Không có quyền" : "Nhập tiến độ hiện tại..."}
                     className="w-full border border-amber-200 rounded-xl p-3 text-sm outline-none transition-all focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10 disabled:bg-slate-100 disabled:text-slate-400 font-bold text-amber-900 placeholder:text-amber-300"
-                    value={cleanUserNote} 
+                    value={cleanUserNote}
                     onChange={e => {
                       const val = e.target.value;
                       const newFullNote = compilationPart ? (val ? `${val}\n\n${compilationPart}` : compilationPart) : val;
@@ -491,22 +567,66 @@ export default function TaskDetailDrawer({
                         <div key={msg.id} className={`flex flex-col ${msg.senderId === sessionUserId ? "items-end" : "items-start"}`}>
                           <span className="text-[10px] font-bold text-slate-400 mb-1">{msg.sender} • {msg.time}</span>
                           <div className={`px-4 py-2.5 rounded-2xl text-sm font-medium max-w-[85%] shadow-sm ${msg.senderId === sessionUserId ? "bg-blue-600 text-white rounded-tr-sm" : "bg-white border border-slate-200 text-slate-700 rounded-tl-sm"}`}>
-                            {msg.text}
+                            {/* Hiển thị hình ảnh nếu có */}
+                            {msg.imageUrl && (
+                              <img src={msg.imageUrl} alt="Đính kèm" className="max-w-full h-auto rounded-md mb-2" />
+                            )}
+                            {/* Hiển thị văn bản tin nhắn */}
+                            {msg.text && <div>{msg.text}</div>}
                           </div>
                         </div>
                       ))
                     )}
                   </div>
-                  <div className="p-4 bg-white border-t border-slate-100 shrink-0">
+                  <div className="p-4 bg-white border-t border-slate-100 shrink-0 flex flex-col gap-2">
+                    {/* Khu vực hiển thị xem trước hình ảnh (Preview) */}
+                    {chatImagePreview && (
+                      <div className="relative inline-block w-fit mt-1 ml-1 mb-2">
+                        <img
+                          src={chatImagePreview}
+                          alt="Xem trước"
+                          // Ép kích thước ảnh thành hình vuông nhỏ (w-16 h-16) và cắt gọn (object-cover)
+                          className="w-16 h-16 object-cover rounded-xl border border-slate-200 shadow-sm"
+                        />
+                        <button
+                          onClick={handleRemoveImage}
+                          className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-sm active:scale-95"
+                        >
+                          <X size={12} strokeWidth={3} />
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Khung nhập nội dung */}
                     <div className="flex items-end gap-2 bg-slate-50 border border-slate-200 rounded-2xl p-1.5 focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-500/10 transition-all">
+                      {/* Nút đính kèm ảnh (ẩn thẻ input) */}
+                      <label className="p-2.5 cursor-pointer text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all">
+                        <ImageIcon size={18} />
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={handleImageSelect}
+                        />
+                      </label>
+
                       <textarea
                         className="flex-1 bg-transparent resize-none py-2 px-3 text-sm outline-none font-medium text-slate-700"
                         rows={2} value={chatMessage} onChange={e => setChatMessage(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSendMessage(); } }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            handleSendMessageWrapper();
+                          }
+                        }}
                         placeholder="Nhập phản hồi..."
                       />
-                      <button onClick={onSendMessage} className="p-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all active:scale-95 shadow-md">
-                        <Send size={16} />
+                      <button
+                        onClick={handleSendMessageWrapper}
+                        disabled={isUploadingImage || (!chatMessage.trim() && !chatImageFile)}
+                        className="p-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all active:scale-95 shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {isUploadingImage ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
                       </button>
                     </div>
                   </div>

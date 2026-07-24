@@ -49,8 +49,11 @@ export async function GET(req: Request) {
     // - Lọc theo Trạng thái
     if (status !== "ALL") {
       whereClause.status = status;
+    }else {
+      // Nếu bộ lọc là ALL, lấy tất cả NGOẠI TRỪ Backlog
+      whereClause.status = { not: "BACKLOG" };
     }
-
+    
     // - Lọc theo Khoảng thời gian (Ngày tạo)
     if (fromDate || toDate) {
       whereClause.createdAt = {};
@@ -59,6 +62,8 @@ export async function GET(req: Request) {
     }
 
     // 3. XỬ LÝ TRẢ DỮ LIỆU TÙY THEO TAB ĐANG MỞ
+
+    const priorityWeight: any = { URGENT: 4, HIGH: 3, NORMAL: 2, LOW: 1 };
     if (viewMode === "board") {
       // Dành cho Bảng Kanban: Thường lấy tất cả Task CHƯA ĐÓNG để vẽ cột
       const tasks = await prisma.task.findMany({
@@ -73,13 +78,20 @@ export async function GET(req: Request) {
         },
         orderBy: { createdAt: "desc" },
       });
+
+      // 🚀 BỔ SUNG: Thuật toán sắp xếp Task Ưu tiên lên đầu
+      tasks.sort((a: any, b: any) => {
+        const weightA = priorityWeight[a.priority || "NORMAL"] || 2;
+        const weightB = priorityWeight[b.priority || "NORMAL"] || 2;
+        if (weightA !== weightB) return weightB - weightA; // Điểm cao (Gấp) xếp trước
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(); // Cùng điểm thì mới nhất xếp trước
+      });
+
       return NextResponse.json({ tasks, total: tasks.length, totalPages: 1 });
     }
     else {
-      // Dành cho Danh sách List: Áp dụng Lọc + PHÂN TRANG (Skip / Take)
       const skip = (page - 1) * limit;
 
-      // Chạy song song 2 lệnh: Lấy dữ liệu cắt trang VÀ Đếm tổng số Task
       const [tasks, total] = await Promise.all([
         prisma.task.findMany({
           where: whereClause,
@@ -89,14 +101,21 @@ export async function GET(req: Request) {
             contentUser: { select: { fullName: true,avatarUrl:true } },
             editorUser: { select: { fullName: true,avatarUrl:true } },
             channel: { select: { name: true } }
-            
           },
           orderBy: { createdAt: "desc" },
           skip: skip,
-          take: limit, // Chỉ lấy đúng số lượng cần thiết
+          take: limit, 
         }),
         prisma.task.count({ where: whereClause })
       ]);
+
+      // 🚀 BỔ SUNG: Sắp xếp cho cả List View
+      tasks.sort((a: any, b: any) => {
+        const weightA = priorityWeight[a.priority || "NORMAL"] || 2;
+        const weightB = priorityWeight[b.priority || "NORMAL"] || 2;
+        if (weightA !== weightB) return weightB - weightA; 
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(); 
+      });
 
       return NextResponse.json({
         tasks,
@@ -200,7 +219,7 @@ export async function POST(req: Request) {
         keywords: body.keywords || undefined,
         publishDate: body.publishDate ? new Date(body.publishDate) : undefined,
         animatorId: body.animatorId || undefined,
-
+        priority: body.priority || undefined,
         englishScriptLink: body.englishScriptLink || undefined,
         storyboardLink: body.storyboardLink || undefined,
         audioLink: body.audioLink || undefined,

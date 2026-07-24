@@ -83,6 +83,17 @@ export default function BoardView({ tasks, columns, getTeamColor, onDragEnd, onO
                                 <span className={`text-[9px] md:text-[10px] font-black uppercase tracking-widest px-2 py-0.5 md:px-2.5 md:py-1 rounded-md md:rounded-lg border ${teamColor.bg} ${teamColor.text} ${teamColor.border}`}>
                                   {task.team?.name || "Team Sano"}
                                 </span>
+                                {task.priority && task.priority !== 'NORMAL' && (
+                                  <span
+                                    className={`text-[8px] md:text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md border shadow-sm ${
+                                      task.priority === 'URGENT' ? 'bg-red-600 text-white border-red-700 animate-pulse' :
+                                      task.priority === 'HIGH' ? 'bg-orange-100 text-orange-700 border-orange-200' :
+                                      'bg-slate-100 text-slate-500 border-slate-200'
+                                    }`}
+                                  >
+                                    {task.priority === 'URGENT' ? '🔥 GẤP' : task.priority === 'HIGH' ? 'ƯU TIÊN CAO' : 'THẤP'}
+                                  </span>
+                                )}
                               </div>
 
                               <h4 className={`font-bold text-sm md:text-base leading-snug mb-2 md:mb-3 ${task.isClosed ? 'line-through text-slate-400' : 'text-slate-900'}`}>

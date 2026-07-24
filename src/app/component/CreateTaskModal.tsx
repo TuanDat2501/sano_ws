@@ -13,7 +13,7 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
   const [mounted, setMounted] = useState(false);
 
   const [newTask, setNewTask] = useState({
-    id: "", title: "", keywords: "", linkContent: "", contentId: "", editorId: "", animatorId: "", teamId: "", projectId: "", duration: "", publishDate: "", channelId: ""
+    id: "", title: "", keywords: "", linkContent: "", contentId: "", editorId: "", animatorId: "", teamId: "", projectId: "", duration: "", publishDate: "", channelId: "", priority: "NORMAL"
   });
 
   const [teamProjects, setTeamProjects] = useState<any[]>([]);
@@ -39,10 +39,11 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
           projectId: initialData.projectId || "",
           duration: initialData.duration || "",
           publishDate: initialData.publishDate ? new Date(initialData.publishDate).toISOString().split('T')[0] : "",
-          channelId: initialData.channelId || ""
+          channelId: initialData.channelId || "",
+          priority: initialData.priority || "NORMAL"
         });
       } else {
-        setNewTask({ id: "", title: "", keywords: "", linkContent: "", contentId: "", editorId: "", animatorId: "", teamId: "", projectId: "", duration: "", publishDate: "", channelId: "" });
+        setNewTask({ id: "", title: "", keywords: "", linkContent: "", contentId: "", editorId: "", animatorId: "", teamId: "", projectId: "", duration: "", publishDate: "", channelId: "", priority: "" });
       }
     }
   }, [isOpen, initialData]);
@@ -87,8 +88,8 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
   const isTongHopChannel = selectedChannel?.category === 'TONG_HOP';
 
   // 🚀 LỌC DANH SÁCH DỰ ÁN THEO KÊNH ĐANG CHỌN
-  const filteredProjects = newTask.channelId 
-    ? teamProjects.filter(p => p.channelId === newTask.channelId) 
+  const filteredProjects = newTask.channelId
+    ? teamProjects.filter(p => p.channelId === newTask.channelId)
     : teamProjects;
 
   const modalContent = (
@@ -111,7 +112,7 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
           <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
             <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 pb-1">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-6">
-                
+
                 {/* ======== CỘT TRÁI: THÔNG TIN TASK ======== */}
                 <div className="space-y-4">
                   <h3 className="font-bold text-[13px] text-slate-800 border-b border-slate-100 pb-2 flex items-center gap-2">
@@ -138,6 +139,21 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-1.5"><CalendarDays size={12} /> Ngày Hoành Thành</label>
                       <input type="date" className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm outline-none font-bold focus:border-blue-500 focus:bg-white" value={newTask.publishDate} onChange={(e) => setNewTask({ ...newTask, publishDate: e.target.value })} />
                     </div>
+                    <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-1.5">
+                        🔥 Mức Độ Ưu Tiên
+                      </label>
+                      <select
+                        className="w-full mt-1 border border-slate-200 rounded-xl p-2.5 text-sm outline-none font-bold bg-slate-50 focus:border-blue-500"
+                        value={newTask.priority}
+                        onChange={(e) => setNewTask({ ...newTask, priority: e.target.value })}
+                      >
+                        <option value="LOW" className="text-slate-500">Thấp</option>
+                        <option value="NORMAL" className="text-blue-600">Bình thường</option>
+                        <option value="HIGH" className="text-orange-600">Cao</option>
+                        <option value="URGENT" className="text-red-600">Gấp</option>
+                      </select>
+                    </div>
                   </div>
                 </div>
 
@@ -157,14 +173,14 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
                     <div>
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Kênh <span className="text-red-500">*</span></label>
                       <select required disabled={!newTask.teamId || isLoadingData} className="w-full border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-sm bg-slate-50 disabled:opacity-50" value={newTask.channelId} onChange={(e) => {
-                          const newChannelId = e.target.value;
-                          const newChan = teamChannels.find(c => c.id === newChannelId);
-                          setNewTask({ 
-                              ...newTask, 
-                              channelId: newChannelId,
-                              projectId: "", // 🚀 TỰ ĐỘNG RESET DỰ ÁN KHI ĐỔI KÊNH KHÁC
-                              animatorId: newChan?.category === 'TONG_HOP' ? "" : newTask.animatorId 
-                          });
+                        const newChannelId = e.target.value;
+                        const newChan = teamChannels.find(c => c.id === newChannelId);
+                        setNewTask({
+                          ...newTask,
+                          channelId: newChannelId,
+                          projectId: "", // 🚀 TỰ ĐỘNG RESET DỰ ÁN KHI ĐỔI KÊNH KHÁC
+                          animatorId: newChan?.category === 'TONG_HOP' ? "" : newTask.animatorId
+                        });
                       }}>
                         <option value="">-- Chọn --</option>
                         {teamChannels.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -196,7 +212,7 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
                           {teamEditors.map(u => <option key={u.id} value={u.id}>{u.fullName}</option>)}
                         </select>
                       </div>
-                      
+
                       {!isTongHopChannel && (
                         <div>
                           <label className="text-[10px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-1.5 mb-1"><MonitorPlay size={12} /> Chuyển Động</label>
