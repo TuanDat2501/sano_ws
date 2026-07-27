@@ -8,8 +8,10 @@ import { usePermission } from "@/app/component/PermissionProvider";
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler } from 'chart.js';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import ChartDataLabels from 'chartjs-plugin-datalabels';
+
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
+import { getCurrentWeekNumber } from "@/lib/utils";
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler, ChartDataLabels);
 
 const commonTooltipOptions = { backgroundColor: 'rgba(255, 255, 255, 0.95)', titleColor: '#1e293b', bodyColor: '#475569', borderColor: '#e2e8f0', borderWidth: 1, padding: 12, boxPadding: 6, usePointStyle: true, titleFont: { family: 'inherit', size: 13, weight: 'bold' as const }, bodyFont: { family: 'inherit', size: 12, weight: 'bold' as const }, bodySpacing: 6, };
@@ -33,7 +35,7 @@ export default function AnalyticsPage() {
     // ==================================================
     // TẦNG 2: TRẠNG THÁI HR & VẬN HÀNH (Tuần / Tháng)
     // ==================================================
-    const [kpiWeek, setKpiWeek] = useState(0);
+    const [kpiWeek, setKpiWeek] = useState(() => getCurrentWeekNumber(new Date()));
     const [kpiMonth, setKpiMonth] = useState(new Date().getMonth() + 1);
     const [kpiYear, setKpiYear] = useState(new Date().getFullYear());
 
@@ -416,7 +418,7 @@ export default function AnalyticsPage() {
                 <div className="flex items-center gap-2 bg-white border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm">
                     <Calendar size={16} className="text-slate-400 shrink-0" />
                     <select className="bg-transparent text-sm font-bold text-slate-700 outline-none border-r pr-2 border-slate-200" value={kpiWeek} onChange={(e) => setKpiWeek(Number(e.target.value))}>
-                        <option value={0}>Cả Tháng</option><option value={1}>Tuần 1</option><option value={2}>Tuần 2</option><option value={3}>Tuần 3</option><option value={4}>Tuần 4</option>
+                        <option value={0}>Cả Tháng</option><option value={1}>Tuần 1</option><option value={2}>Tuần 2</option><option value={3}>Tuần 3</option><option value={4}>Tuần 4</option><option value={5}>Tuần 5</option>
                     </select>
                     <select className="bg-transparent text-sm font-bold text-slate-700 outline-none pl-1" value={kpiMonth} onChange={(e) => setKpiMonth(Number(e.target.value))}>
                         {[...Array(12)].map((_, i) => (<option key={i + 1} value={i + 1}>Tháng {i + 1}</option>))}

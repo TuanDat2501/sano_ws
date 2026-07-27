@@ -25,3 +25,23 @@ export function getContinuousWeekRange(year: number, month: number, weekNumber: 
         label: `Tuần ${weekNumber} (${formatDate(startOfWeek)} - ${formatDate(endOfWeek)})` 
     };
 }
+
+export function getCurrentWeekNumber(date: Date) {
+    const year = date.getFullYear();
+    const month = date.getMonth() + 1;
+    
+    // Đưa ngày hiện tại về mốc 0h00 để so sánh cho chuẩn
+    const todayTime = new Date(year, month - 1, date.getDate()).getTime();
+
+    for (let w = 1; w <= 5; w++) {
+        const range = getContinuousWeekRange(year, month, w);
+        const startTime = new Date(range.start.getFullYear(), range.start.getMonth(), range.start.getDate()).getTime();
+        const endTime = new Date(range.end.getFullYear(), range.end.getMonth(), range.end.getDate()).getTime();
+        
+        if (todayTime >= startTime && todayTime <= endTime) {
+            // Giới hạn max là tuần 4 (Nếu sang tuần 5 thì vẫn gộp số liệu vào tuần 4)
+            return w; 
+        }
+    }
+    return 1;
+}
