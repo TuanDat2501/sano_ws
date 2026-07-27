@@ -47,6 +47,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             // Sếp được sửa full
             if (rawBody.title !== undefined) body.title = rawBody.title;
             if (rawBody.keywords !== undefined) body.keywords = rawBody.keywords;
+            if (rawBody.linkContent !== undefined) body.linkContent = rawBody.linkContent;
             if (rawBody.status !== undefined) body.status = rawBody.status;
             if (rawBody.scriptLink !== undefined) body.scriptLink = rawBody.scriptLink;
             if (rawBody.englishScriptLink !== undefined) body.englishScriptLink = rawBody.englishScriptLink;
@@ -200,6 +201,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 channelId: body.channelId !== undefined ? body.channelId : undefined,
                 animatorId:body.animatorId !== undefined ? body.animatorId : undefined,
                 priority:body.priority !== undefined ? body.priority : undefined,
+                linkContent:body.linkContent !== undefined ? body.linkContent : undefined,
                 
             }
         });
