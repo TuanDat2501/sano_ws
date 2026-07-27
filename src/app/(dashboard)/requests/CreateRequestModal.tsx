@@ -54,7 +54,7 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
     });
 
     // Lọc người duyệt Cấp 2 cho Nhân viên bình thường
-    const employeeLv2Options = approversLv2.filter(u => ['HR', 'ADMIN', 'BAN_GIAM_DOC'].includes(u.role));
+    const employeeLv2Options = allApprovers.filter(u => ['HR', 'ADMIN', 'BAN_GIAM_DOC'].includes(u.role));
 
     useEffect(() => { setContentData({}); }, [selectedType]);
 
