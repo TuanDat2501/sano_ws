@@ -31,7 +31,7 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
           id: initialData.id,
           title: initialData.title || "",
           keywords: initialData.keywords || "",
-          linkContent: initialData.linkContent || "Chưa có",
+          linkContent: initialData.linkContent || "",
           contentId: initialData.contentId || "",
           editorId: initialData.editorId || "",
           animatorId: initialData.animatorId || "",

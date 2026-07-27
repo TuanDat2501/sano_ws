@@ -46,11 +46,11 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
         if (u.isTeamLeader) return `Leader ${u.team?.name || ''}`;
         return u.role;
     };
-
+    const allApprovers = [...approversLv1, ...approversLv2].filter((v, i, a) => a.findIndex(t => t.id === v.id) === i);
     // 🚀 LỌC NGƯỜI DUYỆT THÔNG MINH CHO CẤP LEADER
-    const leaderApproverOptions = approversLv2.filter(u => {
-        if (isHRLeader) return u.role === 'HR'; // Trưởng phòng HC chỉ chọn HR
-        return ['ADMIN', 'BAN_GIAM_DOC'].includes(u.role); // Các Leader khác chọn BGD/Admin
+    const leaderApproverOptions = allApprovers.filter(u => {
+        if (isHRLeader) return u.role === 'HR'; 
+        return ['ADMIN', 'BAN_GIAM_DOC'].includes(u.role); 
     });
 
     // Lọc người duyệt Cấp 2 cho Nhân viên bình thường
