@@ -4,12 +4,12 @@ import { useState, useEffect, useRef } from "react";
 import { MessageCircle, X, Send, UserCircle2, Minus } from "lucide-react";
 import { io, Socket } from "socket.io-client";
 import { useSession } from "next-auth/react";
-import { usePathname, useRouter } from 'next/navigation'; // 🚀 Nhúng thêm useRouter
+import { usePathname, useRouter } from 'next/navigation';
 import { useToast } from "../ToastProvider";
 
 export default function FloatingChat() {
     const pathname = usePathname();
-    const router = useRouter(); // 🚀 Khai báo Router
+    const router = useRouter(); 
     const { data: session } = useSession();
     const currentUser = session?.user as any;
     const { showToast } = useToast();
@@ -21,7 +21,6 @@ export default function FloatingChat() {
     const chatEndRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
     const audioRef = useRef<HTMLAudioElement>(null);
 
-    // 🚀 TÚI NHỚ ẨN: Giúp Socket đọc được danh sách chat hiện tại mà không làm web bị giật (re-render)
     const activeChatsRef = useRef(activeChats);
 
     const playNotificationSound = () => {
@@ -53,7 +52,6 @@ export default function FloatingChat() {
 
         const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "https://socket.sanogroup.tv";
 
-        // Gọi thẳng đích danh
         const newSocket = io(socketUrl, {
             transports: ['websocket', 'polling']
         });
@@ -87,38 +85,43 @@ export default function FloatingChat() {
 
                     return {
                         ...chat,
-                        messages: [...chat.messages, { ...message, isMe: false }]
+                        // 🚀 ÉP KIỂU STRING: Tránh lỗi lệch type giữa CSDL và Frontend
+                        messages: [...chat.messages, { ...message, isMe: String(message.senderId) === String(currentUser?.id) }]
                     };
                 }
                 return chat;
             }));
         });
 
-        // 🚀 TÍNH NĂNG MỚI: TỰ BẬT POPUP KHI CÓ THÔNG BÁO TIN NHẮN 
+        // TỰ BẬT POPUP KHI CÓ THÔNG BÁO TIN NHẮN 
         newSocket.on("new_message_notification", async (data: any) => {
             const { roomId, message } = data;
 
             if (!roomId || !message) return;
-            if (message.senderId === currentUser?.id) return;
-            if (message.targetId && message.targetId !== currentUser?.id) return;
+            if (String(message.senderId) === String(currentUser?.id)) return;
             if (pathname === '/chat') return;
+
+            // 🚀 CHỐT CHẶN THÉP: Chặn triệt để hiện tượng nhảy nhầm phòng!
+            // Nếu không có targetId hoặc targetId KHÔNG PHẢI LÀ MÌNH -> Dừng lại ngay lập tức!
+            if (!message.targetId || String(message.targetId) !== String(currentUser?.id)) {
+                return; 
+            }
 
             const isChatAlreadyOpen = activeChatsRef.current.some(c => c.roomId === roomId);
 
-            // 🚀 BƯỚC NẢY MOBILE: Nếu đang xài điện thoại, KHÔNG bật popup lơ lửng, chỉ báo Notification (hoặc có thể chuyển thẳng sang /chat)
             if (!isChatAlreadyOpen) {
                 playNotificationSound();
 
-                // Nếu là màn hình rộng (Desktop) thì mới búng Popup Chat lên
                 if (window.innerWidth >= 768) {
                     try {
                         const msgRes = await fetch(`/api/chat/rooms/${roomId}/messages`);
                         const msgData = await msgRes.json();
+                        
                         const newChatBox = {
                             roomId: roomId,
                             targetUser: {
                                 id: message.senderId,
-                                fullName: msgData[msgData.length - 1]?.sender || "Người dùng"
+                                fullName: message.fullName || msgData[msgData.length - 1]?.sender || "Người dùng"
                             },
                             messages: Array.isArray(msgData) ? msgData : [],
                             inputValue: ""
@@ -134,8 +137,7 @@ export default function FloatingChat() {
                         console.error("Lỗi khi tự động búng popup chat:", err);
                     }
                 } else {
-                    // Nếu là Mobile, hiện Toast mượt mà báo có tin nhắn tới để người dùng tự click vào /chat
-                    showToast("info", `💬 Tin nhắn mới từ ${message.sender || "ai đó"}`);
+                    showToast("info", `💬 Tin nhắn mới từ ${message.fullName || message.sender || "ai đó"}`);
                 }
             }
         });
@@ -168,14 +170,12 @@ export default function FloatingChat() {
     // 2. MỞ BOX CHAT KHI BẤM VÀO USER
     // ==========================================
     const openChatBox = async (targetUser: any) => {
-        // 🚀 MOBILE REDIRECT: Nếu là màn hình nhỏ, lập tức chuyển qua trang Full Chat
         if (window.innerWidth < 768) {
             router.push(`/chat`);
             setIsMenuOpen(false);
             return;
         }
 
-        // DESKTOP LOGIC (Giữ nguyên)
         if (activeChats.find(c => c.targetUser.username === targetUser.username)) return;
 
         try {
@@ -233,12 +233,12 @@ export default function FloatingChat() {
 
                 const msgObj = {
                     id: savedMsg.id,
-                    sender: currentUser.fullName,
-                    targetId: activeChats[chatIndex].targetUser.id,
+                    sender: currentUser.fullName || currentUser.name || "Ai đó", 
+                    fullName: currentUser.fullName || currentUser.name || "Ai đó",
+                    targetId: activeChats[chatIndex].targetUser?.id, // 🚀 Bắt buộc phải truyền ID người nhận cho Socket
                     senderId: currentUser.id,
                     text: savedMsg.content,
                     isMe: true,
-                    fullName: (session?.user as any)?.fullName,
                 };
 
                 setActiveChats(prevChats => prevChats.map(chat => {
@@ -263,18 +263,12 @@ export default function FloatingChat() {
         }
     };
 
-    // 🚀 TÀNG HÌNH: Ẩn hoàn toàn cục FloatingChat khi đang đứng ở trang "/chat"
     if (pathname === '/chat') {
         return null;
     }
 
     return (
         <div className="fixed bottom-0 right-4 md:right-6 z-[9999] flex items-end gap-3 pointer-events-none pb-4 md:pb-0">
-
-            {/* ========================================== */}
-            {/* A. CÁC HỘP THOẠI CHAT ĐANG MỞ (CHỈ HIỂN THỊ TRÊN DESKTOP) */}
-            {/* ========================================== */}
-            {/* Thêm hidden md:flex để triệt tiêu việc hiện box lơ lửng trên màn nhỏ */}
             <div className="hidden md:flex items-end gap-3 pointer-events-none">
                 {activeChats.map((chat) => (
                     <div key={chat.roomId} className="w-[320px] h-[400px] bg-white rounded-t-xl shadow-[0_0_20px_rgba(0,0,0,0.15)] border border-slate-200 flex flex-col pointer-events-auto overflow-hidden animate-in slide-in-from-bottom-5 duration-300">
@@ -282,17 +276,17 @@ export default function FloatingChat() {
                             <div className="flex items-center gap-2 font-bold text-[15px] truncate">
                                 <div className="relative shrink-0">
                                     <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center font-black text-sm">
-                                        {chat.targetUser.avatarUrl ? (
+                                        {chat.targetUser?.avatarUrl ? (
                                             <img src={chat.targetUser.avatarUrl} alt="Avatar" className="h-full w-full rounded-full object-cover" />
                                         ) : (
-                                            <span>{chat.targetUser.fullName?.charAt(0)}</span>
+                                            <span>{chat.targetUser?.fullName?.charAt(0)}</span>
                                         )}
                                     </div>
-                                    {onlineUserNames.includes(chat.targetUser.username) && (
+                                    {chat.targetUser?.username && onlineUserNames.includes(chat.targetUser.username) && (
                                         <div className="absolute bottom-0 right-0 h-2.5 w-2.5 bg-green-500 rounded-full border-2 border-red-600"></div>
                                     )}
                                 </div>
-                                <span className="truncate max-w-[150px]">{chat.targetUser.fullName}</span>
+                                <span className="truncate max-w-[150px]">{chat.targetUser?.fullName}</span>
                             </div>
                             <div className="flex items-center gap-1">
                                 <button onClick={() => closeChatBox(chat.roomId)} className="p-1 hover:bg-white/20 rounded-md transition-colors"><X size={18} /></button>
@@ -330,12 +324,8 @@ export default function FloatingChat() {
                 ))}
             </div>
 
-            {/* ========================================== */}
-            {/* B. CỤC MENU LIÊN HỆ GỐC */}
-            {/* ========================================== */}
             <div className="flex flex-col items-end pointer-events-auto pb-2 md:pb-6 relative z-50">
                 {isMenuOpen && (
-                    // 🚀 Responsive: Giới hạn chiều cao và co chiều rộng trên mobile
                     <div className="mb-3 md:mb-4 w-[280px] sm:w-[320px] h-[350px] md:h-[450px] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-in slide-in-from-bottom-5 duration-300">
                         <div className="p-3 md:p-4 bg-slate-950 text-white flex justify-between items-center shrink-0">
                             <span className="font-bold text-[14px] md:text-[15px]">Sano Chat</span>
@@ -374,7 +364,6 @@ export default function FloatingChat() {
 
                 <button
                     onClick={() => setIsMenuOpen(!isMenuOpen)}
-                    // 🚀 Responsive: Co nút nhỏ lại chút trên mobile (p-3 vs p-4)
                     className={`relative p-3 md:p-4 rounded-full shadow-xl transition-all active:scale-95 ${isMenuOpen ? 'bg-slate-800' : 'bg-red-600 hover:bg-red-700'}`}
                 >
                     {isMenuOpen ? <X className="text-white w-6 h-6 md:w-7 md:h-7" /> : <MessageCircle className="text-white w-6 h-6 md:w-7 md:h-7" />}

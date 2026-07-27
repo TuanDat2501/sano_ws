@@ -32,7 +32,7 @@ export async function POST(req: Request) {
         if (!targetUser) return NextResponse.json({ error: "Không tìm thấy người dùng" }, { status: 404 });
 
         const targetId = targetUser.id;
-    // ==========================================
+   // ==========================================
     // TRƯỜNG HỢP 1: TẠO CHAT 1-1 (DIRECT)
     // ==========================================
     if (type === 'DIRECT') {
@@ -43,11 +43,17 @@ export async function POST(req: Request) {
             { members: { some: { userId: myId } } },
             { members: { some: { userId: targetId } } }
           ]
+        },
+        include: {
+          members: true // 🚀 Bổ sung lấy mảng members ra để đếm
         }
       });
 
-      if (existingRooms.length > 0) {
-        return NextResponse.json(existingRooms[0]);
+      // 🚀 CHỐT CHẶN: Chỉ lấy phòng nào có ĐÚNG 2 người (lọc bỏ các phòng bị dính người thứ 3)
+      const validRoom = existingRooms.find(room => room.members.length === 2);
+
+      if (validRoom) {
+        return NextResponse.json(validRoom);
       }
 
       const newRoom = await prisma.chatRoom.create({

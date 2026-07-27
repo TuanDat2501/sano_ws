@@ -98,7 +98,8 @@ export async function POST(req: Request) {
                 name: body.name,
                 description: body.description,
                 teamId: body.teamId,
-                supervisorId: (session?.user as any)?.id // Gắn người tạo làm giám sát
+                channelId: body.channelId, // 🚀 BỔ SUNG DÒNG NÀY ĐỂ GÁN KÊNH NGAY TỪ ĐẦU
+                supervisorId: (session?.user as any)?.id 
             }
         });
         return NextResponse.json(newProject);

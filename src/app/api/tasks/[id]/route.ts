@@ -45,6 +45,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
         if (isManager) {
             // Sếp được sửa full
+            if (rawBody.title !== undefined) body.title = rawBody.title;
+            if (rawBody.keywords !== undefined) body.keywords = rawBody.keywords;
             if (rawBody.status !== undefined) body.status = rawBody.status;
             if (rawBody.scriptLink !== undefined) body.scriptLink = rawBody.scriptLink;
             if (rawBody.englishScriptLink !== undefined) body.englishScriptLink = rawBody.englishScriptLink;
@@ -181,6 +183,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         const updateTaskPromise = prisma.task.update({
             where: { id: taskId },
             data: {
+                title: body.title !== undefined ? body.title : undefined,
+                keywords: body.keywords !== undefined ? body.keywords : undefined,
                 status: body.status !== undefined ? body.status : undefined,
                 scriptLink: body.scriptLink !== undefined ? body.scriptLink : undefined,
                 videoLink: body.videoLink !== undefined ? body.videoLink : undefined,
