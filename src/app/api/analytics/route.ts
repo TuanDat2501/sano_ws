@@ -52,7 +52,6 @@ export async function GET(req: Request) {
 
         if (kpiWeek > 0) {
             const firstDayOfMonth = new Date(kpiYear, kpiMonth - 1, 1);
-            const lastDayOfMonth = new Date(kpiYear, kpiMonth, 0);
 
             const dayOfWeek = firstDayOfMonth.getDay(); 
             const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
@@ -64,11 +63,10 @@ export async function GET(req: Request) {
             const endOfWeek = new Date(startOfWeek);
             endOfWeek.setDate(startOfWeek.getDate() + 6);
 
-            const actualStart = startOfWeek < firstDayOfMonth ? firstDayOfMonth : startOfWeek;
-            const actualEnd = endOfWeek > lastDayOfMonth ? lastDayOfMonth : endOfWeek;
-
-            kpiStartDate = actualStart;
-            kpiEndDate = new Date(actualEnd.getFullYear(), actualEnd.getMonth(), actualEnd.getDate(), 23, 59, 59);
+            // 🚀 ĐÃ SỬA: Xóa bỏ actualStart/actualEnd cắt xén theo tháng
+            // Dùng trực tiếp startOfWeek và endOfWeek để lấy trọn vẹn 7 ngày (Date mới)
+            kpiStartDate = startOfWeek;
+            kpiEndDate = new Date(endOfWeek.getFullYear(), endOfWeek.getMonth(), endOfWeek.getDate(), 23, 59, 59);
         }
 
         const teamFilter = teamId !== "ALL" ? { teamId } : {};
@@ -100,7 +98,12 @@ export async function GET(req: Request) {
 
             // Query Tầng 2
             prisma.taskLog.findMany({
-                where: { createdAt: { gte: kpiStartDate, lte: kpiEndDate }, user: { ...teamFilter, role: { notIn: ["ADMIN", "BAN_GIAM_DOC", "HR"] } }, action: { in: ["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK"] } },
+                where: { 
+                    createdAt: { gte: kpiStartDate, lte: kpiEndDate }, 
+                    user: { ...teamFilter, role: { notIn: ["ADMIN", "BAN_GIAM_DOC", "HR", "KE_TOAN"] } }, 
+                    // 🚀 ĐÃ SỬA: Bổ sung UPDATE_STATUS để đếm không bị sót task DONE
+                    action: { in: ["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK", "UPDATE_STATUS"] } 
+                },
                 include: { user: { select: { role: true } } }
             }),
             prisma.weeklyKPI.findMany({ where: kpiWhere }),
@@ -271,16 +274,23 @@ export async function GET(req: Request) {
             overallTrend, topChannelsByViews, revenueTrend, activeTeamNames, channelRevenueTrend, channelViewsTrend, activeChannelNames, channelGrid, projectHealth, taskFunnel, leadTimeData, 
             monetizationStatus: Object.values(monetStatusMap).filter(m => m.value > 0),
             hrGrid: users.map(u => {
-                const actual = userKpiMap[u.id]?.actualTasks.size || 0;
-                const target = userKpiMap[u.id]?.target || 0;
+                // Lấy Target trực tiếp từ mảng KPI đã đồng bộ
+                const target = kpisPeriod.filter(k => k.userId === u.id).reduce((sum, k) => sum + k.targetValue, 0);
+                
+                // Đếm sản lượng thực tế (Thực đạt)
+                const output = new Set(taskLogsPeriod.filter(l => l.userId === u.id && isDoneLog(l)).map(l => l.taskId)).size;
+                
                 return {
-                    id: u.id, name: u.fullName, role: u.role,
-                    kpi: target > 0 ? Math.round((actual / target) * 100) : 0,
-                    output: new Set(taskLogsPeriod.filter(l => l.userId === u.id && isDoneLog(l)).map(l => l.taskId)).size,
+                    id: u.id, 
+                    name: u.fullName, 
+                    role: u.role,
+                    target: target, // 🚀 Bổ sung truyền Target về Giao diện
+                    output: output,
+                    kpi: target > 0 ? Math.round((output / target) * 100) : 0,
                     avgScore: userScoreMap[u.id] ? (userScoreMap[u.id].total / userScoreMap[u.id].count).toFixed(1) : "-",
                     status: u.isActive ? "Active" : "Nghỉ việc"
                 };
-            }).sort((a,b) => b.output - a.output)
+            }).sort((a, b) => b.output - a.output)
         });
 
     } catch (error) {

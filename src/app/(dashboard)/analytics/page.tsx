@@ -443,7 +443,12 @@ export default function AnalyticsPage() {
                     <div className="overflow-auto flex-1 text-sm text-slate-600 custom-scrollbar relative">
                         <table className="w-full text-left min-w-[700px]">
                             <thead className="sticky top-0 z-10 bg-slate-100 shadow-[0_1px_3px_rgba(0,0,0,0.05)] text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                                <tr><th className="px-4 py-3 border-b">Họ & Tên</th><th className="px-4 py-3 border-b text-center">Sản Lượng (Task)</th><th className="px-4 py-3 border-b text-center">% KPI Thực Tế</th><th className="px-4 py-3 border-b text-center text-amber-600">Điểm Lượng</th></tr>
+                                <tr><th className="px-4 py-3 border-b">Họ & Tên</th>
+                                <th className="px-4 py-3 border-b text-center">Thực Đạt / Target</th>
+                                {/* <th className="px-4 py-3 border-b text-center">Sản Lượng (Task)</th> */}
+                                <th className="px-4 py-3 border-b text-center">% KPI Thực Tế</th>
+                                <th className="px-4 py-3 border-b text-center text-amber-600">Điểm Lượng</th>
+                                </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
                                 {data?.hrGrid?.map((u: any) => (
@@ -451,7 +456,10 @@ export default function AnalyticsPage() {
                                         <td className="px-4 py-3 text-sm font-bold text-slate-800">
                                             {u.name} <span className="block text-[10px] font-black uppercase text-slate-400">{u.role}</span>
                                         </td>
-                                        <td className="px-4 py-3 text-sm text-center font-bold text-slate-800">{u.output}</td>
+                                        {/* 🚀 ĐÃ SỬA: HIỂN THỊ RÕ RÀNG (VD: 0 / 5) */}
+                                        <td className="px-4 py-3 text-sm text-center font-bold text-slate-800">
+                                            <span className="text-blue-600">{u.output}</span> <span className="text-slate-300 mx-1">/</span> <span className="text-slate-500">{u.target}</span>
+                                        </td>
                                         <td className="px-4 py-3 text-center">
                                             <span className={`px-2 py-1 rounded-md text-xs font-black ${u.kpi >= 100 ? 'bg-green-100 text-green-700' : u.kpi < 80 ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-700'}`}>{u.kpi}%</span>
                                         </td>
