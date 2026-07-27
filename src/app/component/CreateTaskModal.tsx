@@ -120,31 +120,31 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
                   </h3>
                   <div>
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tiêu đề / Ý tưởng <span className="text-red-500">*</span></label>
-                    <textarea required autoFocus rows={2} className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm outline-none transition-all font-bold focus:border-blue-500 focus:bg-white resize-none" value={newTask.title} onChange={(e) => setNewTask({ ...newTask, title: e.target.value })} />
+                    <textarea required autoFocus rows={2} className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition-all font-bold focus:border-blue-500 focus:bg-white resize-none" placeholder="Nhập tiêu đề video..." value={newTask.title} onChange={(e) => setNewTask({ ...newTask, title: e.target.value })} />
                   </div>
                   <div>
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-1.5"><Key size={12} /> Từ khóa (Key)</label>
-                    <input type="text" className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm outline-none transition-all font-medium focus:border-blue-500 focus:bg-white" placeholder="VD: prehistoric creatures..." value={newTask.keywords} onChange={(e) => setNewTask({ ...newTask, keywords: e.target.value })} />
+                    <input type="text" className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition-all font-medium focus:border-blue-500 focus:bg-white" placeholder="VD: prehistoric creatures..." value={newTask.keywords} onChange={(e) => setNewTask({ ...newTask, keywords: e.target.value })} />
                   </div>
                   <div>
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-1.5"><LinkIcon size={12} /> Link Tham Khảo</label>
-                    <input type="text" className="w-full mt-1 border rounded-xl p-2.5 text-sm outline-none font-medium bg-slate-50 border-slate-200 focus:border-blue-500" value={newTask.linkContent} onChange={(e) => setNewTask({ ...newTask, linkContent: e.target.value })} />
+                    <input type="text" className="w-full mt-1 border rounded-xl p-2.5 text-sm text-slate-900 placeholder:text-slate-400 outline-none font-medium bg-slate-50 border-slate-200 focus:border-blue-500" placeholder="Dán link youtube..." value={newTask.linkContent} onChange={(e) => setNewTask({ ...newTask, linkContent: e.target.value })} />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-1.5"><Clock size={12} /> Phút <span className="text-red-500">*</span></label>
-                      <input required type="number" min="1" className="w-full mt-1 bg-indigo-50 border border-indigo-100 rounded-xl p-2.5 text-sm outline-none font-black focus:border-indigo-500 focus:bg-white" value={newTask.duration} onChange={(e) => setNewTask({ ...newTask, duration: e.target.value })} />
+                      <input required type="number" min="1" className="w-full mt-1 bg-indigo-50 border border-indigo-100 rounded-xl p-2.5 text-sm text-indigo-900 placeholder:text-indigo-400 outline-none font-black focus:border-indigo-500 focus:bg-white" placeholder="Thời lượng..." value={newTask.duration} onChange={(e) => setNewTask({ ...newTask, duration: e.target.value })} />
                     </div>
                     <div>
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-1.5"><CalendarDays size={12} /> Ngày Hoành Thành</label>
-                      <input type="date" className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm outline-none font-bold focus:border-blue-500 focus:bg-white" value={newTask.publishDate} onChange={(e) => setNewTask({ ...newTask, publishDate: e.target.value })} />
+                      <input type="date" className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm text-slate-900 outline-none font-bold focus:border-blue-500 focus:bg-white" value={newTask.publishDate} onChange={(e) => setNewTask({ ...newTask, publishDate: e.target.value })} />
                     </div>
                     <div>
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-1.5">
                         🔥 Mức Độ Ưu Tiên
                       </label>
                       <select
-                        className="w-full mt-1 border border-slate-200 rounded-xl p-2.5 text-sm outline-none font-bold bg-slate-50 focus:border-blue-500"
+                        className="w-full mt-1 border border-slate-200 rounded-xl p-2.5 text-sm text-slate-900 outline-none font-bold bg-slate-50 focus:border-blue-500"
                         value={newTask.priority}
                         onChange={(e) => setNewTask({ ...newTask, priority: e.target.value })}
                       >
@@ -165,20 +165,20 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
                   <div className="grid grid-cols-2 gap-3">
                     <div className="col-span-2">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Team <span className="text-red-500">*</span></label>
-                      <select required className="w-full border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-sm bg-slate-50" value={newTask.teamId} onChange={(e) => setNewTask({ ...newTask, teamId: e.target.value, projectId: "", contentId: "", editorId: "", animatorId: "", channelId: "" })}>
+                      <select required className="w-full border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-sm text-slate-900 bg-slate-50" value={newTask.teamId} onChange={(e) => setNewTask({ ...newTask, teamId: e.target.value, projectId: "", contentId: "", editorId: "", animatorId: "", channelId: "" })}>
                         <option value="">-- Chọn Team --</option>
                         {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                       </select>
                     </div>
                     <div>
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Kênh <span className="text-red-500">*</span></label>
-                      <select required disabled={!newTask.teamId || isLoadingData} className="w-full border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-sm bg-slate-50 disabled:opacity-50" value={newTask.channelId} onChange={(e) => {
+                      <select required disabled={!newTask.teamId || isLoadingData} className="w-full border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-sm text-slate-900 bg-slate-50 disabled:opacity-50 disabled:text-slate-400" value={newTask.channelId} onChange={(e) => {
                         const newChannelId = e.target.value;
                         const newChan = teamChannels.find(c => c.id === newChannelId);
                         setNewTask({
                           ...newTask,
                           channelId: newChannelId,
-                          projectId: "", // 🚀 TỰ ĐỘNG RESET DỰ ÁN KHI ĐỔI KÊNH KHÁC
+                          projectId: "", 
                           animatorId: newChan?.category === 'TONG_HOP' ? "" : newTask.animatorId
                         });
                       }}>
@@ -188,9 +188,8 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
                     </div>
                     <div>
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Dự án <span className="text-red-500">*</span></label>
-                      <select required disabled={!newTask.teamId || isLoadingData} className="w-full border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-sm bg-slate-50 disabled:opacity-50" value={newTask.projectId} onChange={(e) => setNewTask({ ...newTask, projectId: e.target.value })}>
+                      <select required disabled={!newTask.teamId || isLoadingData} className="w-full border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-sm text-slate-900 bg-slate-50 disabled:opacity-50 disabled:text-slate-400" value={newTask.projectId} onChange={(e) => setNewTask({ ...newTask, projectId: e.target.value })}>
                         <option value="">{newTask.channelId && filteredProjects.length === 0 ? "-- Kênh trống --" : "-- Chọn --"}</option>
-                        {/* 🚀 ĐÃ CẬP NHẬT RENDER TỪ DANH SÁCH ĐÃ LỌC */}
                         {filteredProjects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
                       </select>
                     </div>
@@ -199,7 +198,7 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
                   <div className="bg-emerald-50/50 border border-emerald-100 rounded-xl p-3 space-y-3">
                     <div>
                       <label className="text-[10px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-1.5 mb-1"><FileEdit size={12} /> Content</label>
-                      <select disabled={!newTask.teamId || isLoadingData} className="w-full border rounded-xl p-2.5 outline-none font-bold text-sm bg-white border-emerald-200 disabled:opacity-50" value={newTask.contentId} onChange={(e) => setNewTask({ ...newTask, contentId: e.target.value })}>
+                      <select disabled={!newTask.teamId || isLoadingData} className="w-full border rounded-xl p-2.5 outline-none font-bold text-sm text-slate-900 bg-white border-emerald-200 disabled:opacity-50 disabled:text-slate-400" value={newTask.contentId} onChange={(e) => setNewTask({ ...newTask, contentId: e.target.value })}>
                         <option value="">-- Chưa gán --</option>
                         {teamContents.map(u => <option key={u.id} value={u.id}>{u.fullName}</option>)}
                       </select>
@@ -207,7 +206,7 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
                     <div className={`grid ${isTongHopChannel ? 'grid-cols-1' : 'grid-cols-2'} gap-3`}>
                       <div>
                         <label className="text-[10px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-1.5 mb-1"><Film size={12} /> Editor</label>
-                        <select disabled={!newTask.teamId || isLoadingData} className="w-full border rounded-xl p-2.5 outline-none font-bold text-sm bg-white border-emerald-200 disabled:opacity-50" value={newTask.editorId} onChange={(e) => setNewTask({ ...newTask, editorId: e.target.value })}>
+                        <select disabled={!newTask.teamId || isLoadingData} className="w-full border rounded-xl p-2.5 outline-none font-bold text-sm text-slate-900 bg-white border-emerald-200 disabled:opacity-50 disabled:text-slate-400" value={newTask.editorId} onChange={(e) => setNewTask({ ...newTask, editorId: e.target.value })}>
                           <option value="">-- Ai Dựng? --</option>
                           {teamEditors.map(u => <option key={u.id} value={u.id}>{u.fullName}</option>)}
                         </select>
@@ -216,7 +215,7 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
                       {!isTongHopChannel && (
                         <div>
                           <label className="text-[10px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-1.5 mb-1"><MonitorPlay size={12} /> Chuyển Động</label>
-                          <select disabled={!newTask.teamId || isLoadingData} className="w-full border rounded-xl p-2.5 outline-none font-bold text-sm bg-white border-emerald-200 disabled:opacity-50" value={newTask.animatorId} onChange={(e) => setNewTask({ ...newTask, animatorId: e.target.value })}>
+                          <select disabled={!newTask.teamId || isLoadingData} className="w-full border rounded-xl p-2.5 outline-none font-bold text-sm text-slate-900 bg-white border-emerald-200 disabled:opacity-50 disabled:text-slate-400" value={newTask.animatorId} onChange={(e) => setNewTask({ ...newTask, animatorId: e.target.value })}>
                             <option value="">-- Ai làm CĐ? --</option>
                             {teamContents.map(u => <option key={u.id} value={u.id}>{u.fullName}</option>)}
                           </select>
