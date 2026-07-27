@@ -29,15 +29,19 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
     const [approversLv1, setApproversLv1] = useState<any[]>([]);
     const [approversLv2, setApproversLv2] = useState<any[]>([]);
     const [isLoadingApprovers, setIsLoadingApprovers] = useState(false);
+
+    // 🚀 BƯỚC 1: TẠO STATE RIÊNG NHƯ SẾP GỢI Ý ĐỂ KHÔNG BAO GIỜ TRƯỢT DATA
+    const [leaderApproverOptions, setLeaderApproverOptions] = useState<any[]>([]);
+    const [employeeLv2Options, setEmployeeLv2Options] = useState<any[]>([]);
     
     const { data: session } = useSession();
     const currentUser = session?.user as any;
     
-    // 🚀 NHẬN DIỆN CHUẨN CÁC CẤP QUẢN LÝ
+    // NHẬN DIỆN CHUẨN CÁC CẤP QUẢN LÝ
     const isLeader = currentUser?.isTeamLeader || currentUser?.role === "LEADER";
     const isHRLeader = currentUser?.role === "HR" && currentUser?.isTeamLeader;
 
-    // 🚀 HÀM TIỆN ÍCH: Dịch chức danh hiển thị chuẩn nhất
+    // HÀM TIỆN ÍCH: Dịch chức danh hiển thị chuẩn nhất
     const getRoleLabel = (u: any) => {
         if (u.role === 'BAN_GIAM_DOC') return 'Giám Đốc';
         if (u.role === 'ADMIN') return 'Admin';
@@ -46,22 +50,18 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
         if (u.isTeamLeader) return `Leader ${u.team?.name || ''}`;
         return u.role;
     };
-    const allApprovers = [...approversLv1, ...approversLv2].filter((v, i, a) => a.findIndex(t => t.id === v.id) === i);
-    // 🚀 LỌC NGƯỜI DUYỆT THÔNG MINH CHO CẤP LEADER
-    const leaderApproverOptions = allApprovers.filter(u => {
-        if (isHRLeader) return u.role === 'HR'; 
-        return ['ADMIN', 'BAN_GIAM_DOC'].includes(u.role); 
-    });
-
-    // Lọc người duyệt Cấp 2 cho Nhân viên bình thường
-    const employeeLv2Options = allApprovers.filter(u => ['HR', 'ADMIN', 'BAN_GIAM_DOC'].includes(u.role));
 
     useEffect(() => { setContentData({}); }, [selectedType]);
+    useEffect(() => { 
+        setLeaderApproverOptions(employeeLv2Options)
 
+     }, [employeeLv2Options]);
     useEffect(() => {
         if (!selectedTeamId) {
             setApproversLv1([]);
             setApproversLv2([]);
+            setLeaderApproverOptions([]);
+            setEmployeeLv2Options([]);
             return;
         }
         
@@ -72,15 +72,37 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
             fetch(`/api/requests/approvers?teamId=${selectedTeamId}&lv=2`).then(res => res.json())
         ])
         .then(([dataLv1, dataLv2]) => {
-            setApproversLv1(Array.isArray(dataLv1) ? dataLv1 : []);
-            setApproversLv2(Array.isArray(dataLv2) ? dataLv2 : []);
+            const arr1 = Array.isArray(dataLv1) ? dataLv1 : [];
+            const arr2 = Array.isArray(dataLv2) ? dataLv2 : [];
+
+            setApproversLv1(arr1);
+            setApproversLv2(arr2);
+
+            // 🚀 BƯỚC 2: GỘP VÀ GÁN STATE NGAY LẬP TỨC SAU KHI CÓ KẾT QUẢ API
+            const allApprovers = [...arr1, ...arr2].filter((v, i, a) => a.findIndex(t => t.id === v.id) === i);
+
+            // Tính toán options cho Leader
+            const leaderOpts = allApprovers.filter(u => {
+                const safeRole = String(u.role).toUpperCase().trim();
+                if (isHRLeader) return safeRole === 'HR'; 
+                return ['ADMIN', 'BAN_GIAM_DOC'].includes(safeRole); 
+            });
+            setLeaderApproverOptions(leaderOpts);
+
+            // Tính toán options cho Nhân viên bình thường
+            const empLv2Opts = allApprovers.filter(u => {
+                const safeRole = String(u.role).toUpperCase().trim();
+                return ['HR', 'ADMIN', 'BAN_GIAM_DOC'].includes(safeRole);
+            });
+            setEmployeeLv2Options(empLv2Opts);
+
             setIsLoadingApprovers(false);
         })
         .catch(err => {
             console.error("Lỗi fetch approvers:", err);
             setIsLoadingApprovers(false);
         });
-    }, [selectedTeamId]);
+    }, [selectedTeamId, isHRLeader]);
     
     if (!isOpen) return null;
 
@@ -326,7 +348,7 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
                         <label className="block text-xs md:text-sm font-bold text-slate-700 mb-1.5 md:mb-2">4. Luồng phê duyệt <span className="text-red-500">*</span></label>
                         {!selectedTeamId && <p className="text-[10px] md:text-xs text-red-500 mb-2 italic">Vui lòng chọn Team ở bước 3 để hiển thị danh sách người duyệt.</p>}
                         
-                        {/* 🚀 UI HIỂN THỊ CHUẨN XÁC DỰA VÀO LOẠI LEADER */}
+                        {/* UI HIỂN THỊ CHUẨN XÁC DỰA VÀO LOẠI LEADER */}
                         {isLeader ? (
                             <div className="bg-white border border-slate-200 p-3 md:p-4 rounded-xl">
                                 <span className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 md:mb-2 block">
