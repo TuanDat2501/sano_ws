@@ -66,6 +66,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             if (rawBody.note !== undefined) body.note = rawBody.note;
             if (rawBody.channelId !== undefined) body.channelId = rawBody.channelId || null;
             if (rawBody.priority !== undefined) body.priority = rawBody.priority;
+            if (rawBody.animationLink !== undefined) body.animationLink = rawBody.animationLink;
         } else if (currentUser.role === "CONTENT") {
             // 🚀 ĐÃ SỬA: Cho phép kéo thẻ nếu nhân sự đang đóng vai trò Content, Creator HOẶC có tên trong cột Animator
             if (oldTask.contentId !== currentUser.id && oldTask.creatorId !== currentUser.id && oldTask.animatorId !== currentUser.id) {
@@ -73,6 +74,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             }
             if (rawBody.status !== undefined) body.status = rawBody.status;
             if (rawBody.scriptLink !== undefined) body.scriptLink = rawBody.scriptLink;
+            if (rawBody.animationLink !== undefined) body.animationLink = rawBody.animationLink;
             if (rawBody.englishScriptLink !== undefined) body.englishScriptLink = rawBody.englishScriptLink;
             if (rawBody.note !== undefined) body.note = rawBody.note; // 🚀 ĐÃ XÓA QUYỀN SỬA audioLink CỦA CONTENT
             if (rawBody.storyboardLink !== undefined) body.storyboardLink = rawBody.storyboardLink;
@@ -206,6 +208,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 storyboardLink:body.storyboardLink !== undefined ? body.storyboardLink : undefined,
                 englishScriptLink:body.englishScriptLink !== undefined ? body.englishScriptLink : undefined,
                 thumbnailLink:body.thumbnailLink !== undefined ? body.thumbnailLink : undefined,
+                animationLink:body.animationLink !== undefined ? body.animationLink : undefined,
             }
         });
 

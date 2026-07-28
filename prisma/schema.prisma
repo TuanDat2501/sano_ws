@@ -211,7 +211,7 @@ model Task {
   id          String     @id @default(uuid())
   title       String
   keywords    String?    @db.Text 
-  linkContent String     @unique 
+  linkContent String?     @unique 
   status      TaskStatus @default(TODO)
   priority   String?   @default("NORMAL")
   scriptLink        String? @db.Text 
@@ -221,7 +221,7 @@ model Task {
   thumbnailLink     String? @db.Text 
   videoLink         String? @db.Text 
   publishLink       String? @db.Text 
-
+  animationLink       String? @db.Text 
   publishDate       DateTime? @db.Date 
   duration          Int?     
   note              String? @db.Text
