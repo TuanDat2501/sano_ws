@@ -202,7 +202,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 animatorId:body.animatorId !== undefined ? body.animatorId : undefined,
                 priority:body.priority !== undefined ? body.priority : undefined,
                 linkContent:body.linkContent !== undefined ? body.linkContent : undefined,
-                
+                audioLink:body.audioLink !== undefined ? body.audioLink : undefined,
             }
         });
 
