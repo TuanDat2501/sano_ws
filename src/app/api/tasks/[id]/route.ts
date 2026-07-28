@@ -205,7 +205,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 audioLink:body.audioLink !== undefined ? body.audioLink : undefined,
                 storyboardLink:body.storyboardLink !== undefined ? body.storyboardLink : undefined,
                 englishScriptLink:body.englishScriptLink !== undefined ? body.englishScriptLink : undefined,
-
+                thumbnailLink:body.thumbnailLink !== undefined ? body.thumbnailLink : undefined,
             }
         });
 
