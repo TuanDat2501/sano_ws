@@ -212,10 +212,10 @@ export default function TaskDetailDrawer({
   const channelCategory = selectedTask?.channel?.category || 'AI';
 
   const allLinkFields = [
-    { key: 'scriptLink', label: 'Kịch Bản (VN)', role: 'CONTENT', idField: 'contentId', categories: ['AI', 'TONG_HOP'] },
+    { key: 'scriptLink', label: 'Kịch Bản', role: 'CONTENT', idField: 'contentId', categories: ['AI', 'TONG_HOP'] },
     { key: 'englishScriptLink', label: 'Text ENG', role: 'CONTENT', idField: 'contentId', categories: ['AI'] },
     // Audio dành cho Editor:
-    { key: 'audioLink', label: 'Link Audio (AI)', role: 'EDITOR', idField: 'editorId', categories: ['AI', 'TONG_HOP'] }, 
+    { key: 'audioLink', label: 'Link Audio', role: 'EDITOR', idField: 'editorId', categories: ['AI', 'TONG_HOP'] }, 
     // Bố cục (Storyboard) dành cho Content:
     { key: 'storyboardLink', label: 'Bố Cục', role: 'CONTENT', idField: 'contentId', categories: ['AI', 'TONG_HOP'] }, 
     { key: 'thumbnailLink', label: 'Thumbnail', role: 'EDITOR', idField: 'editorId', categories: ['AI', 'TONG_HOP'] },

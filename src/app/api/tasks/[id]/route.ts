@@ -203,6 +203,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 priority:body.priority !== undefined ? body.priority : undefined,
                 linkContent:body.linkContent !== undefined ? body.linkContent : undefined,
                 audioLink:body.audioLink !== undefined ? body.audioLink : undefined,
+                storyboardLink:body.storyboardLink !== undefined ? body.storyboardLink : undefined,
+                englishScriptLink:body.englishScriptLink !== undefined ? body.englishScriptLink : undefined,
+
             }
         });
 
