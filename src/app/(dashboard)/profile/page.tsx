@@ -129,7 +129,18 @@ export default function ProfilePage() {
                 setPassword("");
                 setConfirmPassword("");
 
-                await update({ ...session, user: { ...session?.user, name: fullName } });
+                // 🚀 BƯỚC 1: Ép NextAuth cập nhật cả Tên và Avatar mới vào Session
+                await update({ 
+                    ...session, 
+                    user: { 
+                        ...session?.user, 
+                        name: fullName,
+                        avatarUrl: avatarUrl || currentUser.avatarUrl // Bổ sung Avatar
+                    } 
+                });
+
+                // 🚀 BƯỚC 2: F5 lại trình duyệt để Sidebar/Header bắt buộc phải lấy Session mới nhất
+                window.location.reload();
             } else {
                 showToast("error", data.error || "Có lỗi xảy ra khi cập nhật!");
             }

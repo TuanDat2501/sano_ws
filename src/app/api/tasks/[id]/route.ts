@@ -74,8 +74,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             if (rawBody.status !== undefined) body.status = rawBody.status;
             if (rawBody.scriptLink !== undefined) body.scriptLink = rawBody.scriptLink;
             if (rawBody.englishScriptLink !== undefined) body.englishScriptLink = rawBody.englishScriptLink;
-            if (rawBody.audioLink !== undefined) body.audioLink = rawBody.audioLink;
-            if (rawBody.note !== undefined) body.note = rawBody.note;
+            if (rawBody.note !== undefined) body.note = rawBody.note; // 🚀 ĐÃ XÓA QUYỀN SỬA audioLink CỦA CONTENT
 
         } else if (currentUser.role === "EDITOR") {
             // 🚀 ĐÃ SỬA: Cho phép kéo thẻ nếu nhân sự đang đóng vai trò Editor HOẶC có tên trong cột Animator
@@ -86,6 +85,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             if (rawBody.videoLink !== undefined) body.videoLink = rawBody.videoLink;
             if (rawBody.storyboardLink !== undefined) body.storyboardLink = rawBody.storyboardLink;
             if (rawBody.thumbnailLink !== undefined) body.thumbnailLink = rawBody.thumbnailLink;
+            if (rawBody.audioLink !== undefined) body.audioLink = rawBody.audioLink; // 🚀 ĐÃ BỔ SUNG QUYỀN SỬA audioLink CHO EDITOR
             if (rawBody.note !== undefined) body.note = rawBody.note;
 
         } else if (currentUser.role === "CHANNEL_MANAGER") {
