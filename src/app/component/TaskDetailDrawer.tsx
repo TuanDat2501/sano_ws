@@ -1,6 +1,6 @@
 "use client";
 
-import { X, Link as LinkIcon, CheckCircle2, Loader2, MessageSquare, Send, ClipboardCheck, Clock, Tag, Tv, Video, Trash2, Key, Layers, ImageIcon } from "lucide-react";
+import { X, Link as LinkIcon, CheckCircle2, Loader2, MessageSquare, Send, ClipboardCheck, Clock, Tag, Tv, Video, Trash2, Key, Layers, ImageIcon, Pencil } from "lucide-react";
 import { useEffect, useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 import EvaluationPanel from "./EvaluationPanel";
@@ -78,6 +78,7 @@ export default function TaskDetailDrawer({
       setRightTab('chat');
       setCheckedStandards({});
       setKaizenNote('');
+      setEditingFields({}); // 🚀 BỔ SUNG: Reset lại chế độ chỉnh sửa
     }
   }, [isOpen, selectedTask?.id]);
 
@@ -144,7 +145,7 @@ export default function TaskDetailDrawer({
 
   const [savingField, setSavingField] = useState<string | null>(null);
   const [savedField, setSavedField] = useState<string | null>(null);
-
+  const [editingFields, setEditingFields] = useState<Record<string, boolean>>({});
   if (!selectedTask) return null;
   const isManager = ["ADMIN", "BAN_GIAM_DOC", "LEADER", "HR", "KE_TOAN"].includes(userRole);
 
@@ -213,8 +214,8 @@ export default function TaskDetailDrawer({
   const allLinkFields = [
     { key: 'scriptLink', label: 'Kịch Bản (VN)', role: 'CONTENT', idField: 'contentId', categories: ['AI', 'TONG_HOP'] },
     { key: 'englishScriptLink', label: 'Text ENG', role: 'CONTENT', idField: 'contentId', categories: ['AI'] },
-    { key: 'audioLink', label: 'Link Audio (AI)', role: 'EDITOR', idField: 'editorId', categories: ['AI','TONG_HOP'] }, // 🚀 ĐÃ SỬA ROLE VÀ idField SANG EDITOR
-    { key: 'storyboardLink', label: 'Bố Cục', role: 'EDITOR', idField: 'contentId', categories: ['AI', 'TONG_HOP'] },
+    { key: 'audioLink', label: 'Link Audio (AI)', role: 'EDITOR', idField: 'editorId', categories: ['AI', 'TONG_HOP'] }, // 🚀 ĐÃ SỬA ROLE VÀ idField SANG EDITOR
+    { key: 'storyboardLink', label: 'Bố Cục', role: 'CONTENT', idField: 'contentId', categories: ['AI', 'TONG_HOP'] },
     { key: 'thumbnailLink', label: 'Thumbnail', role: 'EDITOR', idField: 'editorId', categories: ['AI', 'TONG_HOP'] },
     { key: 'videoLink', label: 'Video Render', role: 'EDITOR', idField: 'editorId', categories: ['AI', 'TONG_HOP'] },
   ];
@@ -487,39 +488,87 @@ export default function TaskDetailDrawer({
                       const isCreator = selectedTask.creatorId === sessionUserId && field.key === 'scriptLink';
                       const isAllowed = isManager || isAssigned || isCreator;
 
+                      const currentLink = taskLinks[field.key as keyof typeof taskLinks] || "";
+                      const isEditing = editingFields[field.key] || !currentLink; // Bật ô nhập nếu đang sửa hoặc chưa có link
+
                       return (
                         <div key={field.key} className="space-y-1.5">
-                          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-                            {idx + 1}. {field.label}
-                            {savingField === field.key && <Loader2 size={12} className="animate-spin text-blue-500" />}
-                            {savedField === field.key && <CheckCircle2 size={12} className="text-emerald-500" />}
+                          <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center justify-between">
+                            <span className="flex items-center gap-1.5">
+                              {idx + 1}. {field.label}
+                              {savingField === field.key && <Loader2 size={12} className="animate-spin text-blue-500" />}
+                              {savedField === field.key && <CheckCircle2 size={12} className="text-emerald-500" />}
+                            </span>
+                            {/* 🚀 NÚT SỬA: Chỉ hiện khi có link và được phép sửa */}
+                            {!isEditing && isAllowed && (
+                              <button onClick={() => setEditingFields({ ...editingFields, [field.key]: true })} className="text-blue-500 hover:text-blue-700 flex items-center gap-1 normal-case tracking-normal transition-colors">
+                                <Pencil size={12} /> Sửa
+                              </button>
+                            )}
                           </label>
-                          <input
-                            type="url" disabled={!isAllowed}
-                            placeholder={!isAllowed ? "Chỉ người phụ trách" : "Dán link..."}
-                            className={`w-full border rounded-xl p-3 text-[13px] outline-none transition-all ${!isAllowed ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-white text-slate-800 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10'} ${errors[field.key] ? 'border-red-500' : ''}`}
-                            value={taskLinks[field.key as keyof typeof taskLinks] || ""}
-                            onChange={e => setTaskLinks({ ...taskLinks, [field.key]: e.target.value })}
-                            onBlur={(e) => handleAutoSave(field.key, e.target.value)}
-                          />
+
+                          {isEditing ? (
+                            <input
+                              type="url" disabled={!isAllowed}
+                              placeholder={!isAllowed ? "Chỉ người phụ trách" : "Dán link..."}
+                              className={`w-full border rounded-xl p-3 text-[13px] outline-none transition-all ${!isAllowed ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-white text-slate-800 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10'} ${errors[field.key] ? 'border-red-500' : ''}`}
+                              value={currentLink}
+                              onChange={e => setTaskLinks({ ...taskLinks, [field.key]: e.target.value })}
+                              onBlur={(e) => {
+                                handleAutoSave(field.key, e.target.value);
+                                // Thoát khỏi input nếu có link
+                                if (e.target.value.trim() !== '') setEditingFields({ ...editingFields, [field.key]: false });
+                              }}
+                              autoFocus={editingFields[field.key]} // Tự động focus con trỏ chuột khi bấm sửa
+                            />
+                          ) : (
+                            // 🚀 HIỂN THỊ LINK BẤM ĐƯỢC
+                            <div className="w-full border border-slate-200 bg-slate-50 rounded-xl p-3 flex items-center gap-2 hover:bg-slate-100 transition-colors group">
+                              <LinkIcon size={14} className="text-slate-400 shrink-0 group-hover:text-blue-500 transition-colors" />
+                              <a href={currentLink} target="_blank" rel="noreferrer" className="text-[13px] font-medium text-blue-600 hover:text-blue-700 hover:underline truncate block w-full">
+                                {currentLink}
+                              </a>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
 
                     <div className="space-y-1.5 col-span-1 md:col-span-2 pt-2 border-t border-slate-200">
-                      <label className="text-[10px] font-bold text-red-500 uppercase tracking-widest flex items-center gap-1.5">
-                        {visibleLinkFields.length + 1}. Link Video Đã Đăng (YT)
-                        {savingField === 'publishLink' && <Loader2 size={12} className="animate-spin text-blue-500" />}
-                        {savedField === 'publishLink' && <CheckCircle2 size={12} className="text-emerald-500" />}
+                      <label className="text-[10px] font-bold text-red-500 uppercase tracking-widest flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                           {visibleLinkFields.length + 1}. Link Video Đã Đăng (YT)
+                           {savingField === 'publishLink' && <Loader2 size={12} className="animate-spin text-blue-500" />}
+                           {savedField === 'publishLink' && <CheckCircle2 size={12} className="text-emerald-500" />}
+                        </span>
+                        {!editingFields['publishLink'] && taskLinks.publishLink && isManager && (
+                           <button onClick={() => setEditingFields({...editingFields, publishLink: true})} className="text-blue-500 hover:text-blue-700 text-xs flex items-center gap-1 normal-case tracking-normal">
+                              <Pencil size={12}/> Sửa
+                           </button>
+                        )}
                       </label>
-                      <input
-                        type="url" disabled={!isManager}
-                        placeholder={!isManager ? "Chỉ Quản lý Kênh" : "Dán link YouTube..."}
-                        className="w-full border rounded-xl p-3 text-[13px] outline-none transition-all bg-white text-slate-800 focus:border-red-500 focus:ring-4 focus:ring-red-500/10"
-                        value={taskLinks.publishLink || ""}
-                        onChange={e => setTaskLinks({ ...taskLinks, publishLink: e.target.value })}
-                        onBlur={(e) => handleAutoSave('publishLink', e.target.value)}
-                      />
+                      
+                      {editingFields['publishLink'] || !taskLinks.publishLink ? (
+                          <input
+                            type="url" disabled={!isManager}
+                            placeholder={!isManager ? "Chỉ Quản lý Kênh" : "Dán link YouTube..."}
+                            className="w-full border rounded-xl p-3 text-[13px] outline-none transition-all bg-white text-slate-800 focus:border-red-500 focus:ring-4 focus:ring-red-500/10"
+                            value={taskLinks.publishLink || ""}
+                            onChange={e => setTaskLinks({ ...taskLinks, publishLink: e.target.value })}
+                            onBlur={(e) => {
+                               handleAutoSave('publishLink', e.target.value);
+                               if (e.target.value.trim() !== '') setEditingFields({...editingFields, publishLink: false});
+                            }}
+                            autoFocus={editingFields['publishLink']}
+                          />
+                      ) : (
+                          <div className="w-full border border-slate-200 bg-slate-50 rounded-xl p-3 flex items-center gap-2 hover:bg-slate-100 transition-colors group">
+                             <LinkIcon size={14} className="text-slate-400 shrink-0 group-hover:text-red-500 transition-colors" />
+                             <a href={taskLinks.publishLink} target="_blank" rel="noreferrer" className="text-[13px] font-medium text-red-600 hover:text-red-700 hover:underline truncate block w-full">
+                                {taskLinks.publishLink}
+                             </a>
+                          </div>
+                      )}
                     </div>
                   </div>
                 </div>
