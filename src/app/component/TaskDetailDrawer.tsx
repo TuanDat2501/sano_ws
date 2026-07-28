@@ -513,11 +513,19 @@ export default function TaskDetailDrawer({
                               placeholder={!isAllowed ? "Chỉ người phụ trách" : "Dán link..."}
                               className={`w-full border rounded-xl p-3 text-[13px] outline-none transition-all ${!isAllowed ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-white text-slate-800 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10'} ${errors[field.key] ? 'border-red-500' : ''}`}
                               value={currentLink}
-                              onChange={e => setTaskLinks({ ...taskLinks, [field.key]: e.target.value })}
+                              onChange={e => {
+                                 setTaskLinks({ ...taskLinks, [field.key]: e.target.value });
+                                 // 🚀 KHÓA TRẠNG THÁI EDIT: Bắt buộc giữ input để hàm onBlur kịp chạy
+                                 if (!editingFields[field.key]) {
+                                     setEditingFields(prev => ({ ...prev, [field.key]: true }));
+                                 }
+                              }}
                               onBlur={(e) => {
                                 handleAutoSave(field.key, e.target.value);
-                                // Thoát khỏi input nếu có link
-                                if (e.target.value.trim() !== '') setEditingFields({ ...editingFields, [field.key]: false });
+                                // Thoát khỏi input nếu có link (dùng prev để lấy state an toàn)
+                                if (e.target.value.trim() !== '') {
+                                    setEditingFields(prev => ({ ...prev, [field.key]: false }));
+                                }
                               }}
                               autoFocus={editingFields[field.key]} // Tự động focus con trỏ chuột khi bấm sửa
                             />
@@ -542,7 +550,9 @@ export default function TaskDetailDrawer({
                            {savedField === 'publishLink' && <CheckCircle2 size={12} className="text-emerald-500" />}
                         </span>
                         {!editingFields['publishLink'] && taskLinks.publishLink && isManager && (
-                           <button onClick={() => setEditingFields({...editingFields, publishLink: true})} className="text-blue-500 hover:text-blue-700 text-xs flex items-center gap-1 normal-case tracking-normal">
+                           <button onClick={() => setEditingFields({...editingFields, publishLink: true})} className="text-blue-500 hover:text-blue-700 text-xs flex items-center gap-1 normal-case tracking-normal"
+                            
+                           >
                               <Pencil size={12}/> Sửa
                            </button>
                         )}
