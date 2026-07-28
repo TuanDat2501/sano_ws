@@ -564,10 +564,18 @@ export default function TaskDetailDrawer({
                             placeholder={!isManager ? "Chỉ Quản lý Kênh" : "Dán link YouTube..."}
                             className="w-full border rounded-xl p-3 text-[13px] outline-none transition-all bg-white text-slate-800 focus:border-red-500 focus:ring-4 focus:ring-red-500/10"
                             value={taskLinks.publishLink || ""}
-                            onChange={e => setTaskLinks({ ...taskLinks, publishLink: e.target.value })}
+                            onChange={e => {
+                               setTaskLinks({ ...taskLinks, publishLink: e.target.value });
+                               // 🚀 KHÓA TRẠNG THÁI EDIT
+                               if (!editingFields['publishLink']) {
+                                   setEditingFields(prev => ({ ...prev, publishLink: true }));
+                               }
+                            }}
                             onBlur={(e) => {
                                handleAutoSave('publishLink', e.target.value);
-                               if (e.target.value.trim() !== '') setEditingFields({...editingFields, publishLink: false});
+                               if (e.target.value.trim() !== '') {
+                                   setEditingFields(prev => ({ ...prev, publishLink: false }));
+                               }
                             }}
                             autoFocus={editingFields['publishLink']}
                           />
