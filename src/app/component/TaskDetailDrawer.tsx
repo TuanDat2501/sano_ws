@@ -214,7 +214,7 @@ export default function TaskDetailDrawer({
     { key: 'scriptLink', label: 'Kịch Bản (VN)', role: 'CONTENT', idField: 'contentId', categories: ['AI', 'TONG_HOP'] },
     { key: 'englishScriptLink', label: 'Text ENG', role: 'CONTENT', idField: 'contentId', categories: ['AI'] },
     { key: 'audioLink', label: 'Link Audio (AI)', role: 'EDITOR', idField: 'editorId', categories: ['AI'] }, // 🚀 ĐÃ SỬA ROLE VÀ idField SANG EDITOR
-    { key: 'storyboardLink', label: 'Bố Cục', role: 'EDITOR', idField: 'editorId', categories: ['AI', 'TONG_HOP'] },
+    { key: 'storyboardLink', label: 'Bố Cục', role: 'EDITOR', idField: 'contentId', categories: ['AI', 'TONG_HOP'] },
     { key: 'thumbnailLink', label: 'Thumbnail', role: 'EDITOR', idField: 'editorId', categories: ['AI', 'TONG_HOP'] },
     { key: 'videoLink', label: 'Video Render', role: 'EDITOR', idField: 'editorId', categories: ['AI', 'TONG_HOP'] },
   ];
