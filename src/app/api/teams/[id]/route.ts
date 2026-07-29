@@ -14,24 +14,17 @@ export async function DELETE(req: Request, context: any) {
         const session = await getServerSession(authOptions);
         const currentUser = session?.user as any;
         
-        if (!currentUser || !["ADMIN", "BAN_GIAM_DOC"].includes(currentUser.role)) {
+        if (!currentUser || !["ADMIN", "BAN_GIAM_DOC","HR"].includes(currentUser.role)) {
             return NextResponse.json({ error: "Bạn không có quyền xóa Team!" }, { status: 403 });
         }
 
         const teamToCheck = await prisma.team.findUnique({
-            where: { id: teamId },
-            include: { 
-                // Bỏ đếm users vì chúng ta sẽ giải phóng họ, chỉ giữ lại đếm tasks
-                _count: { select: { tasks: true } } 
-            }
+            where: { id: teamId }
         });
 
         if (!teamToCheck) return NextResponse.json({ error: "Team không tồn tại" }, { status: 404 });
 
-        // Vẫn chặn xóa nếu Team đang chứa Tasks (theo logic cũ của bạn)
-        if (teamToCheck._count.tasks > 0) {
-            return NextResponse.json({ error: `Không thể xóa! Team này đang có ${teamToCheck._count.tasks} task trên hệ thống.` }, { status: 400 });
-        }
+        // 🚀 ĐÃ XÓA BỎ LỆNH CHẶN (if teamToCheck._count.tasks > 0) Ở ĐÂY
 
         // Sử dụng Transaction để đảm bảo tính toàn vẹn dữ liệu
         await prisma.$transaction([
@@ -40,13 +33,31 @@ export async function DELETE(req: Request, context: any) {
                 where: { teamId: teamId },
                 data: { teamId: null }
             }),
-            // Bước 2: Xóa Team
+            
+            // 🚀 BƯỚC 1.5 (BỔ SUNG): Giải phóng toàn bộ Task đang dính tới Team này
+            prisma.task.updateMany({
+                where: { teamId: teamId },
+                data: { teamId: null }
+            }),
+
+            // 🚀 BƯỚC 1.6 (TÙY CHỌN): Nếu Kênh (Channel) và Dự án (Project) của sếp cũng bắt buộc phải gỡ Team thì thêm 2 lệnh này. 
+            // Nếu không cần thì sếp có thể xóa/comment 2 khối updateMany Kênh và Dự án đi nhé.
+            prisma.channel.updateMany({
+                where: { teamId: teamId },
+                data: { teamId: null }
+            }),
+            prisma.project.updateMany({
+                where: { teamId: teamId },
+                data: { teamId: null }
+            }),
+
+            // Bước 2: Cuối cùng mới Xóa Team
             prisma.team.delete({
                 where: { id: teamId }
             })
         ]);
 
-        return NextResponse.json({ message: "Xóa Team và giải phóng nhân sự thành công!" });
+        return NextResponse.json({ message: "Xóa Team và giải phóng nhân sự, công việc thành công!" });
 
     } catch (error) {
         console.error("DELETE Team Error:", error);
