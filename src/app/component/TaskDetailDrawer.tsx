@@ -218,7 +218,7 @@ export default function TaskDetailDrawer({
     { key: 'audioLink', label: 'Link Audio', role: 'EDITOR', idField: 'editorId', categories: ['AI', 'TONG_HOP'] }, 
     // Bố cục (Storyboard) dành cho Content:
     { key: 'storyboardLink', label: 'Bố Cục', role: 'CONTENT', idField: 'contentId', categories: ['AI', 'TONG_HOP'] }, 
-    { key: 'animationLink', label: 'Link Chuyển Động', role: 'CONTENT', idField: 'contentId', categories: ['AI'] }, 
+    { key: 'animationLink', label: 'Link Chuyển Động', role: 'CONTENT', idField: 'animatorId', categories: ['AI'] }, 
     { key: 'thumbnailLink', label: 'Thumbnail', role: 'EDITOR', idField: 'editorId', categories: ['AI', 'TONG_HOP'] },
     { key: 'videoLink', label: 'Video Render', role: 'EDITOR', idField: 'editorId', categories: ['AI', 'TONG_HOP'] },
   ];
