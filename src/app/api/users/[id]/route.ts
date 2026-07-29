@@ -190,7 +190,7 @@ export async function GET(
             const defaultModules = ["MENU_DASHBOARD", "MENU_TASKS", "MENU_KPI", "MENU_REVENUE", "MENU_REQUESTS", "MENU_TEAMS", "MENU_USERS", "MENU_ORG_CHART", "MENU_DAILY_REPORT", "MENU_CHANNELS", "MENU_ANALYTICS", "ACTION_CREATE_TASK", "ACTION_APPROVE_REQUEST", "MENU_PROJECTS"];
             defaultModules.forEach(id => modulePermissions[id] = true);
         } else {
-            const rolesToCheck = [user.role];
+            const rolesToCheck: string[] = [user.role];
 
             // 🚀 BƠM QUYỀN ẢO DỰA TRÊN DEPARTMENT
             // Nếu là Leader VÀ thuộc về Department "Nhân sự", cộng dồn quyền Trưởng Phòng và HR
