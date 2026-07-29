@@ -30,7 +30,7 @@ export async function GET(req: Request) {
             whereClause.teamId = queryTeamId;
         } 
         else {
-            if (role !== "ADMIN" && role !== "BAN_GIAM_DOC" && role !== "HR") {
+            if (role !== "ADMIN" && role !== "BAN_GIAM_DOC" && role !== "HR" && role !== "KE_TOAN") {
                 whereClause.teamId = userTeamId;
             }
         }
