@@ -202,7 +202,7 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
 
     const handleSubmit = async () => {
         if (selectedType === "NGHI_PHEP" && (!contentData.startDate || !contentData.endDate || !contentData.reason?.trim())) {
-            showToast("error", "Sếp ơi, nhập đủ Từ ngày, Đến ngày và Lý do nhé!"); return;
+            showToast("error", "Sếp ơi, nhập đủ ngày và Lý do nhé!"); return;
         }
         if (["DI_MUON_VE_SOM", "LAM_REMOTE"].includes(selectedType) && (!contentData.date || !contentData.reason?.trim())) {
             showToast("error", "Chưa chọn ngày hoặc thiếu lý do rồi sếp!"); return;
