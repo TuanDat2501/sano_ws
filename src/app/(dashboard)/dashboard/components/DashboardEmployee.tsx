@@ -113,7 +113,7 @@ export default function DashboardEmployee() {
 
                         {/* 🚀 ĐÃ SỬA Ở ĐÂY: Thêm max-h-[300px], overflow-y-auto và pr-2 */}
                         <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-                            {!stats.pendingTasks || stats.pendingTasks.length === 0 ? (
+                            {!stats.pendingTasks || stats.pendingTasks?.length === 0 ? (
                                 <p className="text-xs md:text-sm text-slate-400 italic py-4">Bạn không nợ công việc nào. Quá tuyệt vời!</p>
                             ) : (
                                 stats.pendingTasks?.map((task: any) => (

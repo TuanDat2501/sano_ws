@@ -113,6 +113,18 @@ enum ChannelStatus {
 
 // ================= MODELS =================
 
+// ==========================================
+// DANH SÁCH NGƯỜI DUYỆT ĐƠN CẤP 2 MẶC ĐỊNH
+// ==========================================
+model Level2Approver {
+  id        String   @id @default(uuid())
+  
+  userId    String   @unique 
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+}
+
 model Team {
   id           String      @id @default(uuid())
   name         String      @unique // VD: Team Anime, Team Manga
@@ -196,6 +208,7 @@ model User {
   revenueUpdates DailyRevenue[]
   managedChannels   Channel[]       @relation("ChannelManager")
   channelMemberships ChannelMember[]
+  level2Approver     Level2Approver?
 }
 
 model Permission {

@@ -30,18 +30,11 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
     const [approversLv2, setApproversLv2] = useState<any[]>([]);
     const [isLoadingApprovers, setIsLoadingApprovers] = useState(false);
 
-    // 🚀 BƯỚC 1: TẠO STATE RIÊNG NHƯ SẾP GỢI Ý ĐỂ KHÔNG BAO GIỜ TRƯỢT DATA
-    const [leaderApproverOptions, setLeaderApproverOptions] = useState<any[]>([]);
-    const [employeeLv2Options, setEmployeeLv2Options] = useState<any[]>([]);
-    
     const { data: session } = useSession();
     const currentUser = session?.user as any;
     
-    // NHẬN DIỆN CHUẨN CÁC CẤP QUẢN LÝ
     const isLeader = currentUser?.isTeamLeader || currentUser?.role === "LEADER" || currentUser?.role === "HR" || currentUser?.role === "KE_TOAN" || currentUser?.role === "ADMIN";
-    const isHRLeader = currentUser?.role === "HR" && currentUser?.isTeamLeader;
 
-    // HÀM TIỆN ÍCH: Dịch chức danh hiển thị chuẩn nhất
     const getRoleLabel = (u: any) => {
         if (u.role === 'BAN_GIAM_DOC') return 'Giám Đốc';
         if (u.role === 'ADMIN') return 'Admin';
@@ -52,57 +45,40 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
     };
 
     useEffect(() => { setContentData({}); }, [selectedType]);
-    useEffect(() => { 
-        setLeaderApproverOptions(employeeLv2Options)
 
-     }, [employeeLv2Options]);
     useEffect(() => {
-        if (!selectedTeamId) {
+        if (!selectedTeamId && !isLeader) {
             setApproversLv1([]);
-            setApproversLv2([]);
-            setLeaderApproverOptions([]);
-            setEmployeeLv2Options([]);
             return;
         }
         
         setIsLoadingApprovers(true);
         
-        Promise.all([
-            fetch(`/api/requests/approvers?teamId=${selectedTeamId}&lv=1`).then(res => res.json()),
-            fetch(`/api/requests/approvers?teamId=${selectedTeamId}&lv=2`).then(res => res.json())
-        ])
-        .then(([dataLv1, dataLv2]) => {
-            const arr1 = Array.isArray(dataLv1) ? dataLv1 : [];
-            const arr2 = Array.isArray(dataLv2) ? dataLv2 : [];
+        // Luôn luôn gọi API cấp 2 (Level2Approver) vì nó cố định
+        const fetchPromises = [fetch(`/api/approvers/level2`).then(res => res.json())];
 
-            setApproversLv1(arr1);
-            setApproversLv2(arr2);
+        // Nếu là nhân sự thường, gọi thêm API cấp 1 (Leader của Team)
+        if (!isLeader && selectedTeamId) {
+            fetchPromises.push(fetch(`/api/requests/approvers?teamId=${selectedTeamId}&lv=1`).then(res => res.json()));
+        }
 
-            // 🚀 BƯỚC 2: GỘP VÀ GÁN STATE NGAY LẬP TỨC SAU KHI CÓ KẾT QUẢ API
-            const allApprovers = [...arr1, ...arr2].filter((v, i, a) => a.findIndex(t => t.id === v.id) === i);
+        Promise.all(fetchPromises)
+        .then((results) => {
+            const dataLv2 = results[0];
+            // Format data từ API Level2 (API trả về mảng { level2Approvers: [{ user: {...} }] }
+            const mappedLv2 = dataLv2.level2Approvers?.map((a: any) => a.user) || [];
+            setApproversLv2(mappedLv2);
 
-            // Tính toán options cho Leader
-            const leaderOpts = allApprovers.filter(u => {
-                const safeRole = String(u.role).toUpperCase().trim();
-                if (isHRLeader) return safeRole === 'HR'; 
-                return ['ADMIN', 'BAN_GIAM_DOC'].includes(safeRole); 
-            });
-            setLeaderApproverOptions(leaderOpts);
-
-            // Tính toán options cho Nhân viên bình thường
-            const empLv2Opts = allApprovers.filter(u => {
-                const safeRole = String(u.role).toUpperCase().trim();
-                return ['HR', 'ADMIN', 'BAN_GIAM_DOC'].includes(safeRole);
-            });
-            setEmployeeLv2Options(empLv2Opts);
-
-            setIsLoadingApprovers(false);
+            // Nếu có kết quả của API cấp 1 thì set
+            if (results[1]) {
+                const dataLv1 = results[1];
+                setApproversLv1(Array.isArray(dataLv1) ? dataLv1 : []);
+            }
         })
-        .catch(err => {
-            console.error("Lỗi fetch approvers:", err);
-            setIsLoadingApprovers(false);
-        });
-    }, [selectedTeamId, isHRLeader]);
+        .catch(err => console.error("Lỗi fetch approvers:", err))
+        .finally(() => setIsLoadingApprovers(false));
+
+    }, [selectedTeamId, isLeader]);
     
     if (!isOpen) return null;
 
@@ -246,10 +222,10 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
         try {
             const payload = {
                 type: selectedType, 
-                teamId: selectedTeamId, 
+                teamId: selectedTeamId || null, // Có thể không có team nếu là BGD
                 contentData: contentData,
                 firstApproverId: isLeader ? currentUser?.id : firstApproverId,
-                secondApproverId: isLeader ? secondApproverId : (secondApproverId || null),
+                secondApproverId: secondApproverId || null,
                 status: isLeader ? "PENDING_2" : "PENDING_1" 
             };
 
@@ -286,7 +262,7 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
         }
     };
 
-    const isSubmitDisabled = isSubmitting || !selectedTeamId || (!isLeader && !firstApproverId) || (isLeader && !secondApproverId);
+    const isSubmitDisabled = isSubmitting || (!isLeader && !selectedTeamId) || (!isLeader && !firstApproverId) || !secondApproverId;
 
     const modalContent = (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200">
@@ -330,29 +306,32 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
 
                     <hr className="border-slate-100" />
 
-                    <div>
-                        <label className="block text-xs md:text-sm font-bold text-slate-700 mb-1.5 md:mb-2">3. Phòng ban / Team <span className="text-red-500">*</span></label>
-                        <select
-                            className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-xs md:text-sm rounded-lg md:rounded-xl focus:ring-red-500 focus:border-red-500 block p-2.5 md:p-3 outline-none font-medium"
-                            value={selectedTeamId}
-                            onChange={(e) => setSelectedTeamId(e.target.value)}
-                        >
-                            <option value="">-- Vui lòng chọn Team --</option>
-                            {teams.map(t => (
-                                <option key={t.id} value={t.id}>{t.name}</option>
-                            ))}
-                        </select>
-                    </div>
+                    
+                        <div>
+                            <label className="block text-xs md:text-sm font-bold text-slate-700 mb-1.5 md:mb-2">3. Phòng ban / Team <span className="text-red-500">*</span></label>
+                            <select
+                                className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-xs md:text-sm rounded-lg md:rounded-xl focus:ring-red-500 focus:border-red-500 block p-2.5 md:p-3 outline-none font-medium"
+                                value={selectedTeamId}
+                                onChange={(e) => setSelectedTeamId(e.target.value)}
+                            >
+                                <option value="">-- Vui lòng chọn Team --</option>
+                                {teams.map(t => (
+                                    <option key={t.id} value={t.id}>{t.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                   
 
-                    <div className={`transition-opacity ${selectedTeamId ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
-                        <label className="block text-xs md:text-sm font-bold text-slate-700 mb-1.5 md:mb-2">4. Luồng phê duyệt <span className="text-red-500">*</span></label>
-                        {!selectedTeamId && <p className="text-[10px] md:text-xs text-red-500 mb-2 italic">Vui lòng chọn Team ở bước 3 để hiển thị danh sách người duyệt.</p>}
+                    <div className={`transition-opacity ${(selectedTeamId || isLeader) ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
+                        <label className="block text-xs md:text-sm font-bold text-slate-700 mb-1.5 md:mb-2">
+                            {isLeader ? "3" : "4"}. Luồng phê duyệt <span className="text-red-500">*</span>
+                        </label>
+                        {!selectedTeamId && !isLeader && <p className="text-[10px] md:text-xs text-red-500 mb-2 italic">Vui lòng chọn Team ở bước 3 để hiển thị danh sách người duyệt.</p>}
                         
-                        {/* UI HIỂN THỊ CHUẨN XÁC DỰA VÀO LOẠI LEADER */}
                         {isLeader ? (
                             <div className="bg-white border border-slate-200 p-3 md:p-4 rounded-xl">
                                 <span className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 md:mb-2 block">
-                                    Người phê duyệt {isHRLeader ? "(Hành Chính)" : "(Ban Giám Đốc/Admin)"} <span className="text-red-500">*</span>
+                                    Người phê duyệt (Cấp 2) <span className="text-red-500">*</span>
                                 </span>
                                 <select 
                                     className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-xs md:text-sm rounded-lg p-2 outline-none" 
@@ -360,7 +339,7 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
                                     onChange={(e) => setSecondApproverId(e.target.value)}
                                 >
                                     <option value="">{isLoadingApprovers ? "Đang tải..." : "-- Chọn Người phê duyệt --"}</option>
-                                    {leaderApproverOptions.map(u => (
+                                    {approversLv2.map((u: any) => (
                                         <option key={u.id} value={u.id}>
                                             {u.fullName} ({getRoleLabel(u)})
                                         </option>
@@ -370,7 +349,7 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
                         ) : (
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
                                 <div className="bg-white border border-slate-200 p-3 md:p-4 rounded-xl">
-                                    <span className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 md:mb-2 block">Cấp 1 (Bắt buộc)</span>
+                                    <span className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 md:mb-2 block">Cấp 1 (Quản lý) <span className="text-red-500">*</span></span>
                                     <select className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-xs md:text-sm rounded-lg p-2 outline-none" value={firstApproverId} onChange={(e) => setFirstApproverId(e.target.value)}>
                                         <option value="">{isLoadingApprovers ? "Đang tải..." : "-- Chọn Quản lý Cấp 1 --"}</option>
                                         {approversLv1.map(u => (
@@ -381,10 +360,10 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
                                     </select>
                                 </div>
                                 <div className="bg-white border border-slate-200 p-3 md:p-4 rounded-xl">
-                                    <span className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 md:mb-2 block">Cấp 2 (Tùy chọn)</span>
+                                    <span className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 md:mb-2 block">Cấp 2 (Bắt buộc) <span className="text-red-500">*</span></span>
                                     <select className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-xs md:text-sm rounded-lg p-2 outline-none" value={secondApproverId} onChange={(e) => setSecondApproverId(e.target.value)}>
                                         <option value="">{isLoadingApprovers ? "Đang tải..." : "-- Chọn Quản lý Cấp 2 --"}</option>
-                                        {employeeLv2Options.map(u => (
+                                        {approversLv2.map((u: any) => (
                                             <option key={u.id} value={u.id}>
                                                 {u.fullName} ({getRoleLabel(u)})
                                             </option>

@@ -346,7 +346,7 @@ export async function GET(req: Request) {
                 role: "EMPLOYEE",
                 dbRole: role,
                 stats: {
-                    pendingTasks: myActiveTasks.length, // Lấy an toàn số lượng Task đang xử lý
+                    pendingTasks: myActiveTasks, // Lấy an toàn số lượng Task đang xử lý
                     lifetimeLogs: myLogsAllTime,
                     kpiPercent: kpiPercent,
                     targetThisWeek: target,

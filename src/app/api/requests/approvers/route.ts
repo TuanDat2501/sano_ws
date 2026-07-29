@@ -31,7 +31,7 @@ export async function GET(req: Request) {
       roleConditions.push({ teamId: teamId, role: "LEADER" });
     } else if (lv === "2") {
       // Nếu lv = 2: Chỉ lấy Ban Giám Đốc và Hành Chính Nhân Sự
-      roleConditions.push({ role: "HR" });
+      roleConditions.push({team:{ name: "Nhân sự"}});
     } else {
       // (Dự phòng) Nếu không có lv truyền lên, lấy tất cả như cũ
       roleConditions.push(

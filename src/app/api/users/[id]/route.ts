@@ -41,16 +41,23 @@ export async function PUT(
         } = body;
 
         // 3. CHUẨN BỊ GIỎ DỮ LIỆU UPDATE
+        // 3. CHUẨN BỊ GIỎ DỮ LIỆU UPDATE
         const updateData: any = {};
         
         if (fullName) updateData.fullName = fullName;
         if (username) updateData.username = username;
         if (avatarUrl) updateData.avatarUrl = avatarUrl;
         
-        // Cập nhật các trường thông tin cơ bản
-        if (employeeCode !== undefined) updateData.employeeCode = employeeCode;
+        // 🚀 ĐÃ FIX: Chuyển đổi chuỗi rỗng "" thành null đối với các trường @unique để tránh lỗi P2002
+        if (employeeCode !== undefined) {
+            updateData.employeeCode = employeeCode?.trim() === "" ? null : employeeCode;
+        }
+        if (cccdNumber !== undefined) {
+            updateData.cccdNumber = cccdNumber?.trim() === "" ? null : cccdNumber;
+        }
+        
+        // Các trường không unique thì có thể giữ nguyên chuỗi rỗng
         if (ethnicity !== undefined) updateData.ethnicity = ethnicity;
-        if (cccdNumber !== undefined) updateData.cccdNumber = cccdNumber;
         if (cccdPlace !== undefined) updateData.cccdPlace = cccdPlace;
         if (permanentAddress !== undefined) updateData.permanentAddress = permanentAddress;
         if (currentAddress !== undefined) updateData.currentAddress = currentAddress;
