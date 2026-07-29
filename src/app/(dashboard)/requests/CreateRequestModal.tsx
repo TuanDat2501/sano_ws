@@ -93,18 +93,18 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
                     <div className="space-y-3 md:space-y-4 animate-fade-in">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
                             <div>
-                                <label className="block text-[11px] md:text-xs font-bold text-slate-500 mb-1">Từ ngày</label>
+                                <label className="block text-[11px] md:text-xs font-bold text-slate-500 mb-1">Từ ngày*</label>
                                 <input type="date" className="w-full bg-white border border-slate-200 rounded-lg p-2 md:p-2.5 outline-none focus:border-red-500 text-sm"
                                     value={contentData.startDate || ""} onChange={(e) => handleChange("startDate", e.target.value)} />
                             </div>
                             <div>
-                                <label className="block text-[11px] md:text-xs font-bold text-slate-500 mb-1">Đến ngày</label>
+                                <label className="block text-[11px] md:text-xs font-bold text-slate-500 mb-1">Đến ngày*</label>
                                 <input type="date" className="w-full bg-white border border-slate-200 rounded-lg p-2 md:p-2.5 outline-none focus:border-red-500 text-sm"
                                     value={contentData.endDate || ""} onChange={(e) => handleChange("endDate", e.target.value)} />
                             </div>
                         </div>
                         <div>
-                            <label className="block text-[11px] md:text-xs font-bold text-slate-500 mb-1">Lý do xin nghỉ</label>
+                            <label className="block text-[11px] md:text-xs font-bold text-slate-500 mb-1">Lý do xin nghỉ *</label>
                             <textarea rows={3} className="w-full bg-white border border-slate-200 rounded-lg p-2 md:p-2.5 outline-none focus:border-red-500 resize-none text-sm"
                                 placeholder="Nhập lý do chi tiết..."
                                 value={contentData.reason || ""} onChange={(e) => handleChange("reason", e.target.value)} />

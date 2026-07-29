@@ -149,6 +149,7 @@ export async function GET(
             return NextResponse.json({ error: "Bạn không có quyền xem thông tin của người này!" }, { status: 403 });
         }
 
+        // 1. KÉO DỮ LIỆU USER (Kèm Department để tính quyền ảo)
         const user = await prisma.user.findUnique({
             where: { id: targetUserId },
             select: {
@@ -160,25 +161,19 @@ export async function GET(
                 isActive: true, 
                 isTeamLeader: true,
                 createdAt: true,
-                team: { select: { name: true } },
-                // 🚀 TRẢ VỀ ĐẦY ĐỦ CÁC TRƯỜNG HR ĐỂ ĐỔ LÊN FORM
-                employeeCode: true,
-                dob: true,
-                ethnicity: true,
-                cccdNumber: true,
-                cccdDate: true,
-                cccdPlace: true,
-                permanentAddress: true,
-                currentAddress: true,
-                phone: true,
-                personalEmail: true,
-                relativeName: true,
-                relativePhone: true,
-                relativeRelation: true,
-                bankAccount: true,
-                bankName: true,
-                joinDate: true,
-                bhxhNumber: true,
+                
+                // 🚀 LẤY THÊM THÔNG TIN DEPARTMENT
+                team: { 
+                    select: { 
+                        name: true,
+                        department: { select: { name: true } } 
+                    } 
+                },
+                
+                employeeCode: true, dob: true, ethnicity: true, cccdNumber: true, cccdDate: true,
+                cccdPlace: true, permanentAddress: true, currentAddress: true, phone: true,
+                personalEmail: true, relativeName: true, relativePhone: true, relativeRelation: true,
+                bankAccount: true, bankName: true, joinDate: true, bhxhNumber: true,
             }
         });
 
@@ -186,7 +181,43 @@ export async function GET(
             return NextResponse.json({ error: "Không tìm thấy nhân sự này!" }, { status: 404 });
         }
 
-        return NextResponse.json(user, { status: 200 });
+        // 2. LOGIC TÍNH TOÁN QUYỀN HẠN (BAO GỒM QUYỀN ẢO)
+        let modulePermissions: Record<string, boolean> = {};
+
+        if (user.role === "ADMIN" || user.role === "BAN_GIAM_DOC") {
+            const allModules = await prisma.permission.findMany({ select: { moduleId: true }, distinct: ['moduleId'] });
+            allModules.forEach(mod => { modulePermissions[mod.moduleId] = true; });
+            const defaultModules = ["MENU_DASHBOARD", "MENU_TASKS", "MENU_KPI", "MENU_REVENUE", "MENU_REQUESTS", "MENU_TEAMS", "MENU_USERS", "MENU_ORG_CHART", "MENU_DAILY_REPORT", "MENU_CHANNELS", "MENU_ANALYTICS", "ACTION_CREATE_TASK", "ACTION_APPROVE_REQUEST", "MENU_PROJECTS"];
+            defaultModules.forEach(id => modulePermissions[id] = true);
+        } else {
+            const rolesToCheck = [user.role];
+
+            // 🚀 BƠM QUYỀN ẢO DỰA TRÊN DEPARTMENT
+            // Nếu là Leader VÀ thuộc về Department "Nhân sự", cộng dồn quyền Trưởng Phòng và HR
+            if (user.role === "LEADER" && user.team?.department?.name?.toLowerCase().includes("hành chính")) {
+                rolesToCheck.push("DEPARTMENT_LEADER");
+                rolesToCheck.push("HR"); 
+            }
+
+            const rawPerms = await prisma.permission.findMany({
+                where: { 
+                    role: { in: rolesToCheck }, 
+                    isAllowed: true 
+                }
+            });
+            
+            rawPerms.forEach(p => {
+                modulePermissions[p.moduleId] = true;
+            });
+        }
+
+        // 3. ĐÓNG GÓI PAYLOAD GỬI VỀ FRONTEND
+        const responseData = {
+            ...user,
+            permissions: modulePermissions
+        };
+
+        return NextResponse.json(responseData, { status: 200 });
 
     } catch (error) {
         console.error(">>> [API GET USER ERROR]:", error);
