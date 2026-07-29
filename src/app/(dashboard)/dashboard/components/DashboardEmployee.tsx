@@ -46,13 +46,13 @@ export default function DashboardEmployee() {
     // Data đã dọn dẹp sạch sẽ
     const chartData = Array.from({ length: 7 }).map((_, i) => {
         const d = new Date();
-        d.setDate(d.getDate() - (6 - i)); 
+        d.setDate(d.getDate() - (6 - i));
         const dateStr = d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' }).replace('/', '-');
         const apiMatch = (data.chartData || []).find((c: any) => c.date === dateStr);
 
         return {
-            name: dateStr, 
-            done: apiMatch ? apiMatch.done : 0 
+            name: dateStr,
+            done: apiMatch ? apiMatch.done : 0
         };
     });
 
@@ -110,24 +110,25 @@ export default function DashboardEmployee() {
                         <h2 className="text-base md:text-lg font-black text-slate-800 mb-4 flex items-center gap-2">
                             <Clock className="text-slate-400" size={18} /> Đang chờ dán Link báo cáo
                         </h2>
-                        <div className="space-y-3">
+
+                        {/* 🚀 ĐÃ SỬA Ở ĐÂY: Thêm max-h-[300px], overflow-y-auto và pr-2 */}
+                        <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
                             {!stats.pendingTasks || stats.pendingTasks.length === 0 ? (
                                 <p className="text-xs md:text-sm text-slate-400 italic py-4">Bạn không nợ công việc nào. Quá tuyệt vời!</p>
                             ) : (
                                 stats.pendingTasks?.map((task: any) => (
-                                    // Thay đổi ở đây: flex-col trên mobile, sm:flex-row để ngang trên máy to
                                     <div key={task.id} className="bg-slate-50 p-4 rounded-xl border border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 md:gap-4">
                                         <div className="min-w-0">
                                             <p className="font-bold text-slate-800 text-sm truncate">{task.title}</p>
                                             <p className="text-[10px] md:text-xs font-bold text-slate-400 mt-1">Giao lúc: {new Date(task.createdAt).toLocaleDateString('vi-VN')}</p>
                                         </div>
-                                        {/* Nút bấm tự động dàn ngang 100% trên điện thoại (w-full sm:w-auto) */}
-                                        <button 
-                    onClick={() => router.push(`/tasks?taskId=${task.id}`)}
-                    className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-1.5 px-3 rounded-lg transition-all"
-                >
-                    Dán link ngay
-                </button>
+                                        <button
+                                            onClick={() => router.push(`/tasks?taskId=${task.id}`)}
+                                            // Thêm shrink-0 để nút không bị ép nhỏ lại
+                                            className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-1.5 px-3 rounded-lg transition-all shrink-0 w-full sm:w-auto"
+                                        >
+                                            Dán link ngay
+                                        </button>
                                     </div>
                                 ))
                             )}

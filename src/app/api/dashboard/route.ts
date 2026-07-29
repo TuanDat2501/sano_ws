@@ -2,10 +2,11 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
+import { getContinuousWeekRange, getCurrentWeekNumber } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
-function getCurrentWeekNumber(date: Date) {
+/* function getCurrentWeekNumber(date: Date) {
     const year = date.getFullYear();
     const month = date.getMonth(); 
     const firstDayOfMonth = new Date(year, month, 1);
@@ -29,7 +30,7 @@ function getCurrentWeekNumber(date: Date) {
         }
     }
     return 1;
-}
+} */
 
 export async function GET(req: Request) {
     try {
@@ -48,26 +49,30 @@ export async function GET(req: Request) {
         const isManager = isTopManagement || isLeader;
 
         const today = new Date();
-        const startOfWeek = new Date(today);
+        const currentWeekNum = getCurrentWeekNumber(today);
+        const weekRange = getContinuousWeekRange(today.getFullYear(), today.getMonth() + 1, currentWeekNum);
+        const startOfWeek = weekRange.start;
+        startOfWeek.setHours(0, 0, 0, 0);
         const dayOfWeek = today.getDay();
         const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
         startOfWeek.setDate(today.getDate() + diffToMonday);
         startOfWeek.setHours(0, 0, 0, 0);
-        
+
         const sevenDaysAgo = new Date(today);
+        sevenDaysAgo.setDate(today.getDate() - 7); // Tính lùi 7 ngày cho biểu đồ
+        sevenDaysAgo.setHours(0, 0, 0, 0);
         sevenDaysAgo.setDate(today.getDate() - 7); // Tính lùi 7 ngày cho query DB
         sevenDaysAgo.setHours(0, 0, 0, 0);
 
-        const currentWeekNum = getCurrentWeekNumber(today);
-
+        
         // 🚀 THUẬT TOÁN TẠO SẴN KHUNG 7 NGÀY ĐẦY ĐỦ (Bao gồm cả hôm nay)
         const generateEmpty7DaysChart = () => {
             const chartTemplate = [];
             for (let i = 6; i >= 0; i--) {
                 const d = new Date(today);
                 d.setDate(today.getDate() - i);
-                const dateStr = d.toLocaleDateString('vi-VN', { 
-                    day: '2-digit', month: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' 
+                const dateStr = d.toLocaleDateString('vi-VN', {
+                    day: '2-digit', month: '2-digit', timeZone: 'Asia/Ho_Chi_Minh'
                 }).replace('/', '-');
                 chartTemplate.push({ date: dateStr, done: 0 }); // Khởi tạo 0 bài
             }
@@ -80,9 +85,9 @@ export async function GET(req: Request) {
         if (isManager) {
             let teamUserIds: string[] = [];
             if (!isTopManagement) {
-                const teamUsers = await prisma.user.findMany({ 
-                    where: { teamId: teamId, isActive: true }, 
-                    select: { id: true } 
+                const teamUsers = await prisma.user.findMany({
+                    where: { teamId: teamId, isActive: true },
+                    select: { id: true }
                 });
                 teamUserIds = teamUsers.map(u => u.id);
             }
@@ -111,7 +116,7 @@ export async function GET(req: Request) {
             ] = await Promise.all([
                 // 1. Task Đang Chạy: Tất cả task chưa chốt sổ
                 prisma.task.count({ where: { ...taskFilter, isClosed: false } }),
-                
+
                 // 2. Cập nhật các trạng thái Review mới (Content, Animation, Edit)
                 prisma.task.count({
                     where: {
@@ -124,24 +129,24 @@ export async function GET(req: Request) {
                         ]
                     }
                 }),
-                
+
                 // 3. Cập nhật các trạng thái Doing mới
                 prisma.task.count({
                     where: {
                         ...taskFilter,
                         isClosed: false,
                         status: { in: ["TODO", "CONTENT_DOING", "ANIMATION_DOING", "EDIT_DOING"] },
-                        createdAt: { lt: threeDaysAgo } 
+                        createdAt: { lt: threeDaysAgo }
                     }
                 }),
 
                 prisma.taskLog.findMany({
                     where: {
-                        createdAt: { gte: sevenDaysAgo }, 
-                        ...userCondition, 
+                        createdAt: { gte: sevenDaysAgo },
+                        ...userCondition,
                         action: { in: ["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK", "DAILY_REPORT", "MERGE_VIDEO"] }
                     },
-                    orderBy: { createdAt: 'desc' }, 
+                    orderBy: { createdAt: 'desc' },
                     include: { user: { select: { fullName: true } } }
                 }),
 
@@ -149,8 +154,8 @@ export async function GET(req: Request) {
                     where: {
                         year: today.getFullYear(),
                         month: today.getMonth() + 1,
-                        weekNumber: currentWeekNum, 
-                        ...userCondition 
+                        weekNumber: currentWeekNum,
+                        ...userCondition
                     },
                     include: { user: { select: { fullName: true, role: true } } }
                 })
@@ -171,38 +176,38 @@ export async function GET(req: Request) {
             });
 
             const logsThisWeek = validLogs7Days.filter(log => new Date(log.createdAt) >= startOfWeek);
-            
+
             // 🚀 CÔNG THỨC MỚI CHO QUẢN LÝ: Tính số task duy nhất của TỪNG NHÂN VIÊN, sau đó mới cộng dồn lại
             let totalActual = 0;
             const userTaskMap = new Map<string, Set<string>>(); // Bản đồ lưu userId -> Danh sách các taskId duy nhất
-            
+
             logsThisWeek.forEach((log: any) => {
                 if (!userTaskMap.has(log.userId)) {
                     userTaskMap.set(log.userId, new Set());
                 }
                 // Thêm taskId vào tập hợp (Set) của riêng nhân viên đó (Tự động lọc trùng)
-                userTaskMap.get(log.userId)!.add(log.taskId); 
+                userTaskMap.get(log.userId)!.add(log.taskId);
             });
 
             // Cộng dồn điểm KPI thực tế từ từng cá nhân để ra tổng của Team
             userTaskMap.forEach((uniqueTasks) => {
-                totalActual += uniqueTasks.size; 
+                totalActual += uniqueTasks.size;
             });
 
             // Lấy tổng chỉ tiêu (Target) của cả Team
             let totalTarget = 0;
             kpiRecords.forEach((k: any) => totalTarget += k.targetValue);
-            
+
             // Tỷ lệ hoàn thành = (Tổng bài thực làm / Tổng chỉ tiêu) * 100
             const avgKpiPercent = totalTarget > 0 ? Math.round((totalActual / totalTarget) * 100) : 0;
 
             // 🚀 BẢO ĐẢM BIỂU ĐỒ LUÔN CÓ ĐỦ 7 NGÀY
             const chartDataArray = generateEmpty7DaysChart();
             validLogs7Days.forEach(log => {
-                const dateStr = new Date(log.createdAt).toLocaleDateString('vi-VN', { 
-                    day: '2-digit', month: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' 
+                const dateStr = new Date(log.createdAt).toLocaleDateString('vi-VN', {
+                    day: '2-digit', month: '2-digit', timeZone: 'Asia/Ho_Chi_Minh'
                 }).replace('/', '-');
-                
+
                 // Tìm ngày tương ứng trong khung và cộng điểm
                 const existingDay = chartDataArray.find(d => d.date === dateStr);
                 if (existingDay) {
@@ -221,8 +226,8 @@ export async function GET(req: Request) {
             });
 
             return NextResponse.json({
-                role: "MANAGER", 
-                dbRole: role,    
+                role: "MANAGER",
+                dbRole: role,
                 isTopManagement,
                 stats: {
                     activeTasks: totalActiveTasks,
@@ -250,16 +255,16 @@ export async function GET(req: Request) {
                     where: {
                         isClosed: false,
                         OR: [
-                            { contentId: userId, OR: [{scriptLink: {equals: ""}}, {scriptLink: null}] },
-                            { editorId: userId, OR: [{videoLink: {equals: ""}}, {videoLink: null}] },
-                            { publisherId: userId, OR: [{publishLink: {equals: ""}}, {publishLink: null}] }
+                            { contentId: userId, OR: [{ scriptLink: { equals: "" } }, { scriptLink: null }] },
+                            { editorId: userId, OR: [{ videoLink: { equals: "" } }, { videoLink: null }] },
+                            { publisherId: userId, OR: [{ publishLink: { equals: "" } }, { publishLink: null }] }
                         ]
                     },
                     select: { id: true, title: true, createdAt: true }
                 }),
 
                 prisma.taskLog.findMany({
-                    where: { 
+                    where: {
                         userId: userId,
                         action: { in: ["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK", "DAILY_REPORT"] }
                     },
@@ -302,11 +307,11 @@ export async function GET(req: Request) {
             });
 
             const logsThisWeek = validLogs7Days.filter(log => new Date(log.createdAt) >= startOfWeek);
-            
+
             // 🚀 CÔNG THỨC MỚI (TUẦN) CHO NHÂN VIÊN: Đếm số Task duy nhất trong tuần
             const uniqueTasksThisWeek = new Set(logsThisWeek.map((log: any) => log.taskId));
             const actualThisWeek = uniqueTasksThisWeek.size;
-            
+
             const target = myKpiThisWeek?.targetValue || 0;
             const kpiPercent = target > 0 ? Math.round((actualThisWeek / target) * 100) : 0;
 
@@ -317,10 +322,10 @@ export async function GET(req: Request) {
             // 🚀 BẢO ĐẢM BIỂU ĐỒ LUÔN CÓ ĐỦ 7 NGÀY (NHÂN VIÊN)
             const chartDataArray = generateEmpty7DaysChart();
             validLogs7Days.forEach(log => {
-                const dateStr = new Date(log.createdAt).toLocaleDateString('vi-VN', { 
-                    day: '2-digit', month: '2-digit', timeZone: 'Asia/Ho_Chi_Minh' 
+                const dateStr = new Date(log.createdAt).toLocaleDateString('vi-VN', {
+                    day: '2-digit', month: '2-digit', timeZone: 'Asia/Ho_Chi_Minh'
                 }).replace('/', '-');
-                
+
                 const existingDay = chartDataArray.find(d => d.date === dateStr);
                 if (existingDay) {
                     existingDay.done++;
@@ -338,8 +343,8 @@ export async function GET(req: Request) {
             });
 
             return NextResponse.json({
-                role: "EMPLOYEE", 
-                dbRole: role,     
+                role: "EMPLOYEE",
+                dbRole: role,
                 stats: {
                     pendingTasks: myActiveTasks.length, // Lấy an toàn số lượng Task đang xử lý
                     lifetimeLogs: myLogsAllTime,
@@ -347,8 +352,8 @@ export async function GET(req: Request) {
                     targetThisWeek: target,
                     actualThisWeek: actualThisWeek
                 },
-                recentLogs: mappedRecentLogs, 
-                chartData: chartDataArray 
+                recentLogs: mappedRecentLogs,
+                chartData: chartDataArray
             });
         }
     } catch (error) {
