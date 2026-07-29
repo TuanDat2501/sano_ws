@@ -31,7 +31,14 @@ export async function PUT(
 
         // 2. LẤY DỮ LIỆU TỪ FORM (Frontend)
         const body = await request.json();
-        const { username, fullName, role, teamId, password, isActive, avatarUrl } = body;
+        const { 
+            username, fullName, role, teamId, password, isActive, avatarUrl,
+            // 🚀 BỔ SUNG CÁC TRƯỜNG HR & TEAM LEADER
+            isTeamLeader, employeeCode, dob, ethnicity, cccdNumber, cccdDate,
+            cccdPlace, permanentAddress, currentAddress, phone, personalEmail,
+            relativeName, relativePhone, relativeRelation, bankAccount, bankName,
+            joinDate, bhxhNumber
+        } = body;
 
         // 3. CHUẨN BỊ GIỎ DỮ LIỆU UPDATE
         const updateData: any = {};
@@ -39,16 +46,44 @@ export async function PUT(
         if (fullName) updateData.fullName = fullName;
         if (username) updateData.username = username;
         if (avatarUrl) updateData.avatarUrl = avatarUrl;
+        
+        // Cập nhật các trường thông tin cơ bản
+        if (employeeCode !== undefined) updateData.employeeCode = employeeCode;
+        if (ethnicity !== undefined) updateData.ethnicity = ethnicity;
+        if (cccdNumber !== undefined) updateData.cccdNumber = cccdNumber;
+        if (cccdPlace !== undefined) updateData.cccdPlace = cccdPlace;
+        if (permanentAddress !== undefined) updateData.permanentAddress = permanentAddress;
+        if (currentAddress !== undefined) updateData.currentAddress = currentAddress;
+        if (phone !== undefined) updateData.phone = phone;
+        if (personalEmail !== undefined) updateData.personalEmail = personalEmail;
+        if (relativeName !== undefined) updateData.relativeName = relativeName;
+        if (relativePhone !== undefined) updateData.relativePhone = relativePhone;
+        if (relativeRelation !== undefined) updateData.relativeRelation = relativeRelation;
+        if (bankAccount !== undefined) updateData.bankAccount = bankAccount;
+        if (bankName !== undefined) updateData.bankName = bankName;
+        if (bhxhNumber !== undefined) updateData.bhxhNumber = bhxhNumber;
+
+        // Xử lý chuẩn hóa ngày tháng cho Prisma
+        if (dob) updateData.dob = new Date(dob);
+        else if (dob === "") updateData.dob = null;
+
+        if (cccdDate) updateData.cccdDate = new Date(cccdDate);
+        else if (cccdDate === "") updateData.cccdDate = null;
+
+        if (joinDate) updateData.joinDate = new Date(joinDate);
+        else if (joinDate === "") updateData.joinDate = null;
+
         // Xử lý mật khẩu (Chỉ băm nếu sếp có gõ pass mới)
         if (password && password.trim() !== "") {
             updateData.passwordHash = await bcrypt.hash(password, 10);
         }
 
-        // 🚀 ĐẶC QUYỀN CỦA QUẢN LÝ: Chỉ Quản lý mới được phép đổi Role, Team và Khóa tài khoản
+        // 🚀 ĐẶC QUYỀN CỦA QUẢN LÝ: Chỉ Quản lý mới được phép đổi Role, Team, Khóa tài khoản và set Leader
         if (isManager) {
             if (role) updateData.role = role;
             updateData.teamId = teamId || null; // Nếu rỗng thì gán null
-            if (isActive !== undefined) updateData.isActive = isActive; // BẮT ĐƯỢC LỆNH KHÓA/MỞ KHÓA TỪ FE
+            if (isActive !== undefined) updateData.isActive = isActive; 
+            if (isTeamLeader !== undefined) updateData.isTeamLeader = isTeamLeader; 
         }
 
         // 4. LỆNH CHO PRISMA THỰC THI
@@ -62,7 +97,8 @@ export async function PUT(
                 role: true,
                 avatarUrl: true,
                 teamId: true,
-                isActive: true, // Trả về trạng thái khóa
+                isActive: true, 
+                isTeamLeader: true,
                 createdAt: true,
                 team: { select: { name: true } }
             }
@@ -73,9 +109,8 @@ export async function PUT(
     } catch (error: any) {
         console.error(">>> [API UPDATE USER ERROR]:", error);
 
-        // Bắt lỗi User đã tồn tại (VD: Trùng username)
         if (error.code === 'P2002') {
-            return NextResponse.json({ error: "Tên đăng nhập này đã có người sử dụng!" }, { status: 400 });
+            return NextResponse.json({ error: "Dữ liệu bị trùng (Tên đăng nhập, CCCD hoặc Mã NV đã tồn tại)!" }, { status: 400 });
         }
         
         if (error.code === 'P2025') {
@@ -115,9 +150,28 @@ export async function GET(
                 fullName: true,
                 role: true,
                 teamId: true,
-                isActive: true, // 🚀 Bổ sung thêm isActive
+                isActive: true, 
+                isTeamLeader: true,
                 createdAt: true,
-                team: { select: { name: true } } // 🚀 Lấy luôn tên Team
+                team: { select: { name: true } },
+                // 🚀 TRẢ VỀ ĐẦY ĐỦ CÁC TRƯỜNG HR ĐỂ ĐỔ LÊN FORM
+                employeeCode: true,
+                dob: true,
+                ethnicity: true,
+                cccdNumber: true,
+                cccdDate: true,
+                cccdPlace: true,
+                permanentAddress: true,
+                currentAddress: true,
+                phone: true,
+                personalEmail: true,
+                relativeName: true,
+                relativePhone: true,
+                relativeRelation: true,
+                bankAccount: true,
+                bankName: true,
+                joinDate: true,
+                bhxhNumber: true,
             }
         });
 

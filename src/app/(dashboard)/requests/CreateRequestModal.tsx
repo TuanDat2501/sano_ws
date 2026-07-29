@@ -38,7 +38,7 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
     const currentUser = session?.user as any;
     
     // NHẬN DIỆN CHUẨN CÁC CẤP QUẢN LÝ
-    const isLeader = currentUser?.isTeamLeader || currentUser?.role === "LEADER";
+    const isLeader = currentUser?.isTeamLeader || currentUser?.role === "LEADER" || currentUser?.role === "HR" || currentUser?.role === "KE_TOAN" || currentUser?.role === "ADMIN";
     const isHRLeader = currentUser?.role === "HR" && currentUser?.isTeamLeader;
 
     // HÀM TIỆN ÍCH: Dịch chức danh hiển thị chuẩn nhất
