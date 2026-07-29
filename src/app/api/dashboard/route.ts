@@ -112,8 +112,7 @@ export async function GET(req: Request) {
                 // 1. Task Đang Chạy: Tất cả task chưa chốt sổ
                 prisma.task.count({ where: { ...taskFilter, isClosed: false } }),
                 
-                // 2. 🚀 ĐÃ SỬA LOGIC "CHỜ NGHIỆM THU": 
-                // Cập nhật các trạng thái Review mới (Content, Animation, Edit) thay vì "REVIEW" cũ
+                // 2. Cập nhật các trạng thái Review mới (Content, Animation, Edit)
                 prisma.task.count({
                     where: {
                         ...taskFilter,
@@ -126,8 +125,7 @@ export async function GET(req: Request) {
                     }
                 }),
                 
-                // 3. 🚀 ĐÃ SỬA LOGIC "TỒN ĐỌNG": 
-                // Cập nhật các trạng thái Doing mới thay vì "BACKLOG", "TODO", "DOING" cũ
+                // 3. Cập nhật các trạng thái Doing mới
                 prisma.task.count({
                     where: {
                         ...taskFilter,
@@ -173,7 +171,10 @@ export async function GET(req: Request) {
             });
 
             const logsThisWeek = validLogs7Days.filter(log => new Date(log.createdAt) >= startOfWeek);
-            const totalActual = logsThisWeek.length;
+            
+            // 🚀 CÔNG THỨC MỚI CHO QUẢN LÝ: Chỉ đếm số Task ID duy nhất (Lọc mọi spam hành động)
+            const uniqueTasksThisWeek = new Set(logsThisWeek.map((log: any) => log.taskId));
+            const totalActual = uniqueTasksThisWeek.size;
 
             let totalTarget = 0;
             kpiRecords.forEach((k: any) => totalTarget += k.targetValue);
@@ -285,25 +286,17 @@ export async function GET(req: Request) {
             });
 
             const logsThisWeek = validLogs7Days.filter(log => new Date(log.createdAt) >= startOfWeek);
-            const actualThisWeek = logsThisWeek.length;
+            
+            // 🚀 CÔNG THỨC MỚI (TUẦN) CHO NHÂN VIÊN: Đếm số Task duy nhất trong tuần
+            const uniqueTasksThisWeek = new Set(logsThisWeek.map((log: any) => log.taskId));
+            const actualThisWeek = uniqueTasksThisWeek.size;
             
             const target = myKpiThisWeek?.targetValue || 0;
             const kpiPercent = target > 0 ? Math.round((actualThisWeek / target) * 100) : 0;
 
-            let myLogsAllTime = 0;
-            const dailyReportTrackerAllTime = new Set<string>();
-            myLogsAllTimeRaw.forEach(log => {
-                if (log.action === "DAILY_REPORT") {
-                    const dateStr = new Date(log.createdAt).toISOString().split('T')[0];
-                    const uniqueKey = `${log.taskId}_${dateStr}`;
-                    if (!dailyReportTrackerAllTime.has(uniqueKey)) {
-                        dailyReportTrackerAllTime.add(uniqueKey);
-                        myLogsAllTime++;
-                    }
-                } else {
-                    myLogsAllTime++;
-                }
-            });
+            // 🚀 CÔNG THỨC MỚI (ALL TIME) CHO NHÂN VIÊN: Đếm tổng số Task duy nhất từ trước đến nay
+            const uniqueTasksAllTime = new Set(myLogsAllTimeRaw.map((log: any) => log.taskId));
+            const myLogsAllTime = uniqueTasksAllTime.size;
 
             // 🚀 BẢO ĐẢM BIỂU ĐỒ LUÔN CÓ ĐỦ 7 NGÀY (NHÂN VIÊN)
             const chartDataArray = generateEmpty7DaysChart();
@@ -332,7 +325,7 @@ export async function GET(req: Request) {
                 role: "EMPLOYEE", 
                 dbRole: role,     
                 stats: {
-                    pendingTasks: myActiveTasks,
+                    pendingTasks: myActiveTasks.length, // Lấy an toàn số lượng Task đang xử lý
                     lifetimeLogs: myLogsAllTime,
                     kpiPercent: kpiPercent,
                     targetThisWeek: target,
