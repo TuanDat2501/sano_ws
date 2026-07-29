@@ -507,7 +507,7 @@ export default function KanbanBoard() {
         setTaskLinks({
           scriptLink: fullTask.scriptLink || "", englishScriptLink: fullTask.englishScriptLink || "", storyboardLink: fullTask.storyboardLink || "",
           audioLink: fullTask.audioLink || "", thumbnailLink: fullTask.thumbnailLink || "", videoLink: fullTask.videoLink || "",
-          publishLink: fullTask.publishLink || "", note: fullTask.note || ""
+          publishLink: fullTask.publishLink || "", note: fullTask.note || "",animationLink:fullTask.animationLink||""
         });
       }
     } catch (err) {
@@ -703,7 +703,7 @@ export default function KanbanBoard() {
         handleCloseDrawer();
         setTaskLinks({
           scriptLink: "", englishScriptLink: "", storyboardLink: "",
-          audioLink: "", thumbnailLink: "", videoLink: "", publishLink: "", note: ""
+          audioLink: "", thumbnailLink: "", videoLink: "", publishLink: "", note: "",animationLink:""
         });
         setLinksError("");
       } else {
