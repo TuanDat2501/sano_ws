@@ -172,12 +172,28 @@ export async function GET(req: Request) {
 
             const logsThisWeek = validLogs7Days.filter(log => new Date(log.createdAt) >= startOfWeek);
             
-            // 🚀 CÔNG THỨC MỚI CHO QUẢN LÝ: Chỉ đếm số Task ID duy nhất (Lọc mọi spam hành động)
-            const uniqueTasksThisWeek = new Set(logsThisWeek.map((log: any) => log.taskId));
-            const totalActual = uniqueTasksThisWeek.size;
+            // 🚀 CÔNG THỨC MỚI CHO QUẢN LÝ: Tính số task duy nhất của TỪNG NHÂN VIÊN, sau đó mới cộng dồn lại
+            let totalActual = 0;
+            const userTaskMap = new Map<string, Set<string>>(); // Bản đồ lưu userId -> Danh sách các taskId duy nhất
+            
+            logsThisWeek.forEach((log: any) => {
+                if (!userTaskMap.has(log.userId)) {
+                    userTaskMap.set(log.userId, new Set());
+                }
+                // Thêm taskId vào tập hợp (Set) của riêng nhân viên đó (Tự động lọc trùng)
+                userTaskMap.get(log.userId)!.add(log.taskId); 
+            });
 
+            // Cộng dồn điểm KPI thực tế từ từng cá nhân để ra tổng của Team
+            userTaskMap.forEach((uniqueTasks) => {
+                totalActual += uniqueTasks.size; 
+            });
+
+            // Lấy tổng chỉ tiêu (Target) của cả Team
             let totalTarget = 0;
             kpiRecords.forEach((k: any) => totalTarget += k.targetValue);
+            
+            // Tỷ lệ hoàn thành = (Tổng bài thực làm / Tổng chỉ tiêu) * 100
             const avgKpiPercent = totalTarget > 0 ? Math.round((totalActual / totalTarget) * 100) : 0;
 
             // 🚀 BẢO ĐẢM BIỂU ĐỒ LUÔN CÓ ĐỦ 7 NGÀY
