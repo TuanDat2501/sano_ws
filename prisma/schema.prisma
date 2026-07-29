@@ -486,8 +486,8 @@ model Channel {
   status          ChannelStatus      @default(XAY_DUNG)
   monetization    MonetizationStatus @default(CHUA_DAT)
 
-  teamId          String
-  team            Team               @relation(fields: [teamId], references: [id])
+  teamId          String?
+  team            Team?               @relation(fields: [teamId], references: [id])
   
   managerId       String?
   manager         User?              @relation("ChannelManager", fields: [managerId], references: [id])

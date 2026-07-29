@@ -24,43 +24,42 @@ export async function DELETE(req: Request, context: any) {
 
         if (!teamToCheck) return NextResponse.json({ error: "Team không tồn tại" }, { status: 404 });
 
-        // 🚀 ĐÃ XÓA BỎ LỆNH CHẶN (if teamToCheck._count.tasks > 0) Ở ĐÂY
-
         // Sử dụng Transaction để đảm bảo tính toàn vẹn dữ liệu
         await prisma.$transaction([
-            // Bước 1: Giải phóng toàn bộ user trong team (Set teamId = null)
+            // Bước 1: Giải phóng toàn bộ User đang dính tới Team này
             prisma.user.updateMany({
                 where: { teamId: teamId },
                 data: { teamId: null }
             }),
             
-            // 🚀 BƯỚC 1.5 (BỔ SUNG): Giải phóng toàn bộ Task đang dính tới Team này
+            // Bước 2: Giải phóng toàn bộ Task đang dính tới Team này
             prisma.task.updateMany({
                 where: { teamId: teamId },
                 data: { teamId: null }
             }),
 
-            // 🚀 BƯỚC 1.6 (TÙY CHỌN): Nếu Kênh (Channel) và Dự án (Project) của sếp cũng bắt buộc phải gỡ Team thì thêm 2 lệnh này. 
-            // Nếu không cần thì sếp có thể xóa/comment 2 khối updateMany Kênh và Dự án đi nhé.
-            prisma.channel.updateMany({
-                where: { teamId: teamId },
-                data: { teamId: null }
-            }),
+            // 🚀 BƯỚC 3: TRẢ LẠI LỆNH GIẢI PHÓNG PROJECT (Vì bảng Project CÓ chứa teamId)
             prisma.project.updateMany({
                 where: { teamId: teamId },
                 data: { teamId: null }
             }),
 
-            // Bước 2: Cuối cùng mới Xóa Team
+            // Bước 4: Cuối cùng Xóa Team
             prisma.team.delete({
                 where: { id: teamId }
             })
         ]);
 
-        return NextResponse.json({ message: "Xóa Team và giải phóng nhân sự, công việc thành công!" });
+        return NextResponse.json({ message: "Xóa Team và giải phóng nhân sự, dự án thành công!" });
 
-    } catch (error) {
+    } catch (error: any) {
         console.error("DELETE Team Error:", error);
+        
+        // 🚀 Bổ sung thêm chốt chặn báo lỗi chi tiết ra giao diện nếu vẫn còn vướng Foreign Key khác
+        if (error.code === 'P2003') {
+            return NextResponse.json({ error: "Không thể xóa! Vẫn còn dữ liệu quan trọng đang liên kết chặt với Team này." }, { status: 400 });
+        }
+        
         return NextResponse.json({ error: "Lỗi hệ thống khi xóa Team" }, { status: 500 });
     }
 }
@@ -74,7 +73,7 @@ export async function PUT(req: Request, context: any) {
         const session = await getServerSession(authOptions);
         const currentUser = session?.user as any;
         
-        if (!currentUser || !["ADMIN", "BAN_GIAM_DOC"].includes(currentUser.role)) {
+        if (!currentUser || !["ADMIN", "BAN_GIAM_DOC","HR"].includes(currentUser.role)) {
             return NextResponse.json({ error: "Bạn không có quyền sửa Team!" }, { status: 403 });
         }
 
