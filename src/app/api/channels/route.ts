@@ -60,7 +60,7 @@ export async function POST(req: Request) {
 
         // 🚀 BỔ SUNG: Chặn bảo mật - Chỉ cấp Quản lý mới được tạo Kênh
         const role = (session.user as any).role;
-        if (!["ADMIN", "BAN_GIAM_DOC", "LEADER"].includes(role)) {
+        if (!["ADMIN", "BAN_GIAM_DOC", "LEADER","HR","KE_TOAN"].includes(role)) {
             return NextResponse.json({ error: "Không có quyền thực hiện hành động này!" }, { status: 403 });
         }
 
