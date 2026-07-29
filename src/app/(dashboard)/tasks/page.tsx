@@ -69,7 +69,7 @@ export default function KanbanBoard() {
   const [selectedTask, setSelectedTask] = useState<any>(null);
   const [taskLinks, setTaskLinks] = useState({
     scriptLink: "", englishScriptLink: "", storyboardLink: "",
-    audioLink: "", thumbnailLink: "", videoLink: "", publishLink: "", note: ""
+    audioLink: "", thumbnailLink: "", videoLink: "", publishLink: "", note: "",animationLink:""
   });
   const [isSavingLinks, setIsSavingLinks] = useState(false);
   const { showToast } = useToast();
@@ -494,7 +494,7 @@ export default function KanbanBoard() {
     setTaskLinks({
       scriptLink: task.scriptLink || "", englishScriptLink: task.englishScriptLink || "", storyboardLink: task.storyboardLink || "",
       audioLink: task.audioLink || "", thumbnailLink: task.thumbnailLink || "", videoLink: task.videoLink || "",
-      publishLink: task.publishLink || "", note: task.note || ""
+      publishLink: task.publishLink || "", note: task.note || "",animationLink:task.animationLink
     });
 
     try {

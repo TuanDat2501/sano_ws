@@ -491,7 +491,7 @@ export default function TaskDetailDrawer({
                       const isCreator = selectedTask.creatorId === sessionUserId && field.key === 'scriptLink';
                       const isAllowed = isManager || isAssigned || isCreator;
 
-                      const currentLink = taskLinks[field.key as keyof typeof taskLinks] || "";
+                      const currentLink = taskLinks[field.key as keyof typeof taskLinks] ?? selectedTask[field.key] ?? "";
                       const isEditing = editingFields[field.key] || !currentLink; // Bật ô nhập nếu đang sửa hoặc chưa có link
 
                       return (
