@@ -7,7 +7,7 @@ import EvaluationPanel from "./EvaluationPanel";
 
 interface TaskDetailDrawerProps {
   isOpen: boolean;
-  isLoading?: boolean; // 🚀 BỔ SUNG PROP NÀY
+  isLoading?: boolean; 
   onClose: () => void;
   selectedTask: any;
   taskLinks: any;
@@ -71,6 +71,11 @@ export default function TaskDetailDrawer({
   const [chatImageFile, setChatImageFile] = useState<File | null>(null);
   const [chatImagePreview, setChatImagePreview] = useState<string | null>(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  
+  const [savingField, setSavingField] = useState<string | null>(null);
+  const [savedField, setSavedField] = useState<string | null>(null);
+  const [editingFields, setEditingFields] = useState<Record<string, boolean>>({});
+
   useEffect(() => setMounted(true), []);
 
   useEffect(() => {
@@ -78,7 +83,7 @@ export default function TaskDetailDrawer({
       setRightTab('chat');
       setCheckedStandards({});
       setKaizenNote('');
-      setEditingFields({}); // 🚀 BỔ SUNG: Reset lại chế độ chỉnh sửa
+      setEditingFields({}); 
     }
   }, [isOpen, selectedTask?.id]);
 
@@ -93,7 +98,7 @@ export default function TaskDetailDrawer({
     });
     return totalScore.toFixed(1);
   }, [checkedStandards]);
-  // Hàm xử lý chọn file ảnh
+  
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -103,13 +108,11 @@ export default function TaskDetailDrawer({
     }
   };
 
-  // Hàm xử lý xóa ảnh đang chọn
   const handleRemoveImage = () => {
     setChatImageFile(null);
     setChatImagePreview(null);
   };
 
-  // Sửa hàm xử lý việc gửi tin nhắn bao gồm quá trình tải ảnh
   const handleSendMessageWrapper = async () => {
     let imageUrl = undefined;
 
@@ -127,8 +130,6 @@ export default function TaskDetailDrawer({
       }
     }
 
-    // Gọi hàm onSendMessage truyền vào imageUrl (và text sẽ do props cha quản lý)
-    // Chú ý: bạn cần đảm bảo cha (hoặc hàm onSendMessage này) có khả năng gửi tin nhắn chỉ có ảnh (text rỗng)
     if (chatMessage.trim() !== '' || imageUrl) {
       onSendMessage(imageUrl);
       setChatImageFile(null);
@@ -143,12 +144,8 @@ export default function TaskDetailDrawer({
     setTimeout(() => setIsEvaluating(false), 800);
   };
 
-  const [savingField, setSavingField] = useState<string | null>(null);
-  const [savedField, setSavedField] = useState<string | null>(null);
-  const [editingFields, setEditingFields] = useState<Record<string, boolean>>({});
   if (!selectedTask) return null;
   const isManager = ["ADMIN", "BAN_GIAM_DOC", "LEADER", "HR", "KE_TOAN"].includes(userRole);
-
   const isParticipant = isManager || selectedTask.contentId === sessionUserId || selectedTask.editorId === sessionUserId || selectedTask.creatorId === sessionUserId;
 
   const handleAutoSave = async (fieldKey: string, newValue: string) => {
@@ -213,19 +210,17 @@ export default function TaskDetailDrawer({
 
   const allLinkFields = [
     { key: 'scriptLink', label: 'Kịch Bản', role: 'CONTENT', idField: 'contentId', categories: ['AI', 'TONG_HOP'] },
-    { key: 'englishScriptLink', label: 'Text ENG', role: 'CONTENT', idField: 'contentId', categories: ['AI'] },
-    // Audio dành cho Editor:
     { key: 'audioLink', label: 'Link Audio', role: 'EDITOR', idField: 'editorId', categories: ['AI', 'TONG_HOP'] }, 
-    // Bố cục (Storyboard) dành cho Content:
     { key: 'storyboardLink', label: 'Bố Cục', role: 'CONTENT', idField: 'contentId', categories: ['AI', 'TONG_HOP'] }, 
     { key: 'animationLink', label: 'Link Chuyển Động', role: 'CONTENT', idField: 'animatorId', categories: ['AI'] }, 
     { key: 'thumbnailLink', label: 'Thumbnail', role: 'EDITOR', idField: 'editorId', categories: ['AI', 'TONG_HOP'] },
     { key: 'videoLink', label: 'Video Render', role: 'EDITOR', idField: 'editorId', categories: ['AI', 'TONG_HOP'] },
+    { key: 'linkProject', label: 'Link Project', role: 'EDITOR', idField: 'editorId', categories: ['AI', 'TONG_HOP'] },
   ];
 
   let visibleLinkFields = allLinkFields.filter(f => f.categories.includes(channelCategory));
   if (selectedTask?.isCompilation) {
-    visibleLinkFields = visibleLinkFields.filter(f => ['thumbnailLink', 'videoLink'].includes(f.key));
+    visibleLinkFields = visibleLinkFields.filter(f => ['thumbnailLink', 'videoLink','linkProject'].includes(f.key));
   }
 
   const drawerContent = (
@@ -234,7 +229,6 @@ export default function TaskDetailDrawer({
 
       <div className={`fixed top-0 right-0 h-full w-full md:w-[1000px] md:max-w-[95vw] bg-white shadow-2xl z-[99999] transform transition-transform duration-300 flex flex-col ${isOpen ? "translate-x-0" : "translate-x-full"}`}>
 
-        {/* HEADER: HIỂN THỊ LUÔN NGAY KHI VỪA MỞ */}
         <div className="px-4 md:px-6 py-3 md:py-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shrink-0 bg-white z-10">
           <div className="flex flex-col w-full sm:w-auto gap-1.5">
             <div className="flex items-center gap-2 flex-wrap">
@@ -265,27 +259,7 @@ export default function TaskDetailDrawer({
               <span className="text-[10px] font-black uppercase text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-100">
                 {selectedTask.team?.name || "Chưa có Team"}
               </span>
-              {/* <select
-                disabled={!isManager}
-                value={selectedTask.priority || "NORMAL"}
-                onChange={(e) => {
-                  // 🚀 Lập tức lưu vào state local và gọi API AutoSave
-                  selectedTask.priority = e.target.value;
-                  handleAutoSave("priority", e.target.value);
-                }}
-                className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-md border shadow-sm outline-none cursor-pointer${selectedTask.priority === 'URGENT' ? 'bg-red-600 text-white border-red-700 animate-pulse' :
-                    selectedTask.priority === 'HIGH' ? 'bg-orange-100 text-orange-700 border-orange-200' :
-                      selectedTask.priority === 'LOW' ? 'bg-slate-100 text-slate-500 border-slate-200' :
-                        'bg-blue-50 text-blue-600 border-blue-200'}`}
-              >
-                <option value="LOW">Thấp</option>
-                <option value="NORMAL">Bình thường</option>
-                <option value="HIGH">Ưu tiên Cao</option>
-                <option value="URGENT">GẤP</option>
-              </select> */}
-
-
-
+             
               {selectedTask.duration && (
                 <span className="text-[10px] font-black uppercase text-purple-600 bg-purple-50 px-2.5 py-1 rounded-md border border-purple-100 flex items-center gap-1 shadow-sm">
                   <Clock size={12} /> {selectedTask.duration} PHÚT
@@ -335,15 +309,12 @@ export default function TaskDetailDrawer({
           </div>
         </div>
 
-        {/* NẾU ĐANG LOADING THÌ HIỂN THỊ KHỐI SKELETON */}
         {isLoading ? (
           <div className="flex flex-col lg:flex-row flex-1 overflow-hidden bg-slate-50 relative">
             <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white/40 backdrop-blur-[1px]">
               <Loader2 size={40} className="animate-spin text-blue-600 mb-3 drop-shadow-md" />
               <p className="text-sm font-black text-blue-600 uppercase tracking-widest animate-pulse">Đang tải chi tiết bài...</p>
             </div>
-
-            {/* Cột trái Skeleton */}
             <div className="w-full lg:w-[55%] flex flex-col h-full border-r border-slate-200 bg-white p-4 md:p-6 space-y-6">
               <div className="h-24 w-full bg-slate-100/80 rounded-[24px] animate-pulse border border-slate-200"></div>
               <div className="grid grid-cols-2 gap-4">
@@ -355,13 +326,9 @@ export default function TaskDetailDrawer({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="h-14 bg-white border border-slate-200 rounded-xl"></div>
                   <div className="h-14 bg-white border border-slate-200 rounded-xl"></div>
-                  <div className="h-14 bg-white border border-slate-200 rounded-xl"></div>
-                  <div className="h-14 bg-white border border-slate-200 rounded-xl"></div>
                 </div>
               </div>
             </div>
-
-            {/* Cột phải Skeleton */}
             <div className="w-full lg:w-[45%] flex flex-col h-full bg-white">
               <div className="p-4 border-b border-slate-100 bg-white flex items-center gap-2 shrink-0 animate-pulse">
                 <div className="h-5 w-5 bg-slate-200 rounded-full"></div>
@@ -372,18 +339,10 @@ export default function TaskDetailDrawer({
                   <div className="h-3 w-24 bg-slate-200 rounded mb-1.5"></div>
                   <div className="h-12 w-3/4 max-w-[250px] bg-white border border-slate-200 rounded-2xl rounded-tl-sm shadow-sm"></div>
                 </div>
-                <div className="flex flex-col items-end w-full animate-pulse mt-4">
-                  <div className="h-3 w-24 bg-slate-200 rounded mb-1.5"></div>
-                  <div className="h-12 w-3/4 max-w-[250px] bg-blue-100 rounded-2xl rounded-tr-sm shadow-sm"></div>
-                </div>
-              </div>
-              <div className="p-4 bg-white border-t border-slate-100 shrink-0">
-                <div className="h-12 w-full bg-slate-50 border border-slate-200 rounded-2xl animate-pulse"></div>
               </div>
             </div>
           </div>
         ) : (
-          /* NẾU ĐÃ LOAD XONG THÌ HIỂN THỊ NỘI DUNG THẬT */
           <div className="flex flex-col lg:flex-row flex-1 overflow-hidden bg-slate-50">
 
             <div className="w-full lg:w-[55%] flex flex-col h-full border-r border-slate-200 bg-white">
@@ -489,10 +448,25 @@ export default function TaskDetailDrawer({
                     {visibleLinkFields.map((field, idx) => {
                       const isAssigned = selectedTask[field.idField] === sessionUserId;
                       const isCreator = selectedTask.creatorId === sessionUserId && field.key === 'scriptLink';
-                      const isAllowed = isManager || isAssigned || isCreator;
+                      
+                      // 🚀 BỔ SUNG LOGIC: Kiểm tra xem Task có đang nằm ở đúng cột (status) của người đó không
+                      let isTaskAtRightStatus = false;
+                      if (field.role === 'CONTENT') {
+                          // Nếu là Content, chỉ được sửa ở cột TODO, DOING, REVIEW
+                          isTaskAtRightStatus = ['TODO', 'CONTENT_DOING', 'CONTENT_REVIEW'].includes(selectedTask.status);
+                      } else if (field.role === 'EDITOR') {
+                          // Nếu là Editor, chỉ được sửa ở cột EDIT_DOING, EDIT_REVIEW
+                          isTaskAtRightStatus = ['EDIT_DOING', 'EDIT_REVIEW'].includes(selectedTask.status);
+                      } else if (field.key === 'animationLink') {
+                          // Nếu là Animator
+                          isTaskAtRightStatus = ['ANIMATION_DOING', 'ANIMATION_REVIEW'].includes(selectedTask.status);
+                      }
+
+                      // Tổng hợp điều kiện: Là quản lý HOẶC (Được giao + Đang ở đúng trạm của mình)
+                      const isAllowed = isManager || (isCreator && isTaskAtRightStatus) || (isAssigned && isTaskAtRightStatus);
 
                       const currentLink = taskLinks[field.key as keyof typeof taskLinks] ?? selectedTask[field.key] ?? "";
-                      const isEditing = editingFields[field.key] || !currentLink; // Bật ô nhập nếu đang sửa hoặc chưa có link
+                      const isEditing = editingFields[field.key] || !currentLink; 
 
                       return (
                         <div key={field.key} className="space-y-1.5">
@@ -502,7 +476,6 @@ export default function TaskDetailDrawer({
                               {savingField === field.key && <Loader2 size={12} className="animate-spin text-blue-500" />}
                               {savedField === field.key && <CheckCircle2 size={12} className="text-emerald-500" />}
                             </span>
-                            {/* 🚀 NÚT SỬA: Chỉ hiện khi có link và được phép sửa */}
                             {!isEditing && isAllowed && (
                               <button onClick={() => setEditingFields({ ...editingFields, [field.key]: true })} className="text-blue-500 hover:text-blue-700 flex items-center gap-1 normal-case tracking-normal transition-colors">
                                 <Pencil size={12} /> Sửa
@@ -513,27 +486,25 @@ export default function TaskDetailDrawer({
                           {isEditing ? (
                             <input
                               type="url" disabled={!isAllowed}
-                              placeholder={!isAllowed ? "Chỉ người phụ trách" : "Dán link..."}
+                              // Thay đổi placeholder để gợi ý lý do không được sửa
+                              placeholder={!isAllowed ? (!isTaskAtRightStatus && isAssigned ? "Chưa đến bước của bạn" : "Chỉ người phụ trách") : "Dán link..."}
                               className={`w-full border rounded-xl p-3 text-[13px] outline-none transition-all ${!isAllowed ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-white text-slate-800 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10'} ${errors[field.key] ? 'border-red-500' : ''}`}
                               value={currentLink}
                               onChange={e => {
                                  setTaskLinks({ ...taskLinks, [field.key]: e.target.value });
-                                 // 🚀 KHÓA TRẠNG THÁI EDIT: Bắt buộc giữ input để hàm onBlur kịp chạy
                                  if (!editingFields[field.key]) {
                                      setEditingFields(prev => ({ ...prev, [field.key]: true }));
                                  }
                               }}
                               onBlur={(e) => {
                                 handleAutoSave(field.key, e.target.value);
-                                // Thoát khỏi input nếu có link (dùng prev để lấy state an toàn)
                                 if (e.target.value.trim() !== '') {
                                     setEditingFields(prev => ({ ...prev, [field.key]: false }));
                                 }
                               }}
-                              autoFocus={editingFields[field.key]} // Tự động focus con trỏ chuột khi bấm sửa
+                              autoFocus={editingFields[field.key]} 
                             />
                           ) : (
-                            // 🚀 HIỂN THỊ LINK BẤM ĐƯỢC
                             <div className="w-full border border-slate-200 bg-slate-50 rounded-xl p-3 flex items-center gap-2 hover:bg-slate-100 transition-colors group">
                               <LinkIcon size={14} className="text-slate-400 shrink-0 group-hover:text-blue-500 transition-colors" />
                               <a href={currentLink} target="_blank" rel="noreferrer" className="text-[13px] font-medium text-blue-600 hover:text-blue-700 hover:underline truncate block w-full">
@@ -553,9 +524,7 @@ export default function TaskDetailDrawer({
                            {savedField === 'publishLink' && <CheckCircle2 size={12} className="text-emerald-500" />}
                         </span>
                         {!editingFields['publishLink'] && taskLinks.publishLink && isManager && (
-                           <button onClick={() => setEditingFields({...editingFields, publishLink: true})} className="text-blue-500 hover:text-blue-700 text-xs flex items-center gap-1 normal-case tracking-normal"
-                            
-                           >
+                           <button onClick={() => setEditingFields({...editingFields, publishLink: true})} className="text-blue-500 hover:text-blue-700 text-xs flex items-center gap-1 normal-case tracking-normal">
                               <Pencil size={12}/> Sửa
                            </button>
                         )}
@@ -565,11 +534,10 @@ export default function TaskDetailDrawer({
                           <input
                             type="url" disabled={!isManager}
                             placeholder={!isManager ? "Chỉ Quản lý Kênh" : "Dán link YouTube..."}
-                            className="w-full border rounded-xl p-3 text-[13px] outline-none transition-all bg-white text-slate-800 focus:border-red-500 focus:ring-4 focus:ring-red-500/10"
+                            className={`w-full border rounded-xl p-3 text-[13px] outline-none transition-all ${!isManager ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-white text-slate-800 focus:border-red-500 focus:ring-4 focus:ring-red-500/10'}`}
                             value={taskLinks.publishLink || ""}
                             onChange={e => {
                                setTaskLinks({ ...taskLinks, publishLink: e.target.value });
-                               // 🚀 KHÓA TRẠNG THÁI EDIT
                                if (!editingFields['publishLink']) {
                                    setEditingFields(prev => ({ ...prev, publishLink: true }));
                                }
@@ -637,18 +605,14 @@ export default function TaskDetailDrawer({
                         <div key={msg.id} className={`flex flex-col ${msg.senderId === sessionUserId ? "items-end" : "items-start"}`}>
                           <span className="text-[10px] font-bold text-slate-400 mb-1">{msg.sender} • {msg.time}</span>
                           <div className={`px-4 py-2.5 rounded-2xl text-sm font-medium max-w-[85%] shadow-sm ${msg.senderId === sessionUserId ? "bg-blue-600 text-white rounded-tr-sm" : "bg-white border border-slate-200 text-slate-700 rounded-tl-sm"}`}>
-                            {/* Hiển thị hình ảnh nếu có */}
                             {msg.imageUrl && (
                               <img
                                 src={msg.imageUrl}
                                 alt="Đính kèm"
-                                // 🚀 BỔ SUNG: Giới hạn chiều rộng và chiều cao tối đa, bo góc xịn xò
                                 className="max-w-[200px] sm:max-w-[250px] max-h-[250px] object-cover rounded-xl mb-2 border border-slate-200 shadow-sm hover:opacity-90 cursor-pointer"
-                                // Tùy chọn: Thêm onclick để mở ảnh to nếu sếp muốn
                                 onClick={() => window.open(msg.imageUrl, '_blank')}
                               />
                             )}
-                            {/* Hiển thị văn bản tin nhắn */}
                             {msg.text && <div>{msg.text}</div>}
                           </div>
                         </div>
@@ -656,13 +620,11 @@ export default function TaskDetailDrawer({
                     )}
                   </div>
                   <div className="p-4 bg-white border-t border-slate-100 shrink-0 flex flex-col gap-2">
-                    {/* Khu vực hiển thị xem trước hình ảnh (Preview) */}
                     {chatImagePreview && (
                       <div className="relative inline-block w-fit mt-1 ml-1 mb-2">
                         <img
                           src={chatImagePreview}
                           alt="Xem trước"
-                          // Ép kích thước ảnh thành hình vuông nhỏ (w-16 h-16) và cắt gọn (object-cover)
                           className="w-16 h-16 object-cover rounded-xl border border-slate-200 shadow-sm"
                         />
                         <button
@@ -674,9 +636,7 @@ export default function TaskDetailDrawer({
                       </div>
                     )}
 
-                    {/* Khung nhập nội dung */}
                     <div className="flex items-end gap-2 bg-slate-50 border border-slate-200 rounded-2xl p-1.5 focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-500/10 transition-all">
-                      {/* Nút đính kèm ảnh (ẩn thẻ input) */}
                       <label className="p-2.5 cursor-pointer text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all">
                         <ImageIcon size={18} />
                         <input

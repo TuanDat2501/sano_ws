@@ -67,6 +67,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             if (rawBody.channelId !== undefined) body.channelId = rawBody.channelId || null;
             if (rawBody.priority !== undefined) body.priority = rawBody.priority;
             if (rawBody.animationLink !== undefined) body.animationLink = rawBody.animationLink;
+            if (rawBody.linkProject !== undefined) body.linkProject = rawBody.linkProject;
         } else if (currentUser.role === "CONTENT") {
             // 🚀 ĐÃ SỬA: Cho phép kéo thẻ nếu nhân sự đang đóng vai trò Content, Creator HOẶC có tên trong cột Animator
             if (oldTask.contentId !== currentUser.id && oldTask.creatorId !== currentUser.id && oldTask.animatorId !== currentUser.id) {
@@ -85,6 +86,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             }
             if (rawBody.status !== undefined) body.status = rawBody.status;
             if (rawBody.videoLink !== undefined) body.videoLink = rawBody.videoLink;
+            if (rawBody.linkProject !== undefined) body.linkProject = rawBody.linkProject;
             // if (rawBody.storyboardLink !== undefined) body.storyboardLink = rawBody.storyboardLink;
             if (rawBody.thumbnailLink !== undefined) body.thumbnailLink = rawBody.thumbnailLink;
             if (rawBody.audioLink !== undefined) body.audioLink = rawBody.audioLink; // 🚀 ĐÃ BỔ SUNG QUYỀN SỬA audioLink CHO EDITOR
@@ -209,6 +211,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 englishScriptLink:body.englishScriptLink !== undefined ? body.englishScriptLink : undefined,
                 thumbnailLink:body.thumbnailLink !== undefined ? body.thumbnailLink : undefined,
                 animationLink:body.animationLink !== undefined ? body.animationLink : undefined,
+                linkProject:body.linkProject !== undefined ? body.linkProject : undefined,
             }
         });
 

@@ -41,7 +41,7 @@ export async function POST(req: Request) {
                     linkContent: dummyLinkContent,
                     isCompilation: true,
                     mergeCount: sourceTasks.length,
-                    status: "TODO", 
+                    status: "EDIT_DOING", 
                     note: autoNote,
                     creatorId: currentUser.id,
                     teamId: teamId,
