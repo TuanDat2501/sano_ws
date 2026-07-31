@@ -457,8 +457,10 @@ export default function TaskDetailDrawer({
                       } else if (field.role === 'EDITOR') {
                           // Nếu là Editor, chỉ được sửa ở cột EDIT_DOING, EDIT_REVIEW
                           isTaskAtRightStatus = ['EDIT_DOING', 'EDIT_REVIEW'].includes(selectedTask.status);
-                      } else if (field.key === 'animationLink') {
-                          // Nếu là Animator
+                      }
+                      
+                      // Cụ thể hóa điều kiện cho AnimationLink
+                      if (field.key === 'animationLink') {
                           isTaskAtRightStatus = ['ANIMATION_DOING', 'ANIMATION_REVIEW'].includes(selectedTask.status);
                       }
 
