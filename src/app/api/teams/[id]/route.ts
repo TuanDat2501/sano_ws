@@ -7,14 +7,16 @@ export const dynamic = "force-dynamic";
 
 export async function DELETE(req: Request, context: any) {
     try {
-        // Giải mã params cho Next.js bản mới
         const params = await context.params;
         const teamId = params.id;
 
         const session = await getServerSession(authOptions);
         const currentUser = session?.user as any;
         
-        if (!currentUser || !["ADMIN", "BAN_GIAM_DOC","HR"].includes(currentUser.role)) {
+        // 🚀 ĐÃ SỬA: Đọc quyền động từ biến permissions thay vì fix cứng Role
+        const hasPermission = currentUser?.permissions?.includes("MENU_TEAMS") || currentUser?.role === "ADMIN";
+
+        if (!currentUser || !hasPermission) {
             return NextResponse.json({ error: "Bạn không có quyền xóa Team!" }, { status: 403 });
         }
 
@@ -24,27 +26,22 @@ export async function DELETE(req: Request, context: any) {
 
         if (!teamToCheck) return NextResponse.json({ error: "Team không tồn tại" }, { status: 404 });
 
-        // Sử dụng Transaction để đảm bảo tính toàn vẹn dữ liệu
         await prisma.$transaction([
-            // Bước 1: Giải phóng toàn bộ User đang dính tới Team này
             prisma.user.updateMany({
                 where: { teamId: teamId },
                 data: { teamId: null }
             }),
             
-            // Bước 2: Giải phóng toàn bộ Task đang dính tới Team này
             prisma.task.updateMany({
                 where: { teamId: teamId },
                 data: { teamId: null }
             }),
 
-            // 🚀 BƯỚC 3: TRẢ LẠI LỆNH GIẢI PHÓNG PROJECT (Vì bảng Project CÓ chứa teamId)
             prisma.project.updateMany({
                 where: { teamId: teamId },
                 data: { teamId: null }
             }),
 
-            // Bước 4: Cuối cùng Xóa Team
             prisma.team.delete({
                 where: { id: teamId }
             })
@@ -55,7 +52,6 @@ export async function DELETE(req: Request, context: any) {
     } catch (error: any) {
         console.error("DELETE Team Error:", error);
         
-        // 🚀 Bổ sung thêm chốt chặn báo lỗi chi tiết ra giao diện nếu vẫn còn vướng Foreign Key khác
         if (error.code === 'P2003') {
             return NextResponse.json({ error: "Không thể xóa! Vẫn còn dữ liệu quan trọng đang liên kết chặt với Team này." }, { status: 400 });
         }
@@ -64,7 +60,6 @@ export async function DELETE(req: Request, context: any) {
     }
 }
 
-// [PUT] CẬP NHẬT/ĐIỀU CHUYỂN TEAM (Giữ nguyên như cũ)
 export async function PUT(req: Request, context: any) {
     try {
         const params = await context.params;
@@ -73,7 +68,10 @@ export async function PUT(req: Request, context: any) {
         const session = await getServerSession(authOptions);
         const currentUser = session?.user as any;
         
-        if (!currentUser || !["ADMIN", "BAN_GIAM_DOC","HR"].includes(currentUser.role)) {
+        // 🚀 ĐÃ SỬA: Đọc quyền động từ biến permissions thay vì fix cứng Role
+        const hasPermission = currentUser?.permissions?.includes("MENU_TEAMS") || currentUser?.role === "ADMIN";
+
+        if (!currentUser || !hasPermission) {
             return NextResponse.json({ error: "Bạn không có quyền sửa Team!" }, { status: 403 });
         }
 
@@ -96,7 +94,6 @@ export async function PUT(req: Request, context: any) {
     }
 }
 
-// BỔ SUNG HÀM GET ĐỂ LẤY CHI TIẾT TEAM KÈM DANH SÁCH USER VÀ KÊNH
 export async function GET(req: Request, context: any) {
     try {
         const params = await context.params;
@@ -111,7 +108,7 @@ export async function GET(req: Request, context: any) {
             where: { id: teamId },
             include: {
                 users: {
-                    where: { isActive: true }, // Chỉ lấy user đang hoạt động
+                    where: { isActive: true }, 
                     select: {
                         id: true,
                         fullName: true,
@@ -119,7 +116,7 @@ export async function GET(req: Request, context: any) {
                         teamId: true
                     }
                 },
-                channels: true // 🚀 BỔ SUNG: Lấy toàn bộ kênh thuộc sở hữu của Team này
+                channels: true 
             }
         });
 

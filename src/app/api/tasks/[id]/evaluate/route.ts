@@ -1,5 +1,3 @@
-// File: src/app/api/tasks/[id]/evaluate/route.ts
-
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
@@ -12,10 +10,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             return NextResponse.json({ error: "Chưa đăng nhập!" }, { status: 401 });
         }
 
-        const user = session.user as any;
+        const currentUser = session.user as any;
         
-        // 🚀 ĐÃ SỬA: Đổi "QLK" thành "CHANNEL_MANAGER" cho khớp với schema
-        if (!["ADMIN", "BAN_GIAM_DOC", "LEADER", "CHANNEL_MANAGER"].includes(user.role)) {
+        // 🚀 ĐÃ SỬA: Thay thế fix cứng Role bằng phân quyền động từ biến permissions
+        const hasPermission = currentUser.permissions?.includes("ACTION_CREATE_TASK") || ["ADMIN", "BAN_GIAM_DOC", "LEADER", "CHANNEL_MANAGER"].includes(currentUser.role);
+        
+        if (!hasPermission) {
              return NextResponse.json({ error: "Không có quyền chấm điểm!" }, { status: 403 });
         }
 
@@ -26,7 +26,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
         const isPass = score >= 7;
         
-        // 🚀 ĐÃ SỬA: Thay "DOING" bằng "TODO" (Hoặc sếp có thể đổi thành "EDIT_DOING" tùy quy trình)
+        // Thay "DOING" bằng "TODO" (Hoặc sếp có thể đổi thành "EDIT_DOING" tùy quy trình)
         const newStatus = isPass ? "DONE" : "TODO"; 
 
         const [evaluation, updatedTask, systemComment] = await prisma.$transaction([
@@ -37,7 +37,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
                     score: score,
                     criteria: criteria, 
                     kaizenNote: note,
-                    evaluatorId: user.id
+                    evaluatorId: currentUser.id
                 }
             }),
             // Lệnh 2: Cập nhật trạng thái Task
@@ -49,7 +49,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
             prisma.taskComment.create({
                 data: {
                     taskId: resolvedParams.id,
-                    userId: user.id,
+                    userId: currentUser.id,
                     text: isPass 
                           ? `✅ [SYSTEM] Video đã được duyệt với số điểm ${score}/10. Tuyệt vời!`
                           : `⚠️ [KAIZEN YÊU CẦU] Video chưa đạt (${score}/10). Lỗi: ${note}`

@@ -9,8 +9,15 @@ export async function POST(req: Request) {
         if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         const currentUser = session.user as any;
 
+        // 🚀 BỔ SUNG: Kiểm tra quyền tạo/ghép Task
+        const hasPermission = currentUser.permissions?.includes("ACTION_CREATE_TASK") || ["ADMIN", "BAN_GIAM_DOC", "LEADER"].includes(currentUser.role);
+        
+        if (!hasPermission) {
+            return NextResponse.json({ error: "Bạn không có quyền ghép Video!" }, { status: 403 });
+        }
+
         const body = await req.json();
-        // 🚀 BỔ SUNG NHẬN channelId và duration TỪ FRONTEND GỬI LÊN
+        // BỔ SUNG NHẬN channelId và duration TỪ FRONTEND GỬI LÊN
         const { sourceTaskIds, teamId, projectId, assigneeId, channelId, duration } = body; 
 
         if (!sourceTaskIds || sourceTaskIds.length < 2) {
@@ -47,7 +54,7 @@ export async function POST(req: Request) {
                     teamId: teamId,
                     projectId: projectId,
                     editorId: assigneeId,
-                    // 🚀 LƯU VÀO DATABASE
+                    // LƯU VÀO DATABASE
                     channelId: channelId || undefined,
                     duration: duration ? Number(duration) : undefined,
                     

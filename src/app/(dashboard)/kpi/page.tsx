@@ -63,10 +63,12 @@ export default function KpiDashboard() {
     const userRole = currentUser?.role || "CONTENT";
     const teamId = currentUser?.teamId;
     const { showToast } = useToast();
-
+    
+    
     const isHighLevel = ["BAN_GIAM_DOC", "ADMIN", "HR","KE_TOAN"].includes(userRole);
+    
     const isManager = ["LEADER", "BAN_GIAM_DOC", "ADMIN", "HR","KE_TOAN"].includes(userRole);
-
+    
     const [teams, setTeams] = useState<any[]>([]);
     const [selectedTeamFilter, setSelectedTeamFilter] = useState<string>("ALL");
     const queryTeamId = isHighLevel ? selectedTeamFilter : teamId;
@@ -91,10 +93,10 @@ export default function KpiDashboard() {
     const availableWeeks = [1, 2, 3, 4, 5];
     
     useEffect(() => {
-        if (isHighLevel) {
+        if (isHighLevel || session?.user.isTeamLeader) {
             fetch("/api/teams").then(res => res.ok ? res.json() : []).then(setTeams);
         }
-    }, [isHighLevel]);
+    }, [isHighLevel,session?.user.isTeamLeader]);
 
     const fetchKpiData = async () => {
         setIsLoading(true);
@@ -105,7 +107,13 @@ export default function KpiDashboard() {
                     setIsLoading(false);
                     return;
                 }
-                const res = await fetch(`/api/kpi?teamId=${queryTeamId}&year=${selectedYear}&month=${selectedMonth}&week=${selectedWeek}`);
+                let url = ""
+                if(session?.user.isTeamLeader){
+                    url = `/api/kpi?teamId=ALL&year=${selectedYear}&month=${selectedMonth}&week=${selectedWeek}`
+                }else{
+                    url = `/api/kpi?teamId=${queryTeamId}&year=${selectedYear}&month=${selectedMonth}&week=${selectedWeek}`
+                }
+                const res = await fetch(url);
                 const data = await res.json();
                 if (res.ok) {
                     setKpiList(data.kpiList || []);
@@ -197,13 +205,24 @@ export default function KpiDashboard() {
                         <TrendingUp className="text-red-600 w-5 h-5 md:w-6 md:h-6" /> Bảng Theo Dõi KPI
                     </h1>
                     <p className="text-xs md:text-sm font-medium text-slate-500 mt-1 md:mt-1.5 flex items-center gap-1.5 md:gap-2">
-                        <Calendar size={14} className="md:w-4 md:h-4" /> {getContinuousWeekRange(selectedYear, selectedMonth, selectedWeek).label}
+                        <Calendar size={14} className="md:w-4 md:h-4" /> 
+                        {selectedWeek === 0 ? `Tháng ${selectedMonth}/${selectedYear}` : getContinuousWeekRange(selectedYear, selectedMonth, selectedWeek).label}
                     </p>
                 </div>
 
                 {/* Khối Filter */}
                 <div className="flex items-center gap-1 md:gap-2 bg-white p-1.5 md:p-2 rounded-xl shadow-sm border border-slate-200 overflow-x-auto w-full xl:w-auto custom-scrollbar-thin">
                     {isHighLevel && (
+                        <div className="flex items-center gap-1 px-2 md:px-3 border-r border-slate-200 shrink-0">
+                            <Users size={14} className="text-slate-400 md:w-4 md:h-4" />
+                            <select className="bg-transparent text-xs md:text-sm font-black text-slate-800 outline-none cursor-pointer max-w-[100px] md:max-w-[140px] truncate" value={selectedTeamFilter} onChange={(e) => setSelectedTeamFilter(e.target.value)}>
+                                <option value="ALL">Toàn công ty</option>
+                                <option value="" disabled>--- Chọn Team ---</option>
+                                {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                            </select>
+                        </div>
+                    )}
+                    {session?.user.isTeamLeader && (
                         <div className="flex items-center gap-1 px-2 md:px-3 border-r border-slate-200 shrink-0">
                             <Users size={14} className="text-slate-400 md:w-4 md:h-4" />
                             <select className="bg-transparent text-xs md:text-sm font-black text-slate-800 outline-none cursor-pointer max-w-[100px] md:max-w-[140px] truncate" value={selectedTeamFilter} onChange={(e) => setSelectedTeamFilter(e.target.value)}>
@@ -222,6 +241,8 @@ export default function KpiDashboard() {
                     <div className="flex items-center gap-1 px-2 md:px-3 shrink-0">
                         <span className="text-[10px] md:text-sm font-bold text-slate-500">Tuần:</span>
                         <select className="bg-transparent text-xs md:text-sm font-black text-slate-800 outline-none cursor-pointer" value={selectedWeek} onChange={(e) => setSelectedWeek(Number(e.target.value))}>
+                            {/* 🚀 ĐÃ THÊM: Option "Cả tháng" */}
+                            <option value={0}>Cả tháng</option>
                             {availableWeeks.map(w => <option key={w} value={w}>Tuần {w}</option>)}
                         </select>
                     </div>

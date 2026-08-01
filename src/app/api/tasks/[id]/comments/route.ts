@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 
@@ -35,33 +36,43 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const senderId = (session.user as any).id;
     const senderName = (session.user as any).fullName || session.user.name || "Ai đó";
 
-    // 1. Lưu tin nhắn vào DB (🚀 ĐÃ BỔ SUNG imageUrl)
+    // 1. Lưu tin nhắn vào DB
     const newComment = await prisma.taskComment.create({
       data: { 
         text: body.text || "", 
-        imageUrl: body.imageUrl || null, // Hứng link ảnh từ body
+        imageUrl: body.imageUrl || null, 
         taskId: taskId, 
         userId: senderId 
       },
       include: { user: { select: { fullName: true } } }
     });
 
-    // 2. Tìm thông tin Task và danh sách Admin
-    const task = await prisma.task.findUnique({ where: { id: taskId } });
-    const admins = await prisma.user.findMany({ where: { role: "ADMIN" }, select: { id: true } });
+    // 2. 🚀 ĐÃ SỬA: Tìm thông tin Task VÀ những người đã từng tham gia bình luận trong Task này
+    const [task, previousComments] = await Promise.all([
+        prisma.task.findUnique({ where: { id: taskId } }),
+        prisma.taskComment.findMany({ 
+            where: { taskId }, 
+            select: { userId: true }, 
+            distinct: ['userId'] 
+        })
+    ]);
 
-    // 3. Gom ID những người cần nhận thông báo
+    // 3. Gom ID những người cần nhận thông báo (Chỉ khoanh vùng những người liên quan)
     const notifyUserIds = new Set<string>();
+    
+    // - Những người chịu trách nhiệm trực tiếp
     if (task?.creatorId) notifyUserIds.add(task.creatorId);
     if (task?.contentId) notifyUserIds.add(task.contentId);
     if (task?.editorId) notifyUserIds.add(task.editorId);
-    if (task?.animatorId) notifyUserIds.add(task.animatorId); // Bổ sung Animator nếu có
-    admins.forEach(admin => notifyUserIds.add(admin.id));
+    if (task?.animatorId) notifyUserIds.add(task.animatorId); 
+    
+    // - Những người đã từng "chấm hóng" hoặc thảo luận trong luồng chat này
+    previousComments.forEach(comment => notifyUserIds.add(comment.userId));
 
     // XÓA MÌNH RA KHỎI DANH SÁCH NHẬN NOTI CỦA CHÍNH MÌNH
     notifyUserIds.delete(senderId);
 
-    // 🚀 Xử lý logic hiển thị nội dung thông báo cho mượt mà (Nếu chỉ có ảnh thì báo là [Hình ảnh đính kèm])
+    // 🚀 Xử lý logic hiển thị nội dung thông báo cho mượt mà
     const messagePreview = body.text && body.text.trim() !== "" 
       ? `${body.text.substring(0, 30)}${body.text.length > 30 ? '...' : ''}`
       : "[Hình ảnh đính kèm 🖼️]";
@@ -80,7 +91,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       notifications.push(notif);
     }
 
-    // Trả về cả tin nhắn MỚI và danh sách NOTI để Frontend đem đi bắn Socket
     return NextResponse.json({ 
       comment: newComment, 
       notifications: notifications,

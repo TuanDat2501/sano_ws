@@ -14,15 +14,14 @@ export async function POST(req: Request) {
 
         const user = session.user as any;
         const userId = user.id;
-        const userRole = user.role; 
-        const isLeader = userRole === "LEADER";
+        
+        // 🚀 ĐÃ SỬA: Dùng quyền duyệt đơn (ACTION_APPROVE_REQUEST) hoặc Role Quản lý để quyết định luồng đi của đơn
+        const isLeader = user.permissions?.includes("ACTION_APPROVE_REQUEST") || ["LEADER", "ADMIN", "BAN_GIAM_DOC"].includes(user.role);
 
         const body = await req.json();
         
-        // 🚀 Bóc tách dữ liệu y hệt như payload frontend gửi lên
         const { type, teamId, contentData, firstApproverId, secondApproverId, status } = body;
 
-        // Xử lý dữ liệu contentData
         const targetDate = contentData.date ? new Date(contentData.date) : null;
         const startDate = contentData.startDate ? new Date(contentData.startDate) : null;
         const endDate = contentData.endDate ? new Date(contentData.endDate) : null;
@@ -30,28 +29,23 @@ export async function POST(req: Request) {
         const itemName = contentData.itemName || null;
         const reason = contentData.reason || null;
 
-        // 🚀 VALIDATE DỮ LIỆU CHẶT CHẼ THEO PHÂN QUYỀN
         if (!type || !contentData || !teamId) {
             return NextResponse.json({ error: "Thiếu thông tin cơ bản của đơn" }, { status: 400 });
         }
 
         if (isLeader) {
-            // Leader tạo thì bắt buộc phải có người duyệt cấp 2 (Giám đốc / Admin)
             if (!secondApproverId) {
                 return NextResponse.json({ error: "Vui lòng chọn người duyệt (Ban Giám Đốc)" }, { status: 400 });
             }
         } else {
-            // Nhân viên tạo thì bắt buộc phải có quản lý cấp 1
             if (!firstApproverId) {
                 return NextResponse.json({ error: "Vui lòng chọn Quản lý Cấp 1 để duyệt đơn" }, { status: 400 });
             }
         }
 
-        // 🚀 TẠO ĐƠN TRONG DATABASE
         const newRequest = await prisma.request.create({
             data: {
                 type,
-                // Lấy status từ FE gửi (PENDING_2 cho leader, PENDING_1 cho NV), nếu rỗng thì fallback
                 status: status || (isLeader ? "PENDING_2" : "PENDING_1"), 
                 requesterId: userId,
                 teamId,
@@ -67,20 +61,17 @@ export async function POST(req: Request) {
             }
         });
 
-        // 🚀 TẠO THÔNG BÁO CHO NGƯỜI DUYỆT
         if (isLeader || status === "PENDING_2") {
-            // Đơn của Leader đẩy thẳng thông báo cho cấp 2 (Vì cấp 1 là chính họ rồi)
             await prisma.notification.create({
                 data: {
-                    title: "Đơn từ mới cần duyệt gấp (Từ Leader)",
-                    message: `Leader vừa tạo một đề xuất ${type} và đang chờ bạn phê duyệt.`,
+                    title: "Đơn từ mới cần duyệt gấp (Từ Quản lý)",
+                    message: `Quản lý vừa tạo một đề xuất ${type} và đang chờ bạn phê duyệt.`,
                     type: "info",
                     userId: secondApproverId,
                     requestId: newRequest.id
                 }
             });
         } else {
-            // Đơn của nhân viên đẩy cho cấp 1
             await prisma.notification.create({
                 data: {
                     title: "Đơn từ mới cần duyệt",
@@ -91,7 +82,6 @@ export async function POST(req: Request) {
                 }
             });
             
-            // Nếu nhân viên có chọn cấp 2 thì báo trước cho cấp 2 biết để chuẩn bị tinh thần
             if (secondApproverId) {
                 await prisma.notification.create({
                     data: {
@@ -127,7 +117,8 @@ export async function GET(req: Request) {
         const tab = searchParams.get("tab") || "MY_REQUESTS";
         const searchKeyword = searchParams.get("search") || "";
 
-        const isAdminOrHR = ["ADMIN", "BAN_GIAM_DOC", "HR"].includes(user.role);
+        // 🚀 ĐÃ SỬA: Đọc quyền động từ biến permissions (MENU_TEAMS) để cho phép xem đơn toàn công ty
+        const canViewAll = user.permissions?.includes("MENU_TEAMS") || ["ADMIN", "BAN_GIAM_DOC"].includes(user.role);
 
         let whereClause: any = {};
 
@@ -139,7 +130,7 @@ export async function GET(req: Request) {
                 ]
             };
         } else if (tab === "ALL_REQUESTS") {
-            if (!isAdminOrHR) {
+            if (!canViewAll) {
                 return NextResponse.json({ error: "Forbidden" }, { status: 403 });
             }
             whereClause = {};

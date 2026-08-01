@@ -1,3 +1,4 @@
+// src/app/api/kpi/monthly/route.ts
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
@@ -7,11 +8,10 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
     try {
-        // 🚀 BẢO MẬT: Chặn xuất Excel lậu
         const session = await getServerSession(authOptions);
         if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-        const currentUserRole = (session.user as any)?.role;
-
+        
+        const currentUser = session.user as any;
         const { searchParams } = new URL(req.url);
         const teamId = searchParams.get("teamId");
         const year = parseInt(searchParams.get("year") || String(new Date().getFullYear()));
@@ -19,10 +19,12 @@ export async function GET(req: Request) {
 
         let userWhere: any = { isActive: true };
         
-        // 🚀 SỬA LỖI teamId === "ALL" gây crash DB
-        if (currentUserRole === "ADMIN") {
+        // 🚀 ĐÃ SỬA: Đồng bộ logic phân quyền lọc xuyên Team bằng permissions (MENU_TEAMS)
+        const canFilterTeam = currentUser.permissions?.includes("MENU_TEAMS") || ["ADMIN", "BAN_GIAM_DOC", "KE_TOAN"].includes(currentUser.role);
+
+        if (currentUser.role === "ADMIN") {
             if (teamId && teamId !== "ALL") userWhere.teamId = teamId;
-        } else if (currentUserRole === "BAN_GIAM_DOC" || currentUserRole === "HR") {
+        } else if (canFilterTeam || currentUser.role === "LEADER") {
             userWhere.role = { not: "ADMIN" };
             if (teamId && teamId !== "ALL") userWhere.teamId = teamId;
         } else {
@@ -30,6 +32,7 @@ export async function GET(req: Request) {
             userWhere.teamId = teamId;
         }
 
+        // 🚀 ĐẢM BẢO LẤY TẤT CẢ USER KHÔNG GIỚI HẠN
         const users = await prisma.user.findMany({
             where: userWhere,
             select: { id: true, fullName: true, role: true }
@@ -41,7 +44,6 @@ export async function GET(req: Request) {
         const startOfMonth = new Date(year, month - 1, 1);
         const endOfMonth = new Date(year, month, 0, 23, 59, 59, 999);
 
-        // 🚀 TỐI ƯU N+1 BẰNG BATCH FETCHING
         const [allWeeklyKPIs, allLogs, allActiveTasks] = await Promise.all([
             prisma.weeklyKPI.findMany({
                 where: { userId: { in: userIds }, year, month }

@@ -41,7 +41,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         // 🚀 BƯỚC 1.5: BỘ LỌC QUYỀN (RBAC) - TẠO BODY SẠCH
         // =========================================================================
         const body: any = {};
-        const isManager = ["ADMIN", "BAN_GIAM_DOC", "LEADER", "HR"].includes(currentUser.role);
+        
+        // 🚀 ĐÃ SỬA: Đọc quyền động từ permissions thay vì fix cứng Role
+        const isManager = currentUser.permissions?.includes("ACTION_CREATE_TASK") || ["ADMIN", "BAN_GIAM_DOC", "LEADER", "HR"].includes(currentUser.role);
+
+        // 🚀 BỔ SUNG LOGIC: Chặn nhân sự thường sửa đổi khi Task đã đóng (Nghiệm thu)
+        if (!isManager && oldTask.isClosed) {
+            return NextResponse.json({ error: "Task đã nghiệm thu, không thể chỉnh sửa!" }, { status: 403 });
+        }
 
         if (isManager) {
             // Sếp được sửa full
@@ -69,7 +76,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             if (rawBody.animationLink !== undefined) body.animationLink = rawBody.animationLink;
             if (rawBody.linkProject !== undefined) body.linkProject = rawBody.linkProject;
         } else if (currentUser.role === "CONTENT") {
-            // 🚀 ĐÃ SỬA: Cho phép kéo thẻ nếu nhân sự đang đóng vai trò Content, Creator HOẶC có tên trong cột Animator
             if (oldTask.contentId !== currentUser.id && oldTask.creatorId !== currentUser.id && oldTask.animatorId !== currentUser.id) {
                 return NextResponse.json({ error: "Bạn không phụ trách nội dung/chuyển động bài này!" }, { status: 403 });
             }
@@ -77,19 +83,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             if (rawBody.scriptLink !== undefined) body.scriptLink = rawBody.scriptLink;
             if (rawBody.animationLink !== undefined) body.animationLink = rawBody.animationLink;
             if (rawBody.englishScriptLink !== undefined) body.englishScriptLink = rawBody.englishScriptLink;
-            if (rawBody.note !== undefined) body.note = rawBody.note; // 🚀 ĐÃ XÓA QUYỀN SỬA audioLink CỦA CONTENT
+            if (rawBody.note !== undefined) body.note = rawBody.note; 
             if (rawBody.storyboardLink !== undefined) body.storyboardLink = rawBody.storyboardLink;
         } else if (currentUser.role === "EDITOR") {
-            // 🚀 ĐÃ SỬA: Cho phép kéo thẻ nếu nhân sự đang đóng vai trò Editor HOẶC có tên trong cột Animator
             if (oldTask.editorId !== currentUser.id && oldTask.animatorId !== currentUser.id) {
                 return NextResponse.json({ error: "Bạn không phụ trách dựng/chuyển động bài này!" }, { status: 403 });
             }
             if (rawBody.status !== undefined) body.status = rawBody.status;
             if (rawBody.videoLink !== undefined) body.videoLink = rawBody.videoLink;
             if (rawBody.linkProject !== undefined) body.linkProject = rawBody.linkProject;
-            // if (rawBody.storyboardLink !== undefined) body.storyboardLink = rawBody.storyboardLink;
             if (rawBody.thumbnailLink !== undefined) body.thumbnailLink = rawBody.thumbnailLink;
-            if (rawBody.audioLink !== undefined) body.audioLink = rawBody.audioLink; // 🚀 ĐÃ BỔ SUNG QUYỀN SỬA audioLink CHO EDITOR
+            if (rawBody.audioLink !== undefined) body.audioLink = rawBody.audioLink; 
             if (rawBody.note !== undefined) body.note = rawBody.note;
 
         } else if (currentUser.role === "CHANNEL_MANAGER") {
@@ -146,18 +150,16 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             logsToCreate.push({ action: "UPDATE_STATUS", details: `Từ [${oldTask.status}] sang [${body.status}]`, taskId, userId });
         }
 
-        // Hàm helper tự động tạo TaskLog ghi nhận tiến độ khi link thay đổi
         const addLinkLog = (fieldName: string, label: string) => {
             if (body[fieldName] !== undefined && body[fieldName] !== (oldTask as any)[fieldName]) {
                 logsToCreate.push({
-                    action: "DAILY_REPORT", // Ghi danh thẳng vào Nhật ký báo cáo ngày
+                    action: "DAILY_REPORT", 
                     details: body[fieldName] ? `Báo cáo tiến độ: Đã cập nhật ${label}` : `Đã xóa ${label}`,
                     taskId, userId
                 });
             }
         };
 
-        // Áp dụng ghi log cho tất cả các field công việc
         addLinkLog('scriptLink', 'Kịch Bản (VN)');
         addLinkLog('englishScriptLink', 'Text ENG');
         addLinkLog('audioLink', 'Link Audio (AI)');
@@ -166,7 +168,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         addLinkLog('videoLink', 'Video Render');
         addLinkLog('publishLink', 'Link Video Đã Đăng (YT)');
 
-        // Bắt sự kiện người dùng điền ghi chú Trạng thái (note)
         if (body.note !== undefined && body.note !== oldTask.note) {
             logsToCreate.push({
                 action: "UPDATE_LINK",
@@ -178,12 +179,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         if (body.isClosed !== undefined && body.isClosed !== oldTask.isClosed) {
             logsToCreate.push({ action: body.isClosed ? "COMPLETE_TASK" : "UPDATE_STATUS", details: body.isClosed ? "Task đã bị khóa (Nghiệm thu)" : "Task được kích hoạt lại", taskId, userId });
         }
-        // 🚀 Ghi Log khi Sếp giao việc (Đổi người)
         if (body.contentId !== undefined && body.contentId !== oldTask.contentId) {
             logsToCreate.push({ action: "ASSIGN_USER", details: `Đã phân công Content mới`, taskId, userId });
         }
+
         // =========================================================================
-        // 4. 🚀 CẬP NHẬT TASK XUỐNG DATABASE (ĐÃ THÊM CÁC TRƯỜNG GÁN VIỆC)
+        // 4. CẬP NHẬT TASK XUỐNG DATABASE
         // =========================================================================
         const updateTaskPromise = prisma.task.update({
             where: { id: taskId },
@@ -195,7 +196,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 videoLink: body.videoLink !== undefined ? body.videoLink : undefined,
                 publishLink: body.publishLink !== undefined ? body.publishLink : undefined,
                 isClosed: body.isClosed !== undefined ? body.isClosed : undefined,
-                // 🚀 Nạp dữ liệu giao việc vào Database
                 teamId: body.teamId !== undefined ? body.teamId : undefined,
                 contentId: body.contentId !== undefined ? body.contentId : undefined,
                 editorId: body.editorId !== undefined ? body.editorId : undefined,
@@ -225,7 +225,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         let createdNotifications: any[] = [];
         let userIdsToNotify: string[] = [];
 
-        // --- 5.1. BÁO CHO SẾP KHI XONG TASK ---
         if (body.status === "DONE" && oldTask.status !== "DONE") {
             const targetConditions: any[] = [{ role: 'ADMIN' }, { role: 'BAN_GIAM_DOC' }];
             if (oldTask.teamId) targetConditions.push({ AND: [{ role: 'LEADER' }, { teamId: oldTask.teamId }] });
@@ -243,7 +242,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             }
         }
 
-        // --- 5.2. BÁO CHO NHÂN SỰ KHI REJECT / ĐÓNG TASK ---
         const involvedIds = [oldTask.contentId, oldTask.editorId, oldTask.animatorId, oldTask.publisherId];
         const targetWorkerIds = [...new Set(involvedIds.filter(id => id && id !== userId))];
 
@@ -262,7 +260,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             }
         }
 
-        // --- 5.3. 🚀 BÁO CHO NHÂN SỰ KHI ĐƯỢC GIAO VIỆC TỪ KHO KẾ HOẠCH ---
         if (body.status === "TODO" && oldTask.status === "BACKLOG") {
             const newAssignees = [];
             if (body.contentId) newAssignees.push(body.contentId);
@@ -300,7 +297,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
 }
 
-// ... Giữ nguyên hàm GET ở dưới
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
     try {
         const resolvedParams = await params;
@@ -320,12 +316,12 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
                         criteria: true
                     }
                 },
-                channel: { select: { name: true,category: true } },
+                channel: { select: { name: true, category: true } },
                 evaluations: {
                     include: {
                         evaluator: { select: { fullName: true } }
                     },
-                    orderBy: { createdAt: 'desc' }, // Lấy bản ghi chấm điểm mới nhất
+                    orderBy: { createdAt: 'desc' }, 
                 },
             }
         });
@@ -344,16 +340,23 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     }
 }
 
-// Bổ sung vào cuối file src/app/api/tasks/[id]/route.ts
-
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
     try {
         const session = await getServerSession(authOptions);
         if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+        const currentUser = session.user as any;
+        
+        // 🚀 BỔ SUNG: Kiểm tra quyền động trước khi xóa Task
+        const hasPermission = currentUser.permissions?.includes("ACTION_CREATE_TASK") || ["ADMIN", "BAN_GIAM_DOC", "LEADER"].includes(currentUser.role);
+        
+        if (!hasPermission) {
+            return NextResponse.json({ error: "Bạn không có quyền xóa Task!" }, { status: 403 });
+        }
+
         const resolvedParams = await params;
 
-        // 🚀 Xóa task khỏi Database
+        // Xóa task khỏi Database
         await prisma.task.delete({
             where: { id: resolvedParams.id }
         });

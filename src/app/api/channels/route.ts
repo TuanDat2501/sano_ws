@@ -19,18 +19,21 @@ export async function GET(req: Request) {
             return NextResponse.json({ teams, users });
         }
 
-        const userData = session.user as any;
-        const role = userData.role?.toUpperCase();
-        const userTeamId = userData.teamId;
+        const currentUser = session.user as any;
+        const userTeamId = currentUser.teamId;
         const queryTeamId = searchParams.get("teamId");
 
         let whereClause: any = {};
+
+        // 🚀 ĐÃ SỬA: Đọc quyền động để xem toàn bộ Kênh xuyên Team
+        // Nếu có quyền MENU_TEAMS (HR, DEPARTMENT_LEADER) HOẶC là Kế toán/Admin/BGD thì được xem xuyên Team
+        const canViewAll = currentUser.permissions?.includes("MENU_TEAMS") || ["ADMIN", "BAN_GIAM_DOC", "KE_TOAN"].includes(currentUser.role);
 
         if (queryTeamId) {
             whereClause.teamId = queryTeamId;
         } 
         else {
-            if (role !== "ADMIN" && role !== "BAN_GIAM_DOC" && role !== "HR" && role !== "KE_TOAN") {
+            if (!canViewAll) {
                 whereClause.teamId = userTeamId;
             }
         }
@@ -40,7 +43,7 @@ export async function GET(req: Request) {
             include: {
                 team: { select: { name: true } },
                 members: true,
-                // 🚀 ĐÃ BỔ SUNG: Kéo mảng dự án (projects) thuộc về kênh này
+                // Kéo mảng dự án (projects) thuộc về kênh này
                 projects: true 
             },
             orderBy: { createdAt: 'desc' }
@@ -58,9 +61,12 @@ export async function POST(req: Request) {
         const session = await getServerSession(authOptions);
         if (!session || !session.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-        // 🚀 BỔ SUNG: Chặn bảo mật - Chỉ cấp Quản lý mới được tạo Kênh
-        const role = (session.user as any).role;
-        if (!["ADMIN", "BAN_GIAM_DOC", "LEADER","HR","KE_TOAN"].includes(role)) {
+        const currentUser = session.user as any;
+        
+        // 🚀 ĐÃ SỬA: Đọc quyền động từ biến permissions thay vì fix cứng Role
+        const hasPermission = currentUser.permissions?.includes("MENU_CHANNELS") || currentUser.role === "ADMIN";
+
+        if (!hasPermission) {
             return NextResponse.json({ error: "Không có quyền thực hiện hành động này!" }, { status: 403 });
         }
 

@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma"; // 🚀 Dùng alias @/ cho sạch code sếp nhé
+import { prisma } from "@/lib/prisma"; 
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
+
 // 1. LẤY DANH SÁCH TEAM
 export async function GET() {
   try {
@@ -14,7 +15,6 @@ export async function GET() {
           select: { id: true, fullName: true, role: true, avatarUrl: true }
         }
       },
-
       // 🚀 Sắp xếp A-Z để vào Form chọn cho dễ nhìn
       orderBy: { name: "asc" },
     });
@@ -25,14 +25,17 @@ export async function GET() {
   }
 }
 
-// 2. TẠO TEAM MỚI (CHỈ ADMIN/BGD)
+// 2. TẠO TEAM MỚI
 export async function POST(req: Request) {
   try {
-    // 🚀 KIỂM TRA QUYỀN HẠN
+    // 🚀 LẤY THÔNG TIN USER TỪ SESSION
     const session = await getServerSession(authOptions);
-    const userRole = (session?.user as any)?.role;
+    const currentUser = session?.user as any;
 
-    if (!session || !["ADMIN", "BAN_GIAM_DOC"].includes(userRole)) {
+    // 🚀 ĐÃ SỬA: Đọc quyền động từ biến permissions thay vì fix cứng Role
+    const hasPermission = currentUser?.permissions?.includes("MENU_TEAMS") || currentUser?.role === "ADMIN";
+
+    if (!currentUser || !hasPermission) {
       return NextResponse.json({ error: "Bạn không có quyền tạo Team mới!" }, { status: 403 });
     }
 
@@ -52,7 +55,6 @@ export async function POST(req: Request) {
       data: {
         name,
         description,
-        // 🚀 Bổ sung thêm dòng này để Team biết nó thuộc Phòng nào
         departmentId: departmentId || null,
       }
     });

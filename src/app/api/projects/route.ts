@@ -15,12 +15,15 @@ export async function GET(req: Request) {
         const { searchParams } = new URL(req.url);
         const teamIdParam = searchParams.get("teamId");
         const channelIdParam = searchParams.get("channelId");
+        
         let whereCondition: any = {};
-        if (teamIdParam) whereCondition.teamId = teamIdParam;
-        if (channelIdParam) whereCondition.channelId = channelIdParam;
-        // Phân quyền hiển thị
-        if (user.role === "ADMIN" || user.role === "BAN_GIAM_DOC") {
-            if (teamIdParam) whereCondition = { teamId: teamIdParam };
+        
+        // 🚀 ĐÃ SỬA: Đọc quyền động từ permissions. Nếu có MENU_TEAMS thì được xem toàn bộ dự án xuyên Team
+        const canViewAll = user.permissions?.includes("MENU_TEAMS") || ["ADMIN", "BAN_GIAM_DOC"].includes(user.role);
+
+        if (canViewAll) {
+            if (teamIdParam) whereCondition.teamId = teamIdParam;
+            if (channelIdParam) whereCondition.channelId = channelIdParam;
         } else {
             whereCondition = {
                 OR: [
@@ -28,9 +31,12 @@ export async function GET(req: Request) {
                     { supervisorId: user.id }
                 ]
             };
+            if (channelIdParam) {
+                whereCondition.channelId = channelIdParam;
+            }
         }
 
-        //  FETCH DỰ ÁN VÀ KÉO THEO CẢ ĐIỂM SỐ CỦA TỪNG TASK BÊN TRONG
+        // FETCH DỰ ÁN VÀ KÉO THEO CẢ ĐIỂM SỐ CỦA TỪNG TASK BÊN TRONG
         const projects = await prisma.project.findMany({
             where: whereCondition,
             select: {
@@ -40,7 +46,6 @@ export async function GET(req: Request) {
                 updatedAt: true,
                 channelId: true,
                 team: { select: { name: true } },
-                // 🚀 LẤY THÊM THÔNG TIN GIÁM SÁT TẠI ĐÂY
                 supervisor: {
                     select: {
                         fullName: true,
@@ -62,17 +67,14 @@ export async function GET(req: Request) {
 
         // TÍNH TOÁN ĐIỂM TRUNG BÌNH BẰNG JAVASCRIPT
         const formattedProjects = projects.map(proj => {
-            // Lấy ra điểm số hợp lệ của các Task (Bỏ qua các Task chưa được chấm)
             const validScores = proj.tasks
-                .map(t => t.evaluations[0]?.score) // Lấy phần tử [0] vì ta đã dùng take: 1 ở trên
+                .map(t => t.evaluations[0]?.score) 
                 .filter(score => score !== undefined && score !== null);
 
-            // Tính trung bình cộng
             const averageScore = validScores.length > 0 
                 ? (validScores.reduce((sum, score) => sum + score, 0) / validScores.length).toFixed(1)
-                : null; // Trả về null nếu chưa có task nào được duyệt
+                : null; 
 
-            // Bóc tách vứt bỏ cục "tasks" đi cho API nhẹ, chỉ gửi điểm số về Frontend
             const { tasks, ...projectData } = proj;
 
             return {
@@ -88,18 +90,31 @@ export async function GET(req: Request) {
         return NextResponse.json({ error: "Lỗi Server" }, { status: 500 });
     }
 }
+
 export async function POST(req: Request) {
     try {
-        const body = await req.json();
         const session = await getServerSession(authOptions);
+        if (!session || !session.user) {
+            return NextResponse.json({ error: "Chưa đăng nhập" }, { status: 401 });
+        }
+
+        const currentUser = session.user as any;
+
+        // 🚀 BỔ SUNG: Kiểm tra quyền tạo Dự án
+        const hasPermission = currentUser.permissions?.includes("MENU_PROJECTS") || currentUser.role === "ADMIN";
+        if (!hasPermission) {
+            return NextResponse.json({ error: "Bạn không có quyền tạo Dự án!" }, { status: 403 });
+        }
+
+        const body = await req.json();
         
         const newProject = await prisma.project.create({
             data: {
                 name: body.name,
                 description: body.description,
                 teamId: body.teamId,
-                channelId: body.channelId, // 🚀 BỔ SUNG DÒNG NÀY ĐỂ GÁN KÊNH NGAY TỪ ĐẦU
-                supervisorId: (session?.user as any)?.id 
+                channelId: body.channelId, 
+                supervisorId: currentUser.id 
             }
         });
         return NextResponse.json(newProject);
@@ -108,10 +123,21 @@ export async function POST(req: Request) {
     }
 }
 
-
 export async function DELETE(req: Request) {
     try {
-        // Lấy ID từ dấu hỏi trên thanh URL (ví dụ: /api/projects?id=123)
+        const session = await getServerSession(authOptions);
+        if (!session || !session.user) {
+            return NextResponse.json({ error: "Chưa đăng nhập" }, { status: 401 });
+        }
+
+        const currentUser = session.user as any;
+
+        // 🚀 BỔ SUNG: Kiểm tra quyền xóa Dự án
+        const hasPermission = currentUser.permissions?.includes("MENU_PROJECTS") || currentUser.role === "ADMIN";
+        if (!hasPermission) {
+            return NextResponse.json({ error: "Bạn không có quyền xóa Dự án!" }, { status: 403 });
+        }
+
         const { searchParams } = new URL(req.url);
         const projectId = searchParams.get("id");
 
@@ -119,7 +145,6 @@ export async function DELETE(req: Request) {
             return NextResponse.json({ error: "Thiếu ID dự án cần xóa" }, { status: 400 });
         }
 
-        // Thực thi xóa dưới Database
         await prisma.project.delete({
             where: { id: projectId }
         });

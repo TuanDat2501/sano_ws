@@ -4,7 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 
 // ==============================================================
-// 1. LẤY THÔNG TIN CHI TIẾT DỰ ÁN (Đã bọc Auth)
+// 1. LẤY THÔNG TIN CHI TIẾT DỰ ÁN
 // ==============================================================
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
     try {
@@ -35,13 +35,21 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 }
 
 // ==============================================================
-// 2. CẬP NHẬT DỰ ÁN & LƯU BẢN VẼ QUY TRÌNH (Đã bọc Auth)
+// 2. CẬP NHẬT DỰ ÁN & LƯU BẢN VẼ QUY TRÌNH
 // ==============================================================
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
     try {
         const session = await getServerSession(authOptions);
         if (!session || !session.user) {
             return NextResponse.json({ error: "Chưa đăng nhập!" }, { status: 401 });
+        }
+
+        // 🚀 BỔ SUNG: Chốt chặn an toàn cho hàm sửa Dự án
+        const currentUser = session.user as any;
+        const hasPermission = currentUser.permissions?.includes("MENU_PROJECTS") || currentUser.role === "ADMIN";
+
+        if (!hasPermission) {
+            return NextResponse.json({ error: "Bạn không có quyền sửa dự án!" }, { status: 403 });
         }
 
         const body = await req.json();
@@ -66,7 +74,6 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
                 ...(body.description !== undefined && { description: body.description }),
                 ...(body.teamId && { teamId: body.teamId }),
                 ...(body.supervisorId && { supervisorId: body.supervisorId }),
-                // 🚀 ĐÃ BỔ SUNG: Lưu channelId khi Edit
                 ...(body.channelId !== undefined && { channelId: body.channelId || null }),
                 ...(body.status && { status: body.status }),
                 ...(parsedNodes !== undefined && { workflowNodes: parsedNodes }),
@@ -84,7 +91,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 }
 
 // ==============================================================
-// 3. XÓA DỰ ÁN (Auth + Role Guard)
+// 3. XÓA DỰ ÁN
 // ==============================================================
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
     try {
@@ -93,9 +100,12 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
             return NextResponse.json({ error: "Chưa đăng nhập!" }, { status: 401 });
         }
 
-        const user = session.user as any;
+        const currentUser = session.user as any;
 
-        if (user.role !== "ADMIN" && user.role !== "BAN_GIAM_DOC") {
+        // 🚀 ĐÃ SỬA: Đọc quyền động từ biến permissions thay vì fix cứng Role
+        const hasPermission = currentUser.permissions?.includes("MENU_PROJECTS") || currentUser.role === "ADMIN";
+
+        if (!hasPermission) {
             return NextResponse.json({ error: "Không có quyền xóa dự án!" }, { status: 403 });
         }
 

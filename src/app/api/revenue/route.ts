@@ -14,24 +14,23 @@ export async function GET(req: Request) {
         const startDate = searchParams.get('startDate');
         const endDate = searchParams.get('endDate');
 
-        // Khởi tạo bộ lọc cho Prisma
         let whereClause: any = {};
 
-        // LOGIC PHÂN QUYỀN
-        // Nếu là ADMIN hoặc BAN_GIAM_DOC -> Lấy hết (whereClause = {})
-        // Nếu không -> Lọc theo teamId hoặc managerId (tùy sếp muốn quản lý theo team hay quản lý kênh riêng)
-        if (user.role !== 'ADMIN' && user.role !== 'BAN_GIAM_DOC' && user.role !== 'HR'&& user.role !== 'KE_TOAN') {
-            // Ví dụ: Leader chỉ thấy kênh thuộc team của mình
+        // 🚀 ĐÃ SỬA: Dùng quyền MENU_TEAMS (hoặc BGD, Kế Toán, Admin) để xem toàn bộ hệ thống
+        const canViewAll = user.permissions?.includes("MENU_TEAMS") || ["ADMIN", "BAN_GIAM_DOC", "KE_TOAN"].includes(user.role);
+
+        if (!canViewAll) {
+            // Nếu không được xem tất cả, chỉ cho xem kênh thuộc Team của mình
             if (user.teamId) {
                 whereClause = { teamId: user.teamId };
             } else {
-                // Nếu ko có teamId, chỉ cho thấy kênh mình quản lý (managerId)
+                // Nếu không có team, chỉ cho xem kênh mình là manager
                 whereClause = { managerId: user.id };
             }
         }
-
+        
         const channels = await prisma.channel.findMany({
-            where: whereClause, // 🚀 ÁP DỤNG BỘ LỌC Ở ĐÂY
+            where: whereClause,
             include: {
                 revenues: {
                     where: {
@@ -48,6 +47,7 @@ export async function GET(req: Request) {
 
         return NextResponse.json(channels);
     } catch (error) {
+        console.error("LỖI GET REVENUE:", error);
         return NextResponse.json({ error: "Lỗi Server" }, { status: 500 });
     }
 }
@@ -58,28 +58,36 @@ export async function POST(req: Request) {
         const session = await getServerSession(authOptions);
         if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+        const user = session.user as any;
+
+        // 🚀 BỔ SUNG: Phân quyền chặt chẽ cho thao tác Sửa/Nhập Doanh thu
+        const hasPermission = user.permissions?.includes("MENU_REVENUE") || user.role === "ADMIN";
+        if (!hasPermission) {
+            return NextResponse.json({ error: "Bạn không có quyền nhập dữ liệu doanh thu!" }, { status: 403 });
+        }
+
         const { channelId, date, revenue, views } = await req.json();
         const parsedDate = new Date(date);
 
         const result = await prisma.dailyRevenue.upsert({
             where: { channelId_date: { channelId, date: parsedDate } },
             update: {
-                // Chỉ cập nhật nếu giá trị được gửi lên là số
                 ...(revenue !== undefined && { amount: Number(revenue) }),
                 ...(views !== undefined && { views: Number(views) }),
-                updaterId: (session.user as any).id
+                updaterId: user.id
             },
             create: {
                 channelId,
                 date: parsedDate,
                 amount: Number(revenue || 0),
                 views: Number(views || 0),
-                updaterId: (session.user as any).id
+                updaterId: user.id
             }
         });
 
         return NextResponse.json({ success: true, result });
     } catch (error) {
+        console.error("LỖI POST REVENUE:", error);
         return NextResponse.json({ error: "Lỗi Server" }, { status: 500 });
     }
 }

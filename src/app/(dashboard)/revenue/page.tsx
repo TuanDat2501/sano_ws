@@ -67,8 +67,7 @@ export default function RevenueEntryPage() {
 
     const isKeToan = userRole === "KE_TOAN" || userRole === "ADMIN" || userRole === "BAN_GIAM_DOC"; 
     // 🚀 KIỂM TRA QUYỀN ĐƯỢC LỌC XUYÊN TEAM
-    const canFilterTeam = ["HR", "BAN_GIAM_DOC", "KE_TOAN", "ADMIN"].includes(userRole);
-
+    const canFilterTeam = hasPermission("MENU_TEAMS") || ["BAN_GIAM_DOC", "KE_TOAN", "ADMIN"].includes(userRole);
     useEffect(() => {
         if (!loading && !hasPermission("MENU_REVENUE")) {
             router.push("/dashboard");
@@ -79,6 +78,7 @@ export default function RevenueEntryPage() {
     useEffect(() => {
         const fetchTableData = async () => {
             try {
+                
                 const res = await fetch(`/api/revenue?startDate=${tableStartDateStr}&endDate=${tableEndDateStr}`);
                 const data = await res.json();
 

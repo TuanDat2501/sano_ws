@@ -3,7 +3,9 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+
 export const dynamic = "force-dynamic";
+
 // ==========================================
 // 1. API LẤY DANH SÁCH TASK (GET)
 // ==========================================
@@ -30,15 +32,17 @@ export async function GET(req: Request) {
     // 2. XÂY DỰNG ĐIỀU KIỆN LỌC (WHERE CLAUSE)
     let whereClause: any = {};
 
-    // - Phân quyền Role
-    if (role === "ADMIN" || role === "BAN_GIAM_DOC") {
+    // 🚀 ĐÃ SỬA: Đọc quyền động từ permissions thay vì fix cứng Role
+    const canViewAll = userData.permissions?.includes("MENU_TEAMS") || ["ADMIN", "BAN_GIAM_DOC"].includes(role);
+    const isLeader = role === "LEADER" || userData.permissions?.includes("DEPARTMENT_LEADER");
+
+    if (canViewAll) {
       whereClause = {};
-    } else if (role === "LEADER") {
+    } else if (isLeader) {
       whereClause = { teamId: teamId };
-    } else if (role === "CONTENT" || role === "EDITOR") {
-      whereClause = { OR: [{ contentId: userId }, { editorId: userId }, { animatorId: userId }, { creatorId: userId }] };
     } else {
-      whereClause = { id: "none" };
+      // Logic bao trùm tự động cho tất cả nhân sự (Content, Editor, Animator...)
+      whereClause = { OR: [{ contentId: userId }, { editorId: userId }, { animatorId: userId }, { creatorId: userId }] };
     }
 
     // - Lọc theo Tìm kiếm tên Task
@@ -49,7 +53,7 @@ export async function GET(req: Request) {
     // - Lọc theo Trạng thái
     if (status !== "ALL") {
       whereClause.status = status;
-    }else {
+    } else {
       // Nếu bộ lọc là ALL, lấy tất cả NGOẠI TRỪ Backlog
       whereClause.status = { not: "BACKLOG" };
     }
@@ -62,8 +66,8 @@ export async function GET(req: Request) {
     }
 
     // 3. XỬ LÝ TRẢ DỮ LIỆU TÙY THEO TAB ĐANG MỞ
-
     const priorityWeight: any = { URGENT: 4, HIGH: 3, NORMAL: 2, LOW: 1 };
+    
     if (viewMode === "board") {
       // Dành cho Bảng Kanban: Thường lấy tất cả Task CHƯA ĐÓNG để vẽ cột
       const tasks = await prisma.task.findMany({
@@ -71,15 +75,15 @@ export async function GET(req: Request) {
         include: {
           creator: { select: { fullName: true } },
           team: { select: { name: true } },
-          contentUser: { select: { fullName: true,avatarUrl:true } },
-          editorUser: { select: { fullName: true,avatarUrl:true } },
-          channel: { select: { name: true} },
-          animatorUser:{ select: { fullName: true,avatarUrl:true } },
+          contentUser: { select: { fullName: true, avatarUrl: true } },
+          editorUser: { select: { fullName: true, avatarUrl: true } },
+          channel: { select: { name: true } },
+          animatorUser: { select: { fullName: true, avatarUrl: true } },
         },
         orderBy: { createdAt: "desc" },
       });
 
-      // 🚀 BỔ SUNG: Thuật toán sắp xếp Task Ưu tiên lên đầu
+      // BỔ SUNG: Thuật toán sắp xếp Task Ưu tiên lên đầu
       tasks.sort((a: any, b: any) => {
         const weightA = priorityWeight[a.priority || "NORMAL"] || 2;
         const weightB = priorityWeight[b.priority || "NORMAL"] || 2;
@@ -98,8 +102,8 @@ export async function GET(req: Request) {
           include: {
             creator: { select: { fullName: true } },
             team: { select: { name: true } },
-            contentUser: { select: { fullName: true,avatarUrl:true } },
-            editorUser: { select: { fullName: true,avatarUrl:true } },
+            contentUser: { select: { fullName: true, avatarUrl: true } },
+            editorUser: { select: { fullName: true, avatarUrl: true } },
             channel: { select: { name: true } }
           },
           orderBy: { createdAt: "desc" },
@@ -109,7 +113,7 @@ export async function GET(req: Request) {
         prisma.task.count({ where: whereClause })
       ]);
 
-      // 🚀 BỔ SUNG: Sắp xếp cho cả List View
+      // BỔ SUNG: Sắp xếp cho cả List View
       tasks.sort((a: any, b: any) => {
         const weightA = priorityWeight[a.priority || "NORMAL"] || 2;
         const weightB = priorityWeight[b.priority || "NORMAL"] || 2;
@@ -131,7 +135,6 @@ export async function GET(req: Request) {
   }
 }
 
-
 const getBaseUrl = (rawUrl: string) => {
   if (!rawUrl || rawUrl.trim() === "") return "";
   try {
@@ -146,8 +149,10 @@ const getBaseUrl = (rawUrl: string) => {
     return rawUrl.trim().split('?')[0];
   }
 };
-// Dán hàm này vào DƯỚI CÙNG của file src/app/api/tasks/route.ts
 
+// ==========================================
+// 2. API TẠO TASK (POST)
+// ==========================================
 export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions);
@@ -155,10 +160,20 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const currentUser = session.user as any;
+    
+    // 🚀 BỔ SUNG: Chốt chặn an toàn cho hàm tạo Task (Sử dụng quyền ACTION_CREATE_TASK)
+    const canCreateTask = currentUser.permissions?.includes("ACTION_CREATE_TASK") || ["ADMIN", "BAN_GIAM_DOC", "LEADER"].includes(currentUser.role);
+    
+    if (!canCreateTask) {
+        return NextResponse.json({ error: "Bạn không có quyền tạo Task!" }, { status: 403 });
+    }
+
     const body = await req.json();
     const { title, linkContent, contentId, editorId, teamId, projectId } = body;
-    const creatorId = (session.user as any).id;
+    const creatorId = currentUser.id;
     const rawLink = linkContent;
+    
     // 1. RADAR CHẶN TRÙNG LINK THÔNG MINH (So sánh Link Lõi)
     // =========================================================================
     if (rawLink && rawLink.trim() !== "") {
@@ -207,7 +222,7 @@ export async function POST(req: Request) {
         title,
         linkContent: rawLink,
         status: body.status ? body.status : "TODO",
-        episodeNumber: nextEpisodeNumber, // 🚀 Bổ sung episodeNumber
+        episodeNumber: nextEpisodeNumber,
         contentId: contentId || undefined,
         editorId: editorId || undefined,
         teamId: teamId || undefined,
@@ -230,7 +245,6 @@ export async function POST(req: Request) {
         team: { select: { name: true } },
         contentUser: { select: { fullName: true } },
         editorUser: { select: { fullName: true } },
-        
       }
     });
 

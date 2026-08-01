@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
+
 // [PUT] CẬP NHẬT TÊN / MÔ TẢ PHÒNG BAN
 export async function PUT(req: Request, context: any) {
     try {
@@ -11,8 +12,12 @@ export async function PUT(req: Request, context: any) {
         const deptId = params.id;
         const session = await getServerSession(authOptions);
         const currentUser = session?.user as any;
-        if (!currentUser || !["ADMIN", "BAN_GIAM_DOC"].includes(currentUser.role)) {
-            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        
+        // 🚀 ĐÃ SỬA: Đọc quyền động từ mảng permissions thay vì fix cứng Role
+        const hasPermission = currentUser?.permissions?.includes("MENU_TEAMS") || currentUser?.role === "ADMIN";
+
+        if (!currentUser || !hasPermission) {
+            return NextResponse.json({ error: "Bạn không có quyền sửa Phòng ban!" }, { status: 403 });
         }
 
         const body = await req.json();
@@ -38,21 +43,27 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     try {
         const session = await getServerSession(authOptions);
         const currentUser = session?.user as any;
-        if (!currentUser || !["ADMIN", "BAN_GIAM_DOC"].includes(currentUser.role)) {
-            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        
+        // 🚀 ĐÃ SỬA: Đọc quyền động từ mảng permissions thay vì fix cứng Role
+        const hasPermission = currentUser?.permissions?.includes("MENU_TEAMS") || currentUser?.role === "ADMIN";
+
+        if (!currentUser || !hasPermission) {
+            return NextResponse.json({ error: "Bạn không có quyền xóa Phòng ban!" }, { status: 403 });
         }
+
+        const { id } = await params;
 
         // 🚀 BƯỚC QUAN TRỌNG: 
         // Trước khi xóa Phòng, phải thả các Team bên trong ra ngoài (thành Team Độc lập)
         // để không bị lỗi khóa ngoại (Foreign Key Constraint) của Database
         await prisma.team.updateMany({
-            where: { departmentId: (await params).id },
+            where: { departmentId: id },
             data: { departmentId: null }
         });
 
         // Giờ thì an tâm Xóa phòng ban
         await prisma.department.delete({
-            where: { id: (await params).id }
+            where: { id: id }
         });
 
         return NextResponse.json({ message: "Đã xóa Phòng ban thành công!" });

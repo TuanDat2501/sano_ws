@@ -10,14 +10,31 @@ export async function GET(req: Request) {
         const session = await getServerSession(authOptions);
         if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-        const { searchParams } = new URL(req.url);
-        const teamId = (session.user as any).teamId;
-        const role = (session.user as any).role;
+        const currentUser = session.user as any;
+        const userId = currentUser.id;
+        const teamId = currentUser.teamId;
+        const role = currentUser.role?.toUpperCase();
 
-        // Chỉ lọc theo Team nếu không phải Sếp tổng
+        // 🚀 ĐÃ SỬA: Phân quyền động cho việc xuất Excel, đồng bộ với logic xem danh sách Task
+        const canViewAll = currentUser.permissions?.includes("MENU_TEAMS") || ["ADMIN", "BAN_GIAM_DOC"].includes(role);
+        const isLeader = role === "LEADER" || currentUser.permissions?.includes("DEPARTMENT_LEADER");
+
         let whereClause: any = {};
-        if (role !== "ADMIN" && role !== "BAN_GIAM_DOC") {
-            whereClause.teamId = teamId;
+        
+        if (canViewAll) {
+            whereClause = {};
+        } else if (isLeader) {
+            whereClause = { teamId: teamId };
+        } else {
+            // Nhân sự thường chỉ xuất được Task của chính mình tham gia
+            whereClause = { 
+                OR: [
+                    { contentId: userId }, 
+                    { editorId: userId }, 
+                    { animatorId: userId }, 
+                    { creatorId: userId }
+                ] 
+            };
         }
 
         const tasks = await prisma.task.findMany({
@@ -25,7 +42,7 @@ export async function GET(req: Request) {
             include: {
                 contentUser: { select: { fullName: true } },
                 editorUser: { select: { fullName: true } },
-                animatorUser: { select: { fullName: true } }, // 🚀 Animator mới thêm
+                animatorUser: { select: { fullName: true } }, // Animator mới thêm
                 channel: { select: { name: true } },
                 project: { select: { name: true } }
             },

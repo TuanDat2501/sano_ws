@@ -22,7 +22,9 @@ export async function PUT(
         }
 
         const currentUser = session.user as any;
-        const isManager = ["ADMIN", "BAN_GIAM_DOC", "HR"].includes(currentUser.role);
+        
+        // 🚀 ĐÃ SỬA: Phân quyền động dựa vào mảng Permission (MENU_USERS) thay vì Role cứng
+        const isManager = currentUser.permissions?.includes("MENU_USERS") || currentUser.role === "ADMIN";
         const isSelf = currentUser.id === targetUserId;
 
         if (!isManager && !isSelf) {
@@ -33,7 +35,6 @@ export async function PUT(
         const body = await request.json();
         const { 
             username, fullName, role, teamId, password, isActive, avatarUrl,
-            // 🚀 BỔ SUNG CÁC TRƯỜNG HR & TEAM LEADER
             isTeamLeader, employeeCode, dob, ethnicity, cccdNumber, cccdDate,
             cccdPlace, permanentAddress, currentAddress, phone, personalEmail,
             relativeName, relativePhone, relativeRelation, bankAccount, bankName,
@@ -41,14 +42,12 @@ export async function PUT(
         } = body;
 
         // 3. CHUẨN BỊ GIỎ DỮ LIỆU UPDATE
-        // 3. CHUẨN BỊ GIỎ DỮ LIỆU UPDATE
         const updateData: any = {};
         
         if (fullName) updateData.fullName = fullName;
         if (username) updateData.username = username;
         if (avatarUrl) updateData.avatarUrl = avatarUrl;
         
-        // 🚀 ĐÃ FIX: Chuyển đổi chuỗi rỗng "" thành null đối với các trường @unique để tránh lỗi P2002
         if (employeeCode !== undefined) {
             updateData.employeeCode = employeeCode?.trim() === "" ? null : employeeCode;
         }
@@ -56,7 +55,6 @@ export async function PUT(
             updateData.cccdNumber = cccdNumber?.trim() === "" ? null : cccdNumber;
         }
         
-        // Các trường không unique thì có thể giữ nguyên chuỗi rỗng
         if (ethnicity !== undefined) updateData.ethnicity = ethnicity;
         if (cccdPlace !== undefined) updateData.cccdPlace = cccdPlace;
         if (permanentAddress !== undefined) updateData.permanentAddress = permanentAddress;
@@ -70,7 +68,6 @@ export async function PUT(
         if (bankName !== undefined) updateData.bankName = bankName;
         if (bhxhNumber !== undefined) updateData.bhxhNumber = bhxhNumber;
 
-        // Xử lý chuẩn hóa ngày tháng cho Prisma
         if (dob) updateData.dob = new Date(dob);
         else if (dob === "") updateData.dob = null;
 
@@ -80,15 +77,14 @@ export async function PUT(
         if (joinDate) updateData.joinDate = new Date(joinDate);
         else if (joinDate === "") updateData.joinDate = null;
 
-        // Xử lý mật khẩu (Chỉ băm nếu sếp có gõ pass mới)
         if (password && password.trim() !== "") {
             updateData.passwordHash = await bcrypt.hash(password, 10);
         }
 
-        // 🚀 ĐẶC QUYỀN CỦA QUẢN LÝ: Chỉ Quản lý mới được phép đổi Role, Team, Khóa tài khoản và set Leader
+        // ĐẶC QUYỀN CỦA QUẢN LÝ
         if (isManager) {
             if (role) updateData.role = role;
-            updateData.teamId = teamId || null; // Nếu rỗng thì gán null
+            updateData.teamId = teamId || null; 
             if (isActive !== undefined) updateData.isActive = isActive; 
             if (isTeamLeader !== undefined) updateData.isTeamLeader = isTeamLeader; 
         }
@@ -142,7 +138,8 @@ export async function GET(
         const { id } = await params;
         const targetUserId = id;
 
-        const isManager = ["ADMIN", "BAN_GIAM_DOC", "HR", "LEADER"].includes(currentUser.role);
+        // 🚀 ĐÃ SỬA: Đồng bộ logic check quyền ở hàm GET
+        const isManager = currentUser.permissions?.includes("MENU_USERS") || currentUser.role === "LEADER" || currentUser.role === "ADMIN";
         const isSelf = currentUser.id === targetUserId;
 
         if (!isManager && !isSelf) {
@@ -161,15 +158,12 @@ export async function GET(
                 isActive: true, 
                 isTeamLeader: true,
                 createdAt: true,
-                
-                // 🚀 LẤY THÊM THÔNG TIN DEPARTMENT
                 team: { 
                     select: { 
                         name: true,
                         department: { select: { name: true } } 
                     } 
                 },
-                
                 employeeCode: true, dob: true, ethnicity: true, cccdNumber: true, cccdDate: true,
                 cccdPlace: true, permanentAddress: true, currentAddress: true, phone: true,
                 personalEmail: true, relativeName: true, relativePhone: true, relativeRelation: true,
@@ -192,8 +186,6 @@ export async function GET(
         } else {
             const rolesToCheck: string[] = [user.role];
 
-            // 🚀 BƠM QUYỀN ẢO DỰA TRÊN DEPARTMENT
-            // Nếu là Leader VÀ thuộc về Department "Nhân sự", cộng dồn quyền Trưởng Phòng và HR
             if (user.role === "LEADER" && user.team?.department?.name?.toLowerCase().includes("hành chính")) {
                 rolesToCheck.push("DEPARTMENT_LEADER");
                 rolesToCheck.push("HR"); 

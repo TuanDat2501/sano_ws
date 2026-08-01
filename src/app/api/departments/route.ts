@@ -1,17 +1,17 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma"; 
 
-import { prisma } from "@/lib/prisma"; // 🚀 Dùng alias @/ cho sạch code sếp nhé
-// 1. LẤY DANH SÁCH TEAM
 export const dynamic = "force-dynamic";
+
+// 1. LẤY DANH SÁCH PHÒNG BAN
 export async function GET() {
     try {
         const session = await getServerSession(authOptions);
         if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
         const departments = await prisma.department.findMany({
-            // 🚀 SỬA Ở ĐÂY: Phòng ban thì đếm số Team trực thuộc nó
             include: {
                 _count: {
                     select: { teams: true }
@@ -29,14 +29,16 @@ export async function GET() {
     }
 }
 
-// 2. TẠO DEPARTMENT MỚI (CHỈ ADMIN/BGD)
+// 2. TẠO DEPARTMENT MỚI
 export async function POST(req: Request) {
   try {
-    // 🚀 KIỂM TRA QUYỀN HẠN
     const session = await getServerSession(authOptions);
-    const userRole = (session?.user as any)?.role;
+    const currentUser = session?.user as any;
 
-    if (!session || !["ADMIN", "BAN_GIAM_DOC"].includes(userRole)) {
+    // 🚀 ĐÃ SỬA: Đọc quyền động từ biến permissions thay vì fix cứng Role
+    const hasPermission = currentUser?.permissions?.includes("MENU_TEAMS") || currentUser?.role === "ADMIN";
+
+    if (!currentUser || !hasPermission) {
       return NextResponse.json({ error: "Bạn không có quyền tạo Department mới!" }, { status: 403 });
     }
 

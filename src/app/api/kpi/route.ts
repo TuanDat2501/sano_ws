@@ -34,7 +34,7 @@ export async function GET(req: Request) {
         const session = await getServerSession(authOptions);
         if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-        const currentUserRole = (session.user as any)?.role;
+        const currentUser = session.user as any;
         const { searchParams } = new URL(req.url);
         const teamId = searchParams.get("teamId");
         const year = parseInt(searchParams.get("year") || String(new Date().getFullYear()));
@@ -43,9 +43,12 @@ export async function GET(req: Request) {
 
         let userWhere: any = { isActive: true };
 
-        if (currentUserRole === "ADMIN") {
+        // 🚀 ĐÃ SỬA: Dùng quyền MENU_TEAMS hoặc Role Admin/Ban Giám Đốc/Kế Toán để quyết định việc lọc xuyên Team
+        const canFilterTeam = currentUser.permissions?.includes("MENU_TEAMS") || ["ADMIN", "BAN_GIAM_DOC", "KE_TOAN"].includes(currentUser.role);
+
+        if (currentUser.role === "ADMIN") {
             if (teamId && teamId !== "ALL") userWhere.teamId = teamId;
-        } else if (currentUserRole === "BAN_GIAM_DOC" || currentUserRole === "HR" || currentUserRole === "KE_TOAN") {
+        } else if (canFilterTeam || currentUser.role === "LEADER") {
             userWhere.role = { not: "ADMIN" };
             if (teamId && teamId !== "ALL") userWhere.teamId = teamId;
         } else {
@@ -53,7 +56,7 @@ export async function GET(req: Request) {
             userWhere.teamId = teamId;
         }
 
-        // 1. QUERY 1: LẤY 50 USERS
+        // 1. QUERY 1: LẤY USERS
         const users = await prisma.user.findMany({
             where: userWhere,
             select: { id: true, fullName: true, role: true, avatarUrl: true }
@@ -98,7 +101,7 @@ export async function GET(req: Request) {
             const validUserLogs: typeof rawUserLogs = [];
             const dailyReportTracker = new Set<string>();
 
-            // Lọc dữ liệu chống hack (Chỉ tính 1 điểm báo cáo / 1 task / 1 ngày)
+            // Lọc dữ liệu chống hack
             rawUserLogs.forEach(log => {
                 if ((log.action as string) === "DAILY_REPORT") {
                     const dateString = new Date(log.createdAt).toISOString().split('T')[0];
@@ -113,7 +116,6 @@ export async function GET(req: Request) {
                 }
             });
 
-            // 🚀 ĐÃ SỬA: Map dữ liệu từ mảng ĐÃ LỌC thay vì mảng GỐC
             const mappedLogs = validUserLogs.map(log => {
                 let typeStr = "Khác";
                 if (log.action === "SUBMIT_SCRIPT") typeStr = "Script";
@@ -141,7 +143,6 @@ export async function GET(req: Request) {
 
             const allUserLogs = [...mappedLogs, ...pendingLogs].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
             
-            // 🚀 ĐÃ SỬA: Đếm số lượng từ mảng ĐÃ LỌC
             const targetValue = kpiRecord?.targetValue || 0;
             const actualCount = validUserLogs.length; 
             const percent = targetValue > 0 ? Math.round((actualCount / targetValue) * 100) : 0;
@@ -163,8 +164,14 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
     try {
         const session = await getServerSession(authOptions);
-        const role = (session?.user as any)?.role;
-        if (!["LEADER", "BAN_GIAM_DOC", "ADMIN"].includes(role)) return NextResponse.json({ error: "Chỉ Quản lý mới được giao KPI" }, { status: 403 });
+        const currentUser = session?.user as any;
+        
+        // 🚀 ĐÃ SỬA: Dùng quyền MENU_KPI (hoặc là Admin/Leader) để kiểm tra chức năng giao KPI
+        const hasPermission = currentUser?.permissions?.includes("MENU_KPI") || currentUser?.role === "ADMIN" || currentUser?.role === "LEADER";
+        
+        if (!hasPermission) {
+            return NextResponse.json({ error: "Chỉ Quản lý mới được giao KPI" }, { status: 403 });
+        }
 
         const body = await req.json();
         const { userId, year, month, weekNumber, targetValue } = body;
