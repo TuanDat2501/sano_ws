@@ -29,11 +29,12 @@ export default function RequestsPage() {
     const currentUser = session?.user as any;
     const userRole = currentUser?.role || "CONTENT";
 
-    // 🚀 PHÂN QUYỀN HIỂN THỊ TAB
-    const canViewAll = ["ADMIN", "BAN_GIAM_DOC", "HR"].includes(userRole); // Ai được xem "Tất cả đề xuất"
-    const isApprover = ["ADMIN", , "LEADER", "CHANNEL_MANAGER", "HR"].includes(userRole); // Ai được duyệt đơn
+    // 🚀 ĐÃ SỬA: Bổ sung quyền ảo DEPARTMENT_LEADER và MENU_TEAMS vào logic hiển thị
+    const canViewAll = currentUser?.permissions?.includes("DEPARTMENT_LEADER") || currentUser?.permissions?.includes("MENU_TEAMS") || ["ADMIN", "BAN_GIAM_DOC", "HR"].includes(userRole); 
+    
+    // 🚀 ĐÃ SỬA: Xóa dấu phẩy thừa và bổ sung quyền duyệt đơn động
+    const isApprover = currentUser?.permissions?.includes("ACTION_APPROVE_REQUEST") || currentUser?.permissions?.includes("DEPARTMENT_LEADER") || ["ADMIN", "BAN_GIAM_DOC", "LEADER", "CHANNEL_MANAGER", "HR"].includes(userRole); 
 
-    // 🚀 THÊM TRẠNG THÁI 'ALL_REQUESTS'
     const [activeTab, setActiveTab] = useState<'ALL_REQUESTS' | 'MY_REQUESTS' | 'NEED_APPROVAL'>(
         (tabParam as 'ALL_REQUESTS' | 'MY_REQUESTS' | 'NEED_APPROVAL') || 'MY_REQUESTS'
     );
@@ -75,7 +76,6 @@ export default function RequestsPage() {
 
     useEffect(() => {
         if (tabParam === "ALL_REQUESTS" || tabParam === "MY_REQUESTS" || tabParam === "NEED_APPROVAL") {
-            // Chống lỗi: Nếu user cố tình gõ tab ALL_REQUESTS lên URL mà không có quyền thì đẩy về MY_REQUESTS
             if (tabParam === "ALL_REQUESTS" && !canViewAll) {
                 setActiveTab('MY_REQUESTS');
             } else {
@@ -157,7 +157,7 @@ export default function RequestsPage() {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 mb-4 md:mb-6 gap-3">
                     <div className="flex items-center gap-4 md:gap-6 overflow-x-auto custom-scrollbar-thin shrink-0">
                         
-                        {/* Tab 1: Tất cả đề xuất (Chỉ Admin/BGD/HR thấy) */}
+                        {/* Tab 1: Tất cả đề xuất */}
                         {canViewAll && (
                             <button
                                 onClick={() => setActiveTab('ALL_REQUESTS')}
@@ -168,7 +168,7 @@ export default function RequestsPage() {
                             </button>
                         )}
 
-                        {/* Tab 2: Đơn của tôi (Tất cả mọi người đều thấy) */}
+                        {/* Tab 2: Đơn của tôi */}
                         <button
                             onClick={() => setActiveTab('MY_REQUESTS')}
                             className={`pb-2.5 md:pb-3 text-sm md:text-[15px] font-bold transition-all relative whitespace-nowrap ${activeTab === 'MY_REQUESTS' ? 'text-red-600' : 'text-slate-500 hover:text-slate-800'}`}
@@ -177,7 +177,7 @@ export default function RequestsPage() {
                             {activeTab === 'MY_REQUESTS' && <div className="absolute bottom-0 left-0 w-full h-1 bg-red-600 rounded-t-full"></div>}
                         </button>
 
-                        {/* Tab 3: Cần tôi duyệt (Chỉ những ai có quyền duyệt đơn mới thấy) */}
+                        {/* Tab 3: Cần tôi duyệt */}
                         {isApprover && (
                             <button
                                 onClick={() => setActiveTab('NEED_APPROVAL')}
@@ -304,7 +304,7 @@ export default function RequestsPage() {
                     onClose={() => setIsCreateModalOpen(false)}
                     allowedTypes={allowedRequestTypes}
                     teams={dbTeams}
-                    onRefresh={fetchRequests} // 🚀 BỔ SUNG DÒNG NÀY ĐỂ GỌI LẠI DATA
+                    onRefresh={fetchRequests} 
                 />
 
                 <RequestDetailModal

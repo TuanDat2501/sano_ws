@@ -24,7 +24,7 @@ declare module "next-auth" {
     teamId: string | null;
     avatarUrl: string | null;
     isTeamLeader: boolean; 
-    teamName?: string; // 🚀 Bổ sung tên Team để check quyền ảo
+    teamName?: string; 
   }
 }
 
@@ -55,7 +55,6 @@ export const authOptions: NextAuthOptions = {
         try {
           const user = await prisma.user.findUnique({
             where: { username: credentials.username },
-            // 🚀 ĐÃ SỬA: Chỉ cần include team là đủ
             include: { team: true } 
           });
 
@@ -72,7 +71,7 @@ export const authOptions: NextAuthOptions = {
             teamId: user.teamId,
             avatarUrl: user.avatarUrl,
             isTeamLeader: user.isTeamLeader || false,
-            teamName: user.team?.name, // 🚀 Kéo tên Team xuống
+            teamName: user.team?.name,
           };
         } catch (error) {
           console.error(">>> [AUTH ERROR]:", error);
@@ -83,6 +82,7 @@ export const authOptions: NextAuthOptions = {
   ],
   callbacks: {
     async jwt({ token, user, trigger, session }) {
+      // 1. Nạp thông tin cơ bản lần đầu đăng nhập
       if (user) {
         token.id = user.id;
         token.name = user.name; 
@@ -91,38 +91,54 @@ export const authOptions: NextAuthOptions = {
         token.username = user.username;
         token.avatarUrl = user.avatarUrl;
         token.isTeamLeader = user.isTeamLeader;
-
-        try {
-            if (user.role === "ADMIN" || user.role === "BAN_GIAM_DOC") {
-                const dbModules = await prisma.permission.findMany({ select: { moduleId: true }, distinct: ['moduleId'] });
-                const defaultModules = ["MENU_DASHBOARD", "MENU_TASKS", "MENU_KPI", "MENU_REVENUE", "MENU_REQUESTS", "MENU_TEAMS", "MENU_USERS", "MENU_ORG_CHART", "MENU_DAILY_REPORT", "MENU_CHANNELS", "MENU_ANALYTICS", "ACTION_CREATE_TASK", "ACTION_APPROVE_REQUEST", "MENU_PROJECTS"];
-                const allModules = [...defaultModules, ...dbModules.map(m => m.moduleId)];
-                token.permissions = Array.from(new Set(allModules));
-            } else {
-                const rolesToCheck = [user.role];
-
-                // 🚀 ĐÃ SỬA ĐIỀU KIỆN: Dựa chính xác vào tên Team có chứa chữ "Nhân sự"
-                if (user.role === "LEADER" && user.teamName?.toLowerCase().includes("nhân sự")) {
-                    rolesToCheck.push("DEPARTMENT_LEADER");
-                    rolesToCheck.push("HR"); // Kéo theo quyền HR (Sẽ lấy được True ở MENU_USERS và MENU_TEAMS)
-                }
-
-                const userPermissions = await prisma.permission.findMany({
-                    where: { 
-                        role: { in: rolesToCheck },
-                        isAllowed: true 
-                    },
-                    select: { moduleId: true }
-                });
-                const rawPerms = userPermissions.map(p => p.moduleId);
-                token.permissions = Array.from(new Set(rawPerms));
-            }
-        } catch (error) {
-            console.error(">>> [AUTH] Lỗi nạp Permission:", error);
-            token.permissions = [];
-        }
       }
 
+      // 2. 🚀 TỰ ĐỘNG CẬP NHẬT DATA & QUYỀN TỪ DB MỖI KHI CÓ REQUEST / F5
+      if (token.id) {
+          try {
+              // Lấy dữ liệu user mới nhất từ DB
+              const dbUser = await prisma.user.findUnique({
+                  where: { id: token.id as string },
+                  include: { team: true } // Cần lấy Team để check quyền Nhân sự
+              });
+
+              if (dbUser) {
+                  // Cập nhật lại Role & Team phòng trường hợp sếp vừa đổi ở màn Admin
+                  token.role = dbUser.role;
+                  token.teamId = dbUser.teamId;
+                  token.isTeamLeader = dbUser.isTeamLeader;
+
+                  // Tính toán lại Permissions động
+                  if (dbUser.role === "ADMIN" || dbUser.role === "BAN_GIAM_DOC") {
+                      const dbModules = await prisma.permission.findMany({ select: { moduleId: true }, distinct: ['moduleId'] });
+                      const defaultModules = ["MENU_DASHBOARD", "MENU_TASKS", "MENU_KPI", "MENU_REVENUE", "MENU_REQUESTS", "MENU_TEAMS", "MENU_USERS", "MENU_ORG_CHART", "MENU_DAILY_REPORT", "MENU_CHANNELS", "MENU_ANALYTICS", "ACTION_CREATE_TASK", "ACTION_APPROVE_REQUEST", "MENU_PROJECTS"];
+                      const allModules = [...defaultModules, ...dbModules.map(m => m.moduleId)];
+                      token.permissions = Array.from(new Set(allModules));
+                  } else {
+                      const rolesToCheck = [dbUser.role];
+
+                      if (dbUser.role === "LEADER" && dbUser.team?.name?.toLowerCase().includes("nhân sự")) {
+                          rolesToCheck.push("DEPARTMENT_LEADER");
+                          rolesToCheck.push("HR"); 
+                      }
+
+                      const userPermissions = await prisma.permission.findMany({
+                          where: { 
+                              role: { in: rolesToCheck },
+                              isAllowed: true 
+                          },
+                          select: { moduleId: true }
+                      });
+                      const rawPerms = userPermissions.map(p => p.moduleId);
+                      token.permissions = Array.from(new Set(rawPerms));
+                  }
+              }
+          } catch (error) {
+              console.error(">>> [AUTH] Lỗi tự động nạp Permission:", error);
+          }
+      }
+
+      // 3. Xử lý Trigger update từ Client (đổi tên, avatar)
       if (trigger === "update" && session?.user) {
         if (session.user.name) token.name = session.user.name;
         if (session.user.avatarUrl) token.avatarUrl = session.user.avatarUrl;
