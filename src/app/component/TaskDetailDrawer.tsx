@@ -136,6 +136,7 @@ export default function TaskDetailDrawer({
       setChatImagePreview(null);
     }
   };
+
   const submitEvaluation = () => {
     setIsEvaluating(true);
     if (onSubmitEvaluation) {
@@ -145,8 +146,18 @@ export default function TaskDetailDrawer({
   };
 
   if (!selectedTask) return null;
+
+  const contentUsersList = [...(selectedTask.contentUser ? [selectedTask.contentUser] : []), ...(selectedTask.coContentUsers || [])];
+  const editorUsersList = [...(selectedTask.editorUser ? [selectedTask.editorUser] : []), ...(selectedTask.coEditorUsers || [])];
+  const animatorUsersList = [...(selectedTask.animatorUser ? [selectedTask.animatorUser] : []), ...(selectedTask.coAnimatorUsers || [])];
+
   const isManager = ["ADMIN", "BAN_GIAM_DOC", "LEADER", "HR", "KE_TOAN"].includes(userRole);
-  const isParticipant = isManager || selectedTask.contentId === sessionUserId || selectedTask.editorId === sessionUserId || selectedTask.creatorId === sessionUserId;
+  
+  const isParticipant = isManager || 
+      selectedTask.creatorId === sessionUserId ||
+      contentUsersList.some(u => u.id === sessionUserId) ||
+      editorUsersList.some(u => u.id === sessionUserId) ||
+      animatorUsersList.some(u => u.id === sessionUserId);
 
   const handleAutoSave = async (fieldKey: string, newValue: string) => {
     if (newValue === (selectedTask[fieldKey] || "")) return;
@@ -208,20 +219,54 @@ export default function TaskDetailDrawer({
 
   const channelCategory = selectedTask?.channel?.category || 'AI';
 
+  // 🚀 ĐÃ SỬA: Bổ sung Link PRJ Thô vào để UI tự động quét và vẽ ra ô điền
   const allLinkFields = [
     { key: 'scriptLink', label: 'Kịch Bản', role: 'CONTENT', idField: 'contentId', categories: ['AI', 'TONG_HOP'] },
     { key: 'audioLink', label: 'Link Audio', role: 'EDITOR', idField: 'editorId', categories: ['AI', 'TONG_HOP'] }, 
     { key: 'storyboardLink', label: 'Bố Cục', role: 'CONTENT', idField: 'contentId', categories: ['AI', 'TONG_HOP'] }, 
     { key: 'animationLink', label: 'Link Chuyển Động', role: 'CONTENT', idField: 'animatorId', categories: ['AI'] }, 
+    { key: 'roughProjectLink', label: 'Link PRJ Thô', role: 'EDITOR', idField: 'editorId', categories: ['AI', 'TONG_HOP'] }, // MỚI
     { key: 'thumbnailLink', label: 'Thumbnail', role: 'EDITOR', idField: 'editorId', categories: ['AI', 'TONG_HOP'] },
     { key: 'videoLink', label: 'Video Render', role: 'EDITOR', idField: 'editorId', categories: ['AI', 'TONG_HOP'] },
-    { key: 'linkProject', label: 'Link Project', role: 'EDITOR', idField: 'editorId', categories: ['AI', 'TONG_HOP'] },
+    { key: 'linkProject', label: 'Link Project (Dựng Chính)', role: 'EDITOR', idField: 'editorId', categories: ['AI', 'TONG_HOP'] }, // ĐỔI TÊN
   ];
 
   let visibleLinkFields = allLinkFields.filter(f => f.categories.includes(channelCategory));
   if (selectedTask?.isCompilation) {
-    visibleLinkFields = visibleLinkFields.filter(f => ['thumbnailLink', 'videoLink','linkProject'].includes(f.key));
+    visibleLinkFields = visibleLinkFields.filter(f => ['thumbnailLink', 'videoLink','linkProject', 'roughProjectLink'].includes(f.key));
   }
+
+  const renderUserGroup = (title: string, users: any[], colorClass: string, bgClass: string, borderClass: string, textClass: string) => {
+    if (users.length === 0) return null;
+    return (
+      <div className={`${bgClass} border ${borderClass} p-3.5 rounded-2xl flex flex-col gap-2.5`}>
+        <p className={`text-[10px] font-bold ${textClass} uppercase tracking-widest`}>{title}</p>
+        
+        <div className="flex flex-wrap gap-2.5">
+          {users.map((u, idx) => (
+            <div key={idx} className="relative group cursor-pointer">
+              {u.avatarUrl ? (
+                <img 
+                  src={u.avatarUrl} 
+                  alt={u.fullName} 
+                  className="h-12 w-12 rounded-xl object-cover border-2 border-white shadow-sm hover:shadow-md hover:scale-105 transition-all duration-200" 
+                />
+              ) : (
+                <div className={`h-12 w-12 rounded-xl ${colorClass} flex items-center justify-center font-black border-2 border-white shadow-sm hover:shadow-md hover:scale-105 transition-all duration-200 text-sm`}>
+                  {u.fullName?.charAt(0) || "?"}
+                </div>
+              )}
+              
+              <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-20 shadow-lg">
+                {u.fullName}
+                <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800"></div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
 
   const drawerContent = (
     <>
@@ -399,43 +444,10 @@ export default function TaskDetailDrawer({
                   </div>
                 )}
 
-                <div className="grid grid-cols-2 gap-4">
-                  {selectedTask.contentUser &&
-                    <div className="bg-orange-50/50 border border-orange-100 p-3.5 rounded-2xl flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center font-black border-2 border-white shadow-sm text-base">
-                        {selectedTask.contentUser?.fullName?.charAt(0) || "?"}
-                      </div>
-                      <div className="overflow-hidden">
-                        <p className="text-[10px] font-bold text-orange-500 uppercase tracking-widest">Content</p>
-                        <p className="text-sm font-bold text-slate-800 truncate">{selectedTask.contentUser?.fullName || "Chưa giao"}</p>
-                      </div>
-                    </div>
-                  }
-
-                  {
-                    selectedTask.editorUser &&
-                    <div className="bg-blue-50/50 border border-blue-100 p-3.5 rounded-2xl flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center font-black border-2 border-white shadow-sm text-base">
-                        {selectedTask.editorUser?.fullName?.charAt(0) || "?"}
-                      </div>
-                      <div className="overflow-hidden">
-                        <p className="text-[10px] font-bold text-blue-500 uppercase tracking-widest">Editor</p>
-                        <p className="text-sm font-bold text-slate-800 truncate">{selectedTask.editorUser?.fullName || "Chưa giao"}</p>
-                      </div>
-                    </div>
-                  }
-
-                  {selectedTask.animatorUser &&
-                    <div className="bg-blue-50/50 border border-blue-100 p-3.5 rounded-2xl flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center font-black border-2 border-white shadow-sm text-base">
-                        {selectedTask.animatorUser?.fullName?.charAt(0) || "?"}
-                      </div>
-                      <div className="overflow-hidden">
-                        <p className="text-[10px] font-bold text-blue-500 uppercase tracking-widest">Animator</p>
-                        <p className="text-sm font-bold text-slate-800 truncate">{selectedTask.animatorUser?.fullName || "Chưa giao"}</p>
-                      </div>
-                    </div>
-                  }
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  {renderUserGroup("Content", contentUsersList, "bg-orange-100 text-orange-600", "bg-orange-50/50", "border-orange-100", "text-orange-500")}
+                  {renderUserGroup("Editor", editorUsersList, "bg-blue-100 text-blue-600", "bg-blue-50/50", "border-blue-100", "text-blue-500")}
+                  {renderUserGroup("Animator", animatorUsersList, "bg-purple-100 text-purple-600", "bg-purple-50/50", "border-purple-100", "text-purple-500")}
                 </div>
 
                 <div className="bg-slate-50 border border-slate-200 rounded-[24px] p-5 space-y-4 shadow-inner">
@@ -446,25 +458,24 @@ export default function TaskDetailDrawer({
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {visibleLinkFields.map((field, idx) => {
-                      const isAssigned = selectedTask[field.idField] === sessionUserId;
+                      const isAssigned = selectedTask[field.idField] === sessionUserId || 
+                           (field.role === 'CONTENT' && contentUsersList.some(u => u.id === sessionUserId)) ||
+                           (field.role === 'EDITOR' && editorUsersList.some(u => u.id === sessionUserId)) ||
+                           (field.key === 'animationLink' && animatorUsersList.some(u => u.id === sessionUserId));
+
                       const isCreator = selectedTask.creatorId === sessionUserId && field.key === 'scriptLink';
                       
-                      // 🚀 BỔ SUNG LOGIC: Kiểm tra xem Task có đang nằm ở đúng cột (status) của người đó không
                       let isTaskAtRightStatus = false;
                       if (field.role === 'CONTENT') {
-                          // Nếu là Content, chỉ được sửa ở cột TODO, DOING, REVIEW
                           isTaskAtRightStatus = ['TODO', 'CONTENT_DOING', 'CONTENT_REVIEW'].includes(selectedTask.status);
                       } else if (field.role === 'EDITOR') {
-                          // Nếu là Editor, chỉ được sửa ở cột EDIT_DOING, EDIT_REVIEW
                           isTaskAtRightStatus = ['EDIT_DOING', 'EDIT_REVIEW'].includes(selectedTask.status);
                       }
                       
-                      // Cụ thể hóa điều kiện cho AnimationLink
                       if (field.key === 'animationLink') {
                           isTaskAtRightStatus = ['ANIMATION_DOING', 'ANIMATION_REVIEW'].includes(selectedTask.status);
                       }
 
-                      // Tổng hợp điều kiện: Là quản lý HOẶC (Được giao + Đang ở đúng trạm của mình)
                       const isAllowed = isManager || (isCreator && isTaskAtRightStatus) || (isAssigned && isTaskAtRightStatus);
 
                       const currentLink = taskLinks[field.key as keyof typeof taskLinks] ?? selectedTask[field.key] ?? "";
@@ -488,7 +499,6 @@ export default function TaskDetailDrawer({
                           {isEditing ? (
                             <input
                               type="url" disabled={!isAllowed}
-                              // Thay đổi placeholder để gợi ý lý do không được sửa
                               placeholder={!isAllowed ? (!isTaskAtRightStatus && isAssigned ? "Chưa đến bước của bạn" : "Chỉ người phụ trách") : "Dán link..."}
                               className={`w-full border rounded-xl p-3 text-[13px] outline-none transition-all ${!isAllowed ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-white text-slate-800 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10'} ${errors[field.key] ? 'border-red-500' : ''}`}
                               value={currentLink}
@@ -523,7 +533,7 @@ export default function TaskDetailDrawer({
                         <span className="flex items-center gap-1.5">
                            {visibleLinkFields.length + 1}. Link Video Đã Đăng (YT)
                            {savingField === 'publishLink' && <Loader2 size={12} className="animate-spin text-blue-500" />}
-                           {savedField === 'publishLink' && <CheckCircle2 size={12} className="text-emerald-500" />}
+                           {savedField === 'publishLink' && <CheckCircle2 size={12} className="text emerald-500" />}
                         </span>
                         {!editingFields['publishLink'] && taskLinks.publishLink && isManager && (
                            <button onClick={() => setEditingFields({...editingFields, publishLink: true})} className="text-blue-500 hover:text-blue-700 text-xs flex items-center gap-1 normal-case tracking-normal">

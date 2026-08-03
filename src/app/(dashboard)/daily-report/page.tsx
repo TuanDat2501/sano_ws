@@ -23,9 +23,16 @@ export default function DailyReportPage() {
 
     const [reports, setReports] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [currentDate] = useState(new Date().toLocaleDateString('vi-VN'));
 
-    // 🚀 STATE CHO BỘ LỌC
+    // 🚀 ĐÃ SỬA: Tính toán ngày hôm nay làm giá trị mặc định cho Date Picker
+    const today = new Date();
+    const offset = today.getTimezoneOffset() * 60000;
+    const localISOTime = (new Date(today.getTime() - offset)).toISOString().split('T')[0];
+    
+    // State lưu trữ ngày báo cáo đang xem
+    const [selectedDate, setSelectedDate] = useState(localISOTime);
+
+    // STATE CHO BỘ LỌC
     const [searchTerm, setSearchTerm] = useState("");
     const [filterTeam, setFilterTeam] = useState("ALL");
     const [filterStatus, setFilterStatus] = useState("ALL");
@@ -33,7 +40,10 @@ export default function DailyReportPage() {
     useEffect(() => {
         if (status === "loading") return;
 
-        fetch("/api/reports/daily")
+        setIsLoading(true); // Bật loading mỗi khi đổi ngày
+
+        // 🚀 ĐÃ SỬA: Đính kèm tham số date vào API call
+        fetch(`/api/reports/daily?date=${selectedDate}`)
             .then(res => res.json())
             .then(data => {
                 if (Array.isArray(data)) {
@@ -50,15 +60,15 @@ export default function DailyReportPage() {
                 console.error(err);
                 setIsLoading(false);
             });
-    }, [currentUser, status]);
+    }, [currentUser, status, selectedDate]); // Chạy lại Effect khi đổi mốc ngày
 
-    // 🚀 LẤY DANH SÁCH TEAM ĐỘNG (Dành cho Dropdown Lọc)
+    // LẤY DANH SÁCH TEAM ĐỘNG (Dành cho Dropdown Lọc)
     const uniqueTeams = useMemo(() => {
         const teams = new Set(reports.map(r => r.teamName));
         return Array.from(teams).filter(Boolean).sort();
     }, [reports]);
 
-    // 🚀 XỬ LÝ LỌC DỮ LIỆU
+    // XỬ LÝ LỌC DỮ LIỆU
     const filteredReports = useMemo(() => {
         return reports.filter(user => {
             const matchSearch = user.fullName.toLowerCase().includes(searchTerm.toLowerCase());
@@ -71,20 +81,23 @@ export default function DailyReportPage() {
         });
     }, [reports, searchTerm, filterTeam, filterStatus]);
 
-    if (status === "loading" || isLoading) {
+    if (status === "loading" || (isLoading && reports.length === 0)) {
         return <div className="h-full flex items-center justify-center"><Loader2 className="animate-spin text-blue-600 h-10 w-10" /></div>;
     }
 
-    // 🚀 THỐNG KÊ (Nhảy số tự động theo bộ lọc)
+    // THỐNG KÊ (Nhảy số tự động theo bộ lọc)
     const totalUsers = filteredReports.length;
     const reportedUsers = filteredReports.filter(r => r.hasReported).length;
     const missingUsers = totalUsers - reportedUsers;
+
+    // Convert ngày để hiển thị trên Header (từ YYYY-MM-DD sang DD/MM/YYYY)
+    const displayDate = new Date(selectedDate).toLocaleDateString('vi-VN');
 
     return (
         <PermissionGuard moduleId="MENU_DAILY_REPORT">
             <div className="h-full max-h-[calc(100vh-80px)] flex flex-col p-4 md:p-6 bg-slate-50 overflow-hidden animate-fade-in gap-4 md:gap-6">
                 
-                {/* 🚀 HEADER & THỐNG KÊ (UI MỚI) */}
+                {/* HEADER & THỐNG KÊ */}
                 <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 shrink-0 bg-white p-4 md:p-5 rounded-2xl shadow-sm border border-slate-200 relative z-10">
                     <div>
                         <h1 className="text-xl md:text-2xl font-black text-slate-900 flex items-center gap-2 tracking-tight">
@@ -94,7 +107,7 @@ export default function DailyReportPage() {
                             <Calendar size={14} className="text-slate-400" /> 
                             <span>Phòng ban: <strong className="text-slate-700">Sản xuất</strong></span>
                             <span className="text-slate-300">|</span>
-                            <span>Ngày: <strong className="text-blue-700">{currentDate}</strong></span>
+                            <span>Ngày: <strong className="text-blue-700">{displayDate}</strong></span>
                         </p>
                     </div>
 
@@ -124,17 +137,29 @@ export default function DailyReportPage() {
                     </div>
                 </div>
 
-                {/* 🚀 THANH CÔNG CỤ BỘ LỌC */}
+                {/* THANH CÔNG CỤ BỘ LỌC */}
                 <div className="shrink-0 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white p-3 md:p-4 rounded-xl shadow-sm border border-slate-200">
-                    <div className="relative w-full sm:w-64">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                        <input 
-                            type="text" 
-                            placeholder="Tìm tên nhân sự..." 
-                            className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                        />
+                    <div className="flex items-center gap-3 w-full sm:w-auto">
+                        <div className="relative w-full sm:w-64">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                            <input 
+                                type="text" 
+                                placeholder="Tìm tên nhân sự..." 
+                                className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                            />
+                        </div>
+                        {/* 🚀 ĐÃ SỬA: Nút chọn ngày */}
+                        <div className="relative flex-1 sm:flex-none flex items-center bg-slate-50 border border-slate-200 rounded-lg h-9 md:h-10 px-3">
+                            <Calendar size={14} className="text-slate-400 mr-2 shrink-0" />
+                            <input
+                                type="date"
+                                className="bg-transparent text-xs md:text-sm font-bold text-slate-700 outline-none w-full sm:w-36 cursor-pointer"
+                                value={selectedDate}
+                                onChange={(e) => setSelectedDate(e.target.value)}
+                            />
+                        </div>
                     </div>
                     
                     <div className="flex items-center gap-3 w-full sm:w-auto">
@@ -166,8 +191,14 @@ export default function DailyReportPage() {
                     </div>
                 </div>
 
-                {/* 🚀 BẢNG BÁO CÁO CHI TIẾT */}
+                {/* BẢNG BÁO CÁO CHI TIẾT */}
                 <div className="bg-white border border-slate-200 rounded-2xl shadow-sm flex-1 overflow-hidden flex flex-col relative z-0">
+                    {/* Hiển thị mờ đi trong lúc đang đổi ngày/loading */}
+                    {isLoading && (
+                        <div className="absolute inset-0 bg-white/50 z-30 flex items-center justify-center backdrop-blur-[1px]">
+                            <Loader2 className="animate-spin text-blue-600 h-8 w-8" />
+                        </div>
+                    )}
                     <div className="flex-1 overflow-auto custom-scrollbar">
                         <table className="w-full text-left border-collapse min-w-[700px] md:min-w-full">
                             <thead className="sticky top-0 z-20 bg-slate-50 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
@@ -184,9 +215,7 @@ export default function DailyReportPage() {
                                         key={user.id} 
                                         className={`group transition-colors hover:bg-slate-50/70 ${!user.hasReported ? 'bg-red-50/20' : ''}`}
                                     >
-                                        {/* CỘT 1: Avatar + Tên + Team */}
                                         <td className={`px-6 py-4 relative`}>
-                                            {/* Đường viền trái báo hiệu trạng thái */}
                                             <div className={`absolute left-0 top-0 bottom-0 w-1 ${user.hasReported ? 'bg-emerald-400 opacity-0 group-hover:opacity-100' : 'bg-red-500'} transition-opacity`}></div>
                                             
                                             <div className="flex items-center gap-3 md:gap-4">
@@ -208,7 +237,6 @@ export default function DailyReportPage() {
                                             </div>
                                         </td>
 
-                                        {/* CỘT 2: Huy hiệu Trạng thái */}
                                         <td className="px-4 py-4">
                                             {user.hasReported ? (
                                                 <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-bold border border-emerald-200 shadow-sm">
@@ -221,12 +249,10 @@ export default function DailyReportPage() {
                                             )}
                                         </td>
 
-                                        {/* CỘT 3: Links hiển thị dạng Label thông minh */}
                                         <td className="px-4 py-4">
                                             {user.hasReported ? (
                                                 <div className="flex flex-wrap gap-2">
                                                     {user.links.map((link: any, idx: number) => {
-                                                        // Bóc tách "[Loại] Tên bài"
                                                         const match = link.name.match(/^\[(.*?)\]\s*(.*)$/);
                                                         const type = match ? match[1] : 'Link';
                                                         const title = match ? match[2] : link.name;
@@ -263,7 +289,7 @@ export default function DailyReportPage() {
                                     </tr>
                                 ))}
                                 
-                                {filteredReports.length === 0 && (
+                                {filteredReports.length === 0 && !isLoading && (
                                     <tr>
                                         <td colSpan={3} className="p-10 text-center flex flex-col items-center justify-center">
                                             <AlertCircle className="w-10 h-10 text-slate-300 mb-3" />

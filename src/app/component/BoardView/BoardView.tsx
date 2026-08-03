@@ -17,12 +17,56 @@ export default function BoardView({ tasks, columns, getTeamColor, onDragEnd, onO
 
   const isManager = ["ADMIN", "BAN_GIAM_DOC", "LEADER"].includes(userRole);
 
+  // 🚀 HELPER BỔ SUNG: Render một nhóm Avatar dạng xếp chồng (Stacked) cực gọn
+  const renderStackedAvatars = (roleTitle: string, mainUser: any, coUsers: any[], colorClass: string, bgClass: string) => {
+    // Gộp chính và phụ thành 1 mảng
+    const allUsers = [...(mainUser ? [mainUser] : []), ...(coUsers || [])];
+    if (allUsers.length === 0) return null;
+
+    // Chỉ hiển thị tối đa 3 avatar, còn lại hiện +N
+    const maxVisible = 3;
+    const visibleUsers = allUsers.slice(0, maxVisible);
+    const hiddenCount = allUsers.length - maxVisible;
+
+    return (
+        <div className="relative group cursor-pointer flex items-center" title={`${roleTitle}: ${allUsers.map(u => u.fullName).join(', ')}`}>
+            <div className="flex -space-x-2 mr-1">
+                {visibleUsers.map((u, idx) => (
+                    <div key={idx} className={`relative z-[${10 - idx}]`}>
+                        {u.avatarUrl ? (
+                            <img 
+                                src={u.avatarUrl} 
+                                alt={u.fullName} 
+                                className={`h-6 w-6 md:h-8 md:w-8 rounded-full object-cover border-2 border-white shadow-md ${bgClass} text-${colorClass}`} 
+                            />
+                        ) : (
+                            <div className={`h-6 w-6 md:h-8 md:w-8 rounded-full flex items-center justify-center font-black text-[10px] md:text-xs border-2 border-white shadow-md ${bgClass} ${colorClass}`}>
+                                {u.fullName?.charAt(0) || "?"}
+                            </div>
+                        )}
+                    </div>
+                ))}
+                
+                {/* Nút cộng số lượng người bị ẩn */}
+                {hiddenCount > 0 && (
+                    <div className="h-6 w-6 md:h-8 md:w-8 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center font-bold text-[9px] md:text-[10px] border-2 border-white shadow-md z-[1]">
+                        +{hiddenCount}
+                    </div>
+                )}
+            </div>
+            
+            {/* Chữ Mác của Team (C, E, A) nằm đè nhẹ lên Avatar cuối cùng */}
+            <div className={`absolute -bottom-1 -right-1 h-3.5 w-3.5 md:h-4 md:w-4 rounded-full border-2 border-white flex items-center justify-center text-[7px] md:text-[9px] font-black text-white shadow-sm z-20 ${colorClass.replace('text-', 'bg-')}`}>
+               {roleTitle.charAt(0)}
+            </div>
+        </div>
+    );
+  };
+
   return (
     <DragDropContext onDragEnd={onDragEnd}>
-      {/* Giảm gap trên mobile để các cột gần nhau hơn */}
       <div className="flex gap-4 md:gap-6 h-full min-w-max items-start">
         {Object.values(columns).map((column: any) => (
-          // Bóp width của cột từ 320px (w-80) xuống 280px trên mobile để lộ một phần cột bên cạnh
           <div key={column.id} className={`w-[280px] md:w-80 flex flex-col h-full ${column.columnBg} rounded-2xl md:rounded-[32px] border ${column.borderColor} shadow-sm shrink-0`}>
 
             <div className={`p-3 md:p-5 flex items-center justify-between bg-white/40 backdrop-blur-sm border-b ${column.borderColor} shrink-0`}>
@@ -43,17 +87,15 @@ export default function BoardView({ tasks, columns, getTeamColor, onDragEnd, onO
                   className={`flex-1 overflow-y-auto min-h-0 p-3 md:p-4 space-y-3 md:space-y-4 custom-scrollbar transition-colors ${snapshot.isDraggingOver ? "bg-black/5" : ""}`}
                 >
                   {tasks[column.id]?.map((task: any, index: number) => {
-                    const isMyContent = task.contentId === currentUserId || task.creatorId === currentUserId;
-                    const isMyAnimation = task.animatorId === currentUserId;
-                    const isMyEdit = task.editorId === currentUserId;
-                    // Sửa đổi dòng 37 trong BoardView.tsx
+                    // 🚀 ĐÃ SỬA BỘ LỌC QUYỀN: Gom kiểm tra cho toàn bộ người làm chung
+                    const isMyContent = task.contentId === currentUserId || task.creatorId === currentUserId || task.coContentUsers?.some((u:any) => u.id === currentUserId);
+                    const isMyAnimation = task.animatorId === currentUserId || task.coAnimatorUsers?.some((u:any) => u.id === currentUserId);
+                    const isMyEdit = task.editorId === currentUserId || task.coEditorUsers?.some((u:any) => u.id === currentUserId);
+                    
                     const isDragDisabled =
                       !isManager &&
-                      // 1. Nhân viên Content -> CHỈ được kéo thẻ đang ở cột "Chờ Kịch Bản" (TODO) để đem đi nộp
                       !(isMyContent && task.status === "TODO") &&
-                      // 2. Nhân viên Animator -> CHỈ được kéo thẻ đang ở cột "Đang làm CĐ" (ANIMATION_DOING) để đem đi nộp
                       !(isMyAnimation && task.status === "ANIMATION_DOING") &&
-                      // 3. Nhân viên Editor -> CHỈ được kéo thẻ đang ở cột "Đang Dựng" (EDIT_DOING) để đem đi nộp
                       !(isMyEdit && task.status === "EDIT_DOING");
 
                     return (
@@ -70,7 +112,6 @@ export default function BoardView({ tasks, columns, getTeamColor, onDragEnd, onO
                               ref={provided.innerRef}
                               {...provided.draggableProps}
                               {...provided.dragHandleProps}
-                              // Giảm padding card trên mobile (p-4 thay vì p-5)
                               className={`p-4 md:p-5 rounded-[20px] md:rounded-[24px] border-l-[4px] md:border-l-[6px] transition-all 
                                 ${snapshot.isDragging ? "shadow-2xl shadow-slate-500/20 scale-105 rotate-2 z-50 bg-white" : "shadow-sm"} 
                                 ${teamColor.border} border-y-slate-100 border-r-slate-100 
@@ -100,58 +141,16 @@ export default function BoardView({ tasks, columns, getTeamColor, onDragEnd, onO
                                 {task.title}
                               </h4>
 
-
                               {task.linkContent && <div className={`flex items-center gap-1.5 md:gap-2 text-[11px] md:text-xs font-medium p-1.5 md:p-2 rounded-lg md:rounded-xl border mb-3 md:mb-4 truncate ${isDragDisabled ? 'bg-transparent border-transparent text-slate-400' : 'bg-slate-50 text-slate-500 border-slate-100'}`}>
                                 <LinkIcon size={12} className="text-red-500 shrink-0 md:w-3.5 md:h-3.5" />
                                 <span className="truncate">{task.linkContent}</span>
                               </div>}
-                              <div className="flex items-center gap-1.5 md:gap-2 mt-3 md:mt-4 pt-2.5 md:pt-3 border-t border-slate-100/50">
-                                {/* Avatar Content */}
-                                {task.contentUser &&
-                                  <div className="relative ml-0.5 md:ml-1" title={`Editor: ${task.contentUser?.fullName || "Chưa phân công"}`}>
-                                    {task.contentUser.avatarUrl ?
-                                      <img src={task.contentUser.avatarUrl} className={`h-6 w-6 md:h-8 md:w-8 rounded-full flex items-center justify-center font-black text-[10px] md:text-xs shrink-0 border border-white shadow-md ${isDragDisabled ? 'bg-slate-200 text-slate-400' : 'bg-blue-100 text-blue-600'}`}>
-                                      </img>
-                                      :
-                                      <div className={`h-6 w-6 md:h-8 md:w-8 rounded-full flex items-center justify-center font-black text-[10px] md:text-xs shrink-0 border border-white shadow-md ${isDragDisabled ? 'bg-slate-200 text-slate-400' : 'bg-blue-100 text-blue-600'}`}>
-                                        {task.contentUser.fullName.charAt(0)}
-                                      </div>
-                                    }
-                                    <div className={`absolute -bottom-0.5 -right-0.5 md:-bottom-1 md:-right-1 h-3 w-3 md:h-3.5 md:w-3.5 rounded-full border md:border-2 border-white flex items-center justify-center text-[6px] md:text-[8px] font-black text-white shadow-sm ${isDragDisabled ? 'bg-slate-400' : 'bg-blue-500'}`}>E</div>
-                                  </div>
-                                }
-
-
-                                {/* Avatar Editor */}
-                                {task.editorUser &&
-                                  <div className="relative ml-0.5 md:ml-1" title={`Editor: ${task.editorUser?.fullName || "Chưa phân công"}`}>
-                                    {task.editorUser.avatarUrl ?
-                                      <img src={task.editorUser.avatarUrl} className={`h-6 w-6 md:h-8 md:w-8 rounded-full flex items-center justify-center font-black text-[10px] md:text-xs shrink-0 border border-white shadow-md ${isDragDisabled ? 'bg-slate-200 text-slate-400' : 'bg-blue-100 text-blue-600'}`}>
-                                      </img>
-                                      :
-                                      <div className={`h-6 w-6 md:h-8 md:w-8 rounded-full flex items-center justify-center font-black text-[10px] md:text-xs shrink-0 border border-white shadow-md ${isDragDisabled ? 'bg-slate-200 text-slate-400' : 'bg-blue-100 text-blue-600'}`}>
-                                        {task.editorUser.fullName.charAt(0)}
-                                      </div>
-                                    }
-                                    <div className={`absolute -bottom-0.5 -right-0.5 md:-bottom-1 md:-right-1 h-3 w-3 md:h-3.5 md:w-3.5 rounded-full border md:border-2 border-white flex items-center justify-center text-[6px] md:text-[8px] font-black text-white shadow-sm ${isDragDisabled ? 'bg-slate-400' : 'bg-blue-500'}`}>E</div>
-                                  </div>
-                                }
-
-
-                                {task.animatorUser &&
-                                  <div className="relative ml-0.5 md:ml-1" title={`Editor: ${task.animatorUser?.fullName || "Chưa phân công"}`}>
-                                    {task.animatorUser.avatarUrl ?
-                                      <img src={task.animatorUser.avatarUrl} className={`h-6 w-6 md:h-8 md:w-8 rounded-full flex items-center justify-center font-black text-[10px] md:text-xs shrink-0 border border-white shadow-md ${isDragDisabled ? 'bg-slate-200 text-slate-400' : 'bg-blue-100 text-blue-600'}`}>
-                                      </img>
-                                      :
-                                      <div className={`h-6 w-6 md:h-8 md:w-8 rounded-full flex items-center justify-center font-black text-[10px] md:text-xs shrink-0 border border-white shadow-md ${isDragDisabled ? 'bg-slate-200 text-slate-400' : 'bg-blue-100 text-blue-600'}`}>
-                                        {task.animatorUser.fullName.charAt(0)}
-                                      </div>
-                                    }
-                                    <div className={`absolute -bottom-0.5 -right-0.5 md:-bottom-1 md:-right-1 h-3 w-3 md:h-3.5 md:w-3.5 rounded-full border md:border-2 border-white flex items-center justify-center text-[6px] md:text-[8px] font-black text-white shadow-sm ${isDragDisabled ? 'bg-slate-400' : 'bg-blue-500'}`}>E</div>
-                                  </div>
-                                }
-
+                              
+                              <div className="flex flex-wrap items-center gap-2 mt-3 md:mt-4 pt-2.5 md:pt-3 border-t border-slate-100/50 opacity-90">
+                                {/* 🚀 ĐÃ SỬA: SỬ DỤNG HÀM RENDER STACK AVATAR CHO TẤT CẢ CÁC VỊ TRÍ */}
+                                {renderStackedAvatars("Content", task.contentUser, task.coContentUsers, "text-orange-600", "bg-orange-100")}
+                                {renderStackedAvatars("Editor", task.editorUser, task.coEditorUsers, "text-blue-600", "bg-blue-100")}
+                                {renderStackedAvatars("Animator", task.animatorUser, task.coAnimatorUsers, "text-purple-600", "bg-purple-100")}
                               </div>
                             </div>
                           );

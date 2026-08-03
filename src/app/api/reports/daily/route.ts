@@ -12,25 +12,24 @@ export async function GET(request: Request) {
 
         const currentUser = session.user as any;
         
-        // 🚀 ĐÃ SỬA: Kiểm tra quyền trực tiếp từ Database
-        const userPermission = await prisma.permission.findFirst({
-            where: {
-                role: currentUser.role,
-                moduleId: "MENU_DAILY_REPORT",
-                isAllowed: true
-            }
-        });
+        const hasPermission = currentUser.permissions?.includes("MENU_DAILY_REPORT") || 
+                              ["ADMIN", "BAN_GIAM_DOC"].includes(currentUser.role);
 
-        // ADMIN và BAN_GIAM_DOC luôn có quyền, các Role khác phải được tích xanh trên bảng Ma trận
-        if (currentUser.role !== "ADMIN" && currentUser.role !== "BAN_GIAM_DOC" && !userPermission) {
+        if (!hasPermission) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
         
-        const targetDate = new Date();
-        const startOfDay = new Date(targetDate.setHours(0, 0, 0, 0));
-        const endOfDay = new Date(targetDate.setHours(23, 59, 59, 999));
+        // 🚀 ĐÃ SỬA: Lấy tham số ngày từ URL (Nếu không có thì lấy ngày hiện tại)
+        const { searchParams } = new URL(request.url);
+        const dateParam = searchParams.get("date");
+        const targetDate = dateParam ? new Date(dateParam) : new Date();
         
-        // 1. Lấy danh sách nhân sự phòng Sản xuất trước
+        const startOfDay = new Date(targetDate);
+        startOfDay.setHours(0, 0, 0, 0);
+        
+        const endOfDay = new Date(targetDate);
+        endOfDay.setHours(23, 59, 59, 999);
+        
         const productionUsers = await prisma.user.findMany({
             where: {
                 isActive: true,
@@ -44,12 +43,11 @@ export async function GET(request: Request) {
             }
         });
 
-        // 2. Truy vết Log công việc trong ngày hôm nay
         const dailyLogs = await prisma.taskLog.findMany({
             where: {
+                // Lọc log theo khoảng thời gian của ngày được chọn
                 createdAt: { gte: startOfDay, lte: endOfDay },
                 action: {
-                    // 🚀 ĐÃ BỔ SUNG DAILY_REPORT
                     in: ['UPDATE_LINK', 'SUBMIT_SCRIPT', 'SUBMIT_VIDEO', 'PUBLISH_VIDEO', 'DAILY_REPORT']
                 }
             },
@@ -65,13 +63,15 @@ export async function GET(request: Request) {
                         audioLink: true,
                         thumbnailLink: true,
                         videoLink: true,
-                        publishLink: true
+                        publishLink: true,
+                        linkProject: true, 
+                        roughProjectLink: true,
+                        animationLink: true
                     }
                 }
             }
         });
 
-        // 3. Khớp Log vào từng nhân sự
         const reportData = productionUsers.map(user => {
             const userLogs = dailyLogs.filter(log => log.userId === user.id);
             const links: { name: string, url: string }[] = [];
@@ -80,22 +80,23 @@ export async function GET(request: Request) {
                 const t = log.task;
                 if (!t) return;
 
-                // 🚀 XỬ LÝ LOGIC MỚI: Bóc tách loại link từ chuỗi 'details'
                 if (log.action === 'DAILY_REPORT') {
                     const detail = log.details || "";
+                    
                     if (detail.includes("Kịch Bản") && t.scriptLink) links.push({ name: `[Kịch bản] ${t.title}`, url: t.scriptLink });
-                    else if (detail.includes("ENG") && t.englishScriptLink) links.push({ name: `[Text ENG] ${t.title}`, url: t.englishScriptLink });
+                    else if (detail.includes("Text ENG") && t.englishScriptLink) links.push({ name: `[Text ENG] ${t.title}`, url: t.englishScriptLink });
                     else if (detail.includes("Audio") && t.audioLink) links.push({ name: `[Audio] ${t.title}`, url: t.audioLink });
                     else if (detail.includes("Bố Cục") && t.storyboardLink) links.push({ name: `[Bố cục] ${t.title}`, url: t.storyboardLink });
                     else if (detail.includes("Thumbnail") && t.thumbnailLink) links.push({ name: `[Thumb] ${t.title}`, url: t.thumbnailLink });
                     else if (detail.includes("Video Render") && t.videoLink) links.push({ name: `[Video] ${t.title}`, url: t.videoLink });
+                    else if (detail.includes("Dựng Chính") && t.linkProject) links.push({ name: `[PRJ Chính] ${t.title}`, url: t.linkProject });
+                    else if (detail.includes("PRJ Thô") && t.roughProjectLink) links.push({ name: `[PRJ Thô] ${t.title}`, url: t.roughProjectLink });
+                    else if (detail.includes("Chuyển Động") && t.animationLink) links.push({ name: `[Chuyển động] ${t.title}`, url: t.animationLink });
                     else if (detail.includes("Đã Đăng") && t.publishLink) links.push({ name: `[Đã đăng] ${t.title}`, url: t.publishLink });
                     else if (detail.includes("trạng thái")) {
-                        // Nếu chỉ là ghi chú text, trả về đường dẫn trỏ thẳng vào Task đó
                         links.push({ name: `[Ghi chú] ${t.title}`, url: `/tasks?taskId=${t.id}` });
                     }
                 } 
-                // Xử lý Fallback cho các logic cũ
                 else {
                     if (log.action === 'UPDATE_LINK' && t.linkContent) links.push({ name: `[Nguồn] ${t.title}`, url: t.linkContent });
                     if (log.action === 'SUBMIT_SCRIPT' && t.scriptLink) links.push({ name: `[Kịch bản] ${t.title}`, url: t.scriptLink });
@@ -104,7 +105,6 @@ export async function GET(request: Request) {
                 }
             });
 
-            // Loại bỏ các link trùng lặp (nếu một người update 1 link nhiều lần trong ngày)
             const uniqueLinks = Array.from(new Set(links.map(l => JSON.stringify(l)))).map(l => JSON.parse(l));
 
             return {
@@ -112,8 +112,6 @@ export async function GET(request: Request) {
                 fullName: user.fullName,
                 teamName: user.team?.name || "N/A",
                 avatarUrl: user.avatarUrl,
-                // 🚀 CẬP NHẬT: Đếm trạng thái đã báo cáo dựa trên số lượng log, thay vì số lượng Link. 
-                // Đảm bảo những người chỉ gõ Ghi chú cũng được tính là hoàn thành.
                 hasReported: userLogs.length > 0,
                 links: uniqueLinks
             };

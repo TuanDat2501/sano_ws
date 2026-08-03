@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, UsersIcon, Loader2, FolderKanban, FileEdit, Film, Clock, Tv, Link as LinkIcon, FileText, Key, CalendarDays, MonitorPlay } from "lucide-react";
+import { X, UsersIcon, Loader2, FileEdit, Film, Clock, Link as LinkIcon, FileText, Key, CalendarDays, MonitorPlay } from "lucide-react";
 import { createPortal } from "react-dom";
 
 interface CreateTaskModalProps {
@@ -9,11 +9,55 @@ interface CreateTaskModalProps {
   onSubmit: (taskData: any) => Promise<void>; isSubmitting: boolean; errors: { [key: string]: string };
 }
 
+// 🚀 COMPONENT CHỌN NHIỀU NGƯỜI (MULTI-SELECT) THÔNG MINH
+const MultiSelectUser = ({ label, icon: Icon, options, selectedIds, onChange, disabled }: any) => {
+  const handleSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    if (e.target.value) {
+      onChange([...selectedIds, e.target.value]);
+      e.target.value = ""; 
+    }
+  };
+
+  const handleRemove = (idToRemove: string) => {
+    onChange(selectedIds.filter((id: string) => id !== idToRemove));
+  };
+
+  return (
+    <div>
+      <label className="text-[10px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-1.5 mb-1.5">
+        <Icon size={12} /> {label}
+      </label>
+      <div className="flex flex-wrap gap-1.5 mb-2 min-h-[28px] p-1 bg-white border border-emerald-100 rounded-lg">
+        {selectedIds.length === 0 && <span className="text-xs text-slate-400 italic px-1">Chưa chọn ai...</span>}
+        {selectedIds.map((id: string) => {
+          const opt = options.find((o: any) => o.id === id);
+          return (
+            <span key={id} className="bg-emerald-100 text-emerald-800 text-[11px] font-bold px-2 py-1 rounded-md flex items-center gap-1.5 shadow-sm">
+              {opt?.fullName || "Loading..."} 
+              <X size={12} className="cursor-pointer hover:text-red-500 hover:bg-emerald-200 rounded-full transition-colors p-0.5" onClick={() => handleRemove(id)} />
+            </span>
+          );
+        })}
+      </div>
+      <select disabled={disabled} value="" onChange={handleSelect} className="w-full border rounded-xl p-2 outline-none font-bold text-sm text-slate-700 bg-emerald-50/50 border-emerald-200 disabled:opacity-50 focus:border-emerald-500 transition-all cursor-pointer">
+        <option value="">+ Thêm nhân sự</option>
+        {options.filter((o: any) => !selectedIds.includes(o.id)).map((o: any) => (
+          <option key={o.id} value={o.id}>{o.fullName}</option>
+        ))}
+      </select>
+    </div>
+  );
+};
+
 export default function CreateTaskModal({ isOpen, onClose, teams, initialData, onSubmit, isSubmitting, errors }: CreateTaskModalProps) {
   const [mounted, setMounted] = useState(false);
 
   const [newTask, setNewTask] = useState({
-    id: "", title: "", keywords: "", linkContent: "", contentId: "", editorId: "", animatorId: "", teamId: "", projectId: "", duration: "", publishDate: "", channelId: "", priority: "NORMAL"
+    id: "", title: "", keywords: "", linkContent: "", 
+    contentIds: [] as string[], 
+    editorIds: [] as string[], 
+    animatorIds: [] as string[], 
+    teamId: "", projectId: "", duration: "", publishDate: "", channelId: "", priority: "NORMAL"
   });
 
   const [teamProjects, setTeamProjects] = useState<any[]>([]);
@@ -22,19 +66,30 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [teamChannels, setTeamChannels] = useState<any[]>([]);
   const [usersTeam, setUsersTeam] = useState<any[]>([]);
+
   useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
     if (isOpen) {
       if (initialData) {
+        // 🚀 ĐÃ SỬA: Gộp người làm chính (ID) và những người làm phụ (Array) thành 1 mảng duy nhất để hiển thị
         setNewTask({
           id: initialData.id,
           title: initialData.title || "",
           keywords: initialData.keywords || "",
           linkContent: initialData.linkContent || "",
-          contentId: initialData.contentId || "",
-          editorId: initialData.editorId || "",
-          animatorId: initialData.animatorId || "",
+          contentIds: [
+            ...(initialData.contentId ? [initialData.contentId] : []),
+            ...(initialData.coContentUsers?.map((u: any) => u.id) || [])
+          ],
+          editorIds: [
+            ...(initialData.editorId ? [initialData.editorId] : []),
+            ...(initialData.coEditorUsers?.map((u: any) => u.id) || [])
+          ],
+          animatorIds: [
+            ...(initialData.animatorId ? [initialData.animatorId] : []),
+            ...(initialData.coAnimatorUsers?.map((u: any) => u.id) || [])
+          ],
           teamId: initialData.teamId || "",
           projectId: initialData.projectId || "",
           duration: initialData.duration || "",
@@ -43,7 +98,7 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
           priority: initialData.priority || "NORMAL"
         });
       } else {
-        setNewTask({ id: "", title: "", keywords: "", linkContent: "", contentId: "", editorId: "", animatorId: "", teamId: "", projectId: "", duration: "", publishDate: "", channelId: "", priority: "" });
+        setNewTask({ id: "", title: "", keywords: "", linkContent: "", contentIds: [], editorIds: [], animatorIds: [], teamId: "", projectId: "", duration: "", publishDate: "", channelId: "", priority: "NORMAL" });
       }
     }
   }, [isOpen, initialData]);
@@ -70,7 +125,6 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
           setTeamContents(listUsers.filter((u: any) => ['CONTENT', 'LEADER'].includes(u.role)));
           setTeamEditors(listUsers.filter((u: any) => ['EDITOR', 'LEADER'].includes(u.role)));
           setUsersTeam(listUsers.filter((u: any) => ['EDITOR', 'LEADER','CONTENT'].includes(u.role)));
-
         }
       } catch (error) { } finally { setIsLoadingData(false); }
     };
@@ -85,26 +139,21 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
     onSubmit(payload);
   };
 
-  // 🚀 TÌM KÊNH ĐANG ĐƯỢC CHỌN ĐỂ XÁC ĐỊNH LÀ AI HAY TỔNG HỢP
   const selectedChannel = teamChannels.find(c => c.id === newTask.channelId);
   const isTongHopChannel = selectedChannel?.category === 'TONG_HOP';
-
-  // 🚀 LỌC DANH SÁCH DỰ ÁN THEO KÊNH ĐANG CHỌN
-  const filteredProjects = newTask.channelId
-    ? teamProjects.filter(p => p.channelId === newTask.channelId)
-    : teamProjects;
+  const filteredProjects = newTask.channelId ? teamProjects.filter(p => p.channelId === newTask.channelId) : teamProjects;
 
   const modalContent = (
     <>
       <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100000] animate-fade-in" onClick={onClose} />
       <div className="fixed inset-0 z-[100001] flex items-center justify-center p-4 pointer-events-none">
-        <div className="bg-white rounded-[24px] p-5 md:p-6 max-w-4xl shadow-2xl relative pointer-events-auto animate-scale-in max-h-[95vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="bg-white rounded-[24px] p-5 md:p-6 max-w-4xl shadow-2xl relative pointer-events-auto animate-scale-in max-h-[95vh] flex flex-col w-full" onClick={e => e.stopPropagation()}>
           <div className="flex justify-between">
             <div className="shrink-0 mb-5">
               <h2 className="text-lg md:text-xl font-black text-slate-900 mb-0.5 flex items-center gap-2">
                 {initialData ? "Chỉnh sửa Thông tin Task" : "Giao Task / Video mới"}
               </h2>
-              <p className="text-slate-500 font-medium text-[13px]">Điền thông tin và chỉ định nhân sự chuyên biệt.</p>
+              <p className="text-slate-500 font-medium text-[13px]">Cấu trúc động: Có thể phân công nhiều nhân sự cùng lúc.</p>
             </div>
             <button onClick={onClose} className="p-2 bg-slate-50 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors h-fit">
               <X size={18} />
@@ -141,15 +190,9 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-1.5"><CalendarDays size={12} /> Ngày Hoành Thành</label>
                       <input type="date" className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm text-slate-900 outline-none font-bold focus:border-blue-500 focus:bg-white" value={newTask.publishDate} onChange={(e) => setNewTask({ ...newTask, publishDate: e.target.value })} />
                     </div>
-                    <div>
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-1.5">
-                        🔥 Mức Độ Ưu Tiên
-                      </label>
-                      <select
-                        className="w-full mt-1 border border-slate-200 rounded-xl p-2.5 text-sm text-slate-900 outline-none font-bold bg-slate-50 focus:border-blue-500"
-                        value={newTask.priority}
-                        onChange={(e) => setNewTask({ ...newTask, priority: e.target.value })}
-                      >
+                    <div className="col-span-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-1.5">🔥 Mức Độ Ưu Tiên</label>
+                      <select className="w-full mt-1 border border-slate-200 rounded-xl p-2.5 text-sm text-slate-900 outline-none font-bold bg-slate-50 focus:border-blue-500" value={newTask.priority} onChange={(e) => setNewTask({ ...newTask, priority: e.target.value })}>
                         <option value="LOW" className="text-slate-500">Thấp</option>
                         <option value="NORMAL" className="text-blue-600">Bình thường</option>
                         <option value="HIGH" className="text-orange-600">Cao</option>
@@ -167,7 +210,7 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
                   <div className="grid grid-cols-2 gap-3">
                     <div className="col-span-2">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Team <span className="text-red-500">*</span></label>
-                      <select required className="w-full border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-sm text-slate-900 bg-slate-50" value={newTask.teamId} onChange={(e) => setNewTask({ ...newTask, teamId: e.target.value, projectId: "", contentId: "", editorId: "", animatorId: "", channelId: "" })}>
+                      <select required className="w-full border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-sm text-slate-900 bg-slate-50" value={newTask.teamId} onChange={(e) => setNewTask({ ...newTask, teamId: e.target.value, projectId: "", contentIds: [], editorIds: [], animatorIds: [], channelId: "" })}>
                         <option value="">-- Chọn Team --</option>
                         {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                       </select>
@@ -177,12 +220,7 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
                       <select required disabled={!newTask.teamId || isLoadingData} className="w-full border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-sm text-slate-900 bg-slate-50 disabled:opacity-50 disabled:text-slate-400" value={newTask.channelId} onChange={(e) => {
                         const newChannelId = e.target.value;
                         const newChan = teamChannels.find(c => c.id === newChannelId);
-                        setNewTask({
-                          ...newTask,
-                          channelId: newChannelId,
-                          projectId: "", 
-                          animatorId: newChan?.category === 'TONG_HOP' ? "" : newTask.animatorId
-                        });
+                        setNewTask({ ...newTask, channelId: newChannelId, projectId: "", animatorIds: newChan?.category === 'TONG_HOP' ? [] : newTask.animatorIds });
                       }}>
                         <option value="">-- Chọn --</option>
                         {teamChannels.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -197,33 +235,35 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
                     </div>
                   </div>
 
-                  <div className="bg-emerald-50/50 border border-emerald-100 rounded-xl p-3 space-y-3">
-                    <div>
-                      <label className="text-[10px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-1.5 mb-1"><FileEdit size={12} /> Content</label>
-                      <select disabled={!newTask.teamId || isLoadingData} className="w-full border rounded-xl p-2.5 outline-none font-bold text-sm text-slate-900 bg-white border-emerald-200 disabled:opacity-50 disabled:text-slate-400" value={newTask.contentId} onChange={(e) => setNewTask({ ...newTask, contentId: e.target.value })}>
-                        <option value="">-- Chưa gán --</option>
-                        {teamContents.map(u => <option key={u.id} value={u.id}>{u.fullName}</option>)}
-                      </select>
-                    </div>
-                    <div className={`grid ${isTongHopChannel ? 'grid-cols-1' : 'grid-cols-2'} gap-3`}>
-                      <div>
-                        <label className="text-[10px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-1.5 mb-1"><Film size={12} /> Editor</label>
-                        <select disabled={!newTask.teamId || isLoadingData} className="w-full border rounded-xl p-2.5 outline-none font-bold text-sm text-slate-900 bg-white border-emerald-200 disabled:opacity-50 disabled:text-slate-400" value={newTask.editorId} onChange={(e) => setNewTask({ ...newTask, editorId: e.target.value })}>
-                          <option value="">-- Ai Dựng? --</option>
-                          {teamEditors.map(u => <option key={u.id} value={u.id}>{u.fullName}</option>)}
-                        </select>
-                      </div>
+                  <div className="bg-emerald-50/50 border border-emerald-100 rounded-xl p-4 space-y-4 shadow-inner">
+                    <MultiSelectUser 
+                        label="Nhóm Content" 
+                        icon={FileEdit} 
+                        options={teamContents} 
+                        selectedIds={newTask.contentIds} 
+                        onChange={(val: any) => setNewTask({ ...newTask, contentIds: val })} 
+                        disabled={!newTask.teamId || isLoadingData} 
+                    />
+                    
+                    <MultiSelectUser 
+                        label="Nhóm Editor" 
+                        icon={Film} 
+                        options={teamEditors} 
+                        selectedIds={newTask.editorIds} 
+                        onChange={(val: any) => setNewTask({ ...newTask, editorIds: val })} 
+                        disabled={!newTask.teamId || isLoadingData} 
+                    />
 
-                      {!isTongHopChannel && (
-                        <div>
-                          <label className="text-[10px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-1.5 mb-1"><MonitorPlay size={12} /> Chuyển Động</label>
-                          <select disabled={!newTask.teamId || isLoadingData} className="w-full border rounded-xl p-2.5 outline-none font-bold text-sm text-slate-900 bg-white border-emerald-200 disabled:opacity-50 disabled:text-slate-400" value={newTask.animatorId} onChange={(e) => setNewTask({ ...newTask, animatorId: e.target.value })}>
-                            <option value="">-- Ai làm CĐ? --</option>
-                            {usersTeam?.map(u => <option key={u.id} value={u.id}>{u.fullName}</option>)}
-                          </select>
-                        </div>
-                      )}
-                    </div>
+                    {!isTongHopChannel && (
+                      <MultiSelectUser 
+                          label="Nhóm Chuyển Động" 
+                          icon={MonitorPlay} 
+                          options={usersTeam} 
+                          selectedIds={newTask.animatorIds} 
+                          onChange={(val: any) => setNewTask({ ...newTask, animatorIds: val })} 
+                          disabled={!newTask.teamId || isLoadingData} 
+                      />
+                    )}
                   </div>
                 </div>
               </div>

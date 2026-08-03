@@ -19,9 +19,8 @@ export async function GET(req: Request) {
     const role = userData.role?.toUpperCase();
     const teamId = userData.teamId;
 
-    // 1. LẤY CÁC THAM SỐ TỪ URL (Query Parameters)
     const { searchParams } = new URL(req.url);
-    const viewMode = searchParams.get("viewMode") || "board"; // board hoặc list
+    const viewMode = searchParams.get("viewMode") || "board"; 
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "10");
     const search = searchParams.get("search") || "";
@@ -29,10 +28,8 @@ export async function GET(req: Request) {
     const fromDate = searchParams.get("fromDate") || "";
     const toDate = searchParams.get("toDate") || "";
 
-    // 2. XÂY DỰNG ĐIỀU KIỆN LỌC (WHERE CLAUSE)
     let whereClause: any = {};
 
-    // 🚀 ĐÃ SỬA: Đọc quyền động từ permissions thay vì fix cứng Role
     const canViewAll = userData.permissions?.includes("MENU_TEAMS") || ["ADMIN", "BAN_GIAM_DOC"].includes(role);
     const isLeader = role === "LEADER" || userData.permissions?.includes("DEPARTMENT_LEADER");
 
@@ -41,54 +38,63 @@ export async function GET(req: Request) {
     } else if (isLeader) {
       whereClause = { teamId: teamId };
     } else {
-      // Logic bao trùm tự động cho tất cả nhân sự (Content, Editor, Animator...)
-      whereClause = { OR: [{ contentId: userId }, { editorId: userId }, { animatorId: userId }, { creatorId: userId }] };
+      // 🚀 ĐÃ SỬA: Bổ sung điều kiện tìm kiếm cho cả Người làm phụ (Co-workers)
+      whereClause = { 
+        OR: [
+            { contentId: userId }, 
+            { editorId: userId }, 
+            { animatorId: userId }, 
+            { creatorId: userId },
+            { coContentUsers: { some: { id: userId } } },
+            { coEditorUsers: { some: { id: userId } } },
+            { coAnimatorUsers: { some: { id: userId } } }
+        ] 
+      };
     }
 
-    // - Lọc theo Tìm kiếm tên Task
     if (search) {
-      whereClause.title = { contains: search }; // MySQL mặc định không phân biệt hoa thường
+      whereClause.title = { contains: search }; 
     }
 
-    // - Lọc theo Trạng thái
     if (status !== "ALL") {
       whereClause.status = status;
     } else {
-      // Nếu bộ lọc là ALL, lấy tất cả NGOẠI TRỪ Backlog
       whereClause.status = { not: "BACKLOG" };
     }
     
-    // - Lọc theo Khoảng thời gian (Ngày tạo)
     if (fromDate || toDate) {
       whereClause.createdAt = {};
       if (fromDate) whereClause.createdAt.gte = new Date(`${fromDate}T00:00:00.000Z`);
       if (toDate) whereClause.createdAt.lte = new Date(`${toDate}T23:59:59.999Z`);
     }
 
-    // 3. XỬ LÝ TRẢ DỮ LIỆU TÙY THEO TAB ĐANG MỞ
     const priorityWeight: any = { URGENT: 4, HIGH: 3, NORMAL: 2, LOW: 1 };
     
+    // 🚀 ĐÃ SỬA: Kéo thêm data của những người làm chung để hiển thị Avatar trên Kanban
+    const includeQuery = {
+        creator: { select: { fullName: true } },
+        team: { select: { name: true } },
+        channel: { select: { name: true } },
+        contentUser: { select: { fullName: true, avatarUrl: true } },
+        editorUser: { select: { fullName: true, avatarUrl: true } },
+        animatorUser: { select: { fullName: true, avatarUrl: true } },
+        coContentUsers: { select: { id: true, fullName: true, avatarUrl: true } },
+        coEditorUsers: { select: { id: true, fullName: true, avatarUrl: true } },
+        coAnimatorUsers: { select: { id: true, fullName: true, avatarUrl: true } },
+    };
+
     if (viewMode === "board") {
-      // Dành cho Bảng Kanban: Thường lấy tất cả Task CHƯA ĐÓNG để vẽ cột
       const tasks = await prisma.task.findMany({
         where: { ...whereClause, isClosed: false },
-        include: {
-          creator: { select: { fullName: true } },
-          team: { select: { name: true } },
-          contentUser: { select: { fullName: true, avatarUrl: true } },
-          editorUser: { select: { fullName: true, avatarUrl: true } },
-          channel: { select: { name: true } },
-          animatorUser: { select: { fullName: true, avatarUrl: true } },
-        },
+        include: includeQuery,
         orderBy: { createdAt: "desc" },
       });
 
-      // BỔ SUNG: Thuật toán sắp xếp Task Ưu tiên lên đầu
       tasks.sort((a: any, b: any) => {
         const weightA = priorityWeight[a.priority || "NORMAL"] || 2;
         const weightB = priorityWeight[b.priority || "NORMAL"] || 2;
-        if (weightA !== weightB) return weightB - weightA; // Điểm cao (Gấp) xếp trước
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(); // Cùng điểm thì mới nhất xếp trước
+        if (weightA !== weightB) return weightB - weightA; 
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(); 
       });
 
       return NextResponse.json({ tasks, total: tasks.length, totalPages: 1 });
@@ -99,13 +105,7 @@ export async function GET(req: Request) {
       const [tasks, total] = await Promise.all([
         prisma.task.findMany({
           where: whereClause,
-          include: {
-            creator: { select: { fullName: true } },
-            team: { select: { name: true } },
-            contentUser: { select: { fullName: true, avatarUrl: true } },
-            editorUser: { select: { fullName: true, avatarUrl: true } },
-            channel: { select: { name: true } }
-          },
+          include: includeQuery,
           orderBy: { createdAt: "desc" },
           skip: skip,
           take: limit, 
@@ -113,7 +113,6 @@ export async function GET(req: Request) {
         prisma.task.count({ where: whereClause })
       ]);
 
-      // BỔ SUNG: Sắp xếp cho cả List View
       tasks.sort((a: any, b: any) => {
         const weightA = priorityWeight[a.priority || "NORMAL"] || 2;
         const weightB = priorityWeight[b.priority || "NORMAL"] || 2;
@@ -162,7 +161,6 @@ export async function POST(req: Request) {
 
     const currentUser = session.user as any;
     
-    // 🚀 BỔ SUNG: Chốt chặn an toàn cho hàm tạo Task (Sử dụng quyền ACTION_CREATE_TASK)
     const canCreateTask = currentUser.permissions?.includes("ACTION_CREATE_TASK") || ["ADMIN", "BAN_GIAM_DOC", "LEADER"].includes(currentUser.role);
     
     if (!canCreateTask) {
@@ -170,22 +168,26 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { title, linkContent, contentId, editorId, teamId, projectId } = body;
+    
+    // 🚀 ĐÃ SỬA: Bắt dữ liệu dạng mảng (Array) từ Frontend gửi lên
+    const { 
+        title, linkContent, teamId, projectId, channelId, duration, note, keywords, publishDate, priority,
+        englishScriptLink, storyboardLink, audioLink, thumbnailLink,
+        contentIds = [], editorIds = [], animatorIds = [] 
+    } = body;
+    
     const creatorId = currentUser.id;
     const rawLink = linkContent;
     
-    // 1. RADAR CHẶN TRÙNG LINK THÔNG MINH (So sánh Link Lõi)
-    // =========================================================================
+    // 1. RADAR CHẶN TRÙNG LINK THÔNG MINH
     if (rawLink && rawLink.trim() !== "") {
       const baseIncoming = getBaseUrl(rawLink);
-      const searchKey = baseIncoming.replace(/^https?:\/\//, ''); // Bỏ http:// để DB dễ quét
+      const searchKey = baseIncoming.replace(/^https?:\/\//, ''); 
 
-      // Bước 1: Quét Database diện rộng tìm các task có chứa Base URL
       const potentialTasks = await prisma.task.findMany({
         where: { linkContent: { contains: searchKey } }
       });
 
-      // Bước 2: Soi kỹ lại bằng JS (Tránh DB nhận diện nhầm URL giống nhau một phần)
       const isDuplicate = potentialTasks.some(task => {
         return task.linkContent && getBaseUrl(task.linkContent) === baseIncoming;
       });
@@ -198,23 +200,27 @@ export async function POST(req: Request) {
       }
     }
 
-    // 🚀 LOGIC TỰ ĐỘNG TÍNH SỐ TẬP (EPISODE NUMBER)
+    // TÍNH SỐ TẬP (EPISODE NUMBER)
     let nextEpisodeNumber = null;
-
     if (projectId) {
-        // Nếu Task thuộc về 1 Project (Series), tìm số tập to nhất hiện tại
         const lastTask = await prisma.task.findFirst({
-            where: { 
-                projectId: projectId,
-                episodeNumber: { not: null }
-            },
+            where: { projectId: projectId, episodeNumber: { not: null } },
             orderBy: { episodeNumber: 'desc' },
             select: { episodeNumber: true }
         });
-        
-        // Tự động cộng 1, nếu là video đầu tiên thì bắt đầu từ 1
         nextEpisodeNumber = (lastTask?.episodeNumber || 0) + 1;
     }
+
+    // =========================================================================
+    // 🚀 LOGIC TÁCH NGƯỜI LÀM CHÍNH & LÀM PHỤ
+    // =========================================================================
+    const mainContentId = contentIds.length > 0 ? contentIds[0] : undefined;
+    const mainEditorId = editorIds.length > 0 ? editorIds[0] : undefined;
+    const mainAnimatorId = animatorIds.length > 0 ? animatorIds[0] : undefined;
+
+    const coContentConnect = contentIds.length > 1 ? contentIds.slice(1).map((id: string) => ({ id })) : [];
+    const coEditorConnect = editorIds.length > 1 ? editorIds.slice(1).map((id: string) => ({ id })) : [];
+    const coAnimatorConnect = animatorIds.length > 1 ? animatorIds.slice(1).map((id: string) => ({ id })) : [];
 
     // 2. TẠO TASK MỚI
     const newTask = await prisma.task.create({
@@ -223,42 +229,53 @@ export async function POST(req: Request) {
         linkContent: rawLink,
         status: body.status ? body.status : "TODO",
         episodeNumber: nextEpisodeNumber,
-        contentId: contentId || undefined,
-        editorId: editorId || undefined,
+        
+        // Gán người làm chính
+        contentId: mainContentId,
+        editorId: mainEditorId,
+        animatorId: mainAnimatorId,
+        
+        // Gán những người làm chung (Mảng connect)
+        ...(coContentConnect.length > 0 && { coContentUsers: { connect: coContentConnect } }),
+        ...(coEditorConnect.length > 0 && { coEditorUsers: { connect: coEditorConnect } }),
+        ...(coAnimatorConnect.length > 0 && { coAnimatorUsers: { connect: coAnimatorConnect } }),
+
         teamId: teamId || undefined,
         creatorId: creatorId,
         projectId: projectId || undefined,
-        channelId: body.channelId || undefined,
-        duration: body.duration || undefined,
-        note: body.note || undefined,
-        keywords: body.keywords || undefined,
-        publishDate: body.publishDate ? new Date(body.publishDate) : undefined,
-        animatorId: body.animatorId || undefined,
-        priority: body.priority || undefined,
-        englishScriptLink: body.englishScriptLink || undefined,
-        storyboardLink: body.storyboardLink || undefined,
-        audioLink: body.audioLink || undefined,
-        thumbnailLink: body.thumbnailLink || undefined,
+        channelId: channelId || undefined,
+        duration: duration || undefined,
+        note: note || undefined,
+        keywords: keywords || undefined,
+        publishDate: publishDate ? new Date(publishDate) : undefined,
+        priority: priority || undefined,
+        englishScriptLink: englishScriptLink || undefined,
+        storyboardLink: storyboardLink || undefined,
+        audioLink: audioLink || undefined,
+        thumbnailLink: thumbnailLink || undefined,
       },
       include: {
         creator: { select: { fullName: true } },
         team: { select: { name: true } },
         contentUser: { select: { fullName: true } },
         editorUser: { select: { fullName: true } },
+        animatorUser: { select: { fullName: true } },
+        coContentUsers: { select: { fullName: true } },
+        coEditorUsers: { select: { fullName: true } },
+        coAnimatorUsers: { select: { fullName: true } },
       }
     });
 
     // =========================================================================
-    // 3. TẠO THÔNG BÁO CHO NGƯỜI ĐƯỢC GIAO VIỆC (CONTENT & EDITOR)
+    // 3. TẠO THÔNG BÁO CHO TẤT CẢ NHỮNG NGƯỜI ĐƯỢC GIAO VIỆC
     // =========================================================================
     let createdNotifications: any[] = [];
-
-    // Dùng Set để lọc trùng (Nhỡ Content và Editor chọn cùng 1 người)
     const targetIds = new Set<string>();
 
-    // Chỉ thông báo nếu có gán người, và người đó KHÔNG PHẢI là người đang tạo task
-    if (contentId && contentId !== creatorId) targetIds.add(contentId);
-    if (editorId && editorId !== creatorId) targetIds.add(editorId);
+    // Gộp tất cả ID của những người tham gia vào Set để báo Noti một lượt
+    [...contentIds, ...editorIds, ...animatorIds].forEach(id => {
+        if (id && id !== creatorId) targetIds.add(id);
+    });
 
     const userIdsToNotify = Array.from(targetIds);
 
@@ -269,7 +286,7 @@ export async function POST(req: Request) {
             data: {
               userId: targetId,
               title: "Task mới được giao",
-              message: `🎯 Bạn vừa được giao task: "${title}"`,
+              message: `🎯 Bạn vừa được giao tham gia task: "${title}"`,
               taskId: newTask.id
             }
           })
@@ -277,7 +294,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // 4. Trả về cho Frontend cả Task mới lẫn Dữ liệu thông báo
     return NextResponse.json({
       task: newTask,
       notifications: createdNotifications,
