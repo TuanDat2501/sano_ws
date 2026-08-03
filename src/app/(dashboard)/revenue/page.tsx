@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { ChevronLeft, ChevronRight, DollarSign, Check, Loader2, Eye, Download, Filter, FileSpreadsheet } from "lucide-react";
 import { useToast } from "@/app/component/ToastProvider";
 import { useSession } from "next-auth/react";
@@ -14,30 +14,29 @@ interface RevenueEntry {
     revenue?: number | string;
 }
 
-// Lấy 7 ngày của tuần (dành cho bảng nhập liệu)
-const getDaysOfWeek = (currentDate: Date) => {
-    const startOfWeek = new Date(currentDate);
-    const day = startOfWeek.getDay();
-    const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1); // Đưa về Thứ 2
-    startOfWeek.setDate(diff);
-
-    return Array.from({ length: 7 }).map((_, i) => {
-        const date = new Date(startOfWeek);
-        date.setDate(date.getDate() + i);
-        return date;
+// 🚀 ĐÃ SỬA: Lấy toàn bộ ngày trong THÁNG thay vì tuần
+const getDaysOfMonth = (currentDate: Date) => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const numDays = new Date(year, month + 1, 0).getDate();
+    
+    return Array.from({ length: numDays }).map((_, i) => {
+        // Fix cứng lúc 12:00 trưa để khi gọi toISOString() không bị lệch múi giờ
+        return new Date(year, month, i + 1, 12, 0, 0); 
     });
 };
 
 export default function RevenueEntryPage() {
     const { showToast } = useToast();
+    const scrollContainerRef = useRef<HTMLDivElement>(null); // Ref để tự động trượt bảng
     
     // =========================================================
-    // 1. STATE CHO BẢNG NHẬP LIỆU (LUÔN 7 NGÀY)
+    // 1. STATE CHO BẢNG NHẬP LIỆU (THEO THÁNG)
     // =========================================================
-    const [currentWeekDate, setCurrentWeekDate] = useState(new Date());
-    const tableDays = useMemo(() => getDaysOfWeek(currentWeekDate), [currentWeekDate]);
+    const [currentMonthDate, setCurrentMonthDate] = useState(new Date());
+    const tableDays = useMemo(() => getDaysOfMonth(currentMonthDate), [currentMonthDate]);
     const tableStartDateStr = tableDays[0].toISOString().split('T')[0];
-    const tableEndDateStr = tableDays[6].toISOString().split('T')[0];
+    const tableEndDateStr = tableDays[tableDays.length - 1].toISOString().split('T')[0];
 
     // =========================================================
     // 2. STATE CHO BỘ LỌC XUẤT EXCEL (CHỈ KẾ TOÁN)
@@ -60,25 +59,41 @@ export default function RevenueEntryPage() {
     const router = useRouter();
     const { hasPermission, loading } = usePermission();
 
-    // 🚀 LẤY THÔNG TIN USER ĐỂ PHÂN QUYỀN
+    // LẤY THÔNG TIN USER ĐỂ PHÂN QUYỀN
     const currentUser = session?.user as any;
     const userRole = currentUser?.role;
     const userTeamId = currentUser?.teamId;
 
     const isKeToan = userRole === "KE_TOAN" || userRole === "ADMIN" || userRole === "BAN_GIAM_DOC"; 
-    // 🚀 KIỂM TRA QUYỀN ĐƯỢC LỌC XUYÊN TEAM
     const canFilterTeam = hasPermission("MENU_TEAMS") || ["BAN_GIAM_DOC", "KE_TOAN", "ADMIN"].includes(userRole);
+    
     useEffect(() => {
         if (!loading && !hasPermission("MENU_REVENUE")) {
             router.push("/dashboard");
         }
     }, [loading, hasPermission, router]);
 
-    // 🚀 FETCH DỮ LIỆU CHỈ CHO BẢNG NHẬP (7 NGÀY HIỆN TẠI)
+    // 🚀 TỰ ĐỘNG TRƯỢT ĐẾN NGÀY HIỆN TẠI
+    useEffect(() => {
+        const todayObj = new Date();
+        todayObj.setHours(12, 0, 0, 0);
+        const todayKey = todayObj.toISOString().split('T')[0];
+
+        const todayElem = document.getElementById(`day-col-${todayKey}`);
+        if (todayElem && scrollContainerRef.current) {
+            // Chờ 1 chút xíu để React render xong HTML của Bảng
+            setTimeout(() => {
+                // Trừ đi 350px (độ rộng của 3 cột cố định: Team, STT, Tên Kênh) để ngày hiện tại nằm ngay cạnh mép
+                const scrollLeft = todayElem.offsetLeft - 350; 
+                scrollContainerRef.current?.scrollTo({ left: Math.max(0, scrollLeft), behavior: 'smooth' });
+            }, 200);
+        }
+    }, [tableDays]); // Chạy lại mỗi khi chuyển tháng
+
+    // FETCH DỮ LIỆU CHỈ CHO BẢNG NHẬP (TRONG THÁNG)
     useEffect(() => {
         const fetchTableData = async () => {
             try {
-                
                 const res = await fetch(`/api/revenue?startDate=${tableStartDateStr}&endDate=${tableEndDateStr}`);
                 const data = await res.json();
 
@@ -115,13 +130,11 @@ export default function RevenueEntryPage() {
     const filteredChannels = useMemo(() => {
         let result = [...channels];
         
-        // 🚀 LOGIC LỌC DỮ LIỆU ĐỘNG THEO ROLE
         if (canFilterTeam) {
             if (filterTeam !== "ALL") {
                 result = result.filter(ch => ch.team?.name === filterTeam);
             }
         } else if (userTeamId) {
-            // Ép cứng: Nếu không có quyền lọc (VD: Leader), chỉ được xem kênh của team mình
             result = result.filter(ch => ch.teamId === userTeamId || ch.team?.id === userTeamId);
         }
 
@@ -151,10 +164,10 @@ export default function RevenueEntryPage() {
         });
     }, [tableDays, filteredChannels, revenueData]);
 
-    const changeWeek = (offset: number) => {
-        const newDate = new Date(currentWeekDate);
-        newDate.setDate(newDate.getDate() + offset * 7);
-        setCurrentWeekDate(newDate);
+    const changeMonth = (offset: number) => {
+        const newDate = new Date(currentMonthDate);
+        newDate.setMonth(newDate.getMonth() + offset);
+        setCurrentMonthDate(newDate);
     };
 
     const handleCellBlur = async (channelId: string, dateObj: Date, field: 'views' | 'revenue', value: string) => {
@@ -198,7 +211,7 @@ export default function RevenueEntryPage() {
         }
     };
 
-    // 🚀 HÀM XUẤT EXCEL (GỌI API RIÊNG THEO NGÀY CHỌN, KHÔNG ẢNH HƯỞNG BẢNG NHẬP)
+    // HÀM XUẤT EXCEL 
     const handleExportExcel = async () => {
         if (new Date(exportFromDate) > new Date(exportToDate)) {
             showToast("error", "Ngày bắt đầu không được lớn hơn ngày kết thúc!");
@@ -207,13 +220,11 @@ export default function RevenueEntryPage() {
 
         setIsExporting(true);
         try {
-            // 1. Kéo dữ liệu ngầm dựa vào bộ lọc ngày của Kế Toán
             const res = await fetch(`/api/revenue?startDate=${exportFromDate}&endDate=${exportToDate}`);
             const data = await res.json();
 
             if (!Array.isArray(data)) throw new Error("Dữ liệu lỗi");
 
-            // 2. Chuẩn bị mảng ngày xuất
             const start = new Date(exportFromDate);
             const end = new Date(exportToDate);
             const exportDays: Date[] = [];
@@ -223,7 +234,6 @@ export default function RevenueEntryPage() {
                 curr.setDate(curr.getDate() + 1);
             }
 
-            // 3. Xây dựng Data Dictionary
             const exportRevenueData: Record<string, RevenueEntry> = {};
             data.forEach((channel: any) => {
                 const revList = channel.revenues || channel.dailyRevenues || [];
@@ -236,7 +246,6 @@ export default function RevenueEntryPage() {
                 });
             });
 
-            // 4. Lọc theo Team (nếu chọn)
             let exportChannels = [...data];
             if (canFilterTeam) {
                 if (filterTeam !== "ALL") {
@@ -247,7 +256,6 @@ export default function RevenueEntryPage() {
             }
             exportChannels.sort((a, b) => (a.team?.name || "ZZZ").localeCompare(b.team?.name || "ZZZ"));
 
-            // 5. Tạo file Excel
             const workbook = new ExcelJS.Workbook();
             const worksheet = workbook.addWorksheet('Báo Cáo Doanh Thu');
 
@@ -318,18 +326,17 @@ export default function RevenueEntryPage() {
     return (
         <div className="p-4 md:p-6 bg-slate-50 h-full max-h-[calc(100vh-80px)] flex flex-col overflow-hidden animate-fade-in gap-4 md:gap-6">
             
-            {/* 🚀 HEADER BẢNG NHẬP LIỆU (LUÔN HIỂN THỊ) */}
+            {/* 🚀 HEADER BẢNG NHẬP LIỆU (THEO THÁNG) */}
             <div className="shrink-0 flex flex-col xl:flex-row justify-between items-start xl:items-center bg-white p-4 rounded-2xl shadow-sm border border-slate-200 gap-4 relative z-10">
                 <div>
                     <h1 className="text-xl md:text-2xl font-black text-slate-900 flex items-center gap-2">
-                        <DollarSign className="text-emerald-500" /> Bảng Kê Doanh Thu Tuần
+                        <DollarSign className="text-emerald-500" /> Bảng Kê Doanh Thu Tháng
                     </h1>
                     <p className="text-xs md:text-sm text-slate-500 font-medium mt-1">Nhập liệu doanh thu hằng ngày (USD).</p>
                 </div>
                 
                 <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto justify-end">
                     
-                    {/* 🚀 CHỈ HIỂN THỊ CỤM LỌC NẾU CÓ QUYỀN (ADMIN, BGD, KẾ TOÁN, HR) */}
                     {canFilterTeam && (
                         <div className="relative flex items-center bg-slate-50 border border-slate-200 rounded-xl h-10 px-3 w-full sm:w-auto">
                             <Filter size={16} className="text-slate-400 mr-2 shrink-0" />
@@ -347,16 +354,16 @@ export default function RevenueEntryPage() {
                     )}
 
                     <div className="flex items-center gap-2 md:gap-4 bg-slate-50 p-1 md:p-1.5 rounded-xl border border-slate-200 h-10 w-full sm:w-auto justify-between sm:justify-center">
-                        <button onClick={() => changeWeek(-1)} className="p-1 hover:bg-white rounded-md transition-all shadow-sm"><ChevronLeft size={18} /></button>
+                        <button onClick={() => changeMonth(-1)} className="p-1 hover:bg-white rounded-md transition-all shadow-sm"><ChevronLeft size={18} /></button>
                         <div className="text-[11px] md:text-xs font-black text-slate-700 px-1 uppercase tracking-widest whitespace-nowrap">
-                            {tableDays[0].toLocaleDateString('vi-VN')} - {tableDays[6].toLocaleDateString('vi-VN')}
+                            THÁNG {currentMonthDate.getMonth() + 1} / {currentMonthDate.getFullYear()}
                         </div>
-                        <button onClick={() => changeWeek(1)} className="p-1 hover:bg-white rounded-md transition-all shadow-sm"><ChevronRight size={18} /></button>
+                        <button onClick={() => changeMonth(1)} className="p-1 hover:bg-white rounded-md transition-all shadow-sm"><ChevronRight size={18} /></button>
                     </div>
                 </div>
             </div>
 
-            {/* 🚀 KHU VỰC XUẤT EXCEL RIÊNG BIỆT (CHỈ KẾ TOÁN / QUẢN LÝ THẤY) */}
+            {/* KHU VỰC XUẤT EXCEL RIÊNG BIỆT (CHỈ KẾ TOÁN / QUẢN LÝ THẤY) */}
             {isKeToan && (
                 <div className="shrink-0 flex flex-col sm:flex-row justify-between items-start sm:items-center bg-emerald-50/50 p-4 rounded-2xl border border-emerald-100 gap-4 shadow-sm">
                     <div className="flex items-center gap-2">
@@ -398,25 +405,31 @@ export default function RevenueEntryPage() {
                 </div>
             )}
 
-            {/* VÙNG CHỨA BẢNG NHẬP LIỆU (LUÔN LÀ 7 NGÀY) */}
-            <div className="flex-1 overflow-auto custom-scrollbar relative bg-white border border-slate-200 rounded-2xl shadow-sm">
-                <table className="w-full h-full text-left border-separate border-spacing-0 min-w-[1000px]">
+            {/* 🚀 VÙNG CHỨA BẢNG NHẬP LIỆU - DÙNG REF ĐỂ TỰ ĐỘNG TRƯỢT */}
+            <div ref={scrollContainerRef} className="flex-1 overflow-auto custom-scrollbar relative bg-white border border-slate-200 rounded-2xl shadow-sm">
+                <table className="w-full h-full text-left border-separate border-spacing-0 min-w-max">
                     <thead className="sticky top-0 z-[60] bg-slate-100 shadow-[0_2px_4px_rgba(0,0,0,0.05)] border-b-2 border-slate-300">
                         <tr className="text-slate-700 text-[10px] font-black uppercase tracking-widest">
                             <th className="p-3 border-r border-slate-300 sticky left-0 z-[70] bg-slate-200 w-[100px] text-center">Team</th>
                             <th className="p-3 border-r border-slate-300 sticky left-[100px] z-[70] bg-slate-200 w-[50px] text-center">STT</th>
                             <th className="p-3 border-r border-slate-300 sticky left-[150px] z-[70] bg-slate-200 w-[200px]">Tên Kênh</th>
 
-                            {tableDays.map((day, idx) => (
-                                <th key={idx} className={`p-3 border-r border-slate-300 text-center w-[120px] transition-colors duration-300 ${focusedCol === idx ? 'bg-blue-100 border-blue-300 shadow-inner' : 'bg-slate-100'}`}>
-                                    <div className={`mb-1 transition-colors ${focusedCol === idx ? 'text-blue-700 font-black' : 'text-slate-500'}`}>
-                                        {weekDays[day.getDay()]}
-                                    </div>
-                                    <div className={`text-sm ${day.toDateString() === new Date().toDateString() ? 'text-red-600 font-black' : (focusedCol === idx ? 'text-blue-800 font-black' : '')}`}>
-                                        {day.getDate()}/{day.getMonth() + 1}
-                                    </div>
-                                </th>
-                            ))}
+                            {tableDays.map((day, idx) => {
+                                const todayObj = new Date();
+                                todayObj.setHours(12, 0, 0, 0);
+                                const isToday = day.toISOString().split('T')[0] === todayObj.toISOString().split('T')[0];
+
+                                return (
+                                    <th id={`day-col-${day.toISOString().split('T')[0]}`} key={idx} className={`p-3 border-r border-slate-300 text-center w-[120px] transition-colors duration-300 ${focusedCol === idx ? 'bg-blue-100 border-blue-300 shadow-inner' : 'bg-slate-100'}`}>
+                                        <div className={`mb-1 transition-colors ${focusedCol === idx ? 'text-blue-700 font-black' : 'text-slate-500'}`}>
+                                            {weekDays[day.getDay()]}
+                                        </div>
+                                        <div className={`text-sm ${isToday ? 'text-red-600 font-black' : (focusedCol === idx ? 'text-blue-800 font-black' : '')}`}>
+                                            {day.getDate()}/{day.getMonth() + 1}
+                                        </div>
+                                    </th>
+                                );
+                            })}
                         </tr>
                     </thead>
 
@@ -462,7 +475,7 @@ export default function RevenueEntryPage() {
                                                 let info = "";
                                                 if (type === 'views') {
                                                     const views = currentData.views !== "" ? Number(currentData.views).toLocaleString() : "0";
-                                                    info = `Views`;
+                                                    info = `Views 48h`;
                                                 } else {
                                                     const revenue = currentData.revenue !== "" ? `$${Number(currentData.revenue).toLocaleString()}` : "$0";
                                                     info = `Doanh thu`;

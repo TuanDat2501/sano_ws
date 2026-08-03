@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, CheckCircle, XOctagon, Loader2, UserCheck, Trash2 } from "lucide-react";
+import { X, CheckCircle, XOctagon, Loader2, UserCheck, Trash2, FileText, Clock } from "lucide-react";
 import { useToast } from "@/app/component/ToastProvider";
 import { createPortal } from "react-dom";
 
@@ -57,6 +57,20 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
             case "REJECTED": return <span className="bg-red-100 text-red-700 px-2.5 py-1 rounded-md text-[10px] md:text-xs font-black tracking-wide">BỊ TỪ CHỐI</span>;
             case "CANCELLED": return <span className="bg-slate-200 text-slate-600 px-2.5 py-1 rounded-md text-[10px] md:text-xs font-black tracking-wide">ĐÃ HỦY</span>;
             default: return <span className="bg-slate-100 text-slate-700 px-2.5 py-1 rounded-md text-[10px] md:text-xs font-black tracking-wide">{status}</span>;
+        }
+    };
+
+    const renderRequestType = (type: string) => {
+        switch (type) {
+            case "NGHI_PHEP": return "Xin nghỉ phép";
+            case "DI_MUON_VE_SOM": return "Đi muộn / Về sớm";
+            case "LAM_REMOTE": return "Làm Remote (Từ xa)";
+            case "MUA_SAM": return "Mua sắm / Cấp thiết bị";
+            case "TAM_UNG": return "Tạm ứng";
+            case "CHAY_ADS": return "Ngân sách chạy Ads";
+            case "THANH_TOAN": return "Thanh toán chi phí";
+            case "THUONG": return "Đề xuất thưởng";
+            default: return type || "Không xác định";
         }
     };
 
@@ -124,9 +138,21 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
     const startDate = getVal('startDate');
     const endDate = getVal('endDate');
     const targetDate = getVal('targetDate') || getVal('date'); 
+    const time = getVal('time'); // 🚀 Hứng giá trị time
+    const leaveType = getVal('leaveType');
     const itemName = getVal('itemName');
     const amount = getVal('amount');
     const reason = getVal('reason');
+
+    // 🚀 BỔ SUNG: Tính toán số ngày nghỉ để in ra phiếu
+    let numDays = 0;
+    if (startDate && endDate) {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        if (end >= start) {
+            numDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 3600 * 24)) + 1;
+        }
+    }
 
     const drawerContent = (
         <>
@@ -155,6 +181,11 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
                                         <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Người đề xuất</p>
                                         <p className="text-sm font-bold text-slate-900">{request.requester?.fullName}</p>
                                         <p className="text-xs text-slate-500 mt-1 font-medium">Team: {request.team?.name || "Không rõ"}</p>
+                                        
+                                        <div className="mt-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-50 border border-blue-100 text-blue-700">
+                                            <FileText size={14} />
+                                            <span className="text-[11px] font-black uppercase tracking-wider">{renderRequestType(request.type)}</span>
+                                        </div>
                                     </div>
                                     <div className="p-4 flex-1 bg-blue-50/30">
                                         <p className="text-[10px] md:text-[11px] font-black text-blue-500 uppercase tracking-widest mb-2 flex items-center gap-1.5">
@@ -186,17 +217,29 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
                                 <div className="bg-white p-4 md:p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
                                     {startDate && endDate && (
                                         <div className="border-b border-slate-50 pb-3">
-                                            <p className="text-[11px] text-slate-400 font-bold mb-1">Thời gian xin nghỉ</p>
-                                            <p className="text-sm text-slate-900 font-black">
+                                            <p className="text-[11px] text-slate-400 font-bold mb-2">Thời gian & Chế độ nghỉ</p>
+                                            <p className="text-sm text-slate-900 font-black flex items-center gap-2 mb-2">
                                                 Từ <span className="text-blue-600">{new Date(startDate).toLocaleDateString('vi-VN')}</span> đến <span className="text-blue-600">{new Date(endDate).toLocaleDateString('vi-VN')}</span>
+                                                {numDays > 0 && <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-md text-[11px]">({numDays} ngày)</span>}
                                             </p>
+                                            
+                                            {/* 🚀 HIỂN THỊ LOẠI NGHỈ PHÉP */}
+                                            {leaveType && (
+                                                <div className="mt-1.5">
+                                                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border ${leaveType === 'PAID' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-orange-50 text-orange-700 border-orange-200'}`}>
+                                                        {leaveType === 'PAID' ? '✅ Nghỉ phép có lương' : '⚠️ Nghỉ không lương'}
+                                                    </span>
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                     {targetDate && (
                                         <div className="border-b border-slate-50 pb-3">
-                                            <p className="text-[11px] text-slate-400 font-bold mb-1">Ngày áp dụng</p>
-                                            <p className="text-sm text-slate-900 font-black">
+                                            <p className="text-[11px] text-slate-400 font-bold mb-1">Ngày & Giờ áp dụng</p>
+                                            <p className="text-sm text-slate-900 font-black flex items-center gap-2">
                                                 {new Date(targetDate).toLocaleDateString('vi-VN')}
+                                                {/* 🚀 HIỂN THỊ MỐC THỜI GIAN CỤ THỂ NẾU LÀ ĐI MUỘN/VỀ SỚM */}
+                                                {time && <span className="text-red-600 bg-red-50 border border-red-100 px-2 py-0.5 rounded-md text-[11px]"><Clock size={12} className="inline mr-1 mb-0.5" />{time}</span>}
                                             </p>
                                         </div>
                                     )}
@@ -225,7 +268,7 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
                                 </div>
                             </div>
 
-                            {/* 🚀 BLOCK 3 THÊM MỚI: LỊCH SỬ PHÊ DUYỆT / Ý KIẾN CHỈ ĐẠO */}
+                            {/* BLOCK 3: LỊCH SỬ PHÊ DUYỆT / Ý KIẾN CHỈ ĐẠO */}
                             {request.logs && request.logs.length > 0 && (
                                 <div>
                                     <h3 className="text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider ml-1">Lịch sử phê duyệt / Lời phê</h3>
@@ -256,7 +299,7 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
                                                             {log.action === 'REJECTED' && "Đã từ chối"}
                                                         </p>
                                                         
-                                                        {/* 🚀 HIỂN THỊ LỜI PHÊ */}
+                                                        {/* HIỂN THỊ LỜI PHÊ */}
                                                         {log.comment && (
                                                             <div className="mt-2 bg-slate-50 p-3 rounded-xl border border-slate-100 text-sm text-slate-700 font-medium relative italic shadow-inner">
                                                                 <div className="absolute -top-1.5 left-4 w-3 h-3 bg-slate-50 border-t border-l border-slate-100 rotate-45"></div>

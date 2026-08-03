@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { XCircle, Loader2 } from "lucide-react";
+import { XCircle, Loader2, Clock } from "lucide-react";
 import { useToast } from "@/app/component/ToastProvider";
 import { useSession } from "next-auth/react";
 import { createPortal } from "react-dom";
@@ -54,10 +54,8 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
         
         setIsLoadingApprovers(true);
         
-        // Luôn luôn gọi API cấp 2 (Level2Approver) vì nó cố định
         const fetchPromises = [fetch(`/api/approvers/level2`).then(res => res.json())];
 
-        // Nếu là nhân sự thường, gọi thêm API cấp 1 (Leader của Team)
         if (!isLeader && selectedTeamId) {
             fetchPromises.push(fetch(`/api/requests/approvers?teamId=${selectedTeamId}&lv=1`).then(res => res.json()));
         }
@@ -65,11 +63,9 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
         Promise.all(fetchPromises)
         .then((results) => {
             const dataLv2 = results[0];
-            // Format data từ API Level2 (API trả về mảng { level2Approvers: [{ user: {...} }] }
             const mappedLv2 = dataLv2.level2Approvers?.map((a: any) => a.user) || [];
             setApproversLv2(mappedLv2);
 
-            // Nếu có kết quả của API cấp 1 thì set
             if (results[1]) {
                 const dataLv1 = results[1];
                 setApproversLv1(Array.isArray(dataLv1) ? dataLv1 : []);
@@ -89,24 +85,93 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
     const renderDynamicFields = () => {
         switch (selectedType) {
             case "NGHI_PHEP":
+                let numDays = 0;
+                if (contentData.startDate && contentData.endDate) {
+                    const start = new Date(contentData.startDate);
+                    const end = new Date(contentData.endDate);
+                    if (end >= start) {
+                        numDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 3600 * 24)) + 1;
+                    }
+                }
+                return (
+                    <div className="space-y-3 md:space-y-4 animate-fade-in">
+                        {/* 🚀 BỔ SUNG: Chọn loại nghỉ phép */}
+                        <div>
+                            <label className="block text-[11px] md:text-xs font-bold text-slate-500 mb-1">Phân loại <span className="text-red-500">*</span></label>
+                            <select
+                                className="w-full bg-white border border-slate-200 rounded-lg p-2 md:p-2.5 outline-none focus:border-red-500 text-sm font-medium cursor-pointer"
+                                value={contentData.leaveType || ""}
+                                onChange={(e) => handleChange("leaveType", e.target.value)}
+                            >
+                                <option value="">-- Chọn loại nghỉ phép --</option>
+                                <option value="PAID">Nghỉ phép có lương (Trừ vào phép năm)</option>
+                                <option value="UNPAID">Nghỉ không lương</option>
+                            </select>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+                            <div>
+                                <label className="block text-[11px] md:text-xs font-bold text-slate-500 mb-1">Từ ngày <span className="text-red-500">*</span></label>
+                                <input type="date" className="w-full bg-white border border-slate-200 rounded-lg p-2 md:p-2.5 outline-none focus:border-red-500 text-sm font-medium cursor-pointer"
+                                    value={contentData.startDate || ""} onChange={(e) => handleChange("startDate", e.target.value)} />
+                            </div>
+                            <div>
+                                <label className="block text-[11px] md:text-xs font-bold text-slate-500 mb-1">Đến ngày <span className="text-red-500">*</span></label>
+                                <input type="date" className="w-full bg-white border border-slate-200 rounded-lg p-2 md:p-2.5 outline-none focus:border-red-500 text-sm font-medium cursor-pointer"
+                                    value={contentData.endDate || ""} onChange={(e) => handleChange("endDate", e.target.value)} />
+                            </div>
+                        </div>
+                        {numDays > 0 && (
+                            <div className="bg-blue-50 border border-blue-100 p-2.5 rounded-lg text-sm text-blue-700 font-bold flex items-center gap-2">
+                                <Clock size={16} /> Tổng thời gian nghỉ: {numDays} ngày
+                            </div>
+                        )}
+                        <div>
+                            <label className="block text-[11px] md:text-xs font-bold text-slate-500 mb-1">Lý do xin nghỉ <span className="text-red-500">*</span></label>
+                            <textarea rows={3} className="w-full bg-white border border-slate-200 rounded-lg p-2 md:p-2.5 outline-none focus:border-red-500 resize-none text-sm"
+                                placeholder="Nhập lý do chi tiết..."
+                                value={contentData.reason || ""} onChange={(e) => handleChange("reason", e.target.value)} />
+                        </div>
+                    </div>
+                );
+              
+
+            case "DI_MUON_VE_SOM":
                 return (
                     <div className="space-y-3 md:space-y-4 animate-fade-in">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
                             <div>
-                                <label className="block text-[11px] md:text-xs font-bold text-slate-500 mb-1">Từ ngày*</label>
-                                <input type="date" className="w-full bg-white border border-slate-200 rounded-lg p-2 md:p-2.5 outline-none focus:border-red-500 text-sm"
-                                    value={contentData.startDate || ""} onChange={(e) => handleChange("startDate", e.target.value)} />
+                                <label className="block text-[11px] md:text-xs font-bold text-slate-500 mb-1">Ngày áp dụng <span className="text-red-500">*</span></label>
+                                <input type="date" className="w-full bg-white border border-slate-200 rounded-lg p-2 md:p-2.5 outline-none focus:border-red-500 text-sm font-medium"
+                                    value={contentData.date || ""} onChange={(e) => handleChange("date", e.target.value)} />
                             </div>
+                            {/* 🚀 BỔ SUNG: Thanh chọn giờ */}
                             <div>
-                                <label className="block text-[11px] md:text-xs font-bold text-slate-500 mb-1">Đến ngày*</label>
-                                <input type="date" className="w-full bg-white border border-slate-200 rounded-lg p-2 md:p-2.5 outline-none focus:border-red-500 text-sm"
-                                    value={contentData.endDate || ""} onChange={(e) => handleChange("endDate", e.target.value)} />
+                                <label className="block text-[11px] md:text-xs font-bold text-slate-500 mb-1">Giờ áp dụng (Giờ:Phút) <span className="text-red-500">*</span></label>
+                                <input type="time" className="w-full bg-white border border-slate-200 rounded-lg p-2 md:p-2.5 outline-none focus:border-red-500 text-sm font-medium"
+                                    value={contentData.time || ""} onChange={(e) => handleChange("time", e.target.value)} />
                             </div>
                         </div>
                         <div>
-                            <label className="block text-[11px] md:text-xs font-bold text-slate-500 mb-1">Lý do xin nghỉ *</label>
+                            <label className="block text-[11px] md:text-xs font-bold text-slate-500 mb-1">Lý do cụ thể <span className="text-red-500">*</span></label>
                             <textarea rows={3} className="w-full bg-white border border-slate-200 rounded-lg p-2 md:p-2.5 outline-none focus:border-red-500 resize-none text-sm"
-                                placeholder="Nhập lý do chi tiết..."
+                                placeholder="Nhập lý do (VD: Tắc đường, Đưa con đi khám...)"
+                                value={contentData.reason || ""} onChange={(e) => handleChange("reason", e.target.value)} />
+                        </div>
+                    </div>
+                );
+
+            case "LAM_REMOTE":
+                return (
+                    <div className="space-y-3 md:space-y-4 animate-fade-in">
+                        <div>
+                            <label className="block text-[11px] md:text-xs font-bold text-slate-500 mb-1">Ngày áp dụng <span className="text-red-500">*</span></label>
+                            <input type="date" className="w-full bg-white border border-slate-200 rounded-lg p-2 md:p-2.5 outline-none focus:border-red-500 text-sm font-medium"
+                                value={contentData.date || ""} onChange={(e) => handleChange("date", e.target.value)} />
+                        </div>
+                        <div>
+                            <label className="block text-[11px] md:text-xs font-bold text-slate-500 mb-1">Lý do làm Remote <span className="text-red-500">*</span></label>
+                            <textarea rows={3} className="w-full bg-white border border-slate-200 rounded-lg p-2 md:p-2.5 outline-none focus:border-red-500 resize-none text-sm"
+                                placeholder="Nhập lý do..."
                                 value={contentData.reason || ""} onChange={(e) => handleChange("reason", e.target.value)} />
                         </div>
                     </div>
@@ -156,40 +221,22 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
                     <div className="space-y-3 md:space-y-4 animate-fade-in">
                         <div>
                             <label className="block text-[11px] md:text-xs font-bold text-slate-500 mb-1">
-                                {selectedType === "CHAY_ADS" ? "Tên Chiến dịch" : "Hạng mục"}
+                                {selectedType === "CHAY_ADS" ? "Tên Chiến dịch" : "Hạng mục"} <span className="text-red-500">*</span>
                             </label>
                             <input type="text" className="w-full bg-white border border-slate-200 rounded-lg p-2 md:p-2.5 outline-none focus:border-red-500 text-sm"
                                 placeholder="VD: Tạm ứng công tác..."
                                 value={contentData.itemName || ""} onChange={(e) => handleChange("itemName", e.target.value)} />
                         </div>
                         <div>
-                            <label className="block text-[11px] md:text-xs font-bold text-slate-500 mb-1">Số tiền đề xuất (VNĐ)</label>
+                            <label className="block text-[11px] md:text-xs font-bold text-slate-500 mb-1">Số tiền đề xuất (VNĐ) <span className="text-red-500">*</span></label>
                             <input type="number" className="w-full bg-white border border-slate-200 rounded-lg p-2 md:p-2.5 outline-none focus:border-red-500 font-bold text-red-600 text-sm"
                                 placeholder="0"
                                 value={contentData.amount || ""} onChange={(e) => handleChange("amount", Number(e.target.value))} />
                         </div>
                         <div>
-                            <label className="block text-[11px] md:text-xs font-bold text-slate-500 mb-1">Lý do / Mục đích</label>
+                            <label className="block text-[11px] md:text-xs font-bold text-slate-500 mb-1">Lý do / Mục đích <span className="text-red-500">*</span></label>
                             <textarea rows={3} className="w-full bg-white border border-slate-200 rounded-lg p-2 md:p-2.5 outline-none focus:border-red-500 resize-none text-sm"
                                 placeholder="Nhập mục đích sử dụng số tiền này..."
-                                value={contentData.reason || ""} onChange={(e) => handleChange("reason", e.target.value)} />
-                        </div>
-                    </div>
-                );
-
-            case "DI_MUON_VE_SOM":
-            case "LAM_REMOTE":
-                return (
-                    <div className="space-y-3 md:space-y-4 animate-fade-in">
-                        <div>
-                            <label className="block text-[11px] md:text-xs font-bold text-slate-500 mb-1">Ngày áp dụng</label>
-                            <input type="date" className="w-full bg-white border border-slate-200 rounded-lg p-2 md:p-2.5 outline-none focus:border-red-500 text-sm"
-                                value={contentData.date || ""} onChange={(e) => handleChange("date", e.target.value)} />
-                        </div>
-                        <div>
-                            <label className="block text-[11px] md:text-xs font-bold text-slate-500 mb-1">Lý do</label>
-                            <textarea rows={3} className="w-full bg-white border border-slate-200 rounded-lg p-2 md:p-2.5 outline-none focus:border-red-500 resize-none text-sm"
-                                placeholder="Nhập lý do..."
                                 value={contentData.reason || ""} onChange={(e) => handleChange("reason", e.target.value)} />
                         </div>
                     </div>
@@ -201,11 +248,15 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
     };
 
     const handleSubmit = async () => {
-        if (selectedType === "NGHI_PHEP" && (!contentData.startDate || !contentData.endDate || !contentData.reason?.trim())) {
-            showToast("error", "Sếp ơi, nhập đủ ngày và Lý do nhé!"); return;
+        // Validation mở rộng cho các case mới
+        if (selectedType === "NGHI_PHEP" && (!contentData.leaveType || !contentData.startDate || !contentData.endDate || !contentData.reason?.trim())) {
+            showToast("error", "Sếp ơi, chọn loại nghỉ, nhập đủ ngày và Lý do nhé!"); return;
         }
-        if (["DI_MUON_VE_SOM", "LAM_REMOTE"].includes(selectedType) && (!contentData.date || !contentData.reason?.trim())) {
-            showToast("error", "Chưa chọn ngày hoặc thiếu lý do rồi sếp!"); return;
+        if (selectedType === "DI_MUON_VE_SOM" && (!contentData.date || !contentData.time || !contentData.reason?.trim())) {
+            showToast("error", "Vui lòng nhập ngày, GIỜ và lý do cụ thể nhé sếp!"); return;
+        }
+        if (selectedType === "LAM_REMOTE" && (!contentData.date || !contentData.reason?.trim())) {
+            showToast("error", "Vui lòng nhập Ngày và Lý do cụ thể nhé sếp!"); return;
         }
         if (selectedType === "MUA_SAM") {
             if (!contentData.itemName?.trim() || !contentData.currentStatus?.trim() || !contentData.reason?.trim()) {
@@ -222,7 +273,7 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
         try {
             const payload = {
                 type: selectedType, 
-                teamId: selectedTeamId || null, // Có thể không có team nếu là BGD
+                teamId: selectedTeamId || null, 
                 contentData: contentData,
                 firstApproverId: isLeader ? currentUser?.id : firstApproverId,
                 secondApproverId: secondApproverId || null,
