@@ -21,7 +21,7 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
   const [teamEditors, setTeamEditors] = useState<any[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [teamChannels, setTeamChannels] = useState<any[]>([]);
-
+  const [usersTeam, setUsersTeam] = useState<any[]>([]);
   useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
@@ -69,6 +69,8 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
         if (Array.isArray(listUsers)) {
           setTeamContents(listUsers.filter((u: any) => ['CONTENT', 'LEADER'].includes(u.role)));
           setTeamEditors(listUsers.filter((u: any) => ['EDITOR', 'LEADER'].includes(u.role)));
+          setUsersTeam(listUsers.filter((u: any) => ['EDITOR', 'LEADER','CONTENT'].includes(u.role)));
+
         }
       } catch (error) { } finally { setIsLoadingData(false); }
     };
@@ -217,7 +219,7 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
                           <label className="text-[10px] font-black text-emerald-600 uppercase tracking-widest flex items-center gap-1.5 mb-1"><MonitorPlay size={12} /> Chuyển Động</label>
                           <select disabled={!newTask.teamId || isLoadingData} className="w-full border rounded-xl p-2.5 outline-none font-bold text-sm text-slate-900 bg-white border-emerald-200 disabled:opacity-50 disabled:text-slate-400" value={newTask.animatorId} onChange={(e) => setNewTask({ ...newTask, animatorId: e.target.value })}>
                             <option value="">-- Ai làm CĐ? --</option>
-                            {teamContents.map(u => <option key={u.id} value={u.id}>{u.fullName}</option>)}
+                            {usersTeam?.map(u => <option key={u.id} value={u.id}>{u.fullName}</option>)}
                           </select>
                         </div>
                       )}
