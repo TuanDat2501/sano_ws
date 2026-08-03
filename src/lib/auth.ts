@@ -115,7 +115,7 @@ export const authOptions: NextAuthOptions = {
                       const allModules = [...defaultModules, ...dbModules.map(m => m.moduleId)];
                       token.permissions = Array.from(new Set(allModules));
                   } else {
-                      const rolesToCheck = [dbUser.role];
+                      const rolesToCheck: string[] = [dbUser.role];
 
                       if (dbUser.role === "LEADER" && dbUser.team?.name?.toLowerCase().includes("nhân sự")) {
                           rolesToCheck.push("DEPARTMENT_LEADER");
