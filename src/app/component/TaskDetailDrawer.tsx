@@ -1,13 +1,13 @@
 "use client";
 
-import { X, Link as LinkIcon, CheckCircle2, Loader2, MessageSquare, Send, ClipboardCheck, Clock, Tag, Tv, Video, Trash2, Key, Layers, ImageIcon, Pencil } from "lucide-react";
+import { X, Link as LinkIcon, CheckCircle2, Loader2, MessageSquare, Send, ClipboardCheck, Clock, Tag, Tv, Video, Trash2, Key, Layers, ImageIcon, Pencil, RefreshCw, SquarePen, RotateCcw } from "lucide-react";
 import { useEffect, useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 import EvaluationPanel from "./EvaluationPanel";
 
 interface TaskDetailDrawerProps {
   isOpen: boolean;
-  isLoading?: boolean; 
+  isLoading?: boolean;
   onClose: () => void;
   selectedTask: any;
   taskLinks: any;
@@ -16,7 +16,10 @@ interface TaskDetailDrawerProps {
   isSavingLinks: boolean;
   onSaveLinks: () => void;
   onToggleClose: () => void;
-  onReject: () => void;
+  
+  // 🚀 ĐÃ SỬA: Hàm onReject nhận thêm tham số priority
+  onReject: (reason: string, priority: string) => void; 
+  
   canReject: boolean;
   messages: any[];
   chatMessage: string;
@@ -32,30 +35,9 @@ interface TaskDetailDrawerProps {
 }
 
 const MOCK_CRITERIA = [
-  {
-    id: 'c1', name: 'TẦNG 1: RETENTION (Giữ chân)', weight: 50,
-    standards: [
-      { id: 's1', text: 'Hook 3s đầu có biến hoặc câu hỏi tò mò' },
-      { id: 's2', text: 'Nhịp kể phù hợp, có điểm nghỉ thở' },
-      { id: 's3', text: 'Hình ảnh thay đổi (Pattern Interrupt) mỗi 2-3s' }
-    ]
-  },
-  {
-    id: 'c2', name: 'TẦNG 2: SATISFACTION (Hài lòng)', weight: 30,
-    standards: [
-      { id: 's4', text: 'Tạo được ít nhất 1 cảm xúc rõ ràng' },
-      { id: 's5', text: 'Mang lại 1 giá trị/bài học cụ thể' },
-      { id: 's6', text: 'Kết thúc tạo dư âm, có tính hành động' }
-    ]
-  },
-  {
-    id: 'c3', name: 'TẦNG 3: POLISHING (Độ mượt)', weight: 20,
-    standards: [
-      { id: 's7', text: 'Nhạc nền không lấn Voice' },
-      { id: 's8', text: 'Góc máy và Text/Subtitle hỗ trợ cảm xúc' },
-      { id: 's9', text: 'Không dính lỗi bản quyền, âm thanh rác' }
-    ]
-  }
+  { id: 'c1', name: 'TẦNG 1: RETENTION (Giữ chân)', weight: 50, standards: [{ id: 's1', text: 'Hook 3s đầu có biến hoặc câu hỏi tò mò' }, { id: 's2', text: 'Nhịp kể phù hợp, có điểm nghỉ thở' }, { id: 's3', text: 'Hình ảnh thay đổi (Pattern Interrupt) mỗi 2-3s' }] },
+  { id: 'c2', name: 'TẦNG 2: SATISFACTION (Hài lòng)', weight: 30, standards: [{ id: 's4', text: 'Tạo được ít nhất 1 cảm xúc rõ ràng' }, { id: 's5', text: 'Mang lại 1 giá trị/bài học cụ thể' }, { id: 's6', text: 'Kết thúc tạo dư âm, có tính hành động' }] },
+  { id: 'c3', name: 'TẦNG 3: POLISHING (Độ mượt)', weight: 20, standards: [{ id: 's7', text: 'Nhạc nền không lấn Voice' }, { id: 's8', text: 'Góc máy và Text/Subtitle hỗ trợ cảm xúc' }, { id: 's9', text: 'Không dính lỗi bản quyền, âm thanh rác' }] }
 ];
 
 export default function TaskDetailDrawer({
@@ -71,10 +53,15 @@ export default function TaskDetailDrawer({
   const [chatImageFile, setChatImageFile] = useState<File | null>(null);
   const [chatImagePreview, setChatImagePreview] = useState<string | null>(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
-  
+
   const [savingField, setSavingField] = useState<string | null>(null);
   const [savedField, setSavedField] = useState<string | null>(null);
   const [editingFields, setEditingFields] = useState<Record<string, boolean>>({});
+
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
+  // 🚀 BỔ SUNG: State lưu mức độ ưu tiên khi làm lại
+  const [rejectPriority, setRejectPriority] = useState("HIGH"); 
 
   useEffect(() => setMounted(true), []);
 
@@ -83,7 +70,10 @@ export default function TaskDetailDrawer({
       setRightTab('chat');
       setCheckedStandards({});
       setKaizenNote('');
-      setEditingFields({}); 
+      setEditingFields({});
+      setShowRejectModal(false);
+      setRejectReason("");
+      setRejectPriority(selectedTask?.priority || "HIGH");
     }
   }, [isOpen, selectedTask?.id]);
 
@@ -92,13 +82,11 @@ export default function TaskDetailDrawer({
     MOCK_CRITERIA.forEach(criteria => {
       const totalItems = criteria.standards.length;
       const checkedItems = criteria.standards.filter(s => checkedStandards[s.id]).length;
-      if (totalItems > 0) {
-        totalScore += (checkedItems / totalItems) * (criteria.weight / 10);
-      }
+      if (totalItems > 0) totalScore += (checkedItems / totalItems) * (criteria.weight / 10);
     });
     return totalScore.toFixed(1);
   }, [checkedStandards]);
-  
+
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -115,34 +103,19 @@ export default function TaskDetailDrawer({
 
   const handleSendMessageWrapper = async () => {
     let imageUrl = undefined;
-
     if (chatImageFile && onUploadImage) {
       setIsUploadingImage(true);
       try {
         const url = await onUploadImage(chatImageFile);
-        if (url) {
-          imageUrl = url;
-        }
-      } catch (error) {
-        console.error("Lỗi khi tải ảnh lên:", error);
-      } finally {
-        setIsUploadingImage(false);
-      }
+        if (url) imageUrl = url;
+      } catch (error) { console.error("Lỗi khi tải ảnh lên:", error); } 
+      finally { setIsUploadingImage(false); }
     }
-
     if (chatMessage.trim() !== '' || imageUrl) {
       onSendMessage(imageUrl);
       setChatImageFile(null);
       setChatImagePreview(null);
     }
-  };
-
-  const submitEvaluation = () => {
-    setIsEvaluating(true);
-    if (onSubmitEvaluation) {
-      onSubmitEvaluation(Number(currentScore), checkedStandards, kaizenNote);
-    }
-    setTimeout(() => setIsEvaluating(false), 800);
   };
 
   if (!selectedTask) return null;
@@ -152,39 +125,29 @@ export default function TaskDetailDrawer({
   const animatorUsersList = [...(selectedTask.animatorUser ? [selectedTask.animatorUser] : []), ...(selectedTask.coAnimatorUsers || [])];
 
   const isManager = ["ADMIN", "BAN_GIAM_DOC", "LEADER", "HR", "KE_TOAN"].includes(userRole);
-  
+
   const handleAutoSave = async (fieldKey: string, newValue: string) => {
     if (newValue === (selectedTask[fieldKey] || "")) return;
-
     setSavingField(fieldKey);
     try {
       const res = await fetch(`/api/tasks/${selectedTask.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        method: "PATCH", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ [fieldKey]: newValue })
       });
-
       if (res.ok) {
         selectedTask[fieldKey] = newValue;
         setSavingField(null);
         setSavedField(fieldKey);
         setTimeout(() => setSavedField(null), 2500);
-        if (onRefreshBoard) {
-          onRefreshBoard();
-        }
+        if (onRefreshBoard) onRefreshBoard();
       }
-    } catch (error) {
-      setSavingField(null);
-      console.error("Lỗi auto-save:", error);
-    }
+    } catch (error) { setSavingField(null); }
   };
 
   const handleDeleteClick = async () => {
     if (confirm("Bạn có chắc chắn muốn xóa Task này? Hành động này không thể hoàn tác và sẽ xóa toàn bộ nội dung liên quan.")) {
       setIsDeleting(true);
-      if (onDeleteTask) {
-        await onDeleteTask(selectedTask.id);
-      }
+      if (onDeleteTask) await onDeleteTask(selectedTask.id);
       setIsDeleting(false);
     }
   };
@@ -192,7 +155,6 @@ export default function TaskDetailDrawer({
   const fullNote = taskLinks.note !== undefined ? taskLinks.note : (selectedTask?.note || "");
   const splitToken = "Nguyên liệu ghép:";
   const splitIndex = fullNote.indexOf(splitToken);
-
   const cleanUserNote = splitIndex !== -1 ? fullNote.substring(0, splitIndex).trim() : fullNote;
   const compilationPart = splitIndex !== -1 ? fullNote.substring(splitIndex) : "";
 
@@ -201,23 +163,17 @@ export default function TaskDetailDrawer({
     compilationPart.split('\n').forEach((line: string) => {
       if (line.startsWith('- ')) {
         const parts = line.substring(2).split(': ');
-        if (parts.length >= 2) {
-          parsedLinks.push({
-            name: parts[0],
-            url: parts.slice(1).join(': ').trim()
-          });
-        }
+        if (parts.length >= 2) parsedLinks.push({ name: parts[0], url: parts.slice(1).join(': ').trim() });
       }
     });
   }
 
   const channelCategory = selectedTask?.channel?.category || 'AI';
-
   const allLinkFields = [
     { key: 'scriptLink', label: 'Kịch Bản', role: 'CONTENT', idField: 'contentId', categories: ['AI', 'TONG_HOP'] },
-    { key: 'audioLink', label: 'Link Audio', role: 'EDITOR', idField: 'editorId', categories: ['AI', 'TONG_HOP'] }, 
-    { key: 'storyboardLink', label: 'Bố Cục', role: 'CONTENT', idField: 'contentId', categories: ['AI', 'TONG_HOP'] }, 
-    { key: 'animationLink', label: 'Link Chuyển Động', role: 'CONTENT', idField: 'animatorId', categories: ['AI'] }, 
+    { key: 'audioLink', label: 'Link Audio', role: 'EDITOR', idField: 'editorId', categories: ['AI', 'TONG_HOP'] },
+    { key: 'storyboardLink', label: 'Bố Cục', role: 'CONTENT', idField: 'contentId', categories: ['AI', 'TONG_HOP'] },
+    { key: 'animationLink', label: 'Link Chuyển Động', role: 'CONTENT', idField: 'animatorId', categories: ['AI'] },
     { key: 'roughProjectLink', label: 'Link PRJ Thô', role: 'EDITOR', idField: 'editorId', categories: ['AI', 'TONG_HOP'] },
     { key: 'thumbnailLink', label: 'Thumbnail', role: 'EDITOR', idField: 'editorId', categories: ['AI', 'TONG_HOP'] },
     { key: 'videoLink', label: 'Video Render', role: 'EDITOR', idField: 'editorId', categories: ['AI', 'TONG_HOP'] },
@@ -226,7 +182,7 @@ export default function TaskDetailDrawer({
 
   let visibleLinkFields = allLinkFields.filter(f => f.categories.includes(channelCategory));
   if (selectedTask?.isCompilation) {
-    visibleLinkFields = visibleLinkFields.filter(f => ['thumbnailLink', 'videoLink','linkProject', 'roughProjectLink'].includes(f.key));
+    visibleLinkFields = visibleLinkFields.filter(f => ['thumbnailLink', 'videoLink', 'linkProject', 'roughProjectLink'].includes(f.key));
   }
 
   const renderUserGroup = (title: string, users: any[], colorClass: string, bgClass: string, borderClass: string, textClass: string) => {
@@ -234,22 +190,16 @@ export default function TaskDetailDrawer({
     return (
       <div className={`${bgClass} border ${borderClass} p-3.5 rounded-2xl flex flex-col gap-2.5`}>
         <p className={`text-[10px] font-bold ${textClass} uppercase tracking-widest`}>{title}</p>
-        
         <div className="flex flex-wrap gap-2.5">
           {users.map((u, idx) => (
             <div key={idx} className="relative group cursor-pointer">
               {u.avatarUrl ? (
-                <img 
-                  src={u.avatarUrl} 
-                  alt={u.fullName} 
-                  className="h-12 w-12 rounded-xl object-cover border-2 border-white shadow-sm hover:shadow-md hover:scale-105 transition-all duration-200" 
-                />
+                <img src={u.avatarUrl} alt={u.fullName} className="h-12 w-12 rounded-xl object-cover border-2 border-white shadow-sm hover:shadow-md hover:scale-105 transition-all duration-200" />
               ) : (
                 <div className={`h-12 w-12 rounded-xl ${colorClass} flex items-center justify-center font-black border-2 border-white shadow-sm hover:shadow-md hover:scale-105 transition-all duration-200 text-sm`}>
                   {u.fullName?.charAt(0) || "?"}
                 </div>
               )}
-              
               <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[11px] font-bold px-2.5 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-20 shadow-lg">
                 {u.fullName}
                 <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-800"></div>
@@ -265,48 +215,94 @@ export default function TaskDetailDrawer({
     <>
       {isOpen && <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[99998] transition-opacity" onClick={onClose} />}
 
-      <div className={`fixed top-0 right-0 h-full w-full md:w-[1000px] md:max-w-[95vw] bg-white shadow-2xl z-[99999] transform transition-transform duration-300 flex flex-col ${isOpen ? "translate-x-0" : "translate-x-full"}`}>
+      {showRejectModal && (
+        <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-[2px] z-[999999] flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-[24px] shadow-2xl w-full max-w-[420px] p-6 flex flex-col gap-4 animate-scale-in border border-slate-100">
+            <h3 className="font-black text-xl text-slate-800 flex items-center gap-2">
+              <RefreshCw className="text-orange-500 w-6 h-6" /> Yêu cầu chỉnh sửa
+            </h3>
+            <p className="text-xs font-medium text-slate-500 leading-relaxed">
+              Vui lòng ghi rõ lý do để nhân sự nắm được thông tin, nội dung này sẽ được ghim thẳng vào khung thảo luận nội bộ.
+            </p>
+            
+            <div className="flex flex-col gap-3">
+              <textarea
+                autoFocus
+                rows={3}
+                placeholder="VD: Tiết tấu đoạn 1:00 hơi chậm, cần cắt gọt nhanh hơn..."
+                className="w-full border border-slate-200 rounded-xl p-3 text-sm font-medium text-slate-700 bg-slate-50 outline-none focus:bg-white focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 resize-none"
+                value={rejectReason}
+                onChange={e => setRejectReason(e.target.value)}
+              />
 
+              {/* 🚀 BỔ SUNG: Khung chọn Mức độ ưu tiên */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Mức độ ưu tiên</label>
+                <select
+                  className="w-full border border-slate-200 rounded-xl p-3 text-sm font-bold text-slate-700 bg-slate-50 outline-none focus:bg-white focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10"
+                  value={rejectPriority}
+                  onChange={(e) => setRejectPriority(e.target.value)}
+                >
+                  <option value="URGENT">🚨 GẤP (Xử lý ngay)</option>
+                  <option value="HIGH">🔥 Ưu tiên Cao</option>
+                  <option value="NORMAL">⭐ Bình thường</option>
+                  <option value="LOW">🧊 Ưu tiên Thấp</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 mt-2">
+              <button 
+                onClick={() => { setShowRejectModal(false); setRejectReason(''); }} 
+                className="px-4 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:bg-slate-100 transition-all"
+              >
+                Hủy
+              </button>
+              <button 
+                onClick={() => {
+                  if (rejectReason.trim()) {
+                     onReject(rejectReason, rejectPriority); // Truyền cả Priority ra ngoài
+                     setShowRejectModal(false);
+                     setRejectReason('');
+                  }
+                }} 
+                disabled={!rejectReason.trim() || isLoading} 
+                className="px-5 py-2.5 rounded-xl text-sm font-bold bg-orange-500 text-white hover:bg-orange-600 transition-all active:scale-95 flex items-center gap-2 shadow-md shadow-orange-500/20 disabled:opacity-50"
+              >
+                <Send size={16} /> Báo Cáo & Trả Về
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className={`fixed top-0 right-0 h-full w-full md:w-[1000px] md:max-w-[95vw] bg-white shadow-2xl z-[99999] transform transition-transform duration-300 flex flex-col ${isOpen ? "translate-x-0" : "translate-x-full"}`}>
         <div className="px-4 md:px-6 py-3 md:py-4 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shrink-0 bg-white z-10">
           <div className="flex flex-col w-full sm:w-auto gap-1.5">
             <div className="flex items-center gap-2 flex-wrap">
-              <span
-                className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-md border shadow-sm ${selectedTask.priority === 'URGENT' ? 'bg-red-600 text-white border-red-700 animate-pulse' :
-                  selectedTask.priority === 'HIGH' ? 'bg-orange-100 text-orange-700 border-orange-200' :
-                    selectedTask.priority === 'LOW' ? 'bg-slate-100 text-slate-500 border-slate-200' :
-                      'bg-blue-50 text-blue-600 border-blue-200'
-                  }`}
-              >
-                {selectedTask.priority === 'URGENT' ? 'GẤP' :
-                  selectedTask.priority === 'HIGH' ? 'Ưu tiên Cao' :
-                    selectedTask.priority === 'LOW' ? 'Thấp' :
-                      'Bình thường'}
+              <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-md border shadow-sm ${selectedTask.priority === 'URGENT' ? 'bg-red-600 text-white border-red-700 animate-pulse' : selectedTask.priority === 'HIGH' ? 'bg-orange-100 text-orange-700 border-orange-200' : selectedTask.priority === 'LOW' ? 'bg-slate-100 text-slate-500 border-slate-200' : 'bg-blue-50 text-blue-600 border-blue-200'}`}>
+                {selectedTask.priority === 'URGENT' ? 'GẤP' : selectedTask.priority === 'HIGH' ? 'Ưu tiên Cao' : selectedTask.priority === 'LOW' ? 'Thấp' : 'Bình thường'}
               </span>
               <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-md border shadow-sm ${channelCategory === 'AI' ? 'text-pink-600 bg-pink-50 border-pink-100' : 'text-slate-600 bg-slate-100 border-slate-200'}`}>
                 {channelCategory === 'AI' ? 'KÊNH AI' : 'KÊNH TỔNG HỢP'}
               </span>
-
               <span className="text-[10px] font-black uppercase text-blue-600 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-100">
                 {selectedTask.project?.name || "Dự án ẩn"}
               </span>
-
               <span className="text-[10px] font-black uppercase text-red-600 bg-red-50 px-2.5 py-1 rounded-md border border-red-100 flex items-center gap-1 shadow-sm">
                 <Tv size={12} /> {selectedTask.channel?.name || "Chưa chọn Kênh"}
               </span>
-
               <span className="text-[10px] font-black uppercase text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-100">
                 {selectedTask.team?.name || "Chưa có Team"}
               </span>
-             
+              {selectedTask.isRework && (
+                <span className="text-[10px] font-black uppercase text-rose-700 bg-rose-100 px-2.5 py-1 rounded-md border border-rose-300 flex items-center gap-1 shadow-sm animate-pulse">
+                  <RefreshCw size={12} /> XÀO LẠI / CHỈNH SỬA
+                </span>
+              )}
               {selectedTask.duration && (
                 <span className="text-[10px] font-black uppercase text-purple-600 bg-purple-50 px-2.5 py-1 rounded-md border border-purple-100 flex items-center gap-1 shadow-sm">
                   <Clock size={12} /> {selectedTask.duration} PHÚT
-                </span>
-              )}
-
-              {selectedTask.usedInMergeCount > 0 && (
-                <span className="text-[10px] font-black uppercase text-amber-700 bg-amber-100 px-2.5 py-1 rounded-md border border-amber-300 flex items-center gap-1 shadow-sm animate-pulse">
-                  <Layers size={12} /> Đã ghép ({selectedTask.usedInMergeCount} lần)
                 </span>
               )}
             </div>
@@ -315,35 +311,29 @@ export default function TaskDetailDrawer({
 
           <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
             {(isManager || selectedTask.creatorId === sessionUserId) && (
-              <button
-                onClick={handleDeleteClick}
-                disabled={isDeleting || isLoading}
-                className="px-3 md:px-4 py-2 rounded-xl text-sm font-bold bg-red-50 text-red-600 hover:bg-red-100 transition-colors flex items-center gap-2 disabled:opacity-50"
-              >
-                {isDeleting ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
-                Xóa
+              <button onClick={handleDeleteClick} disabled={isDeleting || isLoading} className="px-3 md:px-4 py-2 rounded-xl text-sm font-bold bg-red-50 text-red-600 hover:bg-red-100 transition-colors flex items-center gap-2 disabled:opacity-50">
+                {isDeleting ? <Loader2 size={20} className="animate-spin" /> : <Trash2 size={20} />}
               </button>
             )}
-
             {isManager && (
               <button onClick={() => setRightTab(rightTab === 'chat' ? 'evaluate' : 'chat')} disabled={isLoading} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all disabled:opacity-50 ${rightTab === 'evaluate' ? 'bg-indigo-600 text-white shadow-md' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'}`}>
-                <ClipboardCheck size={16} /> {rightTab === 'evaluate' ? "Quay lại Chat" : "Chấm điểm Video"}
+                <ClipboardCheck size={20} /> {rightTab === 'evaluate' ? "" : ""}
               </button>
             )}
             <div className="w-[1px] h-6 bg-slate-200 mx-1 hidden sm:block"></div>
             {(isManager || selectedTask.creatorId === sessionUserId) && (
               <button onClick={onEditTask} disabled={isLoading} className="px-3 md:px-4 py-2 rounded-xl text-sm font-bold bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors disabled:opacity-50">
-                Sửa Task
-              </button>
+                <SquarePen size={20} />
+                </button>
             )}
+            
             {canReject && (
-              <button onClick={onReject} disabled={isLoading} className="px-3 md:px-4 py-2 rounded-xl text-sm font-bold bg-orange-50 text-orange-600 hover:bg-orange-100 transition-colors disabled:opacity-50">
-                Làm lại
+              <button onClick={() => setShowRejectModal(true)} disabled={isLoading} className="px-3 md:px-4 py-2 rounded-xl text-sm font-bold bg-orange-50 text-orange-600 hover:bg-orange-100 transition-colors disabled:opacity-50">
+                <RotateCcw size={20}/>
               </button>
             )}
-            <button onClick={onClose} className="p-2 bg-slate-50 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors">
-              <X size={20} />
-            </button>
+            
+            <button onClick={onClose} className="p-2 bg-slate-50 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"><X size={20} /></button>
           </div>
         </div>
 
@@ -452,7 +442,7 @@ export default function TaskDetailDrawer({
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {visibleLinkFields.map((field, idx) => {
                       const currentLink = taskLinks[field.key as keyof typeof taskLinks] ?? selectedTask[field.key] ?? "";
-                      const isEditing = editingFields[field.key] || !currentLink; 
+                      const isEditing = editingFields[field.key] || !currentLink;
 
                       return (
                         <div key={field.key} className="space-y-1.5">
@@ -462,7 +452,6 @@ export default function TaskDetailDrawer({
                               {savingField === field.key && <Loader2 size={12} className="animate-spin text-blue-500" />}
                               {savedField === field.key && <CheckCircle2 size={12} className="text-emerald-500" />}
                             </span>
-                            {/* 🚀 Đã mở khóa hoàn toàn: Bỏ logic chặn (isAllowed), chỉ cần đang chưa nhập (isEditing=false) là hiện nút Sửa */}
                             {!isEditing && (
                               <button onClick={() => setEditingFields({ ...editingFields, [field.key]: true })} className="text-blue-500 hover:text-blue-700 flex items-center gap-1 normal-case tracking-normal transition-colors">
                                 <Pencil size={12} /> Sửa
@@ -472,24 +461,23 @@ export default function TaskDetailDrawer({
 
                           {isEditing ? (
                             <input
-                              type="url" 
+                              type="url"
                               placeholder="Dán link..."
-                              // 🚀 Đã mở khóa hoàn toàn: Loại bỏ disabled và các style background xám
                               className={`w-full border rounded-xl p-3 text-[13px] outline-none transition-all bg-white text-slate-800 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 ${errors[field.key] ? 'border-red-500' : ''}`}
                               value={currentLink}
                               onChange={e => {
-                                 setTaskLinks({ ...taskLinks, [field.key]: e.target.value });
-                                 if (!editingFields[field.key]) {
-                                     setEditingFields(prev => ({ ...prev, [field.key]: true }));
-                                 }
+                                setTaskLinks({ ...taskLinks, [field.key]: e.target.value });
+                                if (!editingFields[field.key]) {
+                                  setEditingFields(prev => ({ ...prev, [field.key]: true }));
+                                }
                               }}
                               onBlur={(e) => {
                                 handleAutoSave(field.key, e.target.value);
                                 if (e.target.value.trim() !== '') {
-                                    setEditingFields(prev => ({ ...prev, [field.key]: false }));
+                                  setEditingFields(prev => ({ ...prev, [field.key]: false }));
                                 }
                               }}
-                              autoFocus={editingFields[field.key]} 
+                              autoFocus={editingFields[field.key]}
                             />
                           ) : (
                             <div className="w-full border border-slate-200 bg-slate-50 rounded-xl p-3 flex items-center gap-2 hover:bg-slate-100 transition-colors group">
@@ -506,46 +494,44 @@ export default function TaskDetailDrawer({
                     <div className="space-y-1.5 col-span-1 md:col-span-2 pt-2 border-t border-slate-200">
                       <label className="text-[10px] font-bold text-red-500 uppercase tracking-widest flex items-center justify-between">
                         <span className="flex items-center gap-1.5">
-                           {visibleLinkFields.length + 1}. Link Video Đã Đăng (YT)
-                           {savingField === 'publishLink' && <Loader2 size={12} className="animate-spin text-blue-500" />}
-                           {savedField === 'publishLink' && <CheckCircle2 size={12} className="text emerald-500" />}
+                          {visibleLinkFields.length + 1}. Link Video Đã Đăng (YT)
+                          {savingField === 'publishLink' && <Loader2 size={12} className="animate-spin text-blue-500" />}
+                          {savedField === 'publishLink' && <CheckCircle2 size={12} className="text emerald-500" />}
                         </span>
-                        {/* 🚀 Đã mở khóa hoàn toàn: Ai cũng có thể bấm Sửa */}
                         {!editingFields['publishLink'] && taskLinks.publishLink && (
-                           <button onClick={() => setEditingFields({...editingFields, publishLink: true})} className="text-blue-500 hover:text-blue-700 text-xs flex items-center gap-1 normal-case tracking-normal">
-                              <Pencil size={12}/> Sửa
-                           </button>
+                          <button onClick={() => setEditingFields({ ...editingFields, publishLink: true })} className="text-blue-500 hover:text-blue-700 text-xs flex items-center gap-1 normal-case tracking-normal">
+                            <Pencil size={12} /> Sửa
+                          </button>
                         )}
                       </label>
-                      
+
                       {editingFields['publishLink'] || !taskLinks.publishLink ? (
-                          <input
-                            type="url" 
-                            placeholder="Dán link YouTube..."
-                            // 🚀 Đã mở khóa hoàn toàn: Loại bỏ disabled
-                            className={`w-full border rounded-xl p-3 text-[13px] outline-none transition-all bg-white text-slate-800 focus:border-red-500 focus:ring-4 focus:ring-red-500/10`}
-                            value={taskLinks.publishLink || ""}
-                            onChange={e => {
-                               setTaskLinks({ ...taskLinks, publishLink: e.target.value });
-                               if (!editingFields['publishLink']) {
-                                   setEditingFields(prev => ({ ...prev, publishLink: true }));
-                               }
-                            }}
-                            onBlur={(e) => {
-                               handleAutoSave('publishLink', e.target.value);
-                               if (e.target.value.trim() !== '') {
-                                   setEditingFields(prev => ({ ...prev, publishLink: false }));
-                               }
-                            }}
-                            autoFocus={editingFields['publishLink']}
-                          />
+                        <input
+                          type="url"
+                          placeholder="Dán link YouTube..."
+                          className={`w-full border rounded-xl p-3 text-[13px] outline-none transition-all bg-white text-slate-800 focus:border-red-500 focus:ring-4 focus:ring-red-500/10`}
+                          value={taskLinks.publishLink || ""}
+                          onChange={e => {
+                            setTaskLinks({ ...taskLinks, publishLink: e.target.value });
+                            if (!editingFields['publishLink']) {
+                              setEditingFields(prev => ({ ...prev, publishLink: true }));
+                            }
+                          }}
+                          onBlur={(e) => {
+                            handleAutoSave('publishLink', e.target.value);
+                            if (e.target.value.trim() !== '') {
+                              setEditingFields(prev => ({ ...prev, publishLink: false }));
+                            }
+                          }}
+                          autoFocus={editingFields['publishLink']}
+                        />
                       ) : (
-                          <div className="w-full border border-slate-200 bg-slate-50 rounded-xl p-3 flex items-center gap-2 hover:bg-slate-100 transition-colors group">
-                             <LinkIcon size={14} className="text-slate-400 shrink-0 group-hover:text-red-500 transition-colors" />
-                             <a href={taskLinks.publishLink} target="_blank" rel="noreferrer" className="text-[13px] font-medium text-red-600 hover:text-red-700 hover:underline truncate block w-full">
-                                {taskLinks.publishLink}
-                             </a>
-                          </div>
+                        <div className="w-full border border-slate-200 bg-slate-50 rounded-xl p-3 flex items-center gap-2 hover:bg-slate-100 transition-colors group">
+                          <LinkIcon size={14} className="text-slate-400 shrink-0 group-hover:text-red-500 transition-colors" />
+                          <a href={taskLinks.publishLink} target="_blank" rel="noreferrer" className="text-[13px] font-medium text-red-600 hover:text-red-700 hover:underline truncate block w-full">
+                            {taskLinks.publishLink}
+                          </a>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -558,23 +544,38 @@ export default function TaskDetailDrawer({
                     {savedField === 'note' && <CheckCircle2 size={14} className="text-emerald-500 ml-auto" />}
                   </h3>
                   <p className="text-[11px] text-amber-700/70 font-bold leading-tight">Dùng để cập nhật nhanh tình trạng bài cho QLK nắm bắt (VD: Đang cắt thô, Đang tìm Voice, Lỗi file...)</p>
-                  <input
-                    type="text"
-                    // 🚀 Đã mở khóa hoàn toàn: Loại bỏ disabled để ai cũng có thể Note
-                    placeholder="Nhập tiến độ hiện tại..."
-                    className="w-full border border-amber-200 rounded-xl p-3 text-sm outline-none transition-all focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10 font-bold text-amber-900 placeholder:text-amber-300 bg-white"
-                    value={cleanUserNote}
-                    onChange={e => {
-                      const val = e.target.value;
-                      const newFullNote = compilationPart ? (val ? `${val}\n\n${compilationPart}` : compilationPart) : val;
-                      setTaskLinks({ ...taskLinks, note: newFullNote });
-                    }}
-                    onBlur={(e) => {
-                      const val = e.target.value;
-                      const newFullNote = compilationPart ? (val ? `${val}\n\n${compilationPart}` : compilationPart) : val;
-                      handleAutoSave('note', newFullNote);
-                    }}
-                  />
+                  
+                  <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        placeholder="Nhập tiến độ và nhấn Gửi..."
+                        className="w-full border border-amber-200 rounded-xl p-3 text-sm outline-none transition-all focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10 font-bold text-amber-900 placeholder:text-amber-400 bg-white"
+                        value={cleanUserNote}
+                        onChange={e => {
+                          setTaskLinks({ ...taskLinks, note: e.target.value });
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && cleanUserNote.trim() !== '') {
+                              setChatMessage(`[BÁO CÁO TIẾN ĐỘ]: ${cleanUserNote}`);
+                              setTaskLinks({ ...taskLinks, note: '' }); 
+                              setTimeout(() => handleSendMessageWrapper(), 50);
+                          }
+                        }}
+                      />
+                      <button
+                        onClick={() => {
+                            if (cleanUserNote.trim() !== '') {
+                                setChatMessage(`[BÁO CÁO TIẾN ĐỘ]: ${cleanUserNote}`);
+                                setTaskLinks({ ...taskLinks, note: '' });
+                                setTimeout(() => handleSendMessageWrapper(), 50);
+                            }
+                        }}
+                        disabled={!cleanUserNote.trim()}
+                        className="h-11 px-4 bg-amber-500 text-white rounded-xl hover:bg-amber-600 transition-all font-bold disabled:opacity-50 flex items-center justify-center shrink-0"
+                      >
+                         <Send size={16} />
+                      </button>
+                  </div>
                 </div>
               </div>
             </div>

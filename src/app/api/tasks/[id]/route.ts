@@ -186,7 +186,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         if (body.contentId !== undefined && body.contentId !== oldTask.contentId) {
             logsToCreate.push({ action: "ASSIGN_USER", details: `Đã cập nhật phân công nhân sự`, taskId, userId });
         }
-
+        let reworkFlag = oldTask.isRework; // Mặc định giữ nguyên trạng thái cũ
+        
+        // Nếu Quản lý đẩy Task từ trạng thái khác về lại bước TODO (Làm lại)
+        if (body.status === "TODO" && oldTask.status !== "TODO") {
+            reworkFlag = true; 
+        }
         const updateTaskPromise = prisma.task.update({
             where: { id: taskId },
             data: {
@@ -211,7 +216,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 animationLink: body.animationLink !== undefined ? body.animationLink : undefined,
                 linkProject: body.linkProject !== undefined ? body.linkProject : undefined,
                 roughProjectLink: body.roughProjectLink !== undefined ? body.roughProjectLink : undefined,
-                
+                isRework: reworkFlag,
                 contentId: body.contentId !== undefined ? body.contentId : undefined,
                 editorId: body.editorId !== undefined ? body.editorId : undefined,
                 animatorId: body.animatorId !== undefined ? body.animatorId : undefined,

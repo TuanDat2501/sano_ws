@@ -36,7 +36,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const senderId = (session.user as any).id;
     const senderName = (session.user as any).fullName || session.user.name || "Ai đó";
 
-    // 1. Lưu tin nhắn vào DB
     const newComment = await prisma.taskComment.create({
       data: { 
         text: body.text || "", 
@@ -47,9 +46,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       include: { user: { select: { fullName: true } } }
     });
 
-    // 2. 🚀 ĐÃ SỬA: Tìm thông tin Task VÀ những người đã từng tham gia bình luận trong Task này
+    // 🚀 ĐÃ SỬA: Lấy thêm cả danh sách những người làm phụ (Co-workers)
     const [task, previousComments] = await Promise.all([
-        prisma.task.findUnique({ where: { id: taskId } }),
+        prisma.task.findUnique({ 
+            where: { id: taskId },
+            include: {
+                coContentUsers: { select: { id: true } },
+                coEditorUsers: { select: { id: true } },
+                coAnimatorUsers: { select: { id: true } }
+            }
+        }),
         prisma.taskComment.findMany({ 
             where: { taskId }, 
             select: { userId: true }, 
@@ -57,27 +63,26 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         })
     ]);
 
-    // 3. Gom ID những người cần nhận thông báo (Chỉ khoanh vùng những người liên quan)
     const notifyUserIds = new Set<string>();
     
-    // - Những người chịu trách nhiệm trực tiếp
     if (task?.creatorId) notifyUserIds.add(task.creatorId);
     if (task?.contentId) notifyUserIds.add(task.contentId);
     if (task?.editorId) notifyUserIds.add(task.editorId);
     if (task?.animatorId) notifyUserIds.add(task.animatorId); 
     
-    // - Những người đã từng "chấm hóng" hoặc thảo luận trong luồng chat này
+    // 🚀 BỔ SUNG: Ném cả những người làm phụ vào danh sách nhận Noti
+    task?.coContentUsers?.forEach(u => notifyUserIds.add(u.id));
+    task?.coEditorUsers?.forEach(u => notifyUserIds.add(u.id));
+    task?.coAnimatorUsers?.forEach(u => notifyUserIds.add(u.id));
+
     previousComments.forEach(comment => notifyUserIds.add(comment.userId));
 
-    // XÓA MÌNH RA KHỎI DANH SÁCH NHẬN NOTI CỦA CHÍNH MÌNH
     notifyUserIds.delete(senderId);
 
-    // 🚀 Xử lý logic hiển thị nội dung thông báo cho mượt mà
     const messagePreview = body.text && body.text.trim() !== "" 
       ? `${body.text.substring(0, 30)}${body.text.length > 30 ? '...' : ''}`
       : "[Hình ảnh đính kèm 🖼️]";
 
-    // 4. Tạo thông báo trong Database cho từng người
     const notifications = [];
     for (const targetUserId of Array.from(notifyUserIds)) {
       const notif = await prisma.notification.create({

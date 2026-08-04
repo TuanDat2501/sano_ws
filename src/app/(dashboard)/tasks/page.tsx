@@ -668,25 +668,47 @@ export default function KanbanBoard() {
     } catch (error) { showToast("error", "Lỗi thao tác"); }
   };
 
-  const handleRejectTask = async () => {
-    const reason = window.prompt("Nhập lý do yêu cầu làm lại (hoặc để trống):") || "Cần chỉnh sửa thêm theo yêu cầu Sếp.";
-    if (!reason) return; 
+  // 🚀 ĐÃ SỬA: Hàm nhận "reason" và "priority" từ Modal
+  const handleRejectTask = async (reason: string, priority: string) => {
+    if (!reason) return;
 
     try {
       const res = await fetch(`/api/tasks/${selectedTask.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isClosed: false, status: "TODO" }) 
+        // 🚀 CẬP NHẬT MỨC ĐỘ ƯU TIÊN VÀO ĐÂY
+        body: JSON.stringify({ isClosed: false, status: "TODO", priority: priority })
       });
       const data = await res.json();
+      
       if (res.ok) {
+        // 🚀 BỔ SUNG: Bắn cmt
+        const chatRes = await fetch(`/api/tasks/${selectedTask.id}/comments`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: `[YÊU CẦU LÀM LẠI]: ${reason}` })
+        });
+        const chatData = await chatRes.json();
+
         showToast("success", "Đã trả Task về làm lại!");
         setIsDrawerOpen(false);
         fetchTasks();
 
         if (socket) {
           socket.emit("board_updated");
-          // 🚀 BỔ SUNG: Thông báo cho toàn bộ những người được giao
+          
+          if (chatRes.ok && chatData.comment) {
+             const savedComment = chatData.comment;
+             socket.emit("send_message", {
+                id: savedComment.id,
+                taskId: selectedTask.id,
+                sender: savedComment.user.fullName,
+                senderId: savedComment.userId,
+                text: savedComment.text,
+                time: new Date(savedComment.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+             });
+          }
+
           if (data.userIdsToNotify && data.userIdsToNotify.length > 0) {
             socket.emit("send_notification", { userIds: data.userIdsToNotify, notification: data.notifications[0] });
           }

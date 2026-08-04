@@ -1,7 +1,7 @@
 "use client";
 
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
-import { Link as LinkIcon } from "lucide-react";
+import { Link as LinkIcon, RefreshCw } from "lucide-react";
 
 interface BoardViewProps {
   tasks: any;
@@ -17,13 +17,10 @@ export default function BoardView({ tasks, columns, getTeamColor, onDragEnd, onO
 
   const isManager = ["ADMIN", "BAN_GIAM_DOC", "LEADER"].includes(userRole);
 
-  // 🚀 HELPER BỔ SUNG: Render một nhóm Avatar dạng xếp chồng (Stacked) cực gọn
   const renderStackedAvatars = (roleTitle: string, mainUser: any, coUsers: any[], colorClass: string, bgClass: string) => {
-    // Gộp chính và phụ thành 1 mảng
     const allUsers = [...(mainUser ? [mainUser] : []), ...(coUsers || [])];
     if (allUsers.length === 0) return null;
 
-    // Chỉ hiển thị tối đa 3 avatar, còn lại hiện +N
     const maxVisible = 3;
     const visibleUsers = allUsers.slice(0, maxVisible);
     const hiddenCount = allUsers.length - maxVisible;
@@ -47,7 +44,6 @@ export default function BoardView({ tasks, columns, getTeamColor, onDragEnd, onO
                     </div>
                 ))}
                 
-                {/* Nút cộng số lượng người bị ẩn */}
                 {hiddenCount > 0 && (
                     <div className="h-6 w-6 md:h-8 md:w-8 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center font-bold text-[9px] md:text-[10px] border-2 border-white shadow-md z-[1]">
                         +{hiddenCount}
@@ -55,7 +51,6 @@ export default function BoardView({ tasks, columns, getTeamColor, onDragEnd, onO
                 )}
             </div>
             
-            {/* Chữ Mác của Team (C, E, A) nằm đè nhẹ lên Avatar cuối cùng */}
             <div className={`absolute -bottom-1 -right-1 h-3.5 w-3.5 md:h-4 md:w-4 rounded-full border-2 border-white flex items-center justify-center text-[7px] md:text-[9px] font-black text-white shadow-sm z-20 ${colorClass.replace('text-', 'bg-')}`}>
                {roleTitle.charAt(0)}
             </div>
@@ -87,7 +82,6 @@ export default function BoardView({ tasks, columns, getTeamColor, onDragEnd, onO
                   className={`flex-1 overflow-y-auto min-h-0 p-3 md:p-4 space-y-3 md:space-y-4 custom-scrollbar transition-colors ${snapshot.isDraggingOver ? "bg-black/5" : ""}`}
                 >
                   {tasks[column.id]?.map((task: any, index: number) => {
-                    // 🚀 ĐÃ SỬA BỘ LỌC QUYỀN: Gom kiểm tra cho toàn bộ người làm chung
                     const isMyContent = task.contentId === currentUserId || task.creatorId === currentUserId || task.coContentUsers?.some((u:any) => u.id === currentUserId);
                     const isMyAnimation = task.animatorId === currentUserId || task.coAnimatorUsers?.some((u:any) => u.id === currentUserId);
                     const isMyEdit = task.editorId === currentUserId || task.coEditorUsers?.some((u:any) => u.id === currentUserId);
@@ -120,21 +114,31 @@ export default function BoardView({ tasks, columns, getTeamColor, onDragEnd, onO
                               }
                               onClick={() => onOpenTaskDetail(task)}
                             >
-                              <div className="flex justify-between items-start mb-2 md:mb-3">
-                                <span className={`text-[9px] md:text-[10px] font-black uppercase tracking-widest px-2 py-0.5 md:px-2.5 md:py-1 rounded-md md:rounded-lg border ${teamColor.bg} ${teamColor.text} ${teamColor.border}`}>
+                              <div className="flex justify-between items-start mb-2 md:mb-3 gap-2">
+                                <span className={`text-[9px] md:text-[10px] font-black uppercase tracking-widest px-2 py-0.5 md:px-2.5 md:py-1 rounded-md md:rounded-lg border shrink-0 ${teamColor.bg} ${teamColor.text} ${teamColor.border}`}>
                                   {task.team?.name || "Team Sano"}
                                 </span>
-                                {task.priority && task.priority !== 'NORMAL' && (
-                                  <span
-                                    className={`text-[8px] md:text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md border shadow-sm ${
-                                      task.priority === 'URGENT' ? 'bg-red-600 text-white border-red-700 animate-pulse' :
-                                      task.priority === 'HIGH' ? 'bg-orange-100 text-orange-700 border-orange-200' :
-                                      'bg-slate-100 text-slate-500 border-slate-200'
-                                    }`}
-                                  >
-                                    {task.priority === 'URGENT' ? '🔥 GẤP' : task.priority === 'HIGH' ? 'ƯU TIÊN CAO' : 'THẤP'}
-                                  </span>
-                                )}
+
+                                {/* 🚀 ĐÃ SỬA: Gom nhóm Mức độ ưu tiên và Xào lại sang bên phải, xếp dọc */}
+                                <div className="flex flex-col items-end gap-1.5 shrink-0">
+                                  {task.priority && task.priority !== 'NORMAL' && (
+                                    <span
+                                      className={`text-[8px] md:text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md border shadow-sm ${
+                                        task.priority === 'URGENT' ? 'bg-red-600 text-white border-red-700 animate-pulse' :
+                                        task.priority === 'HIGH' ? 'bg-orange-100 text-orange-700 border-orange-200' :
+                                        'bg-slate-100 text-slate-500 border-slate-200'
+                                      }`}
+                                    >
+                                      {task.priority === 'URGENT' ? '🔥 GẤP' : task.priority === 'HIGH' ? 'ƯU TIÊN CAO' : 'THẤP'}
+                                    </span>
+                                  )}
+
+                                  {task.isRework && (
+                                    <span className="text-[8px] md:text-[9px] font-black uppercase tracking-widest text-rose-700 bg-rose-100 px-2 py-0.5 rounded-md border border-rose-200 shadow-sm flex items-center gap-1 animate-pulse">
+                                      <RefreshCw size={10} strokeWidth={3} /> XÀO LẠI
+                                    </span>
+                                  )}
+                                </div>
                               </div>
 
                               <h4 className={`font-bold text-sm md:text-base leading-snug mb-2 md:mb-3 ${task.isClosed ? 'line-through text-slate-400' : 'text-slate-900'}`}>
@@ -147,7 +151,6 @@ export default function BoardView({ tasks, columns, getTeamColor, onDragEnd, onO
                               </div>}
                               
                               <div className="flex flex-wrap items-center gap-2 mt-3 md:mt-4 pt-2.5 md:pt-3 border-t border-slate-100/50 opacity-90">
-                                {/* 🚀 ĐÃ SỬA: SỬ DỤNG HÀM RENDER STACK AVATAR CHO TẤT CẢ CÁC VỊ TRÍ */}
                                 {renderStackedAvatars("Content", task.contentUser, task.coContentUsers, "text-orange-600", "bg-orange-100")}
                                 {renderStackedAvatars("Editor", task.editorUser, task.coEditorUsers, "text-blue-600", "bg-blue-100")}
                                 {renderStackedAvatars("Animator", task.animatorUser, task.coAnimatorUsers, "text-purple-600", "bg-purple-100")}
