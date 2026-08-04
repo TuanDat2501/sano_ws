@@ -188,7 +188,7 @@ export async function POST(req: Request) {
         where: { linkContent: { contains: searchKey } }
       });
 
-      const isDuplicate = potentialTasks.some(task => {
+      /* const isDuplicate = potentialTasks.some(task => {
         return task.linkContent && getBaseUrl(task.linkContent) === baseIncoming;
       });
 
@@ -197,7 +197,7 @@ export async function POST(req: Request) {
           { error: "Link này đã tồn tại trong hệ thống (Có thể do team khác đã nhận)!" },
           { status: 400 }
         );
-      }
+      } */
     }
 
     // TÍNH SỐ TẬP (EPISODE NUMBER)

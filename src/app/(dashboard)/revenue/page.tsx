@@ -18,16 +18,16 @@ const getDaysOfMonth = (currentDate: Date) => {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
     const numDays = new Date(year, month + 1, 0).getDate();
-    
+
     return Array.from({ length: numDays }).map((_, i) => {
-        return new Date(year, month, i + 1, 12, 0, 0); 
+        return new Date(year, month, i + 1, 12, 0, 0);
     });
 };
 
 export default function RevenueEntryPage() {
     const { showToast } = useToast();
-    const scrollContainerRef = useRef<HTMLDivElement>(null); 
-    
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
+
     const [currentMonthDate, setCurrentMonthDate] = useState(new Date());
     const tableDays = useMemo(() => getDaysOfMonth(currentMonthDate), [currentMonthDate]);
     const tableStartDateStr = tableDays[0].toISOString().split('T')[0];
@@ -43,7 +43,7 @@ export default function RevenueEntryPage() {
     const [focusedCol, setFocusedCol] = useState<number | null>(null);
     const [activeTooltip, setActiveTooltip] = useState<{ content: string; x: number; y: number; } | null>(null);
     const [filterTeam, setFilterTeam] = useState("ALL");
-    
+
     const { data: session, status } = useSession();
     const router = useRouter();
     const { hasPermission, loading } = usePermission();
@@ -52,9 +52,9 @@ export default function RevenueEntryPage() {
     const userRole = currentUser?.role;
     const userTeamId = currentUser?.teamId;
 
-    const isKeToan = userRole === "KE_TOAN" || userRole === "ADMIN" || userRole === "BAN_GIAM_DOC"; 
+    const isKeToan = userRole === "KE_TOAN" || userRole === "ADMIN" || userRole === "BAN_GIAM_DOC";
     const canFilterTeam = hasPermission("MENU_TEAMS") || ["BAN_GIAM_DOC", "KE_TOAN", "ADMIN"].includes(userRole);
-    
+
     useEffect(() => {
         if (!loading && !hasPermission("MENU_REVENUE")) {
             router.push("/dashboard");
@@ -69,11 +69,11 @@ export default function RevenueEntryPage() {
         const todayElem = document.getElementById(`day-col-${todayKey}`);
         if (todayElem && scrollContainerRef.current) {
             setTimeout(() => {
-                const scrollLeft = todayElem.offsetLeft - 350; 
+                const scrollLeft = todayElem.offsetLeft - 450;
                 scrollContainerRef.current?.scrollTo({ left: Math.max(0, scrollLeft), behavior: 'smooth' });
             }, 200);
         }
-    }, [tableDays]); 
+    }, [tableDays]);
 
     useEffect(() => {
         const fetchTableData = async () => {
@@ -113,7 +113,7 @@ export default function RevenueEntryPage() {
 
     const filteredChannels = useMemo(() => {
         let result = [...channels];
-        
+
         if (canFilterTeam) {
             if (filterTeam !== "ALL") {
                 result = result.filter(ch => ch.team?.name === filterTeam);
@@ -195,7 +195,6 @@ export default function RevenueEntryPage() {
         }
     };
 
-    // HÀM XUẤT EXCEL 
     const handleExportExcel = async () => {
         if (new Date(exportFromDate) > new Date(exportToDate)) {
             showToast("error", "Ngày bắt đầu không được lớn hơn ngày kết thúc!");
@@ -247,6 +246,7 @@ export default function RevenueEntryPage() {
                 { key: 'stt', width: 5 },
                 { key: 'team', width: 20 },
                 { key: 'channel', width: 35 },
+                { key: 'total', width: 25 },
             ];
 
             exportDays.forEach(day => {
@@ -255,52 +255,63 @@ export default function RevenueEntryPage() {
             });
             worksheet.columns = cols;
 
-            const row1 = ['STT', 'Team', 'Tên Kênh'];
-            const row2 = ['', '', '']; 
+            const row1 = ['STT', 'Team', 'Tên Kênh', 'Tổng Kỳ Báo Cáo'];
+            const row2 = ['', '', '', ''];
 
             exportDays.forEach(day => {
                 const dateStr = `${day.getDate()}/${day.getMonth() + 1}`;
-                row1.push(dateStr, ''); 
+                row1.push(dateStr, '');
                 row2.push(`Views (${dateStr})`, `Doanh thu $ (${dateStr})`);
             });
 
             worksheet.addRow(row1);
             worksheet.addRow(row2);
 
-            worksheet.mergeCells(1, 1, 2, 1); 
-            worksheet.mergeCells(1, 2, 2, 2); 
-            worksheet.mergeCells(1, 3, 2, 3); 
+            worksheet.mergeCells(1, 1, 2, 1);
+            worksheet.mergeCells(1, 2, 2, 2);
+            worksheet.mergeCells(1, 3, 2, 3);
+            worksheet.mergeCells(1, 4, 2, 4);
 
             exportDays.forEach((_, idx) => {
-                const startCol = 4 + (idx * 2);
-                const endCol = 5 + (idx * 2);
-                worksheet.mergeCells(1, startCol, 1, endCol); 
+                const startCol = 5 + (idx * 2);
+                const endCol = 6 + (idx * 2);
+                worksheet.mergeCells(1, startCol, 1, endCol);
             });
 
-            // 🚀 BỔ SUNG: Biến theo dõi gộp ô Team theo chiều dọc
             let currentTeamStr = "";
             let startRowMerge = 3;
 
             exportChannels.forEach((ch, idx) => {
                 const teamName = ch.team?.name || "No Team";
-                const currentRow = idx + 3; // Vì Dữ liệu bắt đầu từ Dòng số 3
+                const currentRow = idx + 3;
+
+                let sumViews = 0;
+                let sumRevenue = 0;
 
                 const rowData: any = { stt: idx + 1, team: teamName, channel: ch.name };
                 exportDays.forEach(day => {
                     const dateKey = day.toISOString().split('T')[0];
                     const cellKey = `${ch.id}_${dateKey}`;
                     const d = exportRevenueData[cellKey];
-                    rowData[`v_${day.toISOString()}`] = d?.views || 0;
-                    rowData[`r_${day.toISOString()}`] = d?.revenue || 0;
+
+                    const v = d?.views || 0;
+                    const r = d?.revenue || 0;
+
+                    sumViews += Number(v);
+                    sumRevenue += Number(r);
+
+                    rowData[`v_${day.toISOString()}`] = v;
+                    rowData[`r_${day.toISOString()}`] = r;
                 });
+
+                rowData.total = `${sumViews.toLocaleString()} v | $${sumRevenue.toLocaleString()}`;
+
                 worksheet.addRow(rowData);
 
-                // 🚀 BỔ SUNG: Logic kiểm tra và Gộp ô Team
                 if (idx === 0) {
                     currentTeamStr = teamName;
                     startRowMerge = currentRow;
                 } else if (teamName !== currentTeamStr) {
-                    // Nếu team thay đổi, gộp các hàng của team trước đó
                     if (currentRow - 1 > startRowMerge) {
                         worksheet.mergeCells(startRowMerge, 2, currentRow - 1, 2);
                     }
@@ -308,7 +319,6 @@ export default function RevenueEntryPage() {
                     startRowMerge = currentRow;
                 }
 
-                // Gộp ô cho team ở những dòng cuối cùng của mảng
                 if (idx === exportChannels.length - 1) {
                     if (currentRow > startRowMerge) {
                         worksheet.mergeCells(startRowMerge, 2, currentRow, 2);
@@ -334,15 +344,14 @@ export default function RevenueEntryPage() {
                             top: { style: 'thin', color: { argb: 'E2E8F0' } }, left: { style: 'thin', color: { argb: 'E2E8F0' } },
                             bottom: { style: 'thin', color: { argb: 'E2E8F0' } }, right: { style: 'thin', color: { argb: 'E2E8F0' } }
                         };
-                        // 🚀 Định dạng cho ô Team luôn nằm ở giữa theo chiều dọc
-                        if (colNumber > 3) cell.alignment = { vertical: 'middle', horizontal: 'right' };
-                        else if (colNumber === 1) cell.alignment = { vertical: 'middle', horizontal: 'center' };
+                        if (colNumber > 4) cell.alignment = { vertical: 'middle', horizontal: 'right' };
+                        else if (colNumber === 1 || colNumber === 4) cell.alignment = { vertical: 'middle', horizontal: 'center' };
                         else cell.alignment = { vertical: 'middle', horizontal: 'left' };
                     });
                 }
             });
 
-            worksheet.views = [{ state: 'frozen', xSplit: 3, ySplit: 2 }];
+            worksheet.views = [{ state: 'frozen', xSplit: 4, ySplit: 2 }];
 
             const buffer = await workbook.xlsx.writeBuffer();
             saveAs(new Blob([buffer]), `DoanhThu_${exportFromDate}_${exportToDate}.xlsx`);
@@ -365,7 +374,7 @@ export default function RevenueEntryPage() {
 
     return (
         <div className="p-4 md:p-6 bg-slate-50 h-full max-h-[calc(100vh-80px)] flex flex-col overflow-hidden animate-fade-in gap-4 md:gap-6">
-            
+
             <div className="shrink-0 flex flex-col xl:flex-row justify-between items-start xl:items-center bg-white p-4 rounded-2xl shadow-sm border border-slate-200 gap-4 relative z-10">
                 <div>
                     <h1 className="text-xl md:text-2xl font-black text-slate-900 flex items-center gap-2">
@@ -373,9 +382,9 @@ export default function RevenueEntryPage() {
                     </h1>
                     <p className="text-xs md:text-sm text-slate-500 font-medium mt-1">Nhập liệu doanh thu hằng ngày (USD).</p>
                 </div>
-                
+
                 <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto justify-end">
-                    
+
                     {canFilterTeam && (
                         <div className="relative flex items-center bg-slate-50 border border-slate-200 rounded-xl h-10 px-3 w-full sm:w-auto">
                             <Filter size={16} className="text-slate-400 mr-2 shrink-0" />
@@ -411,23 +420,23 @@ export default function RevenueEntryPage() {
                             <p className="text-[11px] text-emerald-600 font-medium">Chọn khoảng thời gian bất kỳ để tải Excel</p>
                         </div>
                     </div>
-                    
+
                     <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
                         <div className="flex items-center gap-1.5 px-2 bg-white border border-slate-200 rounded-xl py-1 h-10 shadow-sm w-full sm:w-auto overflow-x-auto custom-scrollbar-thin">
                             <span className="text-[10px] font-black text-slate-400 uppercase shrink-0">Từ</span>
-                            <input 
-                                type="date" 
-                                className="bg-transparent text-xs md:text-sm font-bold text-slate-700 outline-none w-[110px] md:w-[120px] cursor-pointer" 
-                                value={exportFromDate} 
-                                onChange={(e) => setExportFromDate(e.target.value)} 
+                            <input
+                                type="date"
+                                className="bg-transparent text-xs md:text-sm font-bold text-slate-700 outline-none w-[110px] md:w-[120px] cursor-pointer"
+                                value={exportFromDate}
+                                onChange={(e) => setExportFromDate(e.target.value)}
                             />
                             <div className="w-[1px] h-4 bg-slate-300 mx-0.5 shrink-0"></div>
                             <span className="text-[10px] font-black text-slate-400 uppercase shrink-0">Đến</span>
-                            <input 
-                                type="date" 
-                                className="bg-transparent text-xs md:text-sm font-bold text-slate-700 outline-none w-[110px] md:w-[120px] cursor-pointer" 
-                                value={exportToDate} 
-                                onChange={(e) => setExportToDate(e.target.value)} 
+                            <input
+                                type="date"
+                                className="bg-transparent text-xs md:text-sm font-bold text-slate-700 outline-none w-[110px] md:w-[120px] cursor-pointer"
+                                value={exportToDate}
+                                onChange={(e) => setExportToDate(e.target.value)}
                             />
                         </div>
 
@@ -451,6 +460,11 @@ export default function RevenueEntryPage() {
                             <th className="p-3 border-r border-slate-300 sticky left-[100px] z-[70] bg-slate-200 w-[50px] text-center">STT</th>
                             <th className="p-3 border-r border-slate-300 sticky left-[150px] z-[70] bg-slate-200 w-[200px]">Tên Kênh</th>
 
+                            {/* 🚀 BỔ SUNG: Cột Tổng Tháng */}
+                            <th className="p-3 border-r-4 border-emerald-400 sticky left-[350px] z-[70] bg-emerald-100 text-emerald-800 w-[100px] text-center shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)]">
+                                Tổng
+                            </th>
+
                             {tableDays.map((day, idx) => {
                                 const todayObj = new Date();
                                 todayObj.setHours(12, 0, 0, 0);
@@ -472,7 +486,7 @@ export default function RevenueEntryPage() {
 
                     <tbody>
                         {filteredChannels.length === 0 ? (
-                            <tr><td colSpan={3 + tableDays.length} className="p-8 h-full text-center align-top pt-20 text-slate-400 italic">Chưa có dữ liệu.</td></tr>
+                            <tr><td colSpan={4 + tableDays.length} className="p-8 h-full text-center align-top pt-20 text-slate-400 italic">Chưa có dữ liệu.</td></tr>
                         ) : (
                             filteredChannels.map((channel, index) => {
                                 const teamName = channel.team?.name || "No Team";
@@ -480,6 +494,18 @@ export default function RevenueEntryPage() {
                                 if (isFirstRowOfTeam) currentTeamForRender = teamName;
                                 const rowSpanCount = teamCounts[teamName];
                                 const rowBgClass = index % 2 === 0 ? "bg-white" : "bg-[#f4f5f7]";
+
+                                // 🚀 BỔ SUNG: Tính tổng View/Doanh thu của kênh này trong tháng
+                                let channelTotalViews = 0;
+                                let channelTotalRevenue = 0;
+                                tableDays.forEach(day => {
+                                    const dateKey = day.toISOString().split('T')[0];
+                                    const data = revenueData[`${channel.id}_${dateKey}`];
+                                    if (data) {
+                                        channelTotalViews += Number(data.views || 0);
+                                        channelTotalRevenue += Number(data.revenue || 0);
+                                    }
+                                });
 
                                 return (
                                     <tr key={channel.id} className={`${rowBgClass} hover:bg-[#e2e8f0] focus-within:bg-blue-50/50 transition-colors group`}>
@@ -495,6 +521,23 @@ export default function RevenueEntryPage() {
 
                                         <td className={`p-3 border-b border-r border-slate-200 sticky left-[150px] z-30 ${rowBgClass} group-hover:bg-[#e2e8f0] group-focus-within:bg-blue-50/50 transition-colors shadow-[2px_0_4px_-2px_rgba(0,0,0,0.05)]`}>
                                             <p className="font-bold text-sm text-slate-800 line-clamp-2" title={channel.name}>{channel.name}</p>
+                                        </td>
+
+                                        
+                                        {/* 🚀 BỔ SUNG: Ô hiển thị Tổng Kênh Cố định */}
+                                        <td className="p-2 border-b border-r-4 border-emerald-300 sticky left-[350px] z-40 bg-emerald-50 group-hover:bg-emerald-100 group-focus-within:bg-emerald-100 transition-colors text-right pr-3 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)]">
+                                            <div className="flex flex-col gap-1.5 text-right justify-center h-full">
+                                                {/* Số lượt xem (Views) */}
+                                                <span className="text-xs font-black text-slate-600 flex items-center justify-end gap-1">
+                                                    <Eye size={12} className="text-slate-500" strokeWidth={2.5} />
+                                                    {channelTotalViews.toLocaleString()}
+                                                </span>
+
+                                                {/* Số tiền (Revenue) */}
+                                                <span className="text-base font-black text-emerald-700 drop-shadow-md tracking-tight">
+                                                    ${channelTotalRevenue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                                                </span>
+                                            </div>
                                         </td>
 
                                         {tableDays.map((day, idx) => {
@@ -597,7 +640,7 @@ export default function RevenueEntryPage() {
                                 )
                             })
                         )}
-                        {filteredChannels.length > 0 && <tr><td colSpan={3 + tableDays.length} className="h-full border-0 p-0"></td></tr>}
+                        {filteredChannels.length > 0 && <tr><td colSpan={4 + tableDays.length} className="h-full border-0 p-0"></td></tr>}
                     </tbody>
 
                     <tfoot className="sticky bottom-0 z-[60] shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] bg-slate-800">
@@ -605,6 +648,11 @@ export default function RevenueEntryPage() {
                             <td colSpan={3} className="p-4 border-r border-slate-700 uppercase tracking-widest text-xs sticky left-0 z-[70] bg-slate-800 text-center">
                                 Tổng Cả Hệ Thống
                             </td>
+                            {/* 🚀 BỔ SUNG: Chỗ trống dưới footer cho cột Tổng */}
+                            <td className="p-2 border-r-4 border-emerald-500 bg-slate-900 sticky left-[350px] z-[70] text-center text-[10px] font-bold text-slate-500">
+
+                            </td>
+
                             {dailyTotals.map((total, idx) => (
                                 <td key={idx} className="p-2 border-r border-slate-700 last:border-r-0 bg-slate-800 w-[120px]">
                                     <div className="flex flex-col gap-1.5 text-right pr-2">

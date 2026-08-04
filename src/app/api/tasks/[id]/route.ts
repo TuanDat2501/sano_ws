@@ -1,4 +1,3 @@
-// File: src/app/api/tasks/[id]/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
@@ -108,10 +107,16 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             if (rawBody.note !== undefined) body.note = rawBody.note;
         }
 
+        // 🚀 ĐÃ CẬP NHẬT: Quét toàn bộ 9 trường Link
         const linksToCheck = [
             { key: 'scriptLink', value: body.scriptLink },
-            { key: 'videoLink', value: body.videoLink },
+            { key: 'audioLink', value: body.audioLink },
+            { key: 'storyboardLink', value: body.storyboardLink },
+            { key: 'animationLink', value: body.animationLink },
             { key: 'roughProjectLink', value: body.roughProjectLink }, 
+            { key: 'thumbnailLink', value: body.thumbnailLink },
+            { key: 'videoLink', value: body.videoLink },
+            { key: 'linkProject', value: body.linkProject },
             { key: 'publishLink', value: body.publishLink },
         ].filter(l => l.value && l.value.trim() !== "");
 
@@ -140,31 +145,27 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         }
 
         const logsToCreate: any[] = [];
-        const logsToDelete: any[] = []; // 🚀 ĐÃ BỔ SUNG: Mảng chứa điều kiện xóa log cũ
+        const logsToDelete: any[] = [];
 
         if (body.status && body.status !== oldTask.status) {
             logsToCreate.push({ action: "UPDATE_STATUS", details: `Từ [${oldTask.status}] sang [${body.status}]`, taskId, userId });
         }
 
-        // 🚀 CẬP NHẬT TRỌNG TÂM: Logic xử lý Xóa Link đúng chuẩn Prisma
         const addLinkLog = (fieldName: string, label: string) => {
             if (body[fieldName] !== undefined && body[fieldName] !== (oldTask as any)[fieldName]) {
                 const newValue = body[fieldName];
                 if (newValue && newValue.trim() !== "") {
-                    // Cập nhật link mới: Ghi nhận DAILY_REPORT để cộng KPI
                     logsToCreate.push({
                         action: "DAILY_REPORT", 
                         details: `Báo cáo tiến độ: Đã cập nhật ${label}`,
                         taskId, userId
                     });
                 } else {
-                    // Xóa trắng link: Dùng UPDATE_LINK thay vì PENDING để không dính lỗi Enum
                     logsToCreate.push({
                         action: "UPDATE_LINK", 
                         details: `Báo cáo tiến độ: Đã gỡ/xóa ${label}`,
                         taskId, userId
                     });
-                    // Đồng thời ĐƯA VÀO DIỆN XÓA cái log DAILY_REPORT cũ để hệ thống trừ KPI
                     logsToDelete.push({
                         taskId, userId,
                         action: "DAILY_REPORT",
@@ -174,14 +175,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             }
         };
 
+        // 🚀 CẬP NHẬT: Ghi log lịch sử cho toàn bộ các trường
         addLinkLog('scriptLink', 'Kịch Bản (VN)');
-        addLinkLog('englishScriptLink', 'Text ENG');
-        addLinkLog('audioLink', 'Link Audio (AI)');
+        addLinkLog('audioLink', 'Link Audio');
         addLinkLog('storyboardLink', 'Bố Cục');
+        addLinkLog('animationLink', 'Link Chuyển Động');
+        addLinkLog('roughProjectLink', 'Link PRJ Thô');
         addLinkLog('thumbnailLink', 'Thumbnail');
         addLinkLog('videoLink', 'Video Render');
         addLinkLog('linkProject', 'Link Project (Dựng Chính)');
-        addLinkLog('roughProjectLink', 'Link PRJ Thô');
         addLinkLog('publishLink', 'Link Video Đã Đăng (YT)');
 
         if (body.note !== undefined && body.note !== oldTask.note) {
@@ -230,10 +232,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
         const promises: any[] = [updateTaskPromise];
         
-        // 1. Thêm log mới
         if (logsToCreate.length > 0) promises.push(prisma.taskLog.createMany({ data: logsToCreate }));
-        
-        // 2. Xóa các log DAILY_REPORT cũ (Để trừ KPI)
         if (logsToDelete.length > 0) {
             logsToDelete.forEach(condition => {
                 promises.push(prisma.taskLog.deleteMany({ where: condition }));

@@ -153,12 +153,6 @@ export default function TaskDetailDrawer({
 
   const isManager = ["ADMIN", "BAN_GIAM_DOC", "LEADER", "HR", "KE_TOAN"].includes(userRole);
   
-  const isParticipant = isManager || 
-      selectedTask.creatorId === sessionUserId ||
-      contentUsersList.some(u => u.id === sessionUserId) ||
-      editorUsersList.some(u => u.id === sessionUserId) ||
-      animatorUsersList.some(u => u.id === sessionUserId);
-
   const handleAutoSave = async (fieldKey: string, newValue: string) => {
     if (newValue === (selectedTask[fieldKey] || "")) return;
 
@@ -219,16 +213,15 @@ export default function TaskDetailDrawer({
 
   const channelCategory = selectedTask?.channel?.category || 'AI';
 
-  // 🚀 ĐÃ SỬA: Bổ sung Link PRJ Thô vào để UI tự động quét và vẽ ra ô điền
   const allLinkFields = [
     { key: 'scriptLink', label: 'Kịch Bản', role: 'CONTENT', idField: 'contentId', categories: ['AI', 'TONG_HOP'] },
     { key: 'audioLink', label: 'Link Audio', role: 'EDITOR', idField: 'editorId', categories: ['AI', 'TONG_HOP'] }, 
     { key: 'storyboardLink', label: 'Bố Cục', role: 'CONTENT', idField: 'contentId', categories: ['AI', 'TONG_HOP'] }, 
     { key: 'animationLink', label: 'Link Chuyển Động', role: 'CONTENT', idField: 'animatorId', categories: ['AI'] }, 
-    { key: 'roughProjectLink', label: 'Link PRJ Thô', role: 'EDITOR', idField: 'editorId', categories: ['AI', 'TONG_HOP'] }, // MỚI
+    { key: 'roughProjectLink', label: 'Link PRJ Thô', role: 'EDITOR', idField: 'editorId', categories: ['AI', 'TONG_HOP'] },
     { key: 'thumbnailLink', label: 'Thumbnail', role: 'EDITOR', idField: 'editorId', categories: ['AI', 'TONG_HOP'] },
     { key: 'videoLink', label: 'Video Render', role: 'EDITOR', idField: 'editorId', categories: ['AI', 'TONG_HOP'] },
-    { key: 'linkProject', label: 'Link Project (Dựng Chính)', role: 'EDITOR', idField: 'editorId', categories: ['AI', 'TONG_HOP'] }, // ĐỔI TÊN
+    { key: 'linkProject', label: 'Link Project (Dựng Chính)', role: 'EDITOR', idField: 'editorId', categories: ['AI', 'TONG_HOP'] },
   ];
 
   let visibleLinkFields = allLinkFields.filter(f => f.categories.includes(channelCategory));
@@ -458,30 +451,6 @@ export default function TaskDetailDrawer({
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {visibleLinkFields.map((field, idx) => {
-                      const isAssigned = selectedTask[field.idField] === sessionUserId || 
-                           (field.role === 'CONTENT' && contentUsersList.some(u => u.id === sessionUserId)) ||
-                           (field.role === 'EDITOR' && editorUsersList.some(u => u.id === sessionUserId)) ||
-                           (field.key === 'animationLink' && (
-                               animatorUsersList.some(u => u.id === sessionUserId) || 
-                               editorUsersList.some(u => u.id === sessionUserId) || 
-                               contentUsersList.some(u => u.id === sessionUserId)
-                           ));
-
-                      const isCreator = selectedTask.creatorId === sessionUserId && field.key === 'scriptLink';
-                      
-                      let isTaskAtRightStatus = false;
-                      if (field.role === 'CONTENT') {
-                          isTaskAtRightStatus = ['TODO', 'CONTENT_DOING', 'CONTENT_REVIEW'].includes(selectedTask.status);
-                      } else if (field.role === 'EDITOR') {
-                          isTaskAtRightStatus = ['EDIT_DOING', 'EDIT_REVIEW'].includes(selectedTask.status);
-                      }
-                      
-                      if (field.key === 'animationLink') {
-                          isTaskAtRightStatus = ['ANIMATION_DOING', 'ANIMATION_REVIEW'].includes(selectedTask.status);
-                      }
-
-                      const isAllowed = isManager || (isCreator && isTaskAtRightStatus) || (isAssigned && isTaskAtRightStatus);
-
                       const currentLink = taskLinks[field.key as keyof typeof taskLinks] ?? selectedTask[field.key] ?? "";
                       const isEditing = editingFields[field.key] || !currentLink; 
 
@@ -493,7 +462,8 @@ export default function TaskDetailDrawer({
                               {savingField === field.key && <Loader2 size={12} className="animate-spin text-blue-500" />}
                               {savedField === field.key && <CheckCircle2 size={12} className="text-emerald-500" />}
                             </span>
-                            {!isEditing && isAllowed && (
+                            {/* 🚀 Đã mở khóa hoàn toàn: Bỏ logic chặn (isAllowed), chỉ cần đang chưa nhập (isEditing=false) là hiện nút Sửa */}
+                            {!isEditing && (
                               <button onClick={() => setEditingFields({ ...editingFields, [field.key]: true })} className="text-blue-500 hover:text-blue-700 flex items-center gap-1 normal-case tracking-normal transition-colors">
                                 <Pencil size={12} /> Sửa
                               </button>
@@ -502,9 +472,10 @@ export default function TaskDetailDrawer({
 
                           {isEditing ? (
                             <input
-                              type="url" disabled={!isAllowed}
-                              placeholder={!isAllowed ? (!isTaskAtRightStatus && isAssigned ? "Chưa đến bước của bạn" : "Chỉ người phụ trách") : "Dán link..."}
-                              className={`w-full border rounded-xl p-3 text-[13px] outline-none transition-all ${!isAllowed ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-white text-slate-800 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10'} ${errors[field.key] ? 'border-red-500' : ''}`}
+                              type="url" 
+                              placeholder="Dán link..."
+                              // 🚀 Đã mở khóa hoàn toàn: Loại bỏ disabled và các style background xám
+                              className={`w-full border rounded-xl p-3 text-[13px] outline-none transition-all bg-white text-slate-800 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 ${errors[field.key] ? 'border-red-500' : ''}`}
                               value={currentLink}
                               onChange={e => {
                                  setTaskLinks({ ...taskLinks, [field.key]: e.target.value });
@@ -539,7 +510,8 @@ export default function TaskDetailDrawer({
                            {savingField === 'publishLink' && <Loader2 size={12} className="animate-spin text-blue-500" />}
                            {savedField === 'publishLink' && <CheckCircle2 size={12} className="text emerald-500" />}
                         </span>
-                        {!editingFields['publishLink'] && taskLinks.publishLink && isManager && (
+                        {/* 🚀 Đã mở khóa hoàn toàn: Ai cũng có thể bấm Sửa */}
+                        {!editingFields['publishLink'] && taskLinks.publishLink && (
                            <button onClick={() => setEditingFields({...editingFields, publishLink: true})} className="text-blue-500 hover:text-blue-700 text-xs flex items-center gap-1 normal-case tracking-normal">
                               <Pencil size={12}/> Sửa
                            </button>
@@ -548,9 +520,10 @@ export default function TaskDetailDrawer({
                       
                       {editingFields['publishLink'] || !taskLinks.publishLink ? (
                           <input
-                            type="url" disabled={!isManager}
-                            placeholder={!isManager ? "Chỉ Quản lý Kênh" : "Dán link YouTube..."}
-                            className={`w-full border rounded-xl p-3 text-[13px] outline-none transition-all ${!isManager ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed' : 'bg-white text-slate-800 focus:border-red-500 focus:ring-4 focus:ring-red-500/10'}`}
+                            type="url" 
+                            placeholder="Dán link YouTube..."
+                            // 🚀 Đã mở khóa hoàn toàn: Loại bỏ disabled
+                            className={`w-full border rounded-xl p-3 text-[13px] outline-none transition-all bg-white text-slate-800 focus:border-red-500 focus:ring-4 focus:ring-red-500/10`}
                             value={taskLinks.publishLink || ""}
                             onChange={e => {
                                setTaskLinks({ ...taskLinks, publishLink: e.target.value });
@@ -587,9 +560,9 @@ export default function TaskDetailDrawer({
                   <p className="text-[11px] text-amber-700/70 font-bold leading-tight">Dùng để cập nhật nhanh tình trạng bài cho QLK nắm bắt (VD: Đang cắt thô, Đang tìm Voice, Lỗi file...)</p>
                   <input
                     type="text"
-                    disabled={!isParticipant}
-                    placeholder={!isParticipant ? "Không có quyền" : "Nhập tiến độ hiện tại..."}
-                    className="w-full border border-amber-200 rounded-xl p-3 text-sm outline-none transition-all focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10 disabled:bg-slate-100 disabled:text-slate-400 font-bold text-amber-900 placeholder:text-amber-300"
+                    // 🚀 Đã mở khóa hoàn toàn: Loại bỏ disabled để ai cũng có thể Note
+                    placeholder="Nhập tiến độ hiện tại..."
+                    className="w-full border border-amber-200 rounded-xl p-3 text-sm outline-none transition-all focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10 font-bold text-amber-900 placeholder:text-amber-300 bg-white"
                     value={cleanUserNote}
                     onChange={e => {
                       const val = e.target.value;
