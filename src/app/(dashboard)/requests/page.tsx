@@ -2,10 +2,13 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useSession } from "next-auth/react";
-import { Plus, FileText, CheckCircle, Clock, XCircle, Search, Filter } from "lucide-react";
+import { Plus, FileText, CheckCircle, Clock, XCircle, Search, Filter, Download, Loader2 } from "lucide-react";
 import CreateRequestModal from "./CreateRequestModal";
 import RequestDetailModal from "./RequestDetailModal";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
+import { useToast } from "@/app/component/ToastProvider";
+import ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
 
 const REQUEST_TYPES_CONFIG = [
     { id: "NGHI_PHEP", label: "Xin nghỉ phép", category: "HR", allowedRoles: ["ALL"] },
@@ -21,6 +24,7 @@ export default function RequestsPage() {
     const searchParams = useSearchParams();
     const router = useRouter();
     const pathname = usePathname();
+    const { showToast } = useToast();
 
     const tabParam = searchParams.get("tab");
     const idParam = searchParams.get("id");
@@ -29,10 +33,13 @@ export default function RequestsPage() {
     const currentUser = session?.user as any;
     const userRole = currentUser?.role || "CONTENT";
 
-    // 🚀 ĐÃ SỬA: Bổ sung quyền ảo DEPARTMENT_LEADER và MENU_TEAMS vào logic hiển thị
-    const canViewAll = currentUser?.permissions?.includes("DEPARTMENT_LEADER") || currentUser?.permissions?.includes("MENU_TEAMS") || ["ADMIN", "BAN_GIAM_DOC", "HR"].includes(userRole); 
+    const isTeamLeader = currentUser?.isTeamLeader || userRole === "LEADER";
+
+    const canViewAll = currentUser?.permissions?.includes("DEPARTMENT_LEADER") || 
+                       currentUser?.permissions?.includes("MENU_TEAMS") || 
+                       ["ADMIN", "BAN_GIAM_DOC", "HR"].includes(userRole) || 
+                       isTeamLeader;
     
-    // 🚀 ĐÃ SỬA: Xóa dấu phẩy thừa và bổ sung quyền duyệt đơn động
     const isApprover = currentUser?.permissions?.includes("ACTION_APPROVE_REQUEST") || currentUser?.permissions?.includes("DEPARTMENT_LEADER") || ["ADMIN", "BAN_GIAM_DOC", "LEADER", "CHANNEL_MANAGER", "HR"].includes(userRole); 
 
     const [activeTab, setActiveTab] = useState<'ALL_REQUESTS' | 'MY_REQUESTS' | 'NEED_APPROVAL'>(
@@ -40,6 +47,7 @@ export default function RequestsPage() {
     );
     
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    const [isExporting, setIsExporting] = useState(false);
 
     const allowedRequestTypes = REQUEST_TYPES_CONFIG.filter(req =>
         req.allowedRoles.includes("ALL") || req.allowedRoles.includes(userRole)
@@ -135,6 +143,136 @@ export default function RequestsPage() {
         fetch("/api/teams").then(res => res.json()).then((data: any) => { if (Array.isArray(data)) setDbTeams(data); });
     }, []);
 
+    // 🚀 HÀM XUẤT EXCEL (ĐÃ CẬP NHẬT TÁCH CỘT VÀ TÍNH NGÀY NGHỈ)
+    const handleExportExcel = async () => {
+        setIsExporting(true);
+        try {
+            const res = await fetch(`/api/requests?tab=${activeTab}&limit=5000&search=${debouncedSearch}`);
+            const data = await res.json();
+            const exportData = data.requests || [];
+
+            if (exportData.length === 0) {
+                showToast("error", "Không có dữ liệu để xuất!");
+                setIsExporting(false);
+                return;
+            }
+
+            const workbook = new ExcelJS.Workbook();
+            const worksheet = workbook.addWorksheet('Danh_Sach_Don_Tu');
+
+            // 🚀 BỔ SUNG: Xé nhỏ cột Chi tiết ra thành các cột chuyên biệt
+            worksheet.columns = [
+                { header: 'Mã Đơn', key: 'id', width: 12 },
+                { header: 'Loại Đề Xuất', key: 'type', width: 22 },
+                { header: 'Người Tạo', key: 'requester', width: 22 },
+                { header: 'Phòng Ban', key: 'team', width: 20 },
+                { header: 'Trạng Thái', key: 'status', width: 18 },
+                { header: 'Ngày Tạo Đơn', key: 'createdAt', width: 15 },
+                { header: 'Chế Độ Nghỉ', key: 'leaveType', width: 18 },
+                { header: 'Nghỉ Từ Ngày', key: 'startDate', width: 15 },
+                { header: 'Nghỉ Đến Ngày', key: 'endDate', width: 15 },
+                { header: 'Số Ngày Nghỉ', key: 'numDays', width: 15 },
+                { header: 'Ngày Áp Dụng', key: 'targetDate', width: 15 },
+                { header: 'Giờ Áp Dụng', key: 'time', width: 15 },
+                { header: 'Hạng Mục / Thiết Bị', key: 'itemName', width: 30 },
+                { header: 'Lý Do / Mục Đích', key: 'reason', width: 50 },
+                { header: 'Số Tiền Đề Xuất', key: 'amount', width: 18 },
+                { header: 'Quản Lý Cấp 1', key: 'approver1', width: 22 },
+                { header: 'Quản Lý Cấp 2', key: 'approver2', width: 22 },
+            ];
+
+            const getTypeLabel = (type: string) => REQUEST_TYPES_CONFIG.find(t => t.id === type)?.label || type;
+            const getStatusLabel = (status: string) => {
+                switch (status) {
+                    case "PENDING_1": return "Chờ duyệt Cấp 1";
+                    case "PENDING_2": return "Chờ duyệt Cấp 2";
+                    case "APPROVED": return "Đã duyệt";
+                    case "REJECTED": return "Từ chối";
+                    case "CANCELLED": return "Đã huỷ";
+                    default: return status;
+                }
+            };
+
+            exportData.forEach((req: any) => {
+                const content = req.contentData || {};
+                
+                // 🚀 TÍNH TOÁN SỐ NGÀY NGHỈ
+                let calculatedDays = "";
+                if (req.startDate && req.endDate) {
+                    const start = new Date(req.startDate);
+                    const end = new Date(req.endDate);
+                    if (end >= start) {
+                        calculatedDays = (Math.ceil((end.getTime() - start.getTime()) / (1000 * 3600 * 24)) + 1).toString();
+                    }
+                }
+
+                // Nhãn Có Lương / Không Lương
+                let leaveTypeLabel = "";
+                if (content.leaveType === "PAID") leaveTypeLabel = "Có lương";
+                else if (content.leaveType === "UNPAID") leaveTypeLabel = "Không lương";
+
+                worksheet.addRow({
+                    id: req.id.slice(0, 6).toUpperCase(),
+                    type: getTypeLabel(req.type),
+                    requester: req.requester?.fullName || "---",
+                    team: req.team?.name || "---",
+                    status: getStatusLabel(req.status),
+                    createdAt: new Date(req.createdAt).toLocaleDateString('vi-VN'),
+                    
+                    // Điền dữ liệu vào các cột tách lẻ
+                    leaveType: leaveTypeLabel,
+                    startDate: req.startDate ? new Date(req.startDate).toLocaleDateString('vi-VN') : "",
+                    endDate: req.endDate ? new Date(req.endDate).toLocaleDateString('vi-VN') : "",
+                    numDays: calculatedDays ? Number(calculatedDays) : "", // Để dạng Number để Excel có thể SUM được
+                    targetDate: req.targetDate ? new Date(req.targetDate).toLocaleDateString('vi-VN') : "",
+                    time: content.time || "",
+                    itemName: req.itemName || "",
+                    reason: req.reason || "",
+
+                    amount: req.amount ? req.amount : "", 
+                    approver1: req.firstApprover?.fullName || "---",
+                    approver2: req.secondApprover?.fullName || "---",
+                });
+            });
+
+            // Styling (Định dạng màu sắc)
+            const headerRow = worksheet.getRow(1);
+            headerRow.font = { bold: true, color: { argb: 'FFFFFF' } };
+            headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDC2626' } }; // Đỏ 600
+            headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+            headerRow.height = 25;
+
+            worksheet.eachRow((row, rowNumber) => {
+                row.eachCell((cell, colNumber) => {
+                    cell.border = {
+                        top: { style: 'thin' }, left: { style: 'thin' },
+                        bottom: { style: 'thin' }, right: { style: 'thin' }
+                    };
+                    if (rowNumber > 1) {
+                        // Căn phải cho cột Số ngày nghỉ (10) và Số tiền (15). Xuống dòng tự động cho ô Lý do (14).
+                        cell.alignment = { 
+                            vertical: 'middle', 
+                            horizontal: (colNumber === 10 || colNumber === 15) ? 'right' : 'left', 
+                            wrapText: colNumber === 14 
+                        };
+                    }
+                });
+            });
+
+            // Cố định dòng tiêu đề để cuộn không bị mất
+            worksheet.views = [{ state: 'frozen', ySplit: 1 }];
+
+            const buffer = await workbook.xlsx.writeBuffer();
+            saveAs(new Blob([buffer]), `Danh_Sach_Don_Tu_${new Date().toISOString().split('T')[0]}.xlsx`);
+            showToast("success", "Xuất file Excel thành công!");
+        } catch (error) {
+            console.error(error);
+            showToast("error", "Lỗi xuất file Excel!");
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
     return (
         <Suspense fallback={<div className="p-8 text-center text-slate-500">Đang tải...</div>}>
             <div className="h-full p-3 md:p-6 animate-fade-in flex flex-col bg-slate-50 overflow-hidden">
@@ -145,12 +283,25 @@ export default function RequestsPage() {
                         <h1 className="text-xl md:text-2xl font-black text-slate-900">Quản lý Đơn từ & Đề xuất</h1>
                         <p className="text-slate-500 text-xs md:text-sm font-medium mt-1">Phê duyệt, theo dõi tiến độ các loại giấy tờ nội bộ</p>
                     </div>
-                    <button
-                        onClick={() => setIsCreateModalOpen(true)}
-                        className="w-full md:w-auto flex items-center justify-center gap-2 bg-red-600 text-white px-5 py-2.5 md:py-3 rounded-xl font-bold hover:bg-red-700 transition-all shadow-md shadow-red-600/20 active:scale-95 text-sm md:text-base"
-                    >
-                        <Plus size={18} className="md:w-5 md:h-5" /> Tạo đề xuất mới
-                    </button>
+                    
+                    {/* NÚT THAO TÁC */}
+                    <div className="flex items-center gap-2 w-full md:w-auto">
+                        <button
+                            onClick={handleExportExcel}
+                            disabled={isExporting}
+                            className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-emerald-600 text-white px-4 py-2.5 md:py-3 rounded-xl font-bold hover:bg-emerald-700 transition-all shadow-md shadow-emerald-600/20 active:scale-95 text-sm md:text-base disabled:opacity-50"
+                        >
+                            {isExporting ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} className="md:w-5 md:h-5" />}
+                            <span className="hidden sm:block">Xuất Excel</span>
+                        </button>
+                        
+                        <button
+                            onClick={() => setIsCreateModalOpen(true)}
+                            className="flex-[2] md:flex-none flex items-center justify-center gap-2 bg-red-600 text-white px-5 py-2.5 md:py-3 rounded-xl font-bold hover:bg-red-700 transition-all shadow-md shadow-red-600/20 active:scale-95 text-sm md:text-base"
+                        >
+                            <Plus size={18} className="md:w-5 md:h-5" /> Tạo đề xuất mới
+                        </button>
+                    </div>
                 </div>
 
                 {/* ================= TABS NAVIGATION ================= */}

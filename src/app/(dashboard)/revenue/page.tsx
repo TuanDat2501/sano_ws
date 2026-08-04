@@ -14,40 +14,29 @@ interface RevenueEntry {
     revenue?: number | string;
 }
 
-// 🚀 ĐÃ SỬA: Lấy toàn bộ ngày trong THÁNG thay vì tuần
 const getDaysOfMonth = (currentDate: Date) => {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
     const numDays = new Date(year, month + 1, 0).getDate();
     
     return Array.from({ length: numDays }).map((_, i) => {
-        // Fix cứng lúc 12:00 trưa để khi gọi toISOString() không bị lệch múi giờ
         return new Date(year, month, i + 1, 12, 0, 0); 
     });
 };
 
 export default function RevenueEntryPage() {
     const { showToast } = useToast();
-    const scrollContainerRef = useRef<HTMLDivElement>(null); // Ref để tự động trượt bảng
+    const scrollContainerRef = useRef<HTMLDivElement>(null); 
     
-    // =========================================================
-    // 1. STATE CHO BẢNG NHẬP LIỆU (THEO THÁNG)
-    // =========================================================
     const [currentMonthDate, setCurrentMonthDate] = useState(new Date());
     const tableDays = useMemo(() => getDaysOfMonth(currentMonthDate), [currentMonthDate]);
     const tableStartDateStr = tableDays[0].toISOString().split('T')[0];
     const tableEndDateStr = tableDays[tableDays.length - 1].toISOString().split('T')[0];
 
-    // =========================================================
-    // 2. STATE CHO BỘ LỌC XUẤT EXCEL (CHỈ KẾ TOÁN)
-    // =========================================================
     const [exportFromDate, setExportFromDate] = useState(tableStartDateStr);
     const [exportToDate, setExportToDate] = useState(tableEndDateStr);
     const [isExporting, setIsExporting] = useState(false);
 
-    // =========================================================
-    // DATA STATE
-    // =========================================================
     const [channels, setChannels] = useState<any[]>([]);
     const [revenueData, setRevenueData] = useState<Record<string, RevenueEntry>>({});
     const [savingCells, setSavingCells] = useState<Record<string, 'saving' | 'saved' | null>>({});
@@ -59,7 +48,6 @@ export default function RevenueEntryPage() {
     const router = useRouter();
     const { hasPermission, loading } = usePermission();
 
-    // LẤY THÔNG TIN USER ĐỂ PHÂN QUYỀN
     const currentUser = session?.user as any;
     const userRole = currentUser?.role;
     const userTeamId = currentUser?.teamId;
@@ -73,7 +61,6 @@ export default function RevenueEntryPage() {
         }
     }, [loading, hasPermission, router]);
 
-    // 🚀 TỰ ĐỘNG TRƯỢT ĐẾN NGÀY HIỆN TẠI
     useEffect(() => {
         const todayObj = new Date();
         todayObj.setHours(12, 0, 0, 0);
@@ -81,16 +68,13 @@ export default function RevenueEntryPage() {
 
         const todayElem = document.getElementById(`day-col-${todayKey}`);
         if (todayElem && scrollContainerRef.current) {
-            // Chờ 1 chút xíu để React render xong HTML của Bảng
             setTimeout(() => {
-                // Trừ đi 350px (độ rộng của 3 cột cố định: Team, STT, Tên Kênh) để ngày hiện tại nằm ngay cạnh mép
                 const scrollLeft = todayElem.offsetLeft - 350; 
                 scrollContainerRef.current?.scrollTo({ left: Math.max(0, scrollLeft), behavior: 'smooth' });
             }, 200);
         }
-    }, [tableDays]); // Chạy lại mỗi khi chuyển tháng
+    }, [tableDays]); 
 
-    // FETCH DỮ LIỆU CHỈ CHO BẢNG NHẬP (TRONG THÁNG)
     useEffect(() => {
         const fetchTableData = async () => {
             try {
@@ -259,21 +243,49 @@ export default function RevenueEntryPage() {
             const workbook = new ExcelJS.Workbook();
             const worksheet = workbook.addWorksheet('Báo Cáo Doanh Thu');
 
-            const cols = [
-                { header: 'STT', key: 'stt', width: 5 },
-                { header: 'Team', key: 'team', width: 20 },
-                { header: 'Tên Kênh', key: 'channel', width: 35 },
+            const cols: any[] = [
+                { key: 'stt', width: 5 },
+                { key: 'team', width: 20 },
+                { key: 'channel', width: 35 },
             ];
 
             exportDays.forEach(day => {
-                const dateStr = `${day.getDate()}/${day.getMonth() + 1}`;
-                cols.push({ header: `Views (${dateStr})`, key: `v_${day.toISOString()}`, width: 15 });
-                cols.push({ header: `Doanh thu $ (${dateStr})`, key: `r_${day.toISOString()}`, width: 18 });
+                cols.push({ key: `v_${day.toISOString()}`, width: 15 });
+                cols.push({ key: `r_${day.toISOString()}`, width: 18 });
             });
             worksheet.columns = cols;
 
+            const row1 = ['STT', 'Team', 'Tên Kênh'];
+            const row2 = ['', '', '']; 
+
+            exportDays.forEach(day => {
+                const dateStr = `${day.getDate()}/${day.getMonth() + 1}`;
+                row1.push(dateStr, ''); 
+                row2.push(`Views (${dateStr})`, `Doanh thu $ (${dateStr})`);
+            });
+
+            worksheet.addRow(row1);
+            worksheet.addRow(row2);
+
+            worksheet.mergeCells(1, 1, 2, 1); 
+            worksheet.mergeCells(1, 2, 2, 2); 
+            worksheet.mergeCells(1, 3, 2, 3); 
+
+            exportDays.forEach((_, idx) => {
+                const startCol = 4 + (idx * 2);
+                const endCol = 5 + (idx * 2);
+                worksheet.mergeCells(1, startCol, 1, endCol); 
+            });
+
+            // 🚀 BỔ SUNG: Biến theo dõi gộp ô Team theo chiều dọc
+            let currentTeamStr = "";
+            let startRowMerge = 3;
+
             exportChannels.forEach((ch, idx) => {
-                const rowData: any = { stt: idx + 1, team: ch.team?.name || "No Team", channel: ch.name };
+                const teamName = ch.team?.name || "No Team";
+                const currentRow = idx + 3; // Vì Dữ liệu bắt đầu từ Dòng số 3
+
+                const rowData: any = { stt: idx + 1, team: teamName, channel: ch.name };
                 exportDays.forEach(day => {
                     const dateKey = day.toISOString().split('T')[0];
                     const cellKey = `${ch.id}_${dateKey}`;
@@ -282,27 +294,55 @@ export default function RevenueEntryPage() {
                     rowData[`r_${day.toISOString()}`] = d?.revenue || 0;
                 });
                 worksheet.addRow(rowData);
+
+                // 🚀 BỔ SUNG: Logic kiểm tra và Gộp ô Team
+                if (idx === 0) {
+                    currentTeamStr = teamName;
+                    startRowMerge = currentRow;
+                } else if (teamName !== currentTeamStr) {
+                    // Nếu team thay đổi, gộp các hàng của team trước đó
+                    if (currentRow - 1 > startRowMerge) {
+                        worksheet.mergeCells(startRowMerge, 2, currentRow - 1, 2);
+                    }
+                    currentTeamStr = teamName;
+                    startRowMerge = currentRow;
+                }
+
+                // Gộp ô cho team ở những dòng cuối cùng của mảng
+                if (idx === exportChannels.length - 1) {
+                    if (currentRow > startRowMerge) {
+                        worksheet.mergeCells(startRowMerge, 2, currentRow, 2);
+                    }
+                }
             });
 
-            const headerRow = worksheet.getRow(1);
-            headerRow.height = 25;
-            headerRow.eachCell((cell) => {
-                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
-                cell.font = { name: 'Arial', bold: true, size: 10, color: { argb: '000000' } };
-                cell.alignment = { vertical: 'middle', horizontal: 'center' };
-                cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+            [1, 2].forEach(rowNum => {
+                const row = worksheet.getRow(rowNum);
+                row.height = 25;
+                row.eachCell({ includeEmpty: true }, (cell) => {
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
+                    cell.font = { name: 'Arial', bold: true, size: 10, color: { argb: '000000' } };
+                    cell.alignment = { vertical: 'middle', horizontal: 'center' };
+                    cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+                });
             });
 
             worksheet.eachRow((row, rowNumber) => {
-                if (rowNumber > 1) {
-                    row.eachCell((cell) => {
+                if (rowNumber > 2) {
+                    row.eachCell((cell, colNumber) => {
                         cell.border = {
                             top: { style: 'thin', color: { argb: 'E2E8F0' } }, left: { style: 'thin', color: { argb: 'E2E8F0' } },
                             bottom: { style: 'thin', color: { argb: 'E2E8F0' } }, right: { style: 'thin', color: { argb: 'E2E8F0' } }
                         };
+                        // 🚀 Định dạng cho ô Team luôn nằm ở giữa theo chiều dọc
+                        if (colNumber > 3) cell.alignment = { vertical: 'middle', horizontal: 'right' };
+                        else if (colNumber === 1) cell.alignment = { vertical: 'middle', horizontal: 'center' };
+                        else cell.alignment = { vertical: 'middle', horizontal: 'left' };
                     });
                 }
             });
+
+            worksheet.views = [{ state: 'frozen', xSplit: 3, ySplit: 2 }];
 
             const buffer = await workbook.xlsx.writeBuffer();
             saveAs(new Blob([buffer]), `DoanhThu_${exportFromDate}_${exportToDate}.xlsx`);
@@ -326,7 +366,6 @@ export default function RevenueEntryPage() {
     return (
         <div className="p-4 md:p-6 bg-slate-50 h-full max-h-[calc(100vh-80px)] flex flex-col overflow-hidden animate-fade-in gap-4 md:gap-6">
             
-            {/* 🚀 HEADER BẢNG NHẬP LIỆU (THEO THÁNG) */}
             <div className="shrink-0 flex flex-col xl:flex-row justify-between items-start xl:items-center bg-white p-4 rounded-2xl shadow-sm border border-slate-200 gap-4 relative z-10">
                 <div>
                     <h1 className="text-xl md:text-2xl font-black text-slate-900 flex items-center gap-2">
@@ -363,7 +402,6 @@ export default function RevenueEntryPage() {
                 </div>
             </div>
 
-            {/* KHU VỰC XUẤT EXCEL RIÊNG BIỆT (CHỈ KẾ TOÁN / QUẢN LÝ THẤY) */}
             {isKeToan && (
                 <div className="shrink-0 flex flex-col sm:flex-row justify-between items-start sm:items-center bg-emerald-50/50 p-4 rounded-2xl border border-emerald-100 gap-4 shadow-sm">
                     <div className="flex items-center gap-2">
@@ -405,7 +443,6 @@ export default function RevenueEntryPage() {
                 </div>
             )}
 
-            {/* 🚀 VÙNG CHỨA BẢNG NHẬP LIỆU - DÙNG REF ĐỂ TỰ ĐỘNG TRƯỢT */}
             <div ref={scrollContainerRef} className="flex-1 overflow-auto custom-scrollbar relative bg-white border border-slate-200 rounded-2xl shadow-sm">
                 <table className="w-full h-full text-left border-separate border-spacing-0 min-w-max">
                     <thead className="sticky top-0 z-[60] bg-slate-100 shadow-[0_2px_4px_rgba(0,0,0,0.05)] border-b-2 border-slate-300">

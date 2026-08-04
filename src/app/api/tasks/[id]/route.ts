@@ -103,6 +103,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             if (rawBody.thumbnailLink !== undefined) body.thumbnailLink = rawBody.thumbnailLink;
             if (rawBody.audioLink !== undefined) body.audioLink = rawBody.audioLink; 
             if (rawBody.note !== undefined) body.note = rawBody.note;
+            if (rawBody.animationLink !== undefined) body.animationLink = rawBody.animationLink;
         } else if (currentUser.role === "CHANNEL_MANAGER") {
             if (rawBody.status !== undefined) body.status = rawBody.status;
             if (rawBody.publishLink !== undefined) body.publishLink = rawBody.publishLink;

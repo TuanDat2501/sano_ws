@@ -117,8 +117,12 @@ export async function GET(req: Request) {
         const tab = searchParams.get("tab") || "MY_REQUESTS";
         const searchKeyword = searchParams.get("search") || "";
 
-        // 🚀 ĐÃ SỬA: Đọc quyền động từ biến permissions (MENU_TEAMS) để cho phép xem đơn toàn công ty
-        const canViewAll = user.permissions?.includes("MENU_TEAMS") || ["ADMIN", "BAN_GIAM_DOC"].includes(user.role);
+        // 🚀 ĐÃ SỬA: Nhận diện Quản lý tổng và Leader
+        const canViewAllCompany = user.permissions?.includes("MENU_TEAMS") || 
+                                  user.permissions?.includes("DEPARTMENT_LEADER") || 
+                                  ["ADMIN", "BAN_GIAM_DOC", "HR"].includes(user.role);
+        
+        const isTeamLeader = user.isTeamLeader || user.role === "LEADER";
 
         let whereClause: any = {};
 
@@ -130,11 +134,17 @@ export async function GET(req: Request) {
                 ]
             };
         } else if (tab === "ALL_REQUESTS") {
-            if (!canViewAll) {
+            if (canViewAllCompany) {
+                // Ban giám đốc, HR, Admin xem toàn bộ
+                whereClause = {}; 
+            } else if (isTeamLeader && user.teamId) {
+                // Leader chỉ xem của team mình
+                whereClause = { teamId: user.teamId }; 
+            } else {
                 return NextResponse.json({ error: "Forbidden" }, { status: 403 });
             }
-            whereClause = {};
         } else {
+            // Tab Đơn của tôi
             whereClause = { requesterId: user.id };
         }
 

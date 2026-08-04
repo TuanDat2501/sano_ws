@@ -461,7 +461,11 @@ export default function TaskDetailDrawer({
                       const isAssigned = selectedTask[field.idField] === sessionUserId || 
                            (field.role === 'CONTENT' && contentUsersList.some(u => u.id === sessionUserId)) ||
                            (field.role === 'EDITOR' && editorUsersList.some(u => u.id === sessionUserId)) ||
-                           (field.key === 'animationLink' && animatorUsersList.some(u => u.id === sessionUserId));
+                           (field.key === 'animationLink' && (
+                               animatorUsersList.some(u => u.id === sessionUserId) || 
+                               editorUsersList.some(u => u.id === sessionUserId) || 
+                               contentUsersList.some(u => u.id === sessionUserId)
+                           ));
 
                       const isCreator = selectedTask.creatorId === sessionUserId && field.key === 'scriptLink';
                       
