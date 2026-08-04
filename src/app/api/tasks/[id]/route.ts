@@ -41,28 +41,31 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             return NextResponse.json({ error: "Task đã nghiệm thu, không thể chỉnh sửa!" }, { status: 403 });
         }
 
+        // 🚀 MỞ KHÓA BACKEND: Cho phép cập nhật TẤT CẢ các link và tiến độ để đồng bộ với Frontend
+        if (rawBody.status !== undefined) body.status = rawBody.status;
+        if (rawBody.scriptLink !== undefined) body.scriptLink = rawBody.scriptLink;
+        if (rawBody.englishScriptLink !== undefined) body.englishScriptLink = rawBody.englishScriptLink;
+        if (rawBody.audioLink !== undefined) body.audioLink = rawBody.audioLink;
+        if (rawBody.storyboardLink !== undefined) body.storyboardLink = rawBody.storyboardLink;
+        if (rawBody.thumbnailLink !== undefined) body.thumbnailLink = rawBody.thumbnailLink;
+        if (rawBody.videoLink !== undefined) body.videoLink = rawBody.videoLink;
+        if (rawBody.publishLink !== undefined) body.publishLink = rawBody.publishLink;
+        if (rawBody.roughProjectLink !== undefined) body.roughProjectLink = rawBody.roughProjectLink;
+        if (rawBody.animationLink !== undefined) body.animationLink = rawBody.animationLink;
+        if (rawBody.linkProject !== undefined) body.linkProject = rawBody.linkProject;
+        if (rawBody.note !== undefined) body.note = rawBody.note;
+
+        // Những trường hệ thống quan trọng thì vẫn chỉ Manager mới được sửa
         if (isManager) {
             if (rawBody.title !== undefined) body.title = rawBody.title;
             if (rawBody.keywords !== undefined) body.keywords = rawBody.keywords;
             if (rawBody.linkContent !== undefined) body.linkContent = rawBody.linkContent;
-            if (rawBody.status !== undefined) body.status = rawBody.status;
-            if (rawBody.scriptLink !== undefined) body.scriptLink = rawBody.scriptLink;
-            if (rawBody.englishScriptLink !== undefined) body.englishScriptLink = rawBody.englishScriptLink;
-            if (rawBody.audioLink !== undefined) body.audioLink = rawBody.audioLink;
-            if (rawBody.storyboardLink !== undefined) body.storyboardLink = rawBody.storyboardLink;
-            if (rawBody.thumbnailLink !== undefined) body.thumbnailLink = rawBody.thumbnailLink;
-            if (rawBody.videoLink !== undefined) body.videoLink = rawBody.videoLink;
-            if (rawBody.publishLink !== undefined) body.publishLink = rawBody.publishLink;
-            if (rawBody.roughProjectLink !== undefined) body.roughProjectLink = rawBody.roughProjectLink;
             if (rawBody.isClosed !== undefined) body.isClosed = rawBody.isClosed;
             if (rawBody.teamId !== undefined) body.teamId = rawBody.teamId;
             if (rawBody.projectId !== undefined) body.projectId = rawBody.projectId || null;
             if (rawBody.duration !== undefined) body.duration = rawBody.duration;
-            if (rawBody.note !== undefined) body.note = rawBody.note;
             if (rawBody.channelId !== undefined) body.channelId = rawBody.channelId || null;
             if (rawBody.priority !== undefined) body.priority = rawBody.priority;
-            if (rawBody.animationLink !== undefined) body.animationLink = rawBody.animationLink;
-            if (rawBody.linkProject !== undefined) body.linkProject = rawBody.linkProject;
 
             if (rawBody.contentIds !== undefined) {
                 body.contentId = rawBody.contentIds.length > 0 ? rawBody.contentIds[0] : null;
@@ -84,30 +87,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             } else if (rawBody.animatorId !== undefined) {
                 body.animatorId = rawBody.animatorId || null;
             }
-
-        } else if (currentUser.role === "CONTENT") {
-            if (rawBody.status !== undefined) body.status = rawBody.status;
-            if (rawBody.scriptLink !== undefined) body.scriptLink = rawBody.scriptLink;
-            if (rawBody.animationLink !== undefined) body.animationLink = rawBody.animationLink;
-            if (rawBody.englishScriptLink !== undefined) body.englishScriptLink = rawBody.englishScriptLink;
-            if (rawBody.note !== undefined) body.note = rawBody.note; 
-            if (rawBody.storyboardLink !== undefined) body.storyboardLink = rawBody.storyboardLink;
-        } else if (currentUser.role === "EDITOR") {
-            if (rawBody.status !== undefined) body.status = rawBody.status;
-            if (rawBody.videoLink !== undefined) body.videoLink = rawBody.videoLink;
-            if (rawBody.linkProject !== undefined) body.linkProject = rawBody.linkProject;
-            if (rawBody.roughProjectLink !== undefined) body.roughProjectLink = rawBody.roughProjectLink;
-            if (rawBody.thumbnailLink !== undefined) body.thumbnailLink = rawBody.thumbnailLink;
-            if (rawBody.audioLink !== undefined) body.audioLink = rawBody.audioLink; 
-            if (rawBody.note !== undefined) body.note = rawBody.note;
-            if (rawBody.animationLink !== undefined) body.animationLink = rawBody.animationLink;
-        } else if (currentUser.role === "CHANNEL_MANAGER") {
-            if (rawBody.status !== undefined) body.status = rawBody.status;
-            if (rawBody.publishLink !== undefined) body.publishLink = rawBody.publishLink;
-            if (rawBody.note !== undefined) body.note = rawBody.note;
         }
 
-        // 🚀 ĐÃ CẬP NHẬT: Quét toàn bộ 9 trường Link
         const linksToCheck = [
             { key: 'scriptLink', value: body.scriptLink },
             { key: 'audioLink', value: body.audioLink },
@@ -151,23 +132,34 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             logsToCreate.push({ action: "UPDATE_STATUS", details: `Từ [${oldTask.status}] sang [${body.status}]`, taskId, userId });
         }
 
+        // 🚀 BỔ SUNG LOGIC CHIA KPI: Dò đúng người chịu trách nhiệm để cộng KPI
+        const getAssigneeForField = (fieldName: string) => {
+            if (['scriptLink', 'storyboardLink', 'englishScriptLink'].includes(fieldName)) return body.contentId !== undefined ? body.contentId : (oldTask.contentId || userId);
+            if (['videoLink', 'audioLink', 'thumbnailLink', 'linkProject', 'roughProjectLink'].includes(fieldName)) return body.editorId !== undefined ? body.editorId : (oldTask.editorId || userId);
+            if (['animationLink'].includes(fieldName)) return body.animatorId !== undefined ? body.animatorId : (oldTask.animatorId || userId);
+            if (['publishLink'].includes(fieldName)) return body.publisherId !== undefined ? body.publisherId : (oldTask.publisherId || userId);
+            return userId;
+        };
+
         const addLinkLog = (fieldName: string, label: string) => {
             if (body[fieldName] !== undefined && body[fieldName] !== (oldTask as any)[fieldName]) {
                 const newValue = body[fieldName];
+                const targetUserId = getAssigneeForField(fieldName); // Lấy đúng ID của Nhân sự phụ trách
+
                 if (newValue && newValue.trim() !== "") {
                     logsToCreate.push({
                         action: "DAILY_REPORT", 
                         details: `Báo cáo tiến độ: Đã cập nhật ${label}`,
-                        taskId, userId
+                        taskId, userId: targetUserId // Chốt KPI cho người này
                     });
                 } else {
                     logsToCreate.push({
                         action: "UPDATE_LINK", 
                         details: `Báo cáo tiến độ: Đã gỡ/xóa ${label}`,
-                        taskId, userId
+                        taskId, userId: targetUserId
                     });
                     logsToDelete.push({
-                        taskId, userId,
+                        taskId, userId: targetUserId,
                         action: "DAILY_REPORT",
                         details: { contains: label }
                     });
@@ -175,7 +167,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             }
         };
 
-        // 🚀 CẬP NHẬT: Ghi log lịch sử cho toàn bộ các trường
         addLinkLog('scriptLink', 'Kịch Bản (VN)');
         addLinkLog('audioLink', 'Link Audio');
         addLinkLog('storyboardLink', 'Bố Cục');
@@ -274,7 +265,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
 }
 
-// ... GET và DELETE giữ nguyên ...
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
     try {
         const resolvedParams = await params;
