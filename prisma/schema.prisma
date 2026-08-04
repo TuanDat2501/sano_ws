@@ -328,7 +328,7 @@ model WeeklyKPI {
 
   userId String
   user   User   @relation(fields: [userId], references: [id])
-
+  targetDetails Json?
   @@unique([userId, year, month, weekNumber], name: "user_time_unique")
 }
 

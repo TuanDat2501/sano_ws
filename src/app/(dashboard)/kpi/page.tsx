@@ -128,8 +128,8 @@ export default function KpiDashboard() {
                 const data = await res.json();
                 
                 if (res.ok) {
-                    setKpiList([data]); // Nhét vào mảng 1 phần tử để tận dụng lại luồng hiển thị cũ
-                    setViewingUserId(data.userId); // Focus luôn vào user này
+                    setKpiList([data]); 
+                    setViewingUserId(data.userId); 
                 } else {
                     showToast("error", data.error || "Không thể tải dữ liệu");
                 }
@@ -146,7 +146,6 @@ export default function KpiDashboard() {
         if (currentUser) fetchKpiData();
     }, [selectedYear, selectedMonth, selectedWeek, selectedTeamFilter, currentUser]);
 
-    // Đồng bộ viewingUserId cho Manager
     useEffect(() => {
         if (isManager && kpiList.length > 0 && !viewingUserId) {
             const me = kpiList.find(k => k.userId === currentUser?.id);
@@ -154,14 +153,16 @@ export default function KpiDashboard() {
         }
     }, [kpiList, currentUser, viewingUserId, isManager]);
 
-    const handleUpdateTarget = async (userId: string, newTarget: string) => {
-        const targetNum = parseInt(newTarget);
+    // 🚀 BỔ SUNG: Tham số thứ 3 (targetDetails) để nhận mảng từ KpiTeamTable
+    const handleUpdateTarget = async (userId: string, newTarget: string | number, targetDetails: any[] = []) => {
+        const targetNum = parseInt(newTarget as string);
         if (isNaN(targetNum) || targetNum < 0) return;
 
+        // Tạm cập nhật UI trước cho mượt
         setKpiList(prev => prev.map(k => {
             if (k.userId === userId) {
                 const newPercent = targetNum > 0 ? Math.round((k.actualValue / targetNum) * 100) : 0;
-                return { ...k, targetValue: targetNum, percent: newPercent };
+                return { ...k, targetValue: targetNum, percent: newPercent, targetDetails };
             }
             return k;
         }));
@@ -171,13 +172,17 @@ export default function KpiDashboard() {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ 
-                    userId, year: selectedYear, month: selectedMonth, 
-                    weekNumber: selectedWeek, targetValue: targetNum 
+                    userId, 
+                    year: selectedYear, 
+                    month: selectedMonth, 
+                    weekNumber: selectedWeek, 
+                    targetValue: targetNum,
+                    targetDetails // Đẩy mảng detail xuống API
                 })
             });
             
             if (res.ok) {
-                showToast("success", "Đã chốt chỉ tiêu!");
+                showToast("success", "Đã chốt chỉ tiêu chi tiết!");
             } else {
                 showToast("error", "Lỗi lưu dữ liệu. Đang tải lại bảng...");
                 fetchKpiData(); 
@@ -188,7 +193,6 @@ export default function KpiDashboard() {
         }
     };
 
-    // Chặn Leader nếu chưa có Team (Nhân viên thì không cần chặn vì đã lấy qua ID)
     if (isManager && !isHighLevel && !queryTeamId) return <div className="h-full flex-1 p-8 text-center text-slate-500 flex items-center justify-center font-medium">Bạn chưa được phân vào Team nào để xem KPI.</div>;
 
     const activeKpi = kpiList.find(k => k.userId === viewingUserId);
@@ -198,7 +202,6 @@ export default function KpiDashboard() {
     return (
         <div className="h-full flex flex-col p-3 md:p-8 bg-slate-50 overflow-hidden animate-fade-in relative">
 
-            {/* HEADER */}
             <div className="shrink-0 flex flex-col xl:flex-row justify-between items-start xl:items-center mb-4 md:mb-6 gap-3 md:gap-4">
                 <div>
                     <h1 className="text-xl md:text-2xl font-black text-slate-900 flex items-center gap-2">
@@ -210,7 +213,6 @@ export default function KpiDashboard() {
                     </p>
                 </div>
 
-                {/* Khối Filter */}
                 <div className="flex items-center gap-1 md:gap-2 bg-white p-1.5 md:p-2 rounded-xl shadow-sm border border-slate-200 overflow-x-auto w-full xl:w-auto custom-scrollbar-thin">
                     {isHighLevel && (
                         <div className="flex items-center gap-1 px-2 md:px-3 border-r border-slate-200 shrink-0">
@@ -241,7 +243,6 @@ export default function KpiDashboard() {
                     <div className="flex items-center gap-1 px-2 md:px-3 shrink-0">
                         <span className="text-[10px] md:text-sm font-bold text-slate-500">Tuần:</span>
                         <select className="bg-transparent text-xs md:text-sm font-black text-slate-800 outline-none cursor-pointer" value={selectedWeek} onChange={(e) => setSelectedWeek(Number(e.target.value))}>
-                            {/* 🚀 ĐÃ THÊM: Option "Cả tháng" */}
                             <option value={0}>Cả tháng</option>
                             {availableWeeks.map(w => <option key={w} value={w}>Tuần {w}</option>)}
                         </select>
@@ -249,11 +250,10 @@ export default function KpiDashboard() {
                 </div>
             </div>
 
-            {/* BODY */}
             <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
                 {!isManager && (
                     <div className="flex-1 overflow-y-auto custom-scrollbar">
-                        <h2 className="text-lg md:text-xl font-black text-slate-800 mb-4 md:mb-6 flex items-center gap-2">Mục tiêu của bạn</h2>
+                        {/* <h2 className="text-lg md:text-xl font-black text-slate-800 mb-4 md:mb-6 flex items-center gap-2">Mục tiêu của bạn</h2> */}
                         <KpiEmployeeDetail activeKpi={activeKpi} isLoading={isLoading} />
                     </div>
                 )}
@@ -272,7 +272,6 @@ export default function KpiDashboard() {
                             />
                         </div>
 
-                        {/* Phân trang */}
                         {!isLoading && kpiList.length > 0 && (
                             <div className="shrink-0 p-3 md:p-4 border-t border-slate-100 flex justify-between items-center bg-slate-50/50">
                                 <span className="text-[10px] md:text-sm text-slate-500 font-medium hidden sm:inline">

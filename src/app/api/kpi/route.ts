@@ -3,7 +3,7 @@ import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
 
-// 🚀 ĐÃ ĐỒNG BỘ THUẬT TOÁN TÍNH LỊCH CHUẨN XÁC
+// --- BỘ CÔNG CỤ TÍNH LỊCH CHUẨN ---
 function getWeekDateRangeByMonth(year: number, month: number, weekNumber: number) {
     const firstDayOfMonth = new Date(year, month - 1, 1);
     const lastDayOfMonth = new Date(year, month, 0);
@@ -43,7 +43,6 @@ export async function GET(req: Request) {
 
         let userWhere: any = { isActive: true };
 
-        // 🚀 ĐÃ SỬA: Dùng quyền MENU_TEAMS hoặc Role Admin/Ban Giám Đốc/Kế Toán để quyết định việc lọc xuyên Team
         const canFilterTeam = currentUser.permissions?.includes("MENU_TEAMS") || ["ADMIN", "BAN_GIAM_DOC", "KE_TOAN"].includes(currentUser.role);
 
         if (currentUser.role === "ADMIN") {
@@ -56,7 +55,6 @@ export async function GET(req: Request) {
             userWhere.teamId = teamId;
         }
 
-        // 1. QUERY 1: LẤY USERS
         const users = await prisma.user.findMany({
             where: userWhere,
             select: { id: true, fullName: true, role: true, avatarUrl: true }
@@ -67,7 +65,6 @@ export async function GET(req: Request) {
         const userIds = users.map(u => u.id);
         const { start, end } = getWeekDateRangeByMonth(year, month, weekIndex);
 
-        // 🚀 TỐI ƯU N+1: GOM 3 CÂU QUERY LỚN
         const [allKpis, allLogs, allActiveTasks] = await Promise.all([
             prisma.weeklyKPI.findMany({
                 where: { userId: { in: userIds }, year, month, weekNumber: weekIndex }
@@ -78,7 +75,16 @@ export async function GET(req: Request) {
                     createdAt: { gte: start, lte: end },
                     action: { in: ["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK", "DAILY_REPORT"] } 
                 },
-                include: { task: { select: { title: true, status: true } } }
+                include: { 
+                    task: { 
+                        select: { 
+                            title: true, 
+                            status: true, 
+                            duration: true,
+                            channel: { select: { id: true, name: true } }
+                        } 
+                    } 
+                }
             }),
             prisma.task.findMany({
                 where: {
@@ -87,21 +93,20 @@ export async function GET(req: Request) {
                     createdAt: { gte: start, lte: end }
                 },
                 select: { 
-                    id: true, title: true, status: true, 
+                    id: true, title: true, status: true, duration: true,
                     contentId: true, editorId: true, publisherId: true,
-                    scriptLink: true, videoLink: true, publishLink: true, createdAt: true 
+                    scriptLink: true, videoLink: true, publishLink: true, createdAt: true,
+                    channel: { select: { id: true, name: true } }
                 }
             })
         ]);
 
-        // 🚀 MAP DATA
         const kpiData = users.map(user => {
             const kpiRecord = allKpis.find(k => k.userId === user.id);
             const rawUserLogs = allLogs.filter(l => l.userId === user.id);
             const validUserLogs: typeof rawUserLogs = [];
             const dailyReportTracker = new Set<string>();
 
-            // Lọc dữ liệu chống hack
             rawUserLogs.forEach(log => {
                 if ((log.action as string) === "DAILY_REPORT") {
                     const dateString = new Date(log.createdAt).toISOString().split('T')[0];
@@ -144,16 +149,50 @@ export async function GET(req: Request) {
             const allUserLogs = [...mappedLogs, ...pendingLogs].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
             
             const targetValue = kpiRecord?.targetValue || 0;
-            const actualCount = validUserLogs.length; 
-            const percent = targetValue > 0 ? Math.round((actualCount / targetValue) * 100) : 0;
+            const targetDetailsRaw = kpiRecord?.targetDetails;
+            let targetDetails: any[] = [];
+            try {
+                if (targetDetailsRaw) targetDetails = typeof targetDetailsRaw === 'string' ? JSON.parse(targetDetailsRaw) : targetDetailsRaw;
+            } catch(e) {}
+
+            let actualCount = validUserLogs.length; 
+            let percent = 0;
+            let totalTargetMinutes = 0;
+            let totalActualMinutes = 0;
+
+            // 🚀 ÁP DỤNG CÔNG THỨC MỚI: TÍNH % THEO TỔNG PHÚT
+            if (targetDetails && targetDetails.length > 0) {
+                targetDetails.forEach(detail => {
+                    const logsOfChannel = validUserLogs.filter(log => log.task?.channel?.id === detail.channelId);
+                    
+                    // Tính số phút thực đạt cho từng kênh (để hiển thị UI)
+                    const actualMinutes = logsOfChannel.reduce((sum, log) => sum + Number(log.task?.duration || 0), 0);
+                    detail.actualMinutes = actualMinutes;
+                    detail.actualCount = logsOfChannel.length; 
+                    
+                    // Cộng dồn CHỈ TIÊU
+                    totalTargetMinutes += (Number(detail.targetCount) * Number(detail.duration));
+                });
+
+                // Cộng dồn THỰC TẾ (Quét toàn bộ log hợp lệ để không sót video nào)
+                totalActualMinutes = validUserLogs.reduce((sum, log) => sum + Number(log.task?.duration || 0), 0);
+
+                // Tính Phần Trăm (Mức độ hoàn thành)
+                percent = totalTargetMinutes > 0 ? Math.round((totalActualMinutes / totalTargetMinutes) * 100) : 0;
+            } else {
+                // Fallback nếu dùng kiểu KPI cũ
+                percent = targetValue > 0 ? Math.round((actualCount / targetValue) * 100) : 0;
+            }
 
             return {
                 userId: user.id, fullName: user.fullName, role: user.role,
-                targetValue, actualValue: actualCount, percent, logs: allUserLogs, avatarUrl: (user as any).avatarUrl || null
+                targetValue, actualValue: actualCount, percent, logs: allUserLogs, 
+                targetDetails, totalTargetMinutes, totalActualMinutes,
+                avatarUrl: (user as any).avatarUrl || null
             };
         });
 
-        kpiData.sort((a, b) => a.percent - b.percent);
+        kpiData.sort((a, b) => b.percent - a.percent);
 
         return NextResponse.json({ weekData: { year, month, weekIndex, startDate: start, endDate: end }, kpiList: kpiData });
     } catch (error) {
@@ -166,7 +205,6 @@ export async function POST(req: Request) {
         const session = await getServerSession(authOptions);
         const currentUser = session?.user as any;
         
-        // 🚀 ĐÃ SỬA: Dùng quyền MENU_KPI (hoặc là Admin/Leader) để kiểm tra chức năng giao KPI
         const hasPermission = currentUser?.permissions?.includes("MENU_KPI") || currentUser?.role === "ADMIN" || currentUser?.role === "LEADER";
         
         if (!hasPermission) {
@@ -174,7 +212,7 @@ export async function POST(req: Request) {
         }
 
         const body = await req.json();
-        const { userId, year, month, weekNumber, targetValue } = body;
+        const { userId, year, month, weekNumber, targetValue, targetDetails } = body;
         
         const pYear = parseInt(year);
         const pMonth = parseInt(month);
@@ -183,10 +221,19 @@ export async function POST(req: Request) {
 
         if (!userId || !pYear || !pMonth || !pWeek || isNaN(pTarget)) return NextResponse.json({ error: "Thiếu dữ liệu" }, { status: 400 });
 
+        const targetDetailsJson = targetDetails ? targetDetails : [];
+
         const kpiRecord = await prisma.weeklyKPI.upsert({
             where: { user_time_unique: { userId: userId, year: pYear, month: pMonth, weekNumber: pWeek } },
-            update: { targetValue: pTarget },
-            create: { userId, year: pYear, month: pMonth, weekNumber: pWeek, targetValue: pTarget }
+            update: { 
+                targetValue: pTarget,
+                targetDetails: targetDetailsJson 
+            },
+            create: { 
+                userId, year: pYear, month: pMonth, weekNumber: pWeek, 
+                targetValue: pTarget,
+                targetDetails: targetDetailsJson
+            }
         });
         
         return NextResponse.json({ message: "Giao KPI thành công", data: kpiRecord }, { status: 200 });

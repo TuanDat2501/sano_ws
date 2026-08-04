@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
-import { getContinuousWeekRange } from "@/lib/utils";
 
 // --- Hàm tiện ích tính toán ngày trong tuần ---
 function getWeekDateRangeByMonth(year: number, month: number, weekNumber: number) {
@@ -31,25 +30,7 @@ function getWeekDateRangeByMonth(year: number, month: number, weekNumber: number
 
     return { start: actualStart, end: actualEnd };
 }
-function getCurrentWeekNumber(date: Date) {
-    const year = date.getFullYear();
-    const month = date.getMonth() + 1;
-    
-    // Đưa ngày hiện tại về mốc 0h00 để so sánh cho chuẩn
-    const todayTime = new Date(year, month - 1, date.getDate()).getTime();
 
-    for (let w = 1; w <= 5; w++) {
-        const range = getContinuousWeekRange(year, month, w);
-        const startTime = new Date(range.start.getFullYear(), range.start.getMonth(), range.start.getDate()).getTime();
-        const endTime = new Date(range.end.getFullYear(), range.end.getMonth(), range.end.getDate()).getTime();
-        
-        if (todayTime >= startTime && todayTime <= endTime) {
-            // Giới hạn max là tuần 4 (Nếu sang tuần 5 thì vẫn gộp số liệu vào tuần 4)
-            return w > 4 ? 4 : w; 
-        }
-    }
-    return 1;
-}
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -105,18 +86,26 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
             where: { user_time_unique: { userId: targetUserId, year, month, weekNumber: weekIndex } }
         });
 
-        // Lấy lịch sử công việc (Logs)
+        // 🚀 ĐÃ BỔ SUNG: Bắt buộc Select thêm duration và channel từ Task
         const userLogs = await prisma.taskLog.findMany({
             where: {
                 userId: targetUserId,
                 createdAt: { gte: start, lte: end },
                 action: { in: ["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK", "DAILY_REPORT"] }
             },
-            include: { task: { select: { title: true, status: true } } },
+            include: { 
+                task: { 
+                    select: { 
+                        title: true, 
+                        status: true,
+                        duration: true,
+                        channel: { select: { id: true, name: true } }
+                    } 
+                } 
+            },
             orderBy: { createdAt: "desc" }
         });
 
-        // Lấy các task đang xử lý (Active Tasks) để tìm Pending Logs
         const activeTasks = await prisma.task.findMany({
             where: {
                 OR: [ { contentId: targetUserId }, { editorId: targetUserId }, { publisherId: targetUserId } ],
@@ -124,9 +113,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
                 createdAt: { gte: start, lte: end }
             },
             select: { 
-                id: true, title: true, status: true, 
+                id: true, title: true, status: true, duration: true,
                 contentId: true, editorId: true, publisherId: true, 
-                scriptLink: true, videoLink: true, publishLink: true, createdAt: true 
+                scriptLink: true, videoLink: true, publishLink: true, createdAt: true,
+                channel: { select: { id: true, name: true } }
             }
         });
 
@@ -146,11 +136,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
                     validUserLogs.push(log);
                 }
             } else {
-                validUserLogs.push(log); // Các hành động nộp bài luôn được tính
+                validUserLogs.push(log);
             }
         });
 
-        // Đổi action sang Tiếng Việt cho giao diện dễ đọc
         const mappedLogs = validUserLogs.map(log => {
             let typeStr = "Khác";
             if (log.action === "SUBMIT_SCRIPT") typeStr = "Script";
@@ -177,15 +166,58 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
             }
         });
 
-        // Gộp logs đã làm và logs đang chờ, sau đó sort theo thời gian mới nhất
         const allUserLogs = [...mappedLogs, ...pendingLogs].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         
         // ==========================================
-        // 6. TÍNH TOÁN ĐIỂM SỐ
+        // 6. TÍNH TOÁN QUY ĐỔI SỐ PHÚT %
         // ==========================================
         const targetValue = kpiRecord?.targetValue || 0;
-        const actualCount = validUserLogs.length; // 🚀 Tính theo danh sách đã lọc chống hack
-        const percent = targetValue > 0 ? Math.round((actualCount / targetValue) * 100) : 0;
+        
+        const targetDetailsRaw = kpiRecord?.targetDetails;
+        let targetDetails: any[] = [];
+        try {
+            if (targetDetailsRaw) targetDetails = typeof targetDetailsRaw === 'string' ? JSON.parse(targetDetailsRaw) : targetDetailsRaw;
+        } catch(e) {}
+
+        let actualCount = 0;
+        let percent = 0;
+        let totalTargetMinutes = 0;
+        let totalActualMinutes = 0;
+
+        // 🚀 ÁP DỤNG CÔNG THỨC MỚI: TÍNH % THEO TỔNG PHÚT
+        if (targetDetails && targetDetails.length > 0) {
+            let totalEquivalentVideos = 0;
+
+            targetDetails.forEach(detail => {
+                const logsOfChannel = validUserLogs.filter(log => log.task?.channel?.id === detail.channelId);
+                
+                // Tính số phút thực đạt cho từng kênh
+                const actualMinutes = logsOfChannel.reduce((sum, log) => sum + Number(log.task?.duration || 0), 0);
+                detail.actualMinutes = actualMinutes;
+                detail.actualCount = logsOfChannel.length; 
+                
+                // Quy đổi số lượng video tương đương
+                const equivalent = detail.duration > 0 ? actualMinutes / detail.duration : actualMinutes;
+                detail.equivalentCount = Math.round(equivalent * 10) / 10;
+                totalEquivalentVideos += detail.equivalentCount;
+
+                // Cộng dồn CHỈ TIÊU (Phút)
+                totalTargetMinutes += (Number(detail.targetCount) * Number(detail.duration));
+            });
+
+            // Các bài làm vượt tuyến, không nằm trong target kênh
+            const logsOutside = validUserLogs.filter(log => !targetDetails.some(d => d.channelId === log.task?.channel?.id));
+            totalEquivalentVideos += logsOutside.length;
+
+            // Cộng dồn THỰC TẾ (Phút)
+            totalActualMinutes = validUserLogs.reduce((sum, log) => sum + Number(log.task?.duration || 0), 0);
+
+            actualCount = Math.round(totalEquivalentVideos * 10) / 10;
+            percent = totalTargetMinutes > 0 ? Math.round((totalActualMinutes / totalTargetMinutes) * 100) : 0;
+        } else {
+            actualCount = validUserLogs.length; 
+            percent = targetValue > 0 ? Math.round((actualCount / targetValue) * 100) : 0;
+        }
 
         const kpiData = {
             userId: user.id, 
@@ -195,7 +227,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
             targetValue, 
             actualValue: actualCount, 
             percent, 
-            logs: allUserLogs
+            logs: allUserLogs,
+            targetDetails,
+            totalTargetMinutes,
+            totalActualMinutes
         };
 
         return NextResponse.json(kpiData);

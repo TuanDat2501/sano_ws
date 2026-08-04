@@ -54,7 +54,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             if (rawBody.thumbnailLink !== undefined) body.thumbnailLink = rawBody.thumbnailLink;
             if (rawBody.videoLink !== undefined) body.videoLink = rawBody.videoLink;
             if (rawBody.publishLink !== undefined) body.publishLink = rawBody.publishLink;
-            // 🚀 BỔ SUNG: Cho phép Quản lý sửa Link PRJ Thô
             if (rawBody.roughProjectLink !== undefined) body.roughProjectLink = rawBody.roughProjectLink;
             if (rawBody.isClosed !== undefined) body.isClosed = rawBody.isClosed;
             if (rawBody.teamId !== undefined) body.teamId = rawBody.teamId;
@@ -98,7 +97,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             if (rawBody.status !== undefined) body.status = rawBody.status;
             if (rawBody.videoLink !== undefined) body.videoLink = rawBody.videoLink;
             if (rawBody.linkProject !== undefined) body.linkProject = rawBody.linkProject;
-            // 🚀 BỔ SUNG: Cho phép Editor (bao gồm Editor làm chung) nộp Link PRJ Thô
             if (rawBody.roughProjectLink !== undefined) body.roughProjectLink = rawBody.roughProjectLink;
             if (rawBody.thumbnailLink !== undefined) body.thumbnailLink = rawBody.thumbnailLink;
             if (rawBody.audioLink !== undefined) body.audioLink = rawBody.audioLink; 
@@ -110,7 +108,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             if (rawBody.note !== undefined) body.note = rawBody.note;
         }
 
-        // 🚀 BỔ SUNG: Kiểm tra trùng lặp cho cả roughProjectLink
         const linksToCheck = [
             { key: 'scriptLink', value: body.scriptLink },
             { key: 'videoLink', value: body.videoLink },
@@ -143,17 +140,37 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         }
 
         const logsToCreate: any[] = [];
+        const logsToDelete: any[] = []; // 🚀 ĐÃ BỔ SUNG: Mảng chứa điều kiện xóa log cũ
+
         if (body.status && body.status !== oldTask.status) {
             logsToCreate.push({ action: "UPDATE_STATUS", details: `Từ [${oldTask.status}] sang [${body.status}]`, taskId, userId });
         }
 
+        // 🚀 CẬP NHẬT TRỌNG TÂM: Logic xử lý Xóa Link đúng chuẩn Prisma
         const addLinkLog = (fieldName: string, label: string) => {
             if (body[fieldName] !== undefined && body[fieldName] !== (oldTask as any)[fieldName]) {
-                logsToCreate.push({
-                    action: "DAILY_REPORT", 
-                    details: body[fieldName] ? `Báo cáo tiến độ: Đã cập nhật ${label}` : `Đã xóa ${label}`,
-                    taskId, userId
-                });
+                const newValue = body[fieldName];
+                if (newValue && newValue.trim() !== "") {
+                    // Cập nhật link mới: Ghi nhận DAILY_REPORT để cộng KPI
+                    logsToCreate.push({
+                        action: "DAILY_REPORT", 
+                        details: `Báo cáo tiến độ: Đã cập nhật ${label}`,
+                        taskId, userId
+                    });
+                } else {
+                    // Xóa trắng link: Dùng UPDATE_LINK thay vì PENDING để không dính lỗi Enum
+                    logsToCreate.push({
+                        action: "UPDATE_LINK", 
+                        details: `Báo cáo tiến độ: Đã gỡ/xóa ${label}`,
+                        taskId, userId
+                    });
+                    // Đồng thời ĐƯA VÀO DIỆN XÓA cái log DAILY_REPORT cũ để hệ thống trừ KPI
+                    logsToDelete.push({
+                        taskId, userId,
+                        action: "DAILY_REPORT",
+                        details: { contains: label }
+                    });
+                }
             }
         };
 
@@ -164,7 +181,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         addLinkLog('thumbnailLink', 'Thumbnail');
         addLinkLog('videoLink', 'Video Render');
         addLinkLog('linkProject', 'Link Project (Dựng Chính)');
-        // 🚀 BỔ SUNG: Tạo Log báo cáo hằng ngày khi update Link Thô
         addLinkLog('roughProjectLink', 'Link PRJ Thô');
         addLinkLog('publishLink', 'Link Video Đã Đăng (YT)');
 
@@ -201,10 +217,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 thumbnailLink: body.thumbnailLink !== undefined ? body.thumbnailLink : undefined,
                 animationLink: body.animationLink !== undefined ? body.animationLink : undefined,
                 linkProject: body.linkProject !== undefined ? body.linkProject : undefined,
-                // 🚀 BỔ SUNG: Lưu trường dữ liệu Link thô mới vào DB
                 roughProjectLink: body.roughProjectLink !== undefined ? body.roughProjectLink : undefined,
                 
-                // Cập nhật người phụ trách
                 contentId: body.contentId !== undefined ? body.contentId : undefined,
                 editorId: body.editorId !== undefined ? body.editorId : undefined,
                 animatorId: body.animatorId !== undefined ? body.animatorId : undefined,
@@ -215,7 +229,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         });
 
         const promises: any[] = [updateTaskPromise];
+        
+        // 1. Thêm log mới
         if (logsToCreate.length > 0) promises.push(prisma.taskLog.createMany({ data: logsToCreate }));
+        
+        // 2. Xóa các log DAILY_REPORT cũ (Để trừ KPI)
+        if (logsToDelete.length > 0) {
+            logsToDelete.forEach(condition => {
+                promises.push(prisma.taskLog.deleteMany({ where: condition }));
+            });
+        }
+        
         const [updatedTask] = await Promise.all(promises);
 
         let createdNotifications: any[] = [];
@@ -251,6 +275,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
 }
 
+// ... GET và DELETE giữ nguyên ...
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
     try {
         const resolvedParams = await params;
