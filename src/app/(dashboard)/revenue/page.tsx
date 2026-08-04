@@ -648,9 +648,18 @@ export default function RevenueEntryPage() {
                             <td colSpan={3} className="p-4 border-r border-slate-700 uppercase tracking-widest text-xs sticky left-0 z-[70] bg-slate-800 text-center">
                                 Tổng Cả Hệ Thống
                             </td>
-                            {/* 🚀 BỔ SUNG: Chỗ trống dưới footer cho cột Tổng */}
-                            <td className="p-2 border-r-4 border-emerald-500 bg-slate-900 sticky left-[350px] z-[70] text-center text-[10px] font-bold text-slate-500">
-
+                            
+                            {/* 🚀 BỔ SUNG: Tính tổng của tổng (View và Doanh thu) hiển thị ở đây */}
+                            <td className="p-2 border-r-4 border-emerald-500 bg-slate-900 sticky left-[350px] z-[70] text-right pr-3">
+                                <div className="flex flex-col gap-1 text-right justify-center h-full">
+                                    <span className="text-[11px] font-bold text-slate-300 flex items-center justify-end gap-1">
+                                        <Eye size={11} className="opacity-70" strokeWidth={2.5}/> 
+                                        {dailyTotals.reduce((sum, day) => sum + day.views, 0).toLocaleString()}
+                                    </span>
+                                    <span className="text-sm font-black text-emerald-400 drop-shadow-md tracking-tight">
+                                        ${dailyTotals.reduce((sum, day) => sum + day.revenue, 0).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                                    </span>
+                                </div>
                             </td>
 
                             {dailyTotals.map((total, idx) => (
