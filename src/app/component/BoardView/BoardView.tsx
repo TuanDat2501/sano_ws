@@ -15,13 +15,13 @@ interface BoardViewProps {
 
 export default function BoardView({ tasks, columns, getTeamColor, onDragEnd, onOpenTaskDetail, userRole, currentUserId }: BoardViewProps) {
 
-  const isManager = ["ADMIN", "BAN_GIAM_DOC", "LEADER"].includes(userRole);
+  const isManager = ["ADMIN", "BAN_GIAM_DOC", "LEADER", "PUBLISHER"].includes(userRole);
 
   const renderStackedAvatars = (roleTitle: string, mainUser: any, coUsers: any[], colorClass: string, bgClass: string) => {
     const allUsers = [...(mainUser ? [mainUser] : []), ...(coUsers || [])];
     if (allUsers.length === 0) return null;
 
-    const maxVisible = 3;
+    const maxVisible = 4;
     const visibleUsers = allUsers.slice(0, maxVisible);
     const hiddenCount = allUsers.length - maxVisible;
 
@@ -119,7 +119,6 @@ export default function BoardView({ tasks, columns, getTeamColor, onDragEnd, onO
                                   {task.team?.name || "Team Sano"}
                                 </span>
 
-                                {/* 🚀 ĐÃ SỬA: Gom nhóm Mức độ ưu tiên và Xào lại sang bên phải, xếp dọc */}
                                 <div className="flex flex-col items-end gap-1.5 shrink-0">
                                   {task.priority && task.priority !== 'NORMAL' && (
                                     <span
@@ -154,6 +153,8 @@ export default function BoardView({ tasks, columns, getTeamColor, onDragEnd, onO
                                 {renderStackedAvatars("Content", task.contentUser, task.coContentUsers, "text-orange-600", "bg-orange-100")}
                                 {renderStackedAvatars("Editor", task.editorUser, task.coEditorUsers, "text-blue-600", "bg-blue-100")}
                                 {renderStackedAvatars("Animator", task.animatorUser, task.coAnimatorUsers, "text-purple-600", "bg-purple-100")}
+                                {/* 🚀 ĐÃ SỬA: Sửa tham số truyền vào thành mảng rỗng [] và chỉnh màu */}
+                                {renderStackedAvatars("Publisher", task.publisherUser, [], "text-rose-600", "bg-rose-100")}
                               </div>
                             </div>
                           );

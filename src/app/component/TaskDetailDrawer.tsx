@@ -431,7 +431,7 @@ export default function TaskDetailDrawer({
                   {renderUserGroup("Content", contentUsersList, "bg-orange-100 text-orange-600", "bg-orange-50/50", "border-orange-100", "text-orange-500")}
                   {renderUserGroup("Editor", editorUsersList, "bg-blue-100 text-blue-600", "bg-blue-50/50", "border-blue-100", "text-blue-500")}
                   {renderUserGroup("Animator", animatorUsersList, "bg-purple-100 text-purple-600", "bg-purple-50/50", "border-purple-100", "text-purple-500")}
-                  {renderUserGroup("Publisher", publisherUsersList, "bg-rose-100 text-rose-600", "bg-rose-50/50", "border-rose-100", "text-rose-500")}
+                  {renderUserGroup("Quản lý kênh", publisherUsersList, "bg-rose-100 text-rose-600", "bg-rose-50/50", "border-rose-100", "text-rose-500")}
                 </div>
 
                 <div className="bg-slate-50 border border-slate-200 rounded-[24px] p-5 space-y-4 shadow-inner">

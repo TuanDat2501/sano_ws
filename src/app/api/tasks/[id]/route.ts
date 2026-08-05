@@ -149,22 +149,28 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 const newValue = body[fieldName];
                 const targetUserId = getAssigneeForField(fieldName); // Lấy đúng ID của Nhân sự phụ trách
 
+                // 🚀 QUAN TRỌNG: LUÔN XÓA LOG KPI CŨ CỦA TRƯỜNG NÀY TRƯỚC KHI TẠO MỚI
+                // Việc này giúp tự động THU HỒI KPI của ngày cũ nếu nhân sự nhập sai và phải sửa lại vào hôm sau
+                logsToDelete.push({
+                    taskId, 
+                    userId: targetUserId,
+                    action: "DAILY_REPORT",
+                    details: { contains: label }
+                });
+
                 if (newValue && newValue.trim() !== "") {
                     logsToCreate.push({
                         action: "DAILY_REPORT", 
                         details: `Báo cáo tiến độ: Đã cập nhật ${label}`,
-                        taskId, userId: targetUserId // Chốt KPI cho người này
+                        taskId, 
+                        userId: targetUserId // 🚀 Chốt KPI mới dời sang ngày hôm nay!
                     });
                 } else {
                     logsToCreate.push({
                         action: "UPDATE_LINK", 
                         details: `Báo cáo tiến độ: Đã gỡ/xóa ${label}`,
-                        taskId, userId: targetUserId
-                    });
-                    logsToDelete.push({
-                        taskId, userId: targetUserId,
-                        action: "DAILY_REPORT",
-                        details: { contains: label }
+                        taskId, 
+                        userId: targetUserId
                     });
                 }
             }
