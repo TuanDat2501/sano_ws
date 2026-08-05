@@ -6,32 +6,6 @@ import { getContinuousWeekRange, getCurrentWeekNumber } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
-/* function getCurrentWeekNumber(date: Date) {
-    const year = date.getFullYear();
-    const month = date.getMonth(); 
-    const firstDayOfMonth = new Date(year, month, 1);
-    
-    const dayOfWeek = firstDayOfMonth.getDay(); 
-    const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-    const startOfFirstWeek = new Date(year, month, 1 + diffToMonday);
-
-    const targetTime = date.getTime();
-
-    for (let w = 1; w <= 5; w++) {
-        const startOfWeek = new Date(startOfFirstWeek);
-        startOfWeek.setDate(startOfFirstWeek.getDate() + (w - 1) * 7);
-        
-        const endOfWeek = new Date(startOfWeek);
-        endOfWeek.setDate(startOfWeek.getDate() + 6);
-        endOfWeek.setHours(23, 59, 59, 999);
-        
-        if (targetTime >= startOfWeek.getTime() && targetTime <= endOfWeek.getTime()) {
-            return w > 4 ? 4 : w; 
-        }
-    }
-    return 1;
-} */
-
 export async function GET(req: Request) {
     try {
         const session = await getServerSession(authOptions);
@@ -44,7 +18,7 @@ export async function GET(req: Request) {
         const userId = currentUser.id;
         const teamId = currentUser.teamId;
 
-        const isTopManagement = ["ADMIN", "BAN_GIAM_DOC"].includes(role);
+        const isTopManagement = ["ADMIN", "BAN_GIAM_DOC", "HR", "KE_TOAN"].includes(role);
         const isLeader = role === "LEADER";
         const isManager = isTopManagement || isLeader;
 
@@ -59,13 +33,9 @@ export async function GET(req: Request) {
         startOfWeek.setHours(0, 0, 0, 0);
 
         const sevenDaysAgo = new Date(today);
-        sevenDaysAgo.setDate(today.getDate() - 7); // Tính lùi 7 ngày cho biểu đồ
-        sevenDaysAgo.setHours(0, 0, 0, 0);
-        sevenDaysAgo.setDate(today.getDate() - 7); // Tính lùi 7 ngày cho query DB
+        sevenDaysAgo.setDate(today.getDate() - 7); 
         sevenDaysAgo.setHours(0, 0, 0, 0);
 
-        
-        // 🚀 THUẬT TOÁN TẠO SẴN KHUNG 7 NGÀY ĐẦY ĐỦ (Bao gồm cả hôm nay)
         const generateEmpty7DaysChart = () => {
             const chartTemplate = [];
             for (let i = 6; i >= 0; i--) {
@@ -74,7 +44,7 @@ export async function GET(req: Request) {
                 const dateStr = d.toLocaleDateString('vi-VN', {
                     day: '2-digit', month: '2-digit', timeZone: 'Asia/Ho_Chi_Minh'
                 }).replace('/', '-');
-                chartTemplate.push({ date: dateStr, done: 0 }); // Khởi tạo 0 bài
+                chartTemplate.push({ date: dateStr, done: 0 }); 
             }
             return chartTemplate;
         };
@@ -96,14 +66,14 @@ export async function GET(req: Request) {
                 OR: [
                     { contentId: { in: teamUserIds } },
                     { editorId: { in: teamUserIds } },
+                    { animatorId: { in: teamUserIds } },
                     { publisherId: { in: teamUserIds } },
-                    { teamId: teamId } // Chặn thêm đầu rễ cho chắc chắn
+                    { teamId: teamId } 
                 ]
             };
 
             const userCondition = isTopManagement ? {} : { userId: { in: teamUserIds } };
 
-            // 🚀 ĐỊNH NGHĨA LẠI THẾ NÀO LÀ "TỒN ĐỌNG": Đã tạo quá 3 ngày mà chưa xong
             const threeDaysAgo = new Date(today);
             threeDaysAgo.setDate(today.getDate() - 3);
 
@@ -114,10 +84,8 @@ export async function GET(req: Request) {
                 managerLogs7DaysRaw,
                 kpiRecords
             ] = await Promise.all([
-                // 1. Task Đang Chạy: Tất cả task chưa chốt sổ
                 prisma.task.count({ where: { ...taskFilter, isClosed: false } }),
 
-                // 2. Cập nhật các trạng thái Review mới (Content, Animation, Edit)
                 prisma.task.count({
                     where: {
                         ...taskFilter,
@@ -130,7 +98,6 @@ export async function GET(req: Request) {
                     }
                 }),
 
-                // 3. Cập nhật các trạng thái Doing mới
                 prisma.task.count({
                     where: {
                         ...taskFilter,
@@ -147,7 +114,10 @@ export async function GET(req: Request) {
                         action: { in: ["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK", "DAILY_REPORT", "MERGE_VIDEO"] }
                     },
                     orderBy: { createdAt: 'desc' },
-                    include: { user: { select: { fullName: true } } }
+                    include: { 
+                        user: { select: { fullName: true } },
+                        task: { select: { id: true, duration: true, channelId: true } }
+                    }
                 }),
 
                 prisma.weeklyKPI.findMany({
@@ -160,6 +130,7 @@ export async function GET(req: Request) {
                     include: { user: { select: { fullName: true, role: true } } }
                 })
             ]);
+            
             const validLogs7Days: any[] = [];
             const dailyReportTracker7Days = new Set<string>();
             managerLogs7DaysRaw.forEach((log: any) => {
@@ -177,38 +148,72 @@ export async function GET(req: Request) {
 
             const logsThisWeek = validLogs7Days.filter(log => new Date(log.createdAt) >= startOfWeek);
 
-            // 🚀 CÔNG THỨC MỚI CHO QUẢN LÝ: Tính số task duy nhất của TỪNG NHÂN VIÊN, sau đó mới cộng dồn lại
-            let totalActual = 0;
-            const userTaskMap = new Map<string, Set<string>>(); // Bản đồ lưu userId -> Danh sách các taskId duy nhất
+            let totalActualPoint = 0;
+            let totalTargetPoint = 0;
 
+            const userLogsMap = new Map<string, any[]>();
             logsThisWeek.forEach((log: any) => {
-                if (!userTaskMap.has(log.userId)) {
-                    userTaskMap.set(log.userId, new Set());
+                if (!userLogsMap.has(log.userId)) userLogsMap.set(log.userId, []);
+                userLogsMap.get(log.userId)!.push(log);
+            });
+
+            kpiRecords.forEach((k: any) => {
+                let targetDetails: any[] = [];
+                try {
+                    if (k.targetDetails) targetDetails = typeof k.targetDetails === 'string' ? JSON.parse(k.targetDetails) : k.targetDetails;
+                } catch(e) {}
+
+                const userLogs = userLogsMap.get(k.userId) || [];
+                let userTargetMinutes = 0;
+                let userTotalEquivalentVideos = 0;
+
+                if (targetDetails && targetDetails.length > 0) {
+                    targetDetails.forEach(detail => {
+                        const logsOfChannel = userLogs.filter(log => log.task?.channelId === detail.channelId);
+                        
+                        const uniqueTaskIds = new Set<string>();
+                        let actualMinutes = 0;
+                        logsOfChannel.forEach(log => {
+                            if (!uniqueTaskIds.has(log.taskId)) {
+                                uniqueTaskIds.add(log.taskId);
+                                actualMinutes += Number(log.task?.duration || 0);
+                            }
+                        });
+                        
+                        const equivalent = detail.duration > 0 ? actualMinutes / detail.duration : actualMinutes;
+                        userTotalEquivalentVideos += (Math.round(equivalent * 10) / 10);
+                        userTargetMinutes += (Number(detail.targetCount) * Number(detail.duration));
+                    });
+
+                    const uniqueOutsideTaskIds = new Set<string>();
+                    const logsOutside = userLogs.filter(log => !targetDetails.some(d => d.channelId === log.task?.channelId));
+                    logsOutside.forEach(log => uniqueOutsideTaskIds.add(log.taskId));
+                    userTotalEquivalentVideos += uniqueOutsideTaskIds.size;
+
+                    const actualMinutesUser = userLogs.reduce((sum, log) => sum + Number(log.task?.duration || 0), 0);
+                    
+                    if (userTargetMinutes > 0) {
+                       totalTargetPoint += 100;
+                       totalActualPoint += Math.round((actualMinutesUser / userTargetMinutes) * 100);
+                    }
+                } else {
+                    const uniqueTasksCount = new Set(userLogs.map(l => l.taskId)).size;
+                    const targetVal = k.targetValue || 0;
+                    if (targetVal > 0) {
+                        totalTargetPoint += 100;
+                        totalActualPoint += Math.round((uniqueTasksCount / targetVal) * 100);
+                    }
                 }
-                // Thêm taskId vào tập hợp (Set) của riêng nhân viên đó (Tự động lọc trùng)
-                userTaskMap.get(log.userId)!.add(log.taskId);
             });
 
-            // Cộng dồn điểm KPI thực tế từ từng cá nhân để ra tổng của Team
-            userTaskMap.forEach((uniqueTasks) => {
-                totalActual += uniqueTasks.size;
-            });
+            const avgKpiPercent = totalTargetPoint > 0 ? Math.round((totalActualPoint / totalTargetPoint) * 100) : 0;
 
-            // Lấy tổng chỉ tiêu (Target) của cả Team
-            let totalTarget = 0;
-            kpiRecords.forEach((k: any) => totalTarget += k.targetValue);
-
-            // Tỷ lệ hoàn thành = (Tổng bài thực làm / Tổng chỉ tiêu) * 100
-            const avgKpiPercent = totalTarget > 0 ? Math.round((totalActual / totalTarget) * 100) : 0;
-
-            // 🚀 BẢO ĐẢM BIỂU ĐỒ LUÔN CÓ ĐỦ 7 NGÀY
             const chartDataArray = generateEmpty7DaysChart();
             validLogs7Days.forEach(log => {
                 const dateStr = new Date(log.createdAt).toLocaleDateString('vi-VN', {
                     day: '2-digit', month: '2-digit', timeZone: 'Asia/Ho_Chi_Minh'
                 }).replace('/', '-');
 
-                // Tìm ngày tương ứng trong khung và cộng điểm
                 const existingDay = chartDataArray.find(d => d.date === dateStr);
                 if (existingDay) {
                     existingDay.done++;
@@ -257,6 +262,7 @@ export async function GET(req: Request) {
                         OR: [
                             { contentId: userId, OR: [{ scriptLink: { equals: "" } }, { scriptLink: null }] },
                             { editorId: userId, OR: [{ videoLink: { equals: "" } }, { videoLink: null }] },
+                            { animatorId: userId, OR: [{ animationLink: { equals: "" } }, { animationLink: null }] },
                             { publisherId: userId, OR: [{ publishLink: { equals: "" } }, { publishLink: null }] }
                         ]
                     },
@@ -278,7 +284,9 @@ export async function GET(req: Request) {
                         action: { in: ["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK", "DAILY_REPORT"] }
                     },
                     orderBy: { createdAt: 'desc' },
-                    include: { task: { select: { title: true } } }
+                    include: { 
+                        task: { select: { id: true, title: true, duration: true, channelId: true } } 
+                    }
                 }),
 
                 prisma.weeklyKPI.findFirst({
@@ -308,18 +316,66 @@ export async function GET(req: Request) {
 
             const logsThisWeek = validLogs7Days.filter(log => new Date(log.createdAt) >= startOfWeek);
 
-            // 🚀 CÔNG THỨC MỚI (TUẦN) CHO NHÂN VIÊN: Đếm số Task duy nhất trong tuần
-            const uniqueTasksThisWeek = new Set(logsThisWeek.map((log: any) => log.taskId));
-            const actualThisWeek = uniqueTasksThisWeek.size;
+            // ==========================================
+            // 🚀 CÔNG THỨC MỚI: Tính % và xuất luôn details
+            // ==========================================
+            const targetValue = myKpiThisWeek?.targetValue || 0;
+            const targetDetailsRaw = myKpiThisWeek?.targetDetails;
+            let targetDetails: any[] = [];
+            try {
+                if (targetDetailsRaw) targetDetails = typeof targetDetailsRaw === 'string' ? JSON.parse(targetDetailsRaw) : targetDetailsRaw;
+            } catch(e) {}
 
-            const target = myKpiThisWeek?.targetValue || 0;
-            const kpiPercent = target > 0 ? Math.round((actualThisWeek / target) * 100) : 0;
+            let actualCount = 0;
+            let kpiPercent = 0;
 
-            // 🚀 CÔNG THỨC MỚI (ALL TIME) CHO NHÂN VIÊN: Đếm tổng số Task duy nhất từ trước đến nay
+            if (targetDetails && targetDetails.length > 0) {
+                let totalTargetMinutes = 0;
+                let totalActualMinutes = 0;
+                let totalEquivalentVideos = 0;
+
+                targetDetails.forEach(detail => {
+                    const logsOfChannel = logsThisWeek.filter(log => log.task?.channelId === detail.channelId);
+                    
+                    const uniqueTaskIds = new Set<string>();
+                    let actualMinutes = 0;
+                    logsOfChannel.forEach(log => {
+                        if (!uniqueTaskIds.has(log.taskId)) {
+                            uniqueTaskIds.add(log.taskId);
+                            actualMinutes += Number(log.task?.duration || 0);
+                        }
+                    });
+                    
+                    const equivalent = detail.duration > 0 ? actualMinutes / detail.duration : actualMinutes;
+                    const equivalentRounded = Math.round(equivalent * 10) / 10;
+                    
+                    totalEquivalentVideos += equivalentRounded;
+                    totalTargetMinutes += (Number(detail.targetCount) * Number(detail.duration));
+
+                    // 🚀 Đã sửa: Lưu số lượng thực tế ngược lại vào mảng details để trả xuống UI
+                    detail.actualCount = equivalentRounded;
+                });
+
+                const uniqueOutsideTaskIds = new Set<string>();
+                const logsOutside = logsThisWeek.filter(log => !targetDetails.some(d => d.channelId === log.task?.channelId));
+                logsOutside.forEach(log => uniqueOutsideTaskIds.add(log.taskId));
+                totalEquivalentVideos += uniqueOutsideTaskIds.size;
+
+                logsThisWeek.forEach(log => {
+                    totalActualMinutes += Number(log.task?.duration || 0);
+                });
+
+                actualCount = Math.round(totalEquivalentVideos * 10) / 10;
+                kpiPercent = totalTargetMinutes > 0 ? Math.round((totalActualMinutes / totalTargetMinutes) * 100) : 0;
+            } else {
+                const uniqueTasksThisWeek = new Set(logsThisWeek.map((log: any) => log.taskId));
+                actualCount = uniqueTasksThisWeek.size;
+                kpiPercent = targetValue > 0 ? Math.round((actualCount / targetValue) * 100) : 0;
+            }
+
             const uniqueTasksAllTime = new Set(myLogsAllTimeRaw.map((log: any) => log.taskId));
             const myLogsAllTime = uniqueTasksAllTime.size;
 
-            // 🚀 BẢO ĐẢM BIỂU ĐỒ LUÔN CÓ ĐỦ 7 NGÀY (NHÂN VIÊN)
             const chartDataArray = generateEmpty7DaysChart();
             validLogs7Days.forEach(log => {
                 const dateStr = new Date(log.createdAt).toLocaleDateString('vi-VN', {
@@ -346,11 +402,13 @@ export async function GET(req: Request) {
                 role: "EMPLOYEE",
                 dbRole: role,
                 stats: {
-                    pendingTasks: myActiveTasks, // Lấy an toàn số lượng Task đang xử lý
+                    pendingTasks: myActiveTasks, 
                     lifetimeLogs: myLogsAllTime,
                     kpiPercent: kpiPercent,
-                    targetThisWeek: target,
-                    actualThisWeek: actualThisWeek
+                    targetThisWeek: targetValue,
+                    actualThisWeek: actualCount,
+                    // 🚀 Gửi kèm list KPI chi tiết xuống Frontend
+                    targetDetails: targetDetails 
                 },
                 recentLogs: mappedRecentLogs,
                 chartData: chartDataArray
