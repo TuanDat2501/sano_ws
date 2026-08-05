@@ -172,7 +172,7 @@ export async function POST(req: Request) {
     // 🚀 ĐÃ SỬA: Bắt dữ liệu dạng mảng (Array) từ Frontend gửi lên
     const { 
         title, linkContent, teamId, projectId, channelId, duration, note, keywords, publishDate, priority,
-        englishScriptLink, storyboardLink, audioLink, thumbnailLink,
+        englishScriptLink, storyboardLink, audioLink, thumbnailLink, publisherId,
         contentIds = [], editorIds = [], animatorIds = [] 
     } = body;
     
@@ -253,6 +253,7 @@ export async function POST(req: Request) {
         storyboardLink: storyboardLink || undefined,
         audioLink: audioLink || undefined,
         thumbnailLink: thumbnailLink || undefined,
+        publisherId: publisherId || undefined
       },
       include: {
         creator: { select: { fullName: true } },
@@ -273,7 +274,7 @@ export async function POST(req: Request) {
     const targetIds = new Set<string>();
 
     // Gộp tất cả ID của những người tham gia vào Set để báo Noti một lượt
-    [...contentIds, ...editorIds, ...animatorIds].forEach(id => {
+    [...contentIds, ...editorIds, ...animatorIds, publisherId].forEach(id => {
         if (id && id !== creatorId) targetIds.add(id);
     });
 

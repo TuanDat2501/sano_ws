@@ -66,6 +66,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             if (rawBody.duration !== undefined) body.duration = rawBody.duration;
             if (rawBody.channelId !== undefined) body.channelId = rawBody.channelId || null;
             if (rawBody.priority !== undefined) body.priority = rawBody.priority;
+            
+            // 🚀 ĐÃ BỔ SUNG: Bắt dữ liệu PublisherId từ form sửa Task
+            if (rawBody.publisherId !== undefined) body.publisherId = rawBody.publisherId || null;
 
             if (rawBody.contentIds !== undefined) {
                 body.contentId = rawBody.contentIds.length > 0 ? rawBody.contentIds[0] : null;
@@ -223,6 +226,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 ...(body.coContentUsers && { coContentUsers: body.coContentUsers }),
                 ...(body.coEditorUsers && { coEditorUsers: body.coEditorUsers }),
                 ...(body.coAnimatorUsers && { coAnimatorUsers: body.coAnimatorUsers }),
+                publisherId:body.publisherId !== undefined ? body.publisherId : undefined
             }
         });
 

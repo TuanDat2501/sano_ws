@@ -123,7 +123,7 @@ export default function TaskDetailDrawer({
   const contentUsersList = [...(selectedTask.contentUser ? [selectedTask.contentUser] : []), ...(selectedTask.coContentUsers || [])];
   const editorUsersList = [...(selectedTask.editorUser ? [selectedTask.editorUser] : []), ...(selectedTask.coEditorUsers || [])];
   const animatorUsersList = [...(selectedTask.animatorUser ? [selectedTask.animatorUser] : []), ...(selectedTask.coAnimatorUsers || [])];
-
+  const publisherUsersList = selectedTask.publisherUser ? [selectedTask.publisherUser] : [];
   const isManager = ["ADMIN", "BAN_GIAM_DOC", "LEADER", "HR", "KE_TOAN"].includes(userRole);
 
   const handleAutoSave = async (fieldKey: string, newValue: string) => {
@@ -194,9 +194,9 @@ export default function TaskDetailDrawer({
           {users.map((u, idx) => (
             <div key={idx} className="relative group cursor-pointer">
               {u.avatarUrl ? (
-                <img src={u.avatarUrl} alt={u.fullName} className="h-12 w-12 rounded-xl object-cover border-2 border-white shadow-sm hover:shadow-md hover:scale-105 transition-all duration-200" />
+                <img src={u.avatarUrl} alt={u.fullName} className="h-9 w-9 rounded-xl object-cover border-2 border-white shadow-sm hover:shadow-md hover:scale-105 transition-all duration-200" />
               ) : (
-                <div className={`h-12 w-12 rounded-xl ${colorClass} flex items-center justify-center font-black border-2 border-white shadow-sm hover:shadow-md hover:scale-105 transition-all duration-200 text-sm`}>
+                <div className={`h-9 w-9 rounded-xl ${colorClass} flex items-center justify-center font-black border-2 border-white shadow-sm hover:shadow-md hover:scale-105 transition-all duration-200 text-sm`}>
                   {u.fullName?.charAt(0) || "?"}
                 </div>
               )}
@@ -431,6 +431,7 @@ export default function TaskDetailDrawer({
                   {renderUserGroup("Content", contentUsersList, "bg-orange-100 text-orange-600", "bg-orange-50/50", "border-orange-100", "text-orange-500")}
                   {renderUserGroup("Editor", editorUsersList, "bg-blue-100 text-blue-600", "bg-blue-50/50", "border-blue-100", "text-blue-500")}
                   {renderUserGroup("Animator", animatorUsersList, "bg-purple-100 text-purple-600", "bg-purple-50/50", "border-purple-100", "text-purple-500")}
+                  {renderUserGroup("Publisher", publisherUsersList, "bg-rose-100 text-rose-600", "bg-rose-50/50", "border-rose-100", "text-rose-500")}
                 </div>
 
                 <div className="bg-slate-50 border border-slate-200 rounded-[24px] p-5 space-y-4 shadow-inner">

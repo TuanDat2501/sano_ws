@@ -400,6 +400,7 @@ export default function ChannelFormDrawer({
                                             <option value="HOAT_DONG" className="text-emerald-600">Đang Hoạt Động</option>
                                             <option value="CANH_BAO" className="text-orange-600">Cảnh Báo Vi Phạm</option>
                                             <option value="BAY_KENH" className="text-red-600 line-through">Bay Kênh (Khóa)</option>
+                                            <option value="DUNG_HOAT_DONG" className="text-red-600 line-through">Dừng hoạt động</option>
                                         </select>
                                     </div>
                                     <div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, UsersIcon, Loader2, FileEdit, Film, Clock, Link as LinkIcon, FileText, Key, CalendarDays, MonitorPlay } from "lucide-react";
+import { X, UsersIcon, Loader2, FileEdit, Film, Clock, Link as LinkIcon, FileText, Key, CalendarDays, MonitorPlay, UserCheck } from "lucide-react";
 import { createPortal } from "react-dom";
 
 interface CreateTaskModalProps {
@@ -9,7 +9,6 @@ interface CreateTaskModalProps {
   onSubmit: (taskData: any) => Promise<void>; isSubmitting: boolean; errors: { [key: string]: string };
 }
 
-// 🚀 COMPONENT CHỌN NHIỀU NGƯỜI (MULTI-SELECT) THÔNG MINH
 const MultiSelectUser = ({ label, icon: Icon, options, selectedIds, onChange, disabled }: any) => {
   const handleSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
     if (e.target.value) {
@@ -52,12 +51,13 @@ const MultiSelectUser = ({ label, icon: Icon, options, selectedIds, onChange, di
 export default function CreateTaskModal({ isOpen, onClose, teams, initialData, onSubmit, isSubmitting, errors }: CreateTaskModalProps) {
   const [mounted, setMounted] = useState(false);
 
+  // 🚀 BỔ SUNG: Thêm publisherId vào state
   const [newTask, setNewTask] = useState({
     id: "", title: "", keywords: "", linkContent: "", 
     contentIds: [] as string[], 
     editorIds: [] as string[], 
     animatorIds: [] as string[], 
-    teamId: "", projectId: "", duration: "", publishDate: "", channelId: "", priority: "NORMAL"
+    teamId: "", projectId: "", duration: "", publishDate: "", channelId: "", publisherId: "", priority: "NORMAL"
   });
 
   const [teamProjects, setTeamProjects] = useState<any[]>([]);
@@ -66,13 +66,15 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [teamChannels, setTeamChannels] = useState<any[]>([]);
   const [usersTeam, setUsersTeam] = useState<any[]>([]);
+  
+  // 🚀 BỔ SUNG: Danh sách Quản lý kênh
+  const [teamPublishers, setTeamPublishers] = useState<any[]>([]);
 
   useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
     if (isOpen) {
       if (initialData) {
-        // 🚀 ĐÃ SỬA: Gộp người làm chính (ID) và những người làm phụ (Array) thành 1 mảng duy nhất để hiển thị
         setNewTask({
           id: initialData.id,
           title: initialData.title || "",
@@ -95,10 +97,11 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
           duration: initialData.duration || "",
           publishDate: initialData.publishDate ? new Date(initialData.publishDate).toISOString().split('T')[0] : "",
           channelId: initialData.channelId || "",
+          publisherId: initialData.publisherId || "", // 🚀 Load data cũ
           priority: initialData.priority || "NORMAL"
         });
       } else {
-        setNewTask({ id: "", title: "", keywords: "", linkContent: "", contentIds: [], editorIds: [], animatorIds: [], teamId: "", projectId: "", duration: "", publishDate: "", channelId: "", priority: "NORMAL" });
+        setNewTask({ id: "", title: "", keywords: "", linkContent: "", contentIds: [], editorIds: [], animatorIds: [], teamId: "", projectId: "", duration: "", publishDate: "", channelId: "", publisherId: "", priority: "NORMAL" });
       }
     }
   }, [isOpen, initialData]);
@@ -106,7 +109,7 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
   useEffect(() => {
     const fetchTeamData = async () => {
       if (!newTask.teamId) {
-        setTeamProjects([]); setTeamContents([]); setTeamEditors([]); setTeamChannels([]); return;
+        setTeamProjects([]); setTeamContents([]); setTeamEditors([]); setTeamChannels([]); setTeamPublishers([]); return;
       }
       setIsLoadingData(true);
       try {
@@ -125,6 +128,8 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
           setTeamContents(listUsers.filter((u: any) => ['CONTENT', 'LEADER'].includes(u.role)));
           setTeamEditors(listUsers.filter((u: any) => ['EDITOR', 'LEADER'].includes(u.role)));
           setUsersTeam(listUsers.filter((u: any) => ['EDITOR', 'LEADER','CONTENT'].includes(u.role)));
+          // 🚀 Lấy danh sách Quản lý kênh
+          setTeamPublishers(listUsers.filter((u: any) => ['PUBLISHER', 'CHANNEL_MANAGER', 'LEADER', 'ADMIN', 'BAN_GIAM_DOC'].includes(u.role)));
         }
       } catch (error) { } finally { setIsLoadingData(false); }
     };
@@ -210,7 +215,7 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
                   <div className="grid grid-cols-2 gap-3">
                     <div className="col-span-2">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Team <span className="text-red-500">*</span></label>
-                      <select required className="w-full border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-sm text-slate-900 bg-slate-50" value={newTask.teamId} onChange={(e) => setNewTask({ ...newTask, teamId: e.target.value, projectId: "", contentIds: [], editorIds: [], animatorIds: [], channelId: "" })}>
+                      <select required className="w-full border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-sm text-slate-900 bg-slate-50" value={newTask.teamId} onChange={(e) => setNewTask({ ...newTask, teamId: e.target.value, projectId: "", contentIds: [], editorIds: [], animatorIds: [], channelId: "", publisherId: "" })}>
                         <option value="">-- Chọn Team --</option>
                         {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                       </select>
@@ -231,6 +236,15 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
                       <select required disabled={!newTask.teamId || isLoadingData} className="w-full border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-sm text-slate-900 bg-slate-50 disabled:opacity-50 disabled:text-slate-400" value={newTask.projectId} onChange={(e) => setNewTask({ ...newTask, projectId: e.target.value })}>
                         <option value="">{newTask.channelId && filteredProjects.length === 0 ? "-- Kênh trống --" : "-- Chọn --"}</option>
                         {filteredProjects.map((p: any) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      </select>
+                    </div>
+                    
+                    {/* 🚀 BỔ SUNG: Dropdown chọn Quản lý Kênh */}
+                    <div className="col-span-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block flex items-center gap-1.5"><UserCheck size={12} /> Quản lý kênh</label>
+                      <select disabled={!newTask.teamId || isLoadingData} className="w-full border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-sm text-slate-900 bg-slate-50 disabled:opacity-50 disabled:text-slate-400" value={newTask.publisherId} onChange={(e) => setNewTask({ ...newTask, publisherId: e.target.value })}>
+                        <option value="">-- Bỏ trống nếu chưa có --</option>
+                        {usersTeam.map((u: any) => <option key={u.id} value={u.id}>{u.fullName}</option>)}
                       </select>
                     </div>
                   </div>

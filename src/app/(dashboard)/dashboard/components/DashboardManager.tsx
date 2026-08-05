@@ -67,7 +67,7 @@ export default function DashboardManager() {
                         {data.stats?.pendingQC > 0 && <span className="hidden sm:inline-block text-[10px] font-black text-red-600 bg-red-50 px-2 py-1 rounded-full animate-pulse">Cần duyệt!</span>}
                     </div>
                     <p className="text-2xl md:text-3xl font-black text-slate-800">{data.stats?.pendingQC || 0}</p>
-                    <p className="text-[10px] md:text-sm font-bold text-slate-500 uppercase mt-1 line-clamp-1">Chờ Nghiệm Thu</p>
+                    <p className="text-[10px] md:text-sm font-bold text-slate-500 uppercase mt-1 line-clamp-1">Chờ Đăng</p>
                 </div>
 
                 <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200">

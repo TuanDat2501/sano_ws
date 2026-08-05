@@ -180,6 +180,7 @@ export default function ChannelsPage() {
                                         {ch.status === 'HOAT_DONG' && <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded-md text-[10px] font-black uppercase">Hoạt động</span>}
                                         {ch.status === 'CANH_BAO' && <span className="bg-orange-100 text-orange-700 px-2 py-1 rounded-md text-[10px] font-black uppercase flex items-center gap-1 w-max"><ShieldAlert size={12} className="shrink-0"/> Cảnh báo</span>}
                                         {ch.status === 'BAY_KENH' && <span className="bg-red-100 text-red-700 px-2 py-1 rounded-md text-[10px] font-black uppercase line-through">Bay kênh</span>}
+                                        {ch.status === 'DUNG_HOAT_DONG' && <span className="bg-red-100 text-red-700 px-2 py-1 rounded-md text-[10px] font-black uppercase ">Dừng hoạt động</span>}
                                     </td>
                                     <td className="p-4">
                                         {ch.monetization === 'CHUA_DAT' && <span className="text-slate-400 text-xs font-bold">Chưa đạt</span>}
