@@ -4,6 +4,7 @@ import { X, Link as LinkIcon, CheckCircle2, Loader2, MessageSquare, Send, Clipbo
 import { useEffect, useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 import EvaluationPanel from "./EvaluationPanel";
+import { useToast } from "./ToastProvider";
 
 interface TaskDetailDrawerProps {
   isOpen: boolean;
@@ -34,11 +35,6 @@ interface TaskDetailDrawerProps {
   onUploadImage?: (file: File) => Promise<string | null>;
 }
 
-const MOCK_CRITERIA = [
-  { id: 'c1', name: 'TẦNG 1: RETENTION (Giữ chân)', weight: 50, standards: [{ id: 's1', text: 'Hook 3s đầu có biến hoặc câu hỏi tò mò' }, { id: 's2', text: 'Nhịp kể phù hợp, có điểm nghỉ thở' }, { id: 's3', text: 'Hình ảnh thay đổi (Pattern Interrupt) mỗi 2-3s' }] },
-  { id: 'c2', name: 'TẦNG 2: SATISFACTION (Hài lòng)', weight: 30, standards: [{ id: 's4', text: 'Tạo được ít nhất 1 cảm xúc rõ ràng' }, { id: 's5', text: 'Mang lại 1 giá trị/bài học cụ thể' }, { id: 's6', text: 'Kết thúc tạo dư âm, có tính hành động' }] },
-  { id: 'c3', name: 'TẦNG 3: POLISHING (Độ mượt)', weight: 20, standards: [{ id: 's7', text: 'Nhạc nền không lấn Voice' }, { id: 's8', text: 'Góc máy và Text/Subtitle hỗ trợ cảm xúc' }, { id: 's9', text: 'Không dính lỗi bản quyền, âm thanh rác' }] }
-];
 
 export default function TaskDetailDrawer({
   isOpen, isLoading, onClose, selectedTask, taskLinks, setTaskLinks, errors, isSavingLinks, userRole,
@@ -57,7 +53,7 @@ export default function TaskDetailDrawer({
   const [savingField, setSavingField] = useState<string | null>(null);
   const [savedField, setSavedField] = useState<string | null>(null);
   const [editingFields, setEditingFields] = useState<Record<string, boolean>>({});
-
+  const { showToast } = useToast();
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   // 🚀 BỔ SUNG: State lưu mức độ ưu tiên khi làm lại
@@ -77,15 +73,7 @@ export default function TaskDetailDrawer({
     }
   }, [isOpen, selectedTask?.id]);
 
-  const currentScore = useMemo(() => {
-    let totalScore = 0;
-    MOCK_CRITERIA.forEach(criteria => {
-      const totalItems = criteria.standards.length;
-      const checkedItems = criteria.standards.filter(s => checkedStandards[s.id]).length;
-      if (totalItems > 0) totalScore += (checkedItems / totalItems) * (criteria.weight / 10);
-    });
-    return totalScore.toFixed(1);
-  }, [checkedStandards]);
+
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -127,21 +115,43 @@ export default function TaskDetailDrawer({
   const isManager = ["ADMIN", "BAN_GIAM_DOC", "LEADER", "HR", "KE_TOAN"].includes(userRole);
 
   const handleAutoSave = async (fieldKey: string, newValue: string) => {
-    if (newValue === (selectedTask[fieldKey] || "")) return;
+    // 🚀 Lập tức đóng Input nếu nội dung không có sự thay đổi
+    if (newValue === (selectedTask[fieldKey] || "")) {
+        setEditingFields(prev => ({ ...prev, [fieldKey]: false }));
+        return;
+    }
+
     setSavingField(fieldKey);
     try {
+      const payloadValue = newValue === "" ? null : newValue;
+
       const res = await fetch(`/api/tasks/${selectedTask.id}`, {
         method: "PATCH", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ [fieldKey]: newValue })
+        body: JSON.stringify({ [fieldKey]: payloadValue })
       });
+      
+      const data = await res.json();
+
       if (res.ok) {
         selectedTask[fieldKey] = newValue;
+        // 🚀 ĐÃ SỬA: Lưu thành công -> Đóng chế độ sửa
+        setEditingFields(prev => ({ ...prev, [fieldKey]: false }));
+
         setSavingField(null);
         setSavedField(fieldKey);
         setTimeout(() => setSavedField(null), 2500);
         if (onRefreshBoard) onRefreshBoard();
+      } else {
+        setSavingField(null);
+        showToast("error", data.error || "Có lỗi xảy ra khi lưu thông tin!");
+        // 🚀 ĐÃ SỬA: Lỗi trùng Link -> BẮT BUỘC GIỮ CHẾ ĐỘ SỬA ĐỂ USER FIX LẠI
+        setEditingFields(prev => ({ ...prev, [fieldKey]: true }));
       }
-    } catch (error) { setSavingField(null); }
+    } catch (error) { 
+        setSavingField(null);
+        showToast("error", "Lỗi kết nối tới Server!");
+        setEditingFields(prev => ({ ...prev, [fieldKey]: true }));
+    }
   };
 
   const handleDeleteClick = async () => {
