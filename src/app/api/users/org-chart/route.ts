@@ -11,7 +11,7 @@ export async function GET(req: Request) {
         const session = await getServerSession(authOptions);
         if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-        // 🚀 1. TÌM XEM HÔM NAY LÀ TUẦN MẤY THEO LOGIC CỦA SẾP
+        // 1. TÌM XEM HÔM NAY LÀ TUẦN MẤY
         const now = new Date();
         const year = now.getFullYear();
         const month = now.getMonth() + 1;
@@ -27,7 +27,7 @@ export async function GET(req: Request) {
         
         const currentWeekNumber = Math.floor(diffDays / 7) + 1;
 
-        // 🚀 2. LẤY NGÀY ĐẦU VÀ CUỐI TUẦN
+        // 2. LẤY NGÀY ĐẦU VÀ CUỐI TUẦN
         const { start, end } = getContinuousWeekRange(year, month, currentWeekNumber);
         
         const startOfWeek = new Date(start);
@@ -36,15 +36,17 @@ export async function GET(req: Request) {
         const endOfWeek = new Date(end);
         endOfWeek.setHours(23, 59, 59, 999);
 
-        // 3. Query lấy User kèm theo Target KPI
+        // 3. Query lấy User
         const users = await prisma.user.findMany({
             where: { isActive: true },
             select: {
                 id: true,
                 fullName: true,
+                username: true, // 🚀 BỔ SUNG LẤY TÀI KHOẢN
                 role: true,
                 avatarUrl: true,
                 teamId: true,
+                team: { select: { name: true } }, // 🚀 BỔ SUNG LẤY TÊN TEAM
                 isActive: true,
                 weeklyKPIs: {
                     where: { year: year, month: month, weekNumber: currentWeekNumber },
@@ -54,7 +56,6 @@ export async function GET(req: Request) {
         });
 
         // 4. Lấy Lịch sử làm việc (TaskLog)
-        // 🚀 ĐÃ SỬA: Lấy thêm action DAILY_REPORT và include task để bóc tách thời lượng, kênh
         const taskLogs = await prisma.taskLog.findMany({
             where: {
                 createdAt: { gte: startOfWeek, lte: endOfWeek },
@@ -73,7 +74,6 @@ export async function GET(req: Request) {
             }
         });
 
-        // Lọc bỏ trùng lặp DAILY_REPORT trong cùng 1 ngày để đảm bảo công bằng
         const validTaskLogs: typeof taskLogs = [];
         const dailyReportTracker = new Set<string>();
 
@@ -91,7 +91,7 @@ export async function GET(req: Request) {
             }
         });
 
-        // 5. Lắp ráp dữ liệu và TÍNH KPI CHUẨN
+        // 5. Lắp ráp dữ liệu
         const formattedUsers = users.map(user => {
             const kpiRecord = user.weeklyKPIs.length > 0 ? user.weeklyKPIs[0] : null;
             const targetValue = kpiRecord?.targetValue || 0;
@@ -105,7 +105,6 @@ export async function GET(req: Request) {
             const userLogs = validTaskLogs.filter(log => log.userId === user.id);
             let actualCount = 0;
 
-            // 🚀 ĐÃ SỬA: Áp dụng thuật toán chia điểm KPI theo Channel & Rework
             if (targetDetails && targetDetails.length > 0) {
                 let totalEquivalentVideos = 0;
 
@@ -131,7 +130,6 @@ export async function GET(req: Request) {
                     totalEquivalentVideos += equivalentRounded;
                 });
 
-                // Các task lọt ra ngoài vùng target (Vượt tuyến)
                 const uniqueOutsideTaskIds = new Set<string>();
                 const logsOutside = userLogs.filter(log => {
                     const isCovered = targetDetails.some(d => {
@@ -147,7 +145,6 @@ export async function GET(req: Request) {
 
                 actualCount = Math.round(totalEquivalentVideos * 10) / 10;
             } else {
-                // Fallback nếu người dùng chưa có target chi tiết (Logic đếm task)
                 const uniqueTasksCount = new Set(userLogs.map(l => l.taskId)).size;
                 actualCount = uniqueTasksCount;
             }
@@ -155,15 +152,24 @@ export async function GET(req: Request) {
             return {
                 id: user.id,
                 fullName: user.fullName,
+                username: user.username, // 🚀 ĐÃ BỔ SUNG
                 role: user.role,
                 avatarUrl: user.avatarUrl,
                 teamId: user.teamId,
+                teamName: user.team?.name || null, // 🚀 ĐÃ BỔ SUNG
                 isActive: user.isActive,
                 currentWeekStats: {
                     target: targetValue,
                     actual: actualCount
                 }
             };
+        });
+
+        // 🚀 SẮP XẾP LEADER LÊN ĐẦU DANH SÁCH RỒI MỚI TRẢ VỀ
+        formattedUsers.sort((a, b) => {
+            if (a.role === 'LEADER' && b.role !== 'LEADER') return -1;
+            if (a.role !== 'LEADER' && b.role === 'LEADER') return 1;
+            return 0;
         });
 
         return NextResponse.json(formattedUsers);

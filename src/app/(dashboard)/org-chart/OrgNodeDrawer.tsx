@@ -45,11 +45,13 @@ export default function OrgNodeDrawer({ isOpen, onClose, nodeData }: { isOpen: b
                                 <h3 className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-200 pb-2 mb-2 md:mb-3">Thông tin hồ sơ</h3>
                                 <div className="flex items-center gap-2 md:gap-3 text-xs md:text-sm font-medium text-slate-600">
                                     <UserCircle2 size={16} className="text-slate-400" /> 
-                                    Tài khoản: <span className="font-bold text-slate-900 truncate">{nodeData.fullUserObj.username}</span>
+                                    {/* 🚀 ĐÃ BỔ SUNG LẤY USERNAME */}
+                                    Tài khoản: <span className="font-bold text-slate-900 truncate">{nodeData.fullUserObj.username || "Chưa cập nhật"}</span>
                                 </div>
                                 <div className="flex items-center gap-2 md:gap-3 text-xs md:text-sm font-medium text-slate-600">
                                     <Briefcase size={16} className="text-slate-400" /> 
-                                    Thuộc team: <span className="font-bold text-slate-900 truncate">{nodeData.fullUserObj.team || "Độc lập"}</span>
+                                    {/* 🚀 ĐÃ BỔ SUNG LẤY TÊN TEAM */}
+                                    Thuộc team: <span className="font-bold text-slate-900 truncate">{nodeData.fullUserObj.teamName || "Độc lập"}</span>
                                 </div>
                             </div>
 

@@ -53,6 +53,18 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         if (rawBody.animationLink !== undefined) body.animationLink = rawBody.animationLink;
         if (rawBody.linkProject !== undefined) body.linkProject = rawBody.linkProject;
         if (rawBody.note !== undefined) body.note = rawBody.note;
+        
+        // 🚀 BỔ SUNG: Tiếp nhận Ngày Đăng
+        if (rawBody.publishDate !== undefined) {
+            body.publishDate = rawBody.publishDate ? new Date(rawBody.publishDate) : null;
+        }
+
+        // 🚀 AUTO-FILL: Nếu dán Link Youtube lần đầu tiên mà chưa có ngày đăng -> Tự động lấy ngày hôm nay
+        if (body.publishLink && body.publishLink.trim() !== "" && oldTask.publishLink !== body.publishLink) {
+            if (!oldTask.publishDate && rawBody.publishDate === undefined) {
+                body.publishDate = new Date();
+            }
+        }
 
         if (isManager) {
             if (rawBody.title !== undefined) body.title = rawBody.title;
@@ -132,22 +144,18 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             logsToCreate.push({ action: "UPDATE_STATUS", details: `Từ [${oldTask.status}] sang [${body.status}]`, taskId, userId });
         }
 
-        // 🚀 BỔ SUNG LOGIC CHIA KPI MỚI
         const addLinkLog = (fieldName: string, label: string) => {
             if (body[fieldName] !== undefined && body[fieldName] !== (oldTask as any)[fieldName]) {
                 const newValue = body[fieldName];
-                
-                // 1. NGƯỜI BẤM DÁN LINK LÀ NGƯỜI NHẬN KPI
                 const targetUserId = userId; 
 
-                // 2. LEADER CHỈ NHẬN KPI KHI DÁN PUBLISH LINK
-                let actionType = "DAILY_REPORT";
+                const isKpiField = ['scriptLink', 'videoLink', 'animationLink', 'publishLink'].includes(fieldName);
+                let actionType = isKpiField ? "DAILY_REPORT" : "UPDATE_LINK";
+
                 if (isManager && fieldName !== 'publishLink') {
-                    // Nếu là Leader nhưng không phải dán Publish Link -> Ghi nhận UPDATE_LINK (Không được cấu hình tính điểm KPI)
                     actionType = "UPDATE_LINK"; 
                 }
 
-                // Xóa Log cũ của label này trên Task để tránh tính double điểm hoặc rác log khi sửa link
                 logsToDelete.push({
                     taskId, 
                     action: { in: ["DAILY_REPORT", "UPDATE_LINK"] },
@@ -205,6 +213,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 scriptLink: body.scriptLink !== undefined ? body.scriptLink : undefined,
                 videoLink: body.videoLink !== undefined ? body.videoLink : undefined,
                 publishLink: body.publishLink !== undefined ? body.publishLink : undefined,
+                publishDate: body.publishDate !== undefined ? body.publishDate : undefined, // 🚀 BỔ SUNG CẬP NHẬT NGÀY ĐĂNG
                 isClosed: body.isClosed !== undefined ? body.isClosed : undefined,
                 teamId: body.teamId !== undefined ? body.teamId : undefined,
                 projectId: body.projectId !== undefined ? body.projectId : undefined,
