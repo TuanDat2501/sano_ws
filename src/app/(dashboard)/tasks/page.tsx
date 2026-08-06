@@ -90,13 +90,16 @@ export default function KanbanBoard() {
   const [searchTerm, setSearchTerm] = useState(searchParams.get("search") || "");
   const [filterStatus, setFilterStatus] = useState(searchParams.get("status") || "ALL");
   const [filterChannel, setFilterChannel] = useState(searchParams.get("channelId") || "ALL");
+  const [filterTeam, setFilterTeam] = useState(searchParams.get("teamId") || "ALL");
   const [fromDate, setFromDate] = useState(searchParams.get("fromDate") || "");
   const [toDate, setToDate] = useState(searchParams.get("toDate") || "");
   const [currentPage, setCurrentPage] = useState(Number(searchParams.get("page")) || 1);
 
-  const userRole = (session?.user as any)?.role;
+  const currentUser = session?.user as any;
+  const userRole = currentUser?.role;
   const canReject = userRole === 'ADMIN' || userRole === 'LEADER' || userRole === 'BAN_GIAM_DOC';
   const canCreateTask = ["ADMIN", "BAN_GIAM_DOC", "LEADER"].includes(userRole);
+  const isTopManager = ["ADMIN", "BAN_GIAM_DOC"].includes(userRole);
 
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
@@ -121,23 +124,29 @@ export default function KanbanBoard() {
     const matchSearch = task.title.toLowerCase().includes(searchTerm.toLowerCase());
     const matchStatus = filterStatus === "ALL" || task.status === filterStatus;
     const matchChannel = filterChannel === "ALL" || task.channelId === filterChannel;
+    const matchTeam = filterTeam === "ALL" || task.teamId === filterTeam;
+
     const taskDate = new Date(task.createdAt).toISOString().split('T')[0];
     const matchFrom = fromDate === "" || taskDate >= fromDate;
     const matchTo = toDate === "" || taskDate <= toDate;
-    return matchSearch && matchStatus && matchChannel && matchFrom && matchTo;
+    return matchSearch && matchStatus && matchChannel && matchTeam && matchFrom && matchTo;
   });
 
   const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
   const [isMerging, setIsMerging] = useState(false);
 
-  // 🚀 ĐÃ SỬA: Lật lại điều kiện MẶC ĐỊNH
-  // Hệ thống sẽ coi như mặc định 5 cột (Vì đa số công việc là Tổng Hợp).
-  // Chỉ khi sếp CỐ TÌNH chọn một kênh có Category = "AI" thì mới lòi ra thêm 2 cột chuyển động.
-  const activeChannelObj = channels.find(c => c.id === filterChannel);
-  const isAiChannel = activeChannelObj?.category === 'AI'; 
-  
+  let isShow7Columns = false;
+
+  if (isTopManager && filterTeam === "ALL") {
+      isShow7Columns = true;
+  } else {
+      const currentViewedTeamId = (isTopManager && filterTeam !== "ALL") ? filterTeam : currentUser?.teamId;
+      const activeTeamObj = teams.find(t => t.id === currentViewedTeamId);
+      isShow7Columns = activeTeamObj?.name?.toLowerCase().includes('ai') || false;
+  }
+
   const BOARD_COLUMNS = { ...COLUMNS };
-  if (!isAiChannel) {
+  if (!isShow7Columns) {
     delete (BOARD_COLUMNS as any).ANIMATION_DOING;
     delete (BOARD_COLUMNS as any).ANIMATION_REVIEW;
   }
@@ -182,13 +191,15 @@ export default function KanbanBoard() {
         return;
       }
 
-      const currentStatus = viewMode === 'backlog' ? 'BACKLOG' : filterStatus;
+      // 🚀 BỔ SUNG: Ép trạng thái về ALL nếu đang ở màn Kanban để không bị mất cột
+      const currentStatus = viewMode === 'backlog' ? 'BACKLOG' : (viewMode === 'board' ? 'ALL' : filterStatus);
       const currentLimit = viewMode === 'backlog' ? "50" : ITEMS_PER_PAGE.toString();
 
       const params = new URLSearchParams({
         viewMode, page: currentPage.toString(), limit: currentLimit,
         search: searchTerm, status: currentStatus, fromDate, toDate,
-        ...(filterChannel !== "ALL" && { channelId: filterChannel })
+        ...(filterChannel !== "ALL" && { channelId: filterChannel }),
+        ...(filterTeam !== "ALL" && { teamId: filterTeam }) 
       });
 
       const res = await fetch(`/api/tasks?${params}`);
@@ -201,6 +212,8 @@ export default function KanbanBoard() {
         
         data.tasks.forEach((task: any) => {
           if (filterChannel !== "ALL" && task.channelId !== filterChannel) return;
+          if (filterTeam !== "ALL" && task.teamId !== filterTeam) return;
+
           if (groupedTasks[task.status as keyof typeof groupedTasks]) {
             (groupedTasks[task.status as keyof typeof groupedTasks] as any[]).push(task);
           }
@@ -286,6 +299,7 @@ export default function KanbanBoard() {
     if (searchTerm) params.set("search", searchTerm); else params.delete("search");
     if (filterStatus !== "ALL") params.set("status", filterStatus); else params.delete("status");
     if (filterChannel !== "ALL") params.set("channelId", filterChannel); else params.delete("channelId"); 
+    if (filterTeam !== "ALL") params.set("teamId", filterTeam); else params.delete("teamId"); 
     if (fromDate) params.set("fromDate", fromDate); else params.delete("fromDate");
     if (toDate) params.set("toDate", toDate); else params.delete("toDate");
 
@@ -296,11 +310,7 @@ export default function KanbanBoard() {
 
     const timeoutId = setTimeout(() => { fetchTasks(); }, 300);
     return () => clearTimeout(timeoutId);
-  }, [currentPage, searchTerm, filterStatus, filterChannel, fromDate, toDate, viewMode, boardUpdateSignal]);
-
-  const handleImportExcel = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Tạm giữ nguyên logic Import...
-  };
+  }, [currentPage, searchTerm, filterStatus, filterChannel, filterTeam, fromDate, toDate, viewMode, boardUpdateSignal]);
 
   const handleExportExcel = async () => {
       setIsExporting(true);
@@ -392,10 +402,14 @@ export default function KanbanBoard() {
 
   const handleFilterChange = (setter: any, value: any) => { setter(value); setCurrentPage(1); };
 
+  // 🚀 BỔ SUNG: Reset bộ lọc Status khi nhảy sang tab khác để không bị vỡ Layout Kanban
   const handleSwitchTab = (mode: 'board' | 'list' | 'backlog' | 'surplus') => {
     setViewMode(mode);
     setCurrentPage(1);
     setSearchTerm("");
+    if (mode === 'board') {
+        setFilterStatus('ALL');
+    }
   };
 
   const loadTaskComments = async (taskId: string) => {
@@ -875,106 +889,109 @@ export default function KanbanBoard() {
 
   return (
     <PermissionGuard moduleId="MENU_TASKS">
-      <div className="h-full flex flex-col p-3 md:p-6 animate-fade-in">
-        <div className="shrink-0 mb-4 md:mb-6 space-y-4">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-0">
-            <div>
-              <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">Dây chuyền <span className="text-red-600">Sản xuất</span></h1>
-              <p className="text-xs md:text-sm text-slate-500 font-medium mt-1">Quản lý và theo dõi tiến độ video.</p>
-            </div>
-
-            <div className="flex w-full sm:w-auto items-center gap-2 md:gap-3">
-              {canCreateTask && (
-                <button
-                  onClick={handleExportExcel}
-                  disabled={isExporting}
-                  className="flex-1 sm:flex-none bg-emerald-50 border-2 border-emerald-200 hover:bg-emerald-100 text-emerald-700 px-4 py-2.5 rounded-xl md:rounded-2xl font-bold flex items-center justify-center gap-2 transition-all active:scale-95 text-sm md:text-base"
-                >
-                  {isExporting ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
-                  <span>Xuất Excel</span>
-                </button>
-              )}
-
-              {canCreateTask && (
-                <button
-                  onClick={handleClearDoneTasks}
-                  disabled={isClearing}
-                  className="flex-1 sm:flex-none bg-white border-2 border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 px-4 py-2.5 rounded-xl md:rounded-2xl font-bold flex items-center justify-center gap-2 transition-all active:scale-95 text-sm md:text-base"
-                >
-                  {isClearing ? <Loader2 size={18} className="animate-spin" /> : <Archive size={18} className="text-slate-500 md:w-5 md:h-5" />}
-                  <span className="hidden md:inline">Lưu trữ Task</span>
-                </button>
-              )}
-              {canCreateTask && (
-                <div className="flex gap-2">
-                    <button onClick={() => setIsModalOpen(true)} className="flex-1 sm:flex-none bg-red-600 hover:bg-red-700 text-white px-4 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 text-sm md:text-base">
-                      <Plus size={18} /> Tạo Video
-                    </button>
-
-                    <button onClick={() => setIsMergeModalOpen(true)} className="flex-1 sm:flex-none bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-md active:scale-95 text-sm md:text-base">
-                      <Video size={18} /> Video Ghép
-                    </button>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center bg-white p-2 md:p-3 rounded-xl md:rounded-2xl border border-slate-200 shadow-sm gap-3">
-            <div className="flex bg-slate-100 p-1 rounded-xl w-full sm:w-auto overflow-x-auto hide-scrollbar">
-              <button onClick={() => handleSwitchTab('board')} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg font-bold text-xs md:text-sm transition-all whitespace-nowrap ${viewMode === 'board' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Kanban</button>
-              <button onClick={() => handleSwitchTab('list')} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg font-bold text-xs md:text-sm transition-all whitespace-nowrap ${viewMode === 'list' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Danh sách (Excel)</button>
-              {canCreateTask && (
-                <button onClick={() => handleSwitchTab('backlog')} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg font-bold text-xs md:text-sm transition-all flex items-center gap-1.5 whitespace-nowrap ${viewMode === 'backlog' ? 'bg-indigo-600 text-white shadow-sm' : 'text-indigo-600 hover:bg-indigo-50'}`}>Kho Ý Tưởng</button>
-              )}
-              {canCreateTask && (
-                <button onClick={() => handleSwitchTab('surplus')} className={`flex-1 sm:flex-none px-4 py-2 rounded-lg font-bold text-xs md:text-sm transition-all flex items-center gap-1.5 whitespace-nowrap ${viewMode === 'surplus' ? 'bg-emerald-600 text-white shadow-sm' : 'text-emerald-600 hover:bg-emerald-50'}`}>Kiểm Soát Bài Dư</button>
-              )}
-            </div>
-
-            {viewMode !== 'backlog' && viewMode !== 'surplus' && (
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 md:gap-3 w-full lg:w-auto">
-                <div className="relative w-full sm:w-auto flex items-center bg-slate-50 border border-slate-200 rounded-lg md:rounded-xl">
-                    <div className="pl-3 py-2 shrink-0">
-                        <Filter size={16} className="text-slate-400"/>
-                    </div>
-                    <select 
-                        className="bg-transparent text-xs md:text-sm font-bold text-slate-700 px-2 py-2 w-full outline-none" 
-                        value={filterChannel} 
-                        onChange={(e) => handleFilterChange(setFilterChannel, e.target.value)}
-                    >
-                        <option value="ALL">Tất cả Kênh / Dự án</option>
-                        {channels.map((ch: any) => (
-                            <option key={ch.id} value={ch.id}>
-                                {ch.name} {ch.category === 'AI' ? '(AI)' : '(Tổng hợp)'}
-                            </option>
-                        ))}
-                    </select>
-                </div>
-
-                <input type="text" placeholder="Tìm tên task..." className="bg-slate-50 border border-slate-200 text-xs md:text-sm font-medium px-3 md:px-4 py-2 rounded-lg md:rounded-xl outline-none focus:border-blue-500 w-full sm:w-48 lg:w-48" value={searchTerm} onChange={(e) => handleFilterChange(setSearchTerm, e.target.value)} />
-                <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg md:rounded-xl px-2 md:px-3 py-1.5 md:py-1 shadow-sm w-full sm:w-auto overflow-x-auto custom-scrollbar-thin hidden lg:flex">
-                  <span className="text-[10px] font-black text-slate-400 uppercase shrink-0">Từ</span>
-                  <input type="date" className="bg-transparent text-xs md:text-sm font-bold text-slate-600 outline-none" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
-                  <div className="w-[1px] h-4 bg-slate-300 mx-1 shrink-0"></div>
-                  <span className="text-[10px] font-black text-slate-400 uppercase shrink-0">Đến</span>
-                  <input type="date" className="bg-transparent text-xs md:text-sm font-bold text-slate-600 outline-none" value={toDate} onChange={(e) => setToDate(e.target.value)} />
-                </div>
+      <div className="h-full flex flex-col p-2 md:p-4 lg:p-6 animate-fade-in bg-slate-50">
+        <div className="shrink-0 mb-3 md:mb-5 space-y-3">
+            
+            {/* ROW 1: HEADER & TABS & ACTIONS */}
+            <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-3">
                 
-                {viewMode === 'list' && (
-                    <select className="bg-slate-50 border border-slate-200 text-xs md:text-sm font-bold text-slate-600 px-3 md:px-4 py-2 rounded-lg md:rounded-xl outline-none focus:border-blue-500 w-full sm:w-auto" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
-                      <option value="ALL">Mọi trạng thái</option>
-                      <option value="TODO">Chờ Kịch bản</option>
-                      <option value="CONTENT_REVIEW">Chờ duyệt Content</option>
-                      <option value="ANIMATION_DOING">Đang làm CĐ</option>
-                      <option value="ANIMATION_REVIEW">Chờ duyệt CĐ</option>
-                      <option value="EDIT_DOING">Đang Dựng Video</option>
-                      <option value="EDIT_REVIEW">Chờ Đăng (QC)</option>
-                      <option value="DONE">Hoàn thành</option>
-                    </select>
-                )}
-              </div>
+                {/* Title & Tabs */}
+                <div className="flex flex-col md:flex-row items-start md:items-center gap-3 md:gap-6 w-full xl:w-auto">
+                    <div className="shrink-0">
+                        <h1 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight leading-none">Dây chuyền <span className="text-red-600">Sản xuất</span></h1>
+                    </div>
+                    
+                    {/* TABS ĐÃ ĐƯỢC LÊN ĐÂY & ẨN THANH CUỘN */}
+                    <div className="flex bg-slate-200/70 p-1 rounded-xl w-full md:w-auto overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] shrink-0 border border-slate-200/50">
+                        <button onClick={() => handleSwitchTab('board')} className={`flex-1 md:flex-none px-4 py-1.5 rounded-lg font-bold text-xs md:text-sm transition-all whitespace-nowrap ${viewMode === 'board' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'}`}>Kanban</button>
+                        <button onClick={() => handleSwitchTab('list')} className={`flex-1 md:flex-none px-4 py-1.5 rounded-lg font-bold text-xs md:text-sm transition-all whitespace-nowrap ${viewMode === 'list' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'}`}>Danh sách</button>
+                        {canCreateTask && (
+                            <button onClick={() => handleSwitchTab('backlog')} className={`flex-1 md:flex-none px-4 py-1.5 rounded-lg font-bold text-xs md:text-sm transition-all whitespace-nowrap ${viewMode === 'backlog' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'}`}>Kho Ý Tưởng</button>
+                        )}
+                        {canCreateTask && (
+                            <button onClick={() => handleSwitchTab('surplus')} className={`flex-1 md:flex-none px-4 py-1.5 rounded-lg font-bold text-xs md:text-sm transition-all whitespace-nowrap ${viewMode === 'surplus' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'}`}>Bài Dư</button>
+                        )}
+                    </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center gap-2 w-full xl:w-auto overflow-x-auto [&::-webkit-scrollbar]:hidden shrink-0">
+                    {canCreateTask && (
+                        <button onClick={handleExportExcel} disabled={isExporting} className="flex-1 md:flex-none bg-white text-emerald-700 px-3 py-2 rounded-xl font-bold flex items-center justify-center gap-2 whitespace-nowrap text-xs md:text-sm hover:bg-emerald-50 transition-colors border border-emerald-200 shadow-sm">
+                            {isExporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />} Xuất Excel
+                        </button>
+                    )}
+                    {canCreateTask && (
+                        <button onClick={handleClearDoneTasks} disabled={isClearing} className="flex-1 md:flex-none bg-white text-slate-700 px-3 py-2 rounded-xl font-bold flex items-center justify-center gap-2 whitespace-nowrap text-xs md:text-sm hover:bg-slate-50 transition-colors border border-slate-200 shadow-sm">
+                            {isClearing ? <Loader2 size={16} className="animate-spin" /> : <Archive size={16} />} Lưu trữ
+                        </button>
+                    )}
+                    {canCreateTask && (
+                        <button onClick={() => setIsMergeModalOpen(true)} className="flex-1 md:flex-none bg-indigo-600 text-white px-3 py-2 rounded-xl font-bold flex items-center justify-center gap-2 whitespace-nowrap text-xs md:text-sm hover:bg-indigo-700 transition-colors shadow-sm">
+                            <Video size={16} /> Video Ghép
+                        </button>
+                    )}
+                    {canCreateTask && (
+                        <button onClick={() => setIsModalOpen(true)} className="flex-1 md:flex-none bg-red-600 text-white px-3 py-2 rounded-xl font-bold flex items-center justify-center gap-2 whitespace-nowrap text-xs md:text-sm hover:bg-red-700 transition-colors shadow-sm">
+                            <Plus size={16} /> Tạo Video
+                        </button>
+                    )}
+                </div>
+            </div>
+
+            {/* 🚀 ROW 2: FILTERS ĐỘC LẬP THEO TỪNG TAB */}
+            {viewMode !== 'surplus' && (
+                <div className="flex flex-wrap items-center gap-2 bg-white p-2 rounded-xl border border-slate-200 shadow-sm w-full">
+                    
+                    {/* Team Filter */}
+                    {isTopManager && viewMode !== 'backlog' && (
+                        <div className="relative flex-1 md:flex-none flex items-center bg-slate-50 border border-slate-200 rounded-lg">
+                            <div className="pl-2.5 py-1.5 shrink-0"><Users size={14} className="text-slate-400"/></div>
+                            <select className="bg-transparent text-xs font-bold text-slate-700 px-2 py-1.5 w-full outline-none truncate" value={filterTeam} onChange={(e) => handleFilterChange(setFilterTeam, e.target.value)}>
+                                <option value="ALL">Tất cả Team</option>
+                                {teams.map((t: any) => (<option key={t.id} value={t.id}>{t.name}</option>))}
+                            </select>
+                        </div>
+                    )}
+
+                    {/* Channel Filter */}
+                    {viewMode !== 'backlog' && (
+                        <div className="relative flex-1 md:flex-none flex items-center bg-slate-50 border border-slate-200 rounded-lg">
+                            <div className="pl-2.5 py-1.5 shrink-0"><Filter size={14} className="text-slate-400"/></div>
+                            <select className="bg-transparent text-xs font-bold text-slate-700 px-2 py-1.5 w-full outline-none truncate" value={filterChannel} onChange={(e) => handleFilterChange(setFilterChannel, e.target.value)}>
+                                <option value="ALL">Tất cả Kênh / Dự án</option>
+                                {channels.map((ch: any) => (<option key={ch.id} value={ch.id}>{ch.name}</option>))}
+                            </select>
+                        </div>
+                    )}
+
+                    {/* Status Filter CHỈ XUẤT HIỆN TẠI TAB DANH SÁCH */}
+                    {viewMode === 'list' && (
+                        <select className="bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 px-3 py-1.5 rounded-lg outline-none focus:border-blue-500 flex-1 md:flex-none" value={filterStatus} onChange={(e) => handleFilterChange(setFilterStatus, e.target.value)}>
+                            <option value="ALL">Mọi trạng thái</option>
+                            <option value="TODO">Chờ Kịch bản</option>
+                            <option value="CONTENT_REVIEW">Chờ duyệt Content</option>
+                            <option value="ANIMATION_DOING">Đang làm CĐ</option>
+                            <option value="ANIMATION_REVIEW">Chờ duyệt CĐ</option>
+                            <option value="EDIT_DOING">Đang Dựng Video</option>
+                            <option value="EDIT_REVIEW">Chờ Đăng (QC)</option>
+                            <option value="DONE">Hoàn thành</option>
+                        </select>
+                    )}
+
+                    {/* Search */}
+                    <input type="text" placeholder="Tìm tên task..." className="bg-slate-50 border border-slate-200 text-xs font-medium px-3 py-1.5 rounded-lg outline-none focus:border-blue-500 flex-1 md:flex-none min-w-[120px]" value={searchTerm} onChange={(e) => handleFilterChange(setSearchTerm, e.target.value)} />
+                    
+                    {/* Date Picker */}
+                    <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 flex-1 md:flex-none justify-center md:justify-start">
+                        <span className="text-[9px] font-black text-slate-400 uppercase shrink-0">Từ</span>
+                        <input type="date" className="bg-transparent text-xs font-bold text-slate-600 outline-none w-auto" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+                        <div className="w-[1px] h-3 bg-slate-300 shrink-0"></div>
+                        <span className="text-[9px] font-black text-slate-400 uppercase shrink-0">Đến</span>
+                        <input type="date" className="bg-transparent text-xs font-bold text-slate-600 outline-none w-auto" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+                    </div>
+                </div>
             )}
-          </div>
         </div>
 
         <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden pb-2">
