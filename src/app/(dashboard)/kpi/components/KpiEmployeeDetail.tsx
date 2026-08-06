@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock, CheckCircle, Tv, Target, LayoutList } from "lucide-react";
+import { Clock, CheckCircle, Tv, Target, LayoutList, RefreshCw } from "lucide-react";
 import { getProgressColor, InlineLoading } from "../utils";
 
 export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi: any, isLoading: boolean }) {
@@ -24,7 +24,6 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                                 </div>
                             </div>
                             
-                            {/* 🚀 ĐÃ BỔ SUNG: Hiển thị Tổng Phút và Tổng Video ở dưới */}
                             <div className="flex flex-col gap-1 mt-6 text-center w-full">
                                 <p className="text-slate-500 font-bold text-xs md:text-sm flex justify-center gap-1.5 items-center">
                                     Số Lượng Bài: <span className="text-slate-900 font-black">{activeKpi.actualValue} <span className="text-slate-400 font-medium text-xs">/ {activeKpi.targetValue}</span></span>
@@ -34,7 +33,6 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                                         <p className="text-[11px] md:text-xs font-black text-blue-700 bg-blue-50 py-1.5 px-3 rounded-lg border border-blue-100">
                                             Khối lượng (Phút): {activeKpi.totalActualMinutes || 0} / {activeKpi.totalTargetMinutes}
                                         </p>
-                                        {/* <span className="text-[9px] text-slate-400 font-medium italic mt-1">(Tất cả video được quy đổi ra tỷ lệ % theo số phút)</span> */}
                                     </div>
                                 )}
                             </div>
@@ -54,25 +52,32 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                     ) : (
                         <div className="space-y-4">
                             {activeKpi.targetDetails.map((detail: any, idx: number) => {
-                                // Tính % cho từng kênh dựa trên số phút
                                 const channelTargetMins = detail.targetCount * detail.duration;
                                 const percent = channelTargetMins > 0 ? Math.round(((detail.actualMinutes || 0) / channelTargetMins) * 100) : 0;
                                 
                                 return (
-                                    <div key={idx} className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                    <div key={idx} className={`p-3 rounded-xl border ${detail.isRework ? 'bg-rose-50/40 border-rose-100' : 'bg-slate-50 border-slate-100'}`}>
                                         <div className="flex justify-between items-start mb-2.5">
                                             <div>
-                                                <p className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
-                                                    <Tv size={14} className="text-slate-400" /> {detail.channelName}
-                                                </p>
-                                                <p className="text-[10px] font-bold text-slate-500 mt-1 uppercase tracking-wide flex items-center gap-1">
-                                                    <Clock size={10} /> Yêu cầu: {detail.duration} Phút/Video
+                                                {detail.isRework ? (
+                                                    <p className="font-bold text-rose-800 text-sm flex items-center gap-1.5">
+                                                        <RefreshCw size={14} className="text-rose-500" /> {detail.channelName}
+                                                        {/* <span className="text-[9px] bg-rose-100 text-rose-600 px-1.5 py-0.5 rounded border border-rose-200 uppercase tracking-widest ml-0.5 shadow-sm">Xào lại</span> */}
+                                                    </p>
+                                                ) : (
+                                                    <p className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
+                                                        <Tv size={14} className="text-slate-400" /> {detail.channelName}
+                                                    </p>
+                                                )}
+                                                
+                                                <p className={`text-[10px] font-bold mt-1.5 uppercase tracking-wide flex items-center gap-1 ${detail.isRework ? 'text-rose-500' : 'text-slate-500'}`}>
+                                                    <Clock size={10} /> Yêu cầu: {detail.duration} Phút
                                                 </p>
                                             </div>
                                             
-                                            <div className="text-right">
-                                                <span className="text-xs font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100 block">
-                                                    {detail.actualCount} / {detail.targetCount} Bài
+                                            <div className="text-right flex flex-col items-end">
+                                                <span className={`text-xs font-black px-2 py-0.5 rounded-md border block w-fit ${detail.isRework ? 'text-rose-700 bg-rose-100 border-rose-200' : 'text-blue-600 bg-blue-50 border-blue-100'}`}>
+                                                    {detail.actualCount} / {detail.targetCount}
                                                 </span>
                                                 <p className="text-[10px] font-black text-slate-500 mt-1.5 uppercase tracking-wide">
                                                     {detail.actualMinutes || 0} / {channelTargetMins} Phút
@@ -104,6 +109,7 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                                 <h3 className="text-sm md:text-base font-black text-slate-800 uppercase tracking-wider">Sản phẩm thực tế đã nộp</h3>
                             </div>
 
+                            {/* View cho Mobile */}
                             <div className="block md:hidden flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar bg-slate-50/30">
                                 {(!activeKpi?.logs || activeKpi.logs.length === 0) ? (
                                     <p className="text-center text-slate-400 py-10 text-sm font-medium">Chưa có công việc.</p>
@@ -123,6 +129,12 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                                                 <span className="text-[10px] font-bold text-slate-600 bg-slate-50 border border-slate-200 px-2 py-1 rounded flex items-center gap-1">
                                                     <Tv size={10} /> {log.task?.channel?.name || "Chưa gắn kênh"}
                                                 </span>
+                                                {/* 🚀 ĐÃ BỔ SUNG: Hiển thị Xào Lại trên Mobile */}
+                                                {log.task?.isRework && (
+                                                    <span className="text-[10px] font-bold text-rose-600 bg-rose-50 border border-rose-200 px-2 py-1 rounded flex items-center gap-1">
+                                                        <RefreshCw size={10} /> Xào lại
+                                                    </span>
+                                                )}
                                                 {log.task?.duration && (
                                                     <span className="text-[10px] font-bold text-slate-600 bg-slate-50 border border-slate-200 px-2 py-1 rounded flex items-center gap-1">
                                                         <Clock size={10} /> {log.task.duration} Phút
@@ -147,6 +159,7 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                                 )}
                             </div>
 
+                            {/* View cho PC */}
                             <div className="hidden md:block flex-1 overflow-x-auto overflow-y-auto custom-scrollbar bg-white">
                                 <table className="w-full text-left text-sm text-slate-600 min-w-[750px]">
                                     <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[11px] sticky top-0 z-10 border-b border-slate-200 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
@@ -177,11 +190,20 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                                                     </td>
 
                                                     <td className="px-5 py-4 font-bold text-slate-600 text-xs truncate max-w-[150px]">
-                                                        {log.task?.channel?.name ? (
-                                                            <span className="flex items-center gap-1.5 bg-slate-100 px-2 py-1 rounded w-fit border border-slate-200">
-                                                                <Tv size={12} className="text-slate-400" /> {log.task.channel.name}
-                                                            </span>
-                                                        ) : <span className="text-slate-300 italic">---</span>}
+                                                        {/* 🚀 ĐÃ BỔ SUNG: Hiển thị trạng thái Xào Lại */}
+                                                        <div className="flex flex-col gap-1.5 items-start">
+                                                            {log.task?.channel?.name ? (
+                                                                <span className="flex items-center gap-1.5 bg-slate-100 px-2 py-1 rounded w-fit border border-slate-200">
+                                                                    <Tv size={12} className="text-slate-400" /> {log.task.channel.name}
+                                                                </span>
+                                                            ) : <span className="text-slate-300 italic">---</span>}
+                                                            
+                                                            {log.task?.isRework && (
+                                                                <span className="flex items-center gap-1 bg-rose-50 text-rose-600 px-2 py-0.5 rounded w-fit border border-rose-200 text-[9px] uppercase tracking-widest">
+                                                                    <RefreshCw size={10} /> Xào lại
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     </td>
                                                     
                                                     <td className="px-5 py-4 text-center">

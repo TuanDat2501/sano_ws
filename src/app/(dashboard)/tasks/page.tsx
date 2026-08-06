@@ -130,11 +130,14 @@ export default function KanbanBoard() {
   const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
   const [isMerging, setIsMerging] = useState(false);
 
+  // 🚀 ĐÃ SỬA: Lật lại điều kiện MẶC ĐỊNH
+  // Hệ thống sẽ coi như mặc định 5 cột (Vì đa số công việc là Tổng Hợp).
+  // Chỉ khi sếp CỐ TÌNH chọn một kênh có Category = "AI" thì mới lòi ra thêm 2 cột chuyển động.
   const activeChannelObj = channels.find(c => c.id === filterChannel);
-  const isTongHopChannel = activeChannelObj?.category === 'TONG_HOP';
+  const isAiChannel = activeChannelObj?.category === 'AI'; 
   
   const BOARD_COLUMNS = { ...COLUMNS };
-  if (isTongHopChannel) {
+  if (!isAiChannel) {
     delete (BOARD_COLUMNS as any).ANIMATION_DOING;
     delete (BOARD_COLUMNS as any).ANIMATION_REVIEW;
   }
@@ -490,18 +493,15 @@ export default function KanbanBoard() {
         if (socket) {
           socket.emit("board_updated");
           
-          // Ưu tiên dùng list Notification trả về từ Backend (Chứa đẩy đủ list User gộp)
           if (data && data.userIdsToNotify && data.userIdsToNotify.length > 0) {
             socket.emit("send_notification", { userIds: data.userIdsToNotify, notification: data.notifications[0] });
           } 
           else {
-            // 🚀 BỔ SUNG: Xử lý gom toàn bộ mảng ID của Co-workers để thông báo nếu server không trả Noti
             const currentUserId = (session?.user as any)?.id;
             const currentUserName = (session?.user as any)?.name || (session?.user as any)?.fullName || "Ai đó";
             
             const targetIds = new Set<string>();
 
-            // Gom sạch cả người làm chính và người làm phụ
             const contentIds = [movedTask.contentId, ...(movedTask.coContentUsers?.map((u:any)=>u.id) || [])].filter(Boolean);
             const editorIds = [movedTask.editorId, ...(movedTask.coEditorUsers?.map((u:any)=>u.id) || [])].filter(Boolean);
             const animatorIds = [movedTask.animatorId, ...(movedTask.coAnimatorUsers?.map((u:any)=>u.id) || [])].filter(Boolean);
@@ -593,7 +593,6 @@ export default function KanbanBoard() {
 
         if (socket) {
           socket.emit("board_updated");
-          // 🚀 BỔ SUNG: Đẩy thông báo cho mảng userIdsToNotify từ API trả về
           if (data.userIdsToNotify && data.userIdsToNotify.length > 0) {
             socket.emit("send_notification", { userIds: data.userIdsToNotify, notification: data.notifications[0] });
           }
@@ -658,7 +657,6 @@ export default function KanbanBoard() {
         if (socket) {
           socket.emit("board_updated");
           if (newClosedState) {
-            // 🚀 BỔ SUNG: Dùng mảng userIdsToNotify từ API
             if (data.userIdsToNotify && data.userIdsToNotify.length > 0) {
               socket.emit("send_notification", { userIds: data.userIdsToNotify, notification: data.notifications[0] });
             } 
@@ -668,7 +666,6 @@ export default function KanbanBoard() {
     } catch (error) { showToast("error", "Lỗi thao tác"); }
   };
 
-  // 🚀 ĐÃ SỬA: Hàm nhận "reason" và "priority" từ Modal
   const handleRejectTask = async (reason: string, priority: string) => {
     if (!reason) return;
 
@@ -676,13 +673,11 @@ export default function KanbanBoard() {
       const res = await fetch(`/api/tasks/${selectedTask.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        // 🚀 CẬP NHẬT MỨC ĐỘ ƯU TIÊN VÀO ĐÂY
         body: JSON.stringify({ isClosed: false, status: "TODO", priority: priority })
       });
       const data = await res.json();
       
       if (res.ok) {
-        // 🚀 BỔ SUNG: Bắn cmt
         const chatRes = await fetch(`/api/tasks/${selectedTask.id}/comments`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -852,7 +847,6 @@ export default function KanbanBoard() {
         if (socket) {
           socket.emit("board_updated");
           
-          // 🚀 BỔ SUNG: Quét toàn bộ để báo kết quả chấm điểm
           const targetIds = new Set<string>();
           [
              selectedTask.editorId, selectedTask.contentId, selectedTask.animatorId,

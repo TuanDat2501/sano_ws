@@ -49,9 +49,6 @@ export async function GET(req: Request) {
             return chartTemplate;
         };
 
-        // ==========================================
-        // 👑 LUỒNG DATA CHO QUẢN LÝ (BGD / ADMIN / LEADER)
-        // ==========================================
         if (isManager) {
             let teamUserIds: string[] = [];
             if (!isTopManagement) {
@@ -85,19 +82,14 @@ export async function GET(req: Request) {
                 kpiRecords
             ] = await Promise.all([
                 prisma.task.count({ where: { ...taskFilter, isClosed: false } }),
-
                 prisma.task.count({
                     where: {
                         ...taskFilter,
                         isClosed: false,
                         status: { in: ["CONTENT_REVIEW", "ANIMATION_REVIEW", "EDIT_REVIEW", "DONE"] },
-                        NOT: [
-                            { videoLink: null },
-                            { videoLink: "" }
-                        ]
+                        NOT: [{ videoLink: null }, { videoLink: "" }]
                     }
                 }),
-
                 prisma.task.count({
                     where: {
                         ...taskFilter,
@@ -106,7 +98,6 @@ export async function GET(req: Request) {
                         createdAt: { lt: threeDaysAgo }
                     }
                 }),
-
                 prisma.taskLog.findMany({
                     where: {
                         createdAt: { gte: sevenDaysAgo },
@@ -116,10 +107,9 @@ export async function GET(req: Request) {
                     orderBy: { createdAt: 'desc' },
                     include: { 
                         user: { select: { fullName: true } },
-                        task: { select: { id: true, duration: true, channelId: true } }
+                        task: { select: { id: true, duration: true, channelId: true, isRework: true } }
                     }
                 }),
-
                 prisma.weeklyKPI.findMany({
                     where: {
                         year: today.getFullYear(),
@@ -165,11 +155,16 @@ export async function GET(req: Request) {
 
                 const userLogs = userLogsMap.get(k.userId) || [];
                 let userTargetMinutes = 0;
-                let userTotalEquivalentVideos = 0;
+                let userActualMinutes = 0;
 
                 if (targetDetails && targetDetails.length > 0) {
                     targetDetails.forEach(detail => {
-                        const logsOfChannel = userLogs.filter(log => log.task?.channelId === detail.channelId);
+                        // 🚀 SỬA LỖI: Bắt buộc cùng Kênh trước, sau đó mới xét Xào Lại / Làm mới
+                        const logsOfChannel = userLogs.filter(log => {
+                            const isMatchChannel = log.task?.channelId === detail.channelId;
+                            if (!isMatchChannel) return false;
+                            return detail.isRework ? log.task?.isRework === true : log.task?.isRework !== true;
+                        });
                         
                         const uniqueTaskIds = new Set<string>();
                         let actualMinutes = 0;
@@ -180,21 +175,13 @@ export async function GET(req: Request) {
                             }
                         });
                         
-                        const equivalent = detail.duration > 0 ? actualMinutes / detail.duration : actualMinutes;
-                        userTotalEquivalentVideos += (Math.round(equivalent * 10) / 10);
                         userTargetMinutes += (Number(detail.targetCount) * Number(detail.duration));
+                        userActualMinutes += actualMinutes; 
                     });
 
-                    const uniqueOutsideTaskIds = new Set<string>();
-                    const logsOutside = userLogs.filter(log => !targetDetails.some(d => d.channelId === log.task?.channelId));
-                    logsOutside.forEach(log => uniqueOutsideTaskIds.add(log.taskId));
-                    userTotalEquivalentVideos += uniqueOutsideTaskIds.size;
-
-                    const actualMinutesUser = userLogs.reduce((sum, log) => sum + Number(log.task?.duration || 0), 0);
-                    
                     if (userTargetMinutes > 0) {
                        totalTargetPoint += 100;
-                       totalActualPoint += Math.round((actualMinutesUser / userTargetMinutes) * 100);
+                       totalActualPoint += Math.round((userActualMinutes / userTargetMinutes) * 100);
                     }
                 } else {
                     const uniqueTasksCount = new Set(userLogs.map(l => l.taskId)).size;
@@ -246,9 +233,6 @@ export async function GET(req: Request) {
             });
         }
 
-        // ==========================================
-        // 👷 LUỒNG DATA CHO NHÂN VIÊN (CONTENT / EDITOR / PUBLISHER)
-        // ==========================================
         else {
             const [
                 myActiveTasks,
@@ -268,7 +252,6 @@ export async function GET(req: Request) {
                     },
                     select: { id: true, title: true, createdAt: true }
                 }),
-
                 prisma.taskLog.findMany({
                     where: {
                         userId: userId,
@@ -276,7 +259,6 @@ export async function GET(req: Request) {
                     },
                     select: { taskId: true, action: true, createdAt: true }
                 }),
-
                 prisma.taskLog.findMany({
                     where: {
                         userId: userId,
@@ -285,10 +267,9 @@ export async function GET(req: Request) {
                     },
                     orderBy: { createdAt: 'desc' },
                     include: { 
-                        task: { select: { id: true, title: true, duration: true, channelId: true } } 
+                        task: { select: { id: true, title: true, duration: true, channelId: true, isRework: true } } 
                     }
                 }),
-
                 prisma.weeklyKPI.findFirst({
                     where: {
                         userId: userId,
@@ -316,9 +297,6 @@ export async function GET(req: Request) {
 
             const logsThisWeek = validLogs7Days.filter(log => new Date(log.createdAt) >= startOfWeek);
 
-            // ==========================================
-            // 🚀 CÔNG THỨC MỚI: Tính % và xuất luôn details
-            // ==========================================
             const targetValue = myKpiThisWeek?.targetValue || 0;
             const targetDetailsRaw = myKpiThisWeek?.targetDetails;
             let targetDetails: any[] = [];
@@ -335,7 +313,12 @@ export async function GET(req: Request) {
                 let totalEquivalentVideos = 0;
 
                 targetDetails.forEach(detail => {
-                    const logsOfChannel = logsThisWeek.filter(log => log.task?.channelId === detail.channelId);
+                    // 🚀 SỬA LỖI: Bắt buộc cùng Kênh trước, sau đó mới xét Xào Lại / Làm mới
+                    const logsOfChannel = logsThisWeek.filter(log => {
+                         const isMatchChannel = log.task?.channelId === detail.channelId;
+                         if (!isMatchChannel) return false;
+                         return detail.isRework ? log.task?.isRework === true : log.task?.isRework !== true;
+                    });
                     
                     const uniqueTaskIds = new Set<string>();
                     let actualMinutes = 0;
@@ -351,19 +334,25 @@ export async function GET(req: Request) {
                     
                     totalEquivalentVideos += equivalentRounded;
                     totalTargetMinutes += (Number(detail.targetCount) * Number(detail.duration));
-
-                    // 🚀 Đã sửa: Lưu số lượng thực tế ngược lại vào mảng details để trả xuống UI
                     detail.actualCount = equivalentRounded;
+
+                    totalActualMinutes += actualMinutes; 
                 });
 
+                // Các task lọt ra ngoài vùng target
                 const uniqueOutsideTaskIds = new Set<string>();
-                const logsOutside = logsThisWeek.filter(log => !targetDetails.some(d => d.channelId === log.task?.channelId));
+                const logsOutside = logsThisWeek.filter(log => {
+                    // 🚀 SỬA LỖI: Xem log này có nằm trong ĐÚNG kênh + ĐÚNG trạng thái rework của bất kỳ target nào không
+                    const isCovered = targetDetails.some(d => {
+                        const isMatchChannel = d.channelId === log.task?.channelId;
+                        const isMatchRework = d.isRework ? log.task?.isRework === true : log.task?.isRework !== true;
+                        return isMatchChannel && isMatchRework;
+                    });
+                    return !isCovered;
+                });
+                
                 logsOutside.forEach(log => uniqueOutsideTaskIds.add(log.taskId));
                 totalEquivalentVideos += uniqueOutsideTaskIds.size;
-
-                logsThisWeek.forEach(log => {
-                    totalActualMinutes += Number(log.task?.duration || 0);
-                });
 
                 actualCount = Math.round(totalEquivalentVideos * 10) / 10;
                 kpiPercent = totalTargetMinutes > 0 ? Math.round((totalActualMinutes / totalTargetMinutes) * 100) : 0;
@@ -407,7 +396,6 @@ export async function GET(req: Request) {
                     kpiPercent: kpiPercent,
                     targetThisWeek: targetValue,
                     actualThisWeek: actualCount,
-                    // 🚀 Gửi kèm list KPI chi tiết xuống Frontend
                     targetDetails: targetDetails 
                 },
                 recentLogs: mappedRecentLogs,

@@ -1,4 +1,4 @@
-import { Users, FileSpreadsheet, Loader2, Plus, Target, X, Check, Clock, Tv } from "lucide-react";
+import { Users, FileSpreadsheet, Loader2, Plus, Target, X, Check, Clock, Tv, RefreshCw } from "lucide-react";
 import { useState, useEffect } from "react";
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
@@ -13,13 +13,13 @@ export default function KpiTeamTable({ kpiList, handleUpdateTarget, onRowClick, 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedUser, setSelectedUser] = useState<any>(null);
     const [targetDetails, setTargetDetails] = useState<any[]>([]);
+
     const [channels, setChannels] = useState<any[]>([]);
     const [isSavingTarget, setIsSavingTarget] = useState(false);
     const [mounted, setMounted] = useState(false);
 
     useEffect(() => { setMounted(true); }, []);
 
-    // Lấy danh sách Kênh khi mở Modal
     useEffect(() => {
         if (isModalOpen && channels.length === 0) {
             fetch("/api/channels").then(res => res.json()).then((data: any) => {
@@ -31,16 +31,18 @@ export default function KpiTeamTable({ kpiList, handleUpdateTarget, onRowClick, 
     const handleOpenTargetModal = (e: React.MouseEvent, user: any) => {
         e.stopPropagation();
         setSelectedUser(user);
+        
         if (user.targetDetails && user.targetDetails.length > 0) {
             setTargetDetails([...user.targetDetails]);
         } else {
             setTargetDetails([]);
         }
+        
         setIsModalOpen(true);
     };
 
     const handleAddTargetRow = () => {
-        setTargetDetails([...targetDetails, { channelId: "", channelName: "", targetCount: 1, duration: 30 }]);
+        setTargetDetails([...targetDetails, { channelId: "", channelName: "", targetCount: 1, duration: 30, isRework: false }]);
     };
 
     const handleRemoveTargetRow = (index: number) => {
@@ -64,20 +66,19 @@ export default function KpiTeamTable({ kpiList, handleUpdateTarget, onRowClick, 
     const handleSaveTarget = async () => {
         const isValid = targetDetails.every(t => t.channelId && t.targetCount > 0 && t.duration > 0);
         if (targetDetails.length > 0 && !isValid) {
-            showToast("error", "Vui lòng nhập đầy đủ thông tin (Kênh, Số lượng, Thời lượng)!");
+            showToast("error", "Vui lòng nhập đầy đủ thông tin Kênh (Số lượng, Thời lượng)!");
             return;
         }
 
         setIsSavingTarget(true);
-        const totalTargetCount = targetDetails.reduce((sum, item) => sum + Number(item.targetCount), 0);
         
+        const totalTargetCount = targetDetails.reduce((sum, item) => sum + Number(item.targetCount), 0);
         await handleUpdateTarget(selectedUser.userId, totalTargetCount, targetDetails);
         
         setIsSavingTarget(false);
         setIsModalOpen(false);
     };
 
-    // 🚀 HÀM XUẤT EXCEL (ĐÃ CẬP NHẬT TÁCH CHI TIẾT CỘT THỰC ĐẠT)
     const handleExportReport = async () => {
         if (!kpiList || kpiList.length === 0) {
             showToast("error", "Chưa có dữ liệu KPI để xuất!");
@@ -89,26 +90,25 @@ export default function KpiTeamTable({ kpiList, handleUpdateTarget, onRowClick, 
             const workbook = new ExcelJS.Workbook();
             const worksheet = workbook.addWorksheet(`KPI Tháng ${month}`);
 
-            // 1. ĐỊNH NGHĨA CỘT 
             worksheet.columns = [
                 { header: 'STT', key: 'stt', width: 5 },
                 { header: 'Họ và tên', key: 'name', width: 25 },
                 { header: 'Vị trí (Role)', key: 'role', width: 15 },
-                { header: 'Kênh', key: 'channel', width: 25 },
+                { header: 'Kênh / Loại Video', key: 'channel', width: 25 },
                 { header: 'Mục tiêu (Bài)', key: 'targetCount', width: 15 },
                 { header: 'Thời lượng (Phút)', key: 'duration', width: 18 },
-                { header: 'Thực đạt (Chi tiết)', key: 'actual', width: 20 }, // Đổi tên cột
+                { header: 'Thực đạt (Chi tiết)', key: 'actual', width: 20 },
                 { header: 'Tiến độ (%)', key: 'percent', width: 15 },
                 { header: 'Đánh giá', key: 'status', width: 15 },
             ];
 
-            let currentRowIndex = 2; // Dòng 1 là Tiêu đề
+            let currentRowIndex = 2;
 
-            // 2. ĐỔ DỮ LIỆU VÀ GỘP Ô
             kpiList.forEach((user: any, idx: number) => {
                 const isCompleted = user.percent >= 100;
                 const percentText = `${user.percent}%`;
                 const statusText = isCompleted ? "Đạt chỉ tiêu" : "Chưa đạt";
+                
                 const hasDetails = user.targetDetails && user.targetDetails.length > 0;
                 const rowCount = hasDetails ? user.targetDetails.length : 1;
                 const startRow = currentRowIndex;
@@ -116,53 +116,38 @@ export default function KpiTeamTable({ kpiList, handleUpdateTarget, onRowClick, 
 
                 if (hasDetails) {
                     user.targetDetails.forEach((detail: any) => {
-                        // 🚀 Tính toán chuỗi hiển thị Thực đạt riêng cho dòng này
                         const detailActualText = detail.actualMinutes > 0 
                             ? `${detail.actualCount} bài (${detail.actualMinutes}p)` 
                             : (detail.actualCount > 0 ? `${detail.actualCount} bài` : "0");
 
+                        const channelDisplay = detail.isRework ? `${detail.channelName} (Xào lại)` : detail.channelName;
+
                         worksheet.addRow({
-                            stt: idx + 1,
-                            name: user.fullName || "Chưa cập nhật",
-                            role: user.role || "---",
-                            channel: detail.channelName,
-                            targetCount: detail.targetCount,
-                            duration: detail.duration,
-                            actual: detailActualText,
-                            percent: percentText,
-                            status: statusText
+                            stt: idx + 1, name: user.fullName || "---", role: user.role || "---",
+                            channel: channelDisplay, targetCount: detail.targetCount, duration: detail.duration,
+                            actual: detailActualText, percent: percentText, status: statusText
                         });
                     });
                 } else {
-                    // Fallback
                     const fallbackActualText = user.totalActualMinutes > 0 ? `${user.actualValue} bài (${user.totalActualMinutes}p)` : user.actualValue;
                     worksheet.addRow({
-                        stt: idx + 1,
-                        name: user.fullName || "Chưa cập nhật",
-                        role: user.role || "---",
-                        channel: user.targetValue > 0 ? "Mục tiêu chung" : "Chưa có chỉ tiêu",
-                        targetCount: user.targetValue > 0 ? user.targetValue : 0,
-                        duration: "---",
-                        actual: fallbackActualText,
-                        percent: percentText,
-                        status: statusText
+                        stt: idx + 1, name: user.fullName || "---", role: user.role || "---",
+                        channel: user.targetValue > 0 ? "Mục tiêu chung" : "Chưa có chỉ tiêu", targetCount: user.targetValue > 0 ? user.targetValue : 0, duration: "---",
+                        actual: fallbackActualText, percent: percentText, status: statusText
                     });
                 }
 
-                // 🚀 Gộp Ô (Chỉ gộp STT, Tên, Role, Tiến độ, Đánh giá - BỎ GỘP Thực đạt)
                 if (rowCount > 1) {
-                    worksheet.mergeCells(startRow, 1, endRow, 1); // STT
-                    worksheet.mergeCells(startRow, 2, endRow, 2); // Tên
-                    worksheet.mergeCells(startRow, 3, endRow, 3); // Role
-                    // KHÔNG gộp cột 7 (Thực đạt) nữa để giữ chi tiết từng dòng
-                    worksheet.mergeCells(startRow, 8, endRow, 8); // Tiến độ
-                    worksheet.mergeCells(startRow, 9, endRow, 9); // Đánh giá
+                    worksheet.mergeCells(startRow, 1, endRow, 1); 
+                    worksheet.mergeCells(startRow, 2, endRow, 2); 
+                    worksheet.mergeCells(startRow, 3, endRow, 3); 
+                    worksheet.mergeCells(startRow, 8, endRow, 8); 
+                    worksheet.mergeCells(startRow, 9, endRow, 9); 
                 }
 
                 currentRowIndex += rowCount;
             });
 
-            // 3. THIẾT KẾ STYLE 
             const headerRow = worksheet.getRow(1);
             headerRow.height = 30;
             headerRow.eachCell((cell) => {
@@ -176,24 +161,16 @@ export default function KpiTeamTable({ kpiList, handleUpdateTarget, onRowClick, 
                 if (rowNumber > 1) {
                     row.eachCell((cell, colNumber) => {
                         cell.border = { 
-                            top: { style: 'thin', color: { argb: 'E2E8F0' } }, 
-                            left: { style: 'thin', color: { argb: 'E2E8F0' } }, 
-                            bottom: { style: 'thin', color: { argb: 'E2E8F0' } }, 
-                            right: { style: 'thin', color: { argb: 'E2E8F0' } } 
+                            top: { style: 'thin', color: { argb: 'E2E8F0' } }, left: { style: 'thin', color: { argb: 'E2E8F0' } }, 
+                            bottom: { style: 'thin', color: { argb: 'E2E8F0' } }, right: { style: 'thin', color: { argb: 'E2E8F0' } } 
                         };
                         
-                        if (colNumber === 2 || colNumber === 4) {
-                            cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
-                        } else {
-                            cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
-                        }
+                        if (colNumber === 2 || colNumber === 4) cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+                        else cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
                         
                         if (colNumber === 9) {
-                            if (cell.value === "Đạt chỉ tiêu") {
-                                cell.font = { color: { argb: '10B981' }, bold: true }; 
-                            } else if (cell.value === "Chưa đạt") {
-                                cell.font = { color: { argb: 'EF4444' }, bold: true }; 
-                            }
+                            if (cell.value === "Đạt chỉ tiêu") cell.font = { color: { argb: '10B981' }, bold: true }; 
+                            else if (cell.value === "Chưa đạt") cell.font = { color: { argb: 'EF4444' }, bold: true }; 
                         }
                     });
                 }
@@ -208,7 +185,6 @@ export default function KpiTeamTable({ kpiList, handleUpdateTarget, onRowClick, 
 
             showToast("success", `Đã xuất báo cáo KPI tháng ${month} thành công!`);
         } catch (error) {
-            console.error("Lỗi xuất Excel:", error);
             showToast("error", "Không thể xuất file Excel lúc này.");
         } finally {
             setIsExporting(false);
@@ -229,61 +205,82 @@ export default function KpiTeamTable({ kpiList, handleUpdateTarget, onRowClick, 
                 </div>
 
                 <div className="p-6 overflow-y-auto custom-scrollbar flex-1 bg-slate-50">
+                    
                     {targetDetails.length === 0 ? (
-                        <div className="text-center py-10">
+                        <div className="text-center py-8">
                             <Target className="w-12 h-12 text-slate-300 mx-auto mb-3" />
                             <p className="text-slate-500 font-medium mb-4">Nhân sự này chưa có chỉ tiêu phân bổ theo kênh.</p>
                             <button 
                                 onClick={handleAddTargetRow}
                                 className="bg-white border border-slate-200 hover:border-blue-300 text-blue-600 font-bold px-4 py-2 rounded-xl shadow-sm transition-all flex items-center gap-2 mx-auto"
                             >
-                                <Plus size={16} /> Thêm Kênh Mục Tiêu
+                                <Plus size={16} /> Thêm Mục Tiêu
                             </button>
                         </div>
                     ) : (
                         <div className="space-y-4">
+                            <h3 className="text-sm font-black text-blue-800 flex items-center gap-2">
+                                <Tv size={16} /> Danh sách Chỉ tiêu
+                            </h3>
                             {targetDetails.map((item, index) => (
-                                <div key={index} className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-4 items-end animate-in slide-in-from-bottom-2">
-                                    <div className="w-full sm:w-2/5">
-                                        <label className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider flex items-center gap-1">
-                                            <Tv size={12}/> Kênh Đăng
+                                <div key={index} className={`p-4 rounded-xl border shadow-sm flex flex-col sm:flex-row gap-4 items-start animate-in slide-in-from-bottom-2 transition-colors ${item.isRework ? 'bg-rose-50 border-rose-200' : 'bg-white border-slate-200'}`}>
+                                    <div className="w-full sm:w-2/5 flex flex-col gap-1">
+                                        <div>
+                                            <label className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider flex items-center gap-1">
+                                                <Tv size={12}/> Kênh Đăng
+                                            </label>
+                                            <select 
+                                                className={`w-full text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none font-bold ${item.isRework ? 'bg-white border border-rose-200 text-rose-800' : 'bg-slate-50 border border-slate-200 text-slate-800'}`}
+                                                value={item.channelId}
+                                                onChange={(e) => handleTargetChange(index, "channelId", e.target.value)}
+                                            >
+                                                <option value="" disabled>-- Chọn Kênh --</option>
+                                                {channels.map((ch: any) => (
+                                                    <option key={ch.id} value={ch.id}>{ch.name}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        
+                                        <label className="flex items-center gap-1.5 cursor-pointer w-fit mt-1.5">
+                                            <input 
+                                                type="checkbox" 
+                                                checked={item.isRework || false} 
+                                                onChange={(e) => handleTargetChange(index, "isRework", e.target.checked)} 
+                                                className="w-4 h-4 rounded border-slate-300 text-rose-500 focus:ring-rose-500 cursor-pointer" 
+                                            />
+                                            <span className={`text-[11px] font-bold uppercase tracking-wider ${item.isRework ? 'text-rose-600' : 'text-slate-400 hover:text-slate-600'}`}>
+                                                Video cũ / Xào lại
+                                            </span>
                                         </label>
-                                        <select 
-                                            className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none font-bold"
-                                            value={item.channelId}
-                                            onChange={(e) => handleTargetChange(index, "channelId", e.target.value)}
-                                        >
-                                            <option value="" disabled>-- Chọn Kênh --</option>
-                                            {channels.map((ch: any) => (
-                                                <option key={ch.id} value={ch.id}>{ch.name}</option>
-                                            ))}
-                                        </select>
                                     </div>
+
                                     <div className="w-full sm:w-1/4">
                                         <label className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider flex items-center gap-1">
                                             <FileSpreadsheet size={12}/> Số Lượng
                                         </label>
                                         <input 
                                             type="number" min="1"
-                                            className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none font-black text-center"
+                                            className={`w-full text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none font-black text-center ${item.isRework ? 'bg-white border border-rose-200 text-rose-800' : 'bg-slate-50 border border-slate-200 text-slate-800'}`}
                                             value={item.targetCount}
                                             onChange={(e) => handleTargetChange(index, "targetCount", Number(e.target.value))}
                                         />
                                     </div>
+
                                     <div className="w-full sm:w-1/4">
                                         <label className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider flex items-center gap-1">
                                             <Clock size={12}/> Phút/Video
                                         </label>
                                         <input 
                                             type="number" min="1"
-                                            className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none font-black text-center text-amber-600"
+                                            className={`w-full text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none font-black text-center ${item.isRework ? 'bg-white border border-rose-200 text-rose-600' : 'bg-slate-50 border border-slate-200 text-amber-600'}`}
                                             value={item.duration}
                                             onChange={(e) => handleTargetChange(index, "duration", Number(e.target.value))}
                                         />
                                     </div>
+                                    
                                     <button 
                                         onClick={() => handleRemoveTargetRow(index)}
-                                        className="h-10 w-full sm:w-10 bg-red-50 hover:bg-red-100 text-red-500 rounded-lg flex items-center justify-center shrink-0 transition-colors"
+                                        className="h-[42px] w-full sm:w-10 bg-red-50 hover:bg-red-100 text-red-500 rounded-lg flex items-center justify-center shrink-0 transition-colors mt-2 sm:mt-[22px]"
                                         title="Xóa dòng này"
                                     >
                                         <X size={18} />
@@ -295,7 +292,7 @@ export default function KpiTeamTable({ kpiList, handleUpdateTarget, onRowClick, 
                                 onClick={handleAddTargetRow}
                                 className="w-full bg-blue-50/50 hover:bg-blue-50 border border-dashed border-blue-200 text-blue-600 font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2"
                             >
-                                <Plus size={18} /> Thêm Kênh Mục Tiêu Khác
+                                <Plus size={18} /> Thêm Mục Tiêu Khác
                             </button>
                         </div>
                     )}
@@ -386,20 +383,31 @@ export default function KpiTeamTable({ kpiList, handleUpdateTarget, onRowClick, 
                                                 
                                                 {user.targetDetails && user.targetDetails.length > 0 ? (
                                                     <div className="space-y-1">
+                                                        {/* 🚀 ĐÃ SỬA: Chống tràn Text Tên Kênh bằng truncate */}
                                                         {user.targetDetails.map((t: any, i: number) => (
-                                                            <div key={i} className="text-[10px] md:text-xs font-medium text-slate-600 flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded border border-slate-100 w-fit">
-                                                                <span className="font-bold text-slate-800">{t.channelName}</span> 
-                                                                <span className="text-slate-300">|</span> 
-                                                                <span className="text-blue-600 font-bold">{t.targetCount} vid</span> 
-                                                                <span className="text-amber-500">({t.duration}p)</span>
-                                                            </div>
+                                                            t.isRework ? (
+                                                                <div key={i} className="text-[10px] md:text-xs font-medium text-slate-600 flex items-center gap-1.5 bg-rose-50 px-2 py-1 rounded border border-rose-100 max-w-full w-fit">
+                                                                    <RefreshCw size={10} className="text-rose-500 shrink-0" />
+                                                                    <span className="font-bold text-rose-800 truncate max-w-[80px] sm:max-w-[100px]" title={t.channelName}>{t.channelName}</span> 
+                                                                    <span className="text-rose-300 shrink-0">|</span> 
+                                                                    <span className="text-rose-600 font-bold shrink-0">{t.targetCount} vid</span> 
+                                                                    <span className="text-amber-500 shrink-0">({t.duration}p)</span>
+                                                                </div>
+                                                            ) : (
+                                                                <div key={i} className="text-[10px] md:text-xs font-medium text-slate-600 flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded border border-slate-100 max-w-full w-fit">
+                                                                    <span className="font-bold text-slate-800 truncate max-w-[80px] sm:max-w-[100px]" title={t.channelName}>{t.channelName}</span> 
+                                                                    <span className="text-slate-300 shrink-0">|</span> 
+                                                                    <span className="text-blue-600 font-bold shrink-0">{t.targetCount} vid</span> 
+                                                                    <span className="text-amber-500 shrink-0">({t.duration}p)</span>
+                                                                </div>
+                                                            )
                                                         ))}
                                                     </div>
                                                 ) : user.targetValue > 0 ? (
-                                                    <div className="text-[10px] md:text-xs font-medium text-slate-600 flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded border border-slate-100 w-fit">
+                                                    <div className="text-[10px] md:text-xs font-medium text-slate-600 flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded border border-slate-100 max-w-full w-fit">
                                                         <span className="font-bold text-slate-800">Mục tiêu chung</span> 
-                                                        <span className="text-slate-300">|</span> 
-                                                        <span className="text-blue-600 font-bold">{user.targetValue} bài</span> 
+                                                        <span className="text-slate-300 shrink-0">|</span> 
+                                                        <span className="text-blue-600 font-bold shrink-0">{user.targetValue} bài</span> 
                                                     </div>
                                                 ) : (
                                                     <span className="text-[10px] md:text-xs font-bold text-slate-400 italic">Chưa giao cụ thể</span>

@@ -375,7 +375,7 @@ export default function RevenueEntryPage() {
     return (
         <div className="p-4 md:p-6 bg-slate-50 h-full max-h-[calc(100vh-80px)] flex flex-col overflow-hidden animate-fade-in gap-4 md:gap-6">
 
-            <div className="shrink-0 flex flex-col xl:flex-row justify-between items-start xl:items-center bg-white p-4 rounded-2xl shadow-sm border border-slate-200 gap-4 relative z-10">
+            {/* <div className="shrink-0 flex flex-col xl:flex-row justify-between items-start xl:items-center bg-white p-4 rounded-2xl shadow-sm border border-slate-200 gap-4 relative z-10">
                 <div>
                     <h1 className="text-xl md:text-2xl font-black text-slate-900 flex items-center gap-2">
                         <DollarSign className="text-emerald-500" /> Bảng Kê Doanh Thu Tháng
@@ -409,9 +409,9 @@ export default function RevenueEntryPage() {
                         <button onClick={() => changeMonth(1)} className="p-1 hover:bg-white rounded-md transition-all shadow-sm"><ChevronRight size={18} /></button>
                     </div>
                 </div>
-            </div>
+            </div> */}
 
-            {isKeToan && (
+            {isKeToan ? (
                 <div className="shrink-0 flex flex-col sm:flex-row justify-between items-start sm:items-center bg-emerald-50/50 p-4 rounded-2xl border border-emerald-100 gap-4 shadow-sm">
                     <div className="flex items-center gap-2">
                         <div className="p-2 bg-emerald-100 text-emerald-600 rounded-lg"><FileSpreadsheet size={20} /></div>
@@ -422,6 +422,31 @@ export default function RevenueEntryPage() {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+                        <div className="flex">
+                            {canFilterTeam && (
+                                <div className="relative flex items-center bg-slate-50 border border-slate-200 rounded-xl h-10 px-3 w-full sm:w-auto">
+                                    <Filter size={16} className="text-slate-400 mr-2 shrink-0" />
+                                    <select
+                                        className="bg-transparent text-xs md:text-sm font-bold text-slate-700 outline-none w-full sm:w-32 cursor-pointer"
+                                        value={filterTeam}
+                                        onChange={(e) => setFilterTeam(e.target.value)}
+                                    >
+                                        <option value="ALL">Tất cả Team</option>
+                                        {uniqueTeams.map((team: string) => (
+                                            <option key={team} value={team}>{team}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+
+                            <div className="flex items-center gap-2 md:gap-4 bg-slate-50 p-1 md:p-1.5 rounded-xl border border-slate-200 h-10 w-full sm:w-auto justify-between sm:justify-center">
+                                <button onClick={() => changeMonth(-1)} className="p-1 hover:bg-white rounded-md transition-all shadow-sm"><ChevronLeft size={18} /></button>
+                                <div className="text-[11px] md:text-xs font-black text-slate-700 px-1 uppercase tracking-widest whitespace-nowrap">
+                                    THÁNG {currentMonthDate.getMonth() + 1} / {currentMonthDate.getFullYear()}
+                                </div>
+                                <button onClick={() => changeMonth(1)} className="p-1 hover:bg-white rounded-md transition-all shadow-sm"><ChevronRight size={18} /></button>
+                            </div>
+                        </div>
                         <div className="flex items-center gap-1.5 px-2 bg-white border border-slate-200 rounded-xl py-1 h-10 shadow-sm w-full sm:w-auto overflow-x-auto custom-scrollbar-thin">
                             <span className="text-[10px] font-black text-slate-400 uppercase shrink-0">Từ</span>
                             <input
@@ -450,7 +475,31 @@ export default function RevenueEntryPage() {
                         </button>
                     </div>
                 </div>
-            )}
+            ) : <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto justify-end">
+                {canFilterTeam && (
+                    <div className="relative flex items-center bg-slate-50 border border-slate-200 rounded-xl h-10 px-3 w-full sm:w-auto">
+                        <Filter size={16} className="text-slate-400 mr-2 shrink-0" />
+                        <select
+                            className="bg-transparent text-xs md:text-sm font-bold text-slate-700 outline-none w-full sm:w-32 cursor-pointer"
+                            value={filterTeam}
+                            onChange={(e) => setFilterTeam(e.target.value)}
+                        >
+                            <option value="ALL">Tất cả Team</option>
+                            {uniqueTeams.map((team: string) => (
+                                <option key={team} value={team}>{team}</option>
+                            ))}
+                        </select>
+                    </div>
+                )}
+
+                <div className="flex items-center gap-2 md:gap-4 bg-slate-50 p-1 md:p-1.5 rounded-xl border border-slate-200 h-10 w-full sm:w-auto justify-between sm:justify-center">
+                    <button onClick={() => changeMonth(-1)} className="p-1 hover:bg-white rounded-md transition-all shadow-sm"><ChevronLeft size={18} /></button>
+                    <div className="text-[11px] md:text-xs font-black text-slate-700 px-1 uppercase tracking-widest whitespace-nowrap">
+                        THÁNG {currentMonthDate.getMonth() + 1} / {currentMonthDate.getFullYear()}
+                    </div>
+                    <button onClick={() => changeMonth(1)} className="p-1 hover:bg-white rounded-md transition-all shadow-sm"><ChevronRight size={18} /></button>
+                </div>
+            </div>}
 
             <div ref={scrollContainerRef} className="flex-1 overflow-auto custom-scrollbar relative bg-white border border-slate-200 rounded-2xl shadow-sm">
                 <table className="w-full h-full text-left border-separate border-spacing-0 min-w-max">
@@ -523,7 +572,7 @@ export default function RevenueEntryPage() {
                                             <p className="font-bold text-sm text-slate-800 line-clamp-2" title={channel.name}>{channel.name}</p>
                                         </td>
 
-                                        
+
                                         {/* 🚀 BỔ SUNG: Ô hiển thị Tổng Kênh Cố định */}
                                         <td className="p-2 border-b border-r-4 border-emerald-300 sticky left-[350px] z-40 bg-emerald-50 group-hover:bg-emerald-100 group-focus-within:bg-emerald-100 transition-colors text-right pr-3 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)]">
                                             <div className="flex flex-col gap-1.5 text-right justify-center h-full">
@@ -648,12 +697,12 @@ export default function RevenueEntryPage() {
                             <td colSpan={3} className="p-4 border-r border-slate-700 uppercase tracking-widest text-xs sticky left-0 z-[70] bg-slate-800 text-center">
                                 Tổng Cả Hệ Thống
                             </td>
-                            
+
                             {/* 🚀 BỔ SUNG: Tính tổng của tổng (View và Doanh thu) hiển thị ở đây */}
                             <td className="p-2 border-r-4 border-emerald-500 bg-slate-900 sticky left-[350px] z-[70] text-right pr-3">
                                 <div className="flex flex-col gap-1 text-right justify-center h-full">
                                     <span className="text-[11px] font-bold text-slate-300 flex items-center justify-end gap-1">
-                                        <Eye size={11} className="opacity-70" strokeWidth={2.5}/> 
+                                        <Eye size={11} className="opacity-70" strokeWidth={2.5} />
                                         {dailyTotals.reduce((sum, day) => sum + day.views, 0).toLocaleString()}
                                     </span>
                                     <span className="text-sm font-black text-emerald-400 drop-shadow-md tracking-tight">

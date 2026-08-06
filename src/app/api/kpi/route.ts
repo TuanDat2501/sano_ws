@@ -3,7 +3,6 @@ import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
 
-// --- BỘ CÔNG CỤ TÍNH LỊCH CHUẨN ---
 function getWeekDateRangeByMonth(year: number, month: number, weekNumber: number) {
     const firstDayOfMonth = new Date(year, month - 1, 1);
     const lastDayOfMonth = new Date(year, month, 0);
@@ -78,9 +77,7 @@ export async function GET(req: Request) {
                 include: { 
                     task: { 
                         select: { 
-                            title: true, 
-                            status: true, 
-                            duration: true,
+                            title: true, status: true, duration: true, isRework: true,
                             channel: { select: { id: true, name: true } }
                         } 
                     } 
@@ -93,7 +90,7 @@ export async function GET(req: Request) {
                     createdAt: { gte: start, lte: end }
                 },
                 select: { 
-                    id: true, title: true, status: true, duration: true,
+                    id: true, title: true, status: true, duration: true, isRework: true,
                     contentId: true, editorId: true, publisherId: true,
                     scriptLink: true, videoLink: true, publishLink: true, createdAt: true,
                     channel: { select: { id: true, name: true } }
@@ -155,32 +152,62 @@ export async function GET(req: Request) {
                 if (targetDetailsRaw) targetDetails = typeof targetDetailsRaw === 'string' ? JSON.parse(targetDetailsRaw) : targetDetailsRaw;
             } catch(e) {}
 
-            let actualCount = validUserLogs.length; 
             let percent = 0;
             let totalTargetMinutes = 0;
             let totalActualMinutes = 0;
+            let actualCount = 0;
 
-            // 🚀 ÁP DỤNG CÔNG THỨC MỚI: TÍNH % THEO TỔNG PHÚT
             if (targetDetails && targetDetails.length > 0) {
+                let totalEquivalentVideos = 0;
+
                 targetDetails.forEach(detail => {
-                    const logsOfChannel = validUserLogs.filter(log => log.task?.channel?.id === detail.channelId);
+                    // 🚀 SỬA LỖI: Bắt buộc cùng Kênh trước, sau đó mới xét Xào Lại / Làm mới
+                    const logsOfChannel = validUserLogs.filter(log => {
+                        const isMatchChannel = log.task?.channel?.id === detail.channelId;
+                        if (!isMatchChannel) return false;
+                        return detail.isRework ? log.task?.isRework === true : log.task?.isRework !== true;
+                    });
                     
-                    // Tính số phút thực đạt cho từng kênh (để hiển thị UI)
-                    const actualMinutes = logsOfChannel.reduce((sum, log) => sum + Number(log.task?.duration || 0), 0);
+                    const uniqueTaskIds = new Set<string>();
+                    let actualMinutes = 0;
+                    logsOfChannel.forEach(log => {
+                        if (!uniqueTaskIds.has(log.taskId)) {
+                            uniqueTaskIds.add(log.taskId);
+                            actualMinutes += Number(log.task?.duration || 0);
+                        }
+                    });
+                    
                     detail.actualMinutes = actualMinutes;
-                    detail.actualCount = logsOfChannel.length; 
+                    const equivalent = detail.duration > 0 ? actualMinutes / detail.duration : actualMinutes;
+                    const equivalentRounded = Math.round(equivalent * 10) / 10;
                     
-                    // Cộng dồn CHỈ TIÊU
+                    detail.actualCount = equivalentRounded;
+                    totalEquivalentVideos += equivalentRounded;
                     totalTargetMinutes += (Number(detail.targetCount) * Number(detail.duration));
+                    
+                    totalActualMinutes += actualMinutes; 
                 });
 
-                // Cộng dồn THỰC TẾ (Quét toàn bộ log hợp lệ để không sót video nào)
-                totalActualMinutes = validUserLogs.reduce((sum, log) => sum + Number(log.task?.duration || 0), 0);
+                // Các task lọt ra ngoài vùng target
+                const uniqueOutsideTaskIds = new Set<string>();
+                const logsOutside = validUserLogs.filter(log => {
+                    // 🚀 SỬA LỖI: Xem log này có nằm trong ĐÚNG kênh + ĐÚNG trạng thái rework của bất kỳ target nào không
+                    const isCovered = targetDetails.some(d => {
+                        const isMatchChannel = d.channelId === log.task?.channel?.id;
+                        const isMatchRework = d.isRework ? log.task?.isRework === true : log.task?.isRework !== true;
+                        return isMatchChannel && isMatchRework;
+                    });
+                    return !isCovered;
+                });
+                
+                logsOutside.forEach(log => uniqueOutsideTaskIds.add(log.taskId));
+                totalEquivalentVideos += uniqueOutsideTaskIds.size;
 
-                // Tính Phần Trăm (Mức độ hoàn thành)
+                actualCount = Math.round(totalEquivalentVideos * 10) / 10;
                 percent = totalTargetMinutes > 0 ? Math.round((totalActualMinutes / totalTargetMinutes) * 100) : 0;
             } else {
-                // Fallback nếu dùng kiểu KPI cũ
+                const uniqueTasksCount = new Set(validUserLogs.map(l => l.taskId)).size;
+                actualCount = uniqueTasksCount;
                 percent = targetValue > 0 ? Math.round((actualCount / targetValue) * 100) : 0;
             }
 
