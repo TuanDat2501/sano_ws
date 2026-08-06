@@ -15,7 +15,7 @@ function getMonthlyWeekRange(year: number, month: number, weekNumber: number) {
     const firstDayOfMonth = new Date(year, month - 1, 1);
     const lastDayOfMonth = new Date(year, month, 0);
 
-    const dayOfWeek = firstDayOfMonth.getDay(); 
+    const dayOfWeek = firstDayOfMonth.getDay();
     const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
     const startOfFirstWeek = new Date(year, month - 1, 1 + diffToMonday);
 
@@ -40,7 +40,7 @@ function getMonthlyWeekRange(year: number, month: number, weekNumber: number) {
 function getCurrentWeekNumber(date: Date) {
     const year = date.getFullYear();
     const month = date.getMonth() + 1;
-    
+
     // Đưa ngày hiện tại về mốc 0h00 để so sánh cho chuẩn
     const todayTime = new Date(year, month - 1, date.getDate()).getTime();
 
@@ -48,10 +48,10 @@ function getCurrentWeekNumber(date: Date) {
         const range = getContinuousWeekRange(year, month, w);
         const startTime = new Date(range.start.getFullYear(), range.start.getMonth(), range.start.getDate()).getTime();
         const endTime = new Date(range.end.getFullYear(), range.end.getMonth(), range.end.getDate()).getTime();
-        
+
         if (todayTime >= startTime && todayTime <= endTime) {
             // Giới hạn max là tuần 4 (Nếu sang tuần 5 thì vẫn gộp số liệu vào tuần 4)
-            return w > 4 ? 4 : w; 
+            return w > 4 ? 4 : w;
         }
     }
     return 1;
@@ -63,25 +63,25 @@ export default function KpiDashboard() {
     const userRole = currentUser?.role || "CONTENT";
     const teamId = currentUser?.teamId;
     const { showToast } = useToast();
-    
-    
-    const isHighLevel = ["BAN_GIAM_DOC", "ADMIN", "HR","KE_TOAN"].includes(userRole);
-    
-    const isManager = ["LEADER", "BAN_GIAM_DOC", "ADMIN", "HR","KE_TOAN"].includes(userRole);
-    
+
+
+    const isHighLevel = ["BAN_GIAM_DOC", "ADMIN", "HR", "KE_TOAN"].includes(userRole);
+
+    const isManager = ["LEADER", "BAN_GIAM_DOC", "ADMIN", "HR", "KE_TOAN"].includes(userRole);
+
     const [teams, setTeams] = useState<any[]>([]);
     const [selectedTeamFilter, setSelectedTeamFilter] = useState<string>("ALL");
     const queryTeamId = isHighLevel ? selectedTeamFilter : teamId;
 
     const today = new Date();
-    const currentWeekNum = getCurrentWeekNumber(today); 
+    const currentWeekNum = getCurrentWeekNumber(today);
 
     const [selectedYear, setSelectedYear] = useState(today.getFullYear());
     const [selectedMonth, setSelectedMonth] = useState(today.getMonth() + 1);
     const [selectedWeek, setSelectedWeek] = useState(currentWeekNum);
 
     const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 10; 
+    const itemsPerPage = 10;
 
     const [viewingUserId, setViewingUserId] = useState<string | null>(null);
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -91,12 +91,12 @@ export default function KpiDashboard() {
     const [isLoading, setIsLoading] = useState(true);
 
     const availableWeeks = [1, 2, 3, 4, 5];
-    
+
     useEffect(() => {
         if (isHighLevel || session?.user.isTeamLeader) {
             fetch("/api/teams").then(res => res.ok ? res.json() : []).then(setTeams);
         }
-    }, [isHighLevel,session?.user.isTeamLeader]);
+    }, [isHighLevel, session?.user.isTeamLeader]);
 
     const fetchKpiData = async () => {
         setIsLoading(true);
@@ -108,9 +108,9 @@ export default function KpiDashboard() {
                     return;
                 }
                 let url = ""
-                if(session?.user.isTeamLeader){
+                if (session?.user.isTeamLeader) {
                     url = `/api/kpi?teamId=ALL&year=${selectedYear}&month=${selectedMonth}&week=${selectedWeek}`
-                }else{
+                } else {
                     url = `/api/kpi?teamId=${queryTeamId}&year=${selectedYear}&month=${selectedMonth}&week=${selectedWeek}`
                 }
                 const res = await fetch(url);
@@ -126,10 +126,10 @@ export default function KpiDashboard() {
                 if (!currentUser?.id) return;
                 const res = await fetch(`/api/kpi/${currentUser.id}?year=${selectedYear}&month=${selectedMonth}&week=${selectedWeek}`);
                 const data = await res.json();
-                
+
                 if (res.ok) {
-                    setKpiList([data]); 
-                    setViewingUserId(data.userId); 
+                    setKpiList([data]);
+                    setViewingUserId(data.userId);
                 } else {
                     showToast("error", data.error || "Không thể tải dữ liệu");
                 }
@@ -171,25 +171,25 @@ export default function KpiDashboard() {
             const res = await fetch("/api/kpi", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ 
-                    userId, 
-                    year: selectedYear, 
-                    month: selectedMonth, 
-                    weekNumber: selectedWeek, 
+                body: JSON.stringify({
+                    userId,
+                    year: selectedYear,
+                    month: selectedMonth,
+                    weekNumber: selectedWeek,
                     targetValue: targetNum,
                     targetDetails // Đẩy mảng detail xuống API
                 })
             });
-            
+
             if (res.ok) {
                 showToast("success", "Đã chốt chỉ tiêu chi tiết!");
             } else {
                 showToast("error", "Lỗi lưu dữ liệu. Đang tải lại bảng...");
-                fetchKpiData(); 
+                fetchKpiData();
             }
         } catch (error) {
             showToast("error", "Mất kết nối server");
-            fetchKpiData(); 
+            fetchKpiData();
         }
     };
 
@@ -208,7 +208,7 @@ export default function KpiDashboard() {
                         <TrendingUp className="text-red-600 w-5 h-5 md:w-6 md:h-6" /> Bảng Theo Dõi KPI
                     </h1>
                     <p className="text-xs md:text-sm font-medium text-slate-500 mt-1 md:mt-1.5 flex items-center gap-1.5 md:gap-2">
-                        <Calendar size={14} className="md:w-4 md:h-4" /> 
+                        <Calendar size={14} className="md:w-4 md:h-4" />
                         {selectedWeek === 0 ? `Tháng ${selectedMonth}/${selectedYear}` : getContinuousWeekRange(selectedYear, selectedMonth, selectedWeek).label}
                     </p>
                 </div>
@@ -252,8 +252,7 @@ export default function KpiDashboard() {
 
             <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
                 {!isManager && (
-                    <div className="flex-1 overflow-y-auto custom-scrollbar">
-                        {/* <h2 className="text-lg md:text-xl font-black text-slate-800 mb-4 md:mb-6 flex items-center gap-2">Mục tiêu của bạn</h2> */}
+                    <div className="flex-1 flex flex-col min-h-0">
                         <KpiEmployeeDetail activeKpi={activeKpi} isLoading={isLoading} />
                     </div>
                 )}
@@ -262,7 +261,7 @@ export default function KpiDashboard() {
                     <div className="flex-1 flex flex-col min-h-0 bg-white rounded-xl md:rounded-[24px] border border-slate-200 shadow-sm overflow-hidden">
                         <div className="flex-1 flex flex-col min-h-0">
                             <KpiTeamTable
-                                kpiList={paginatedKpiList} 
+                                kpiList={paginatedKpiList}
                                 handleUpdateTarget={handleUpdateTarget}
                                 onRowClick={(id: any) => { setViewingUserId(id); setIsDrawerOpen(true); }}
                                 isLoading={isLoading}

@@ -5,12 +5,13 @@ import { getProgressColor, InlineLoading } from "../utils";
 
 export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi: any, isLoading: boolean }) {
     return (
-        <div className="flex flex-col lg:flex-row gap-4 md:gap-6 lg:gap-8">
+        <div className="flex flex-col lg:flex-row gap-4 md:gap-6 lg:gap-8 h-full min-h-0">
+            
             {/* CỘT TRÁI: MỤC TIÊU & TIẾN ĐỘ TỔNG */}
-            <div className="w-full lg:w-1/3 flex flex-col gap-4 md:gap-6">
+           <div className="w-full lg:w-1/3 flex flex-col gap-4 md:gap-6 shrink-0 lg:overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                 
                 {/* 1. Thẻ Vòng Tròn - Tiến độ tổng */}
-                <div className="bg-white rounded-xl md:rounded-2xl p-4 md:p-6 shadow-sm border border-slate-200 flex flex-col items-center justify-center py-6 md:py-8 min-h-[220px] md:min-h-[300px]">
+                <div className="bg-white rounded-xl md:rounded-2xl p-4 md:p-6 shadow-sm border border-slate-200 flex flex-col items-center justify-center py-6 md:py-8 min-h-[220px] shrink-0">
                     {isLoading ? <InlineLoading /> : activeKpi && (
                         <>
                             <h3 className="font-black text-slate-800 text-sm md:text-base uppercase tracking-widest mb-6 text-center">Tiến độ tổng hợp</h3>
@@ -41,7 +42,7 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                 </div>
 
                 {/* 2. Thẻ Chi tiết Chỉ tiêu theo Kênh */}
-                <div className="bg-white rounded-xl md:rounded-2xl p-4 md:p-5 shadow-sm border border-slate-200">
+                <div className="bg-white rounded-xl md:rounded-2xl p-4 md:p-5 shadow-sm border border-slate-200 shrink-0">
                     <div className="flex items-center gap-2 font-bold text-slate-800 mb-4 border-b border-slate-100 pb-3">
                         <Target className="text-blue-500 w-5 h-5" />
                         <span className="text-sm md:text-base uppercase tracking-wider font-black">Chỉ tiêu chi tiết</span>
@@ -62,7 +63,7 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                                                 {detail.isRework ? (
                                                     <p className="font-bold text-rose-800 text-sm flex items-center gap-1.5">
                                                         <RefreshCw size={14} className="text-rose-500" /> {detail.channelName}
-                                                        {/* <span className="text-[9px] bg-rose-100 text-rose-600 px-1.5 py-0.5 rounded border border-rose-200 uppercase tracking-widest ml-0.5 shadow-sm">Xào lại</span> */}
+                                                        <span className="text-[9px] bg-rose-100 text-rose-600 px-1.5 py-0.5 rounded border border-rose-200 uppercase tracking-widest ml-0.5 shadow-sm">Xào lại</span>
                                                     </p>
                                                 ) : (
                                                     <p className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
@@ -99,18 +100,18 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
             </div>
 
             {/* CỘT PHẢI: LỊCH SỬ CÔNG VIỆC */}
-            <div className="w-full lg:w-2/3 flex flex-col gap-4 md:gap-6">
-                <div className="bg-white rounded-xl md:rounded-2xl shadow-sm border border-slate-200 overflow-hidden h-full min-h-[300px] md:min-h-[400px] flex flex-col">
-                    {isLoading ? <InlineLoading className="h-full min-h-[300px]" /> : (
-                        <div className="h-full flex flex-col min-h-0">
+            <div className="w-full lg:w-2/3 flex flex-col gap-4 md:gap-6 flex-1 min-h-0">
+                <div className="bg-white rounded-xl md:rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full min-h-0">
+                    {isLoading ? <InlineLoading className="h-full" /> : (
+                        <div className="flex flex-col h-full min-h-0 w-full">
                             
-                            <div className="p-4 md:p-5 border-b border-slate-100 shrink-0 flex items-center gap-2">
+                            <div className="p-4 md:p-5 border-b border-slate-100 shrink-0 flex items-center gap-2 bg-white z-10 relative shadow-[0_2px_4px_rgba(0,0,0,0.02)]">
                                 <LayoutList className="text-emerald-500 w-5 h-5" />
                                 <h3 className="text-sm md:text-base font-black text-slate-800 uppercase tracking-wider">Sản phẩm thực tế đã nộp</h3>
                             </div>
 
                             {/* View cho Mobile */}
-                            <div className="block md:hidden flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar bg-slate-50/30">
+                            <div className="block md:hidden overflow-y-auto p-3 space-y-3 custom-scrollbar bg-slate-50/30 flex-1 min-h-0">
                                 {(!activeKpi?.logs || activeKpi.logs.length === 0) ? (
                                     <p className="text-center text-slate-400 py-10 text-sm font-medium">Chưa có công việc.</p>
                                 ) : (
@@ -129,7 +130,6 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                                                 <span className="text-[10px] font-bold text-slate-600 bg-slate-50 border border-slate-200 px-2 py-1 rounded flex items-center gap-1">
                                                     <Tv size={10} /> {log.task?.channel?.name || "Chưa gắn kênh"}
                                                 </span>
-                                                {/* 🚀 ĐÃ BỔ SUNG: Hiển thị Xào Lại trên Mobile */}
                                                 {log.task?.isRework && (
                                                     <span className="text-[10px] font-bold text-rose-600 bg-rose-50 border border-rose-200 px-2 py-1 rounded flex items-center gap-1">
                                                         <RefreshCw size={10} /> Xào lại
@@ -159,16 +159,16 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                                 )}
                             </div>
 
-                            {/* View cho PC */}
-                            <div className="hidden md:block flex-1 overflow-x-auto overflow-y-auto custom-scrollbar bg-white">
-                                <table className="w-full text-left text-sm text-slate-600 min-w-[750px]">
-                                    <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[11px] sticky top-0 z-10 border-b border-slate-200 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+                            {/* View cho PC: Dùng flex-1 min-h-0 để scroll gói gọn bên trong */}
+                            <div className="hidden md:block flex-1 min-h-0 overflow-auto custom-scrollbar bg-white">
+                                <table className="w-full text-left text-sm text-slate-600 min-w-[750px] relative">
+                                    <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[11px] sticky top-0 z-10 shadow-[0_1px_2px_rgba(0,0,0,0.02)] border-b border-slate-200">
                                         <tr>
-                                            <th className="px-5 py-4 w-28 text-center">Cột mốc</th>
-                                            <th className="px-5 py-4">Sản phẩm / Video</th>
-                                            <th className="px-5 py-4 w-40">Kênh đăng</th>
-                                            <th className="px-5 py-4 w-28 text-center">Thời lượng</th>
-                                            <th className="px-5 py-4 w-32 text-center">Trạng thái</th>
+                                            <th className="px-5 py-4 w-28 text-center bg-slate-50">Cột mốc</th>
+                                            <th className="px-5 py-4 bg-slate-50">Sản phẩm / Video</th>
+                                            <th className="px-5 py-4 w-40 bg-slate-50">Kênh đăng</th>
+                                            <th className="px-5 py-4 w-28 text-center bg-slate-50">Thời lượng</th>
+                                            <th className="px-5 py-4 w-32 text-center bg-slate-50">Trạng thái</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100">
@@ -190,7 +190,6 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                                                     </td>
 
                                                     <td className="px-5 py-4 font-bold text-slate-600 text-xs truncate max-w-[150px]">
-                                                        {/* 🚀 ĐÃ BỔ SUNG: Hiển thị trạng thái Xào Lại */}
                                                         <div className="flex flex-col gap-1.5 items-start">
                                                             {log.task?.channel?.name ? (
                                                                 <span className="flex items-center gap-1.5 bg-slate-100 px-2 py-1 rounded w-fit border border-slate-200">
