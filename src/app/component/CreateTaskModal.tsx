@@ -127,9 +127,9 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
         if (Array.isArray(listUsers)) {
           setTeamContents(listUsers.filter((u: any) => ['CONTENT', 'LEADER'].includes(u.role)));
           setTeamEditors(listUsers.filter((u: any) => ['EDITOR', 'LEADER'].includes(u.role)));
-          setUsersTeam(listUsers.filter((u: any) => ['EDITOR', 'LEADER','CONTENT'].includes(u.role)));
+          setUsersTeam(listUsers.filter((u: any) => ['EDITOR', 'LEADER','CONTENT','PUBLISHER'].includes(u.role)));
           // 🚀 Lấy danh sách Quản lý kênh
-          setTeamPublishers(listUsers.filter((u: any) => ['PUBLISHER', 'CHANNEL_MANAGER', 'LEADER', 'ADMIN', 'BAN_GIAM_DOC'].includes(u.role)));
+          setTeamPublishers(listUsers.filter((u: any) => ['PUBLISHER', 'CHANNEL_MANAGER', 'LEADER'].includes(u.role)));
         }
       } catch (error) { } finally { setIsLoadingData(false); }
     };
