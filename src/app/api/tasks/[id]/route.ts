@@ -41,7 +41,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             return NextResponse.json({ error: "Task đã nghiệm thu, không thể chỉnh sửa!" }, { status: 403 });
         }
 
-        // 🚀 MỞ KHÓA BACKEND: Cho phép cập nhật TẤT CẢ các link và tiến độ để đồng bộ với Frontend
         if (rawBody.status !== undefined) body.status = rawBody.status;
         if (rawBody.scriptLink !== undefined) body.scriptLink = rawBody.scriptLink;
         if (rawBody.englishScriptLink !== undefined) body.englishScriptLink = rawBody.englishScriptLink;
@@ -55,7 +54,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         if (rawBody.linkProject !== undefined) body.linkProject = rawBody.linkProject;
         if (rawBody.note !== undefined) body.note = rawBody.note;
 
-        // Những trường hệ thống quan trọng thì vẫn chỉ Manager mới được sửa
         if (isManager) {
             if (rawBody.title !== undefined) body.title = rawBody.title;
             if (rawBody.keywords !== undefined) body.keywords = rawBody.keywords;
@@ -67,7 +65,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             if (rawBody.channelId !== undefined) body.channelId = rawBody.channelId || null;
             if (rawBody.priority !== undefined) body.priority = rawBody.priority;
             
-            // 🚀 ĐÃ BỔ SUNG: Bắt dữ liệu PublisherId từ form sửa Task
             if (rawBody.publisherId !== undefined) body.publisherId = rawBody.publisherId || null;
 
             if (rawBody.contentIds !== undefined) {
@@ -135,35 +132,34 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             logsToCreate.push({ action: "UPDATE_STATUS", details: `Từ [${oldTask.status}] sang [${body.status}]`, taskId, userId });
         }
 
-        // 🚀 BỔ SUNG LOGIC CHIA KPI: Dò đúng người chịu trách nhiệm để cộng KPI
-        const getAssigneeForField = (fieldName: string) => {
-            if (['scriptLink', 'storyboardLink', 'englishScriptLink'].includes(fieldName)) return body.contentId !== undefined ? body.contentId : (oldTask.contentId || userId);
-            if (['videoLink', 'audioLink', 'thumbnailLink', 'linkProject', 'roughProjectLink'].includes(fieldName)) return body.editorId !== undefined ? body.editorId : (oldTask.editorId || userId);
-            if (['animationLink'].includes(fieldName)) return body.animatorId !== undefined ? body.animatorId : (oldTask.animatorId || userId);
-            if (['publishLink'].includes(fieldName)) return body.publisherId !== undefined ? body.publisherId : (oldTask.publisherId || userId);
-            return userId;
-        };
-
+        // 🚀 BỔ SUNG LOGIC CHIA KPI MỚI
         const addLinkLog = (fieldName: string, label: string) => {
             if (body[fieldName] !== undefined && body[fieldName] !== (oldTask as any)[fieldName]) {
                 const newValue = body[fieldName];
-                const targetUserId = getAssigneeForField(fieldName); // Lấy đúng ID của Nhân sự phụ trách
+                
+                // 1. NGƯỜI BẤM DÁN LINK LÀ NGƯỜI NHẬN KPI
+                const targetUserId = userId; 
 
-                // 🚀 QUAN TRỌNG: LUÔN XÓA LOG KPI CŨ CỦA TRƯỜNG NÀY TRƯỚC KHI TẠO MỚI
-                // Việc này giúp tự động THU HỒI KPI của ngày cũ nếu nhân sự nhập sai và phải sửa lại vào hôm sau
+                // 2. LEADER CHỈ NHẬN KPI KHI DÁN PUBLISH LINK
+                let actionType = "DAILY_REPORT";
+                if (isManager && fieldName !== 'publishLink') {
+                    // Nếu là Leader nhưng không phải dán Publish Link -> Ghi nhận UPDATE_LINK (Không được cấu hình tính điểm KPI)
+                    actionType = "UPDATE_LINK"; 
+                }
+
+                // Xóa Log cũ của label này trên Task để tránh tính double điểm hoặc rác log khi sửa link
                 logsToDelete.push({
                     taskId, 
-                    userId: targetUserId,
-                    action: "DAILY_REPORT",
+                    action: { in: ["DAILY_REPORT", "UPDATE_LINK"] },
                     details: { contains: label }
                 });
 
                 if (newValue && newValue.trim() !== "") {
                     logsToCreate.push({
-                        action: "DAILY_REPORT", 
+                        action: actionType, 
                         details: `Báo cáo tiến độ: Đã cập nhật ${label}`,
                         taskId, 
-                        userId: targetUserId // 🚀 Chốt KPI mới dời sang ngày hôm nay!
+                        userId: targetUserId 
                     });
                 } else {
                     logsToCreate.push({
@@ -195,9 +191,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         if (body.contentId !== undefined && body.contentId !== oldTask.contentId) {
             logsToCreate.push({ action: "ASSIGN_USER", details: `Đã cập nhật phân công nhân sự`, taskId, userId });
         }
-        let reworkFlag = oldTask.isRework; // Mặc định giữ nguyên trạng thái cũ
+        let reworkFlag = oldTask.isRework; 
         
-        // Nếu Quản lý đẩy Task từ trạng thái khác về lại bước TODO (Làm lại)
         if (body.status === "TODO" && oldTask.status !== "TODO") {
             reworkFlag = true; 
         }
