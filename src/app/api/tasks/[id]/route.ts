@@ -54,12 +54,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         if (rawBody.linkProject !== undefined) body.linkProject = rawBody.linkProject;
         if (rawBody.note !== undefined) body.note = rawBody.note;
         
-        // 🚀 BỔ SUNG: Tiếp nhận Ngày Đăng
         if (rawBody.publishDate !== undefined) {
             body.publishDate = rawBody.publishDate ? new Date(rawBody.publishDate) : null;
         }
 
-        // 🚀 AUTO-FILL: Nếu dán Link Youtube lần đầu tiên mà chưa có ngày đăng -> Tự động lấy ngày hôm nay
         if (body.publishLink && body.publishLink.trim() !== "" && oldTask.publishLink !== body.publishLink) {
             if (!oldTask.publishDate && rawBody.publishDate === undefined) {
                 body.publishDate = new Date();
@@ -149,10 +147,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 const newValue = body[fieldName];
                 const targetUserId = userId; 
 
-                const isKpiField = ['scriptLink', 'videoLink', 'animationLink', 'publishLink'].includes(fieldName);
+                // 🚀 ĐÃ SỬA: Cho phép roughProjectLink (Dựng thô) sinh ra DAILY_REPORT để tính KPI cho Editor 2
+                const isKpiField = ['scriptLink', 'videoLink', 'animationLink', 'publishLink', 'thumbnailLink', 'roughProjectLink'].includes(fieldName);
                 let actionType = isKpiField ? "DAILY_REPORT" : "UPDATE_LINK";
 
-                if (isManager && fieldName !== 'publishLink') {
+                if (isManager && !['publishLink', 'thumbnailLink'].includes(fieldName)) {
                     actionType = "UPDATE_LINK"; 
                 }
 
@@ -213,7 +212,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 scriptLink: body.scriptLink !== undefined ? body.scriptLink : undefined,
                 videoLink: body.videoLink !== undefined ? body.videoLink : undefined,
                 publishLink: body.publishLink !== undefined ? body.publishLink : undefined,
-                publishDate: body.publishDate !== undefined ? body.publishDate : undefined, // 🚀 BỔ SUNG CẬP NHẬT NGÀY ĐĂNG
+                publishDate: body.publishDate !== undefined ? body.publishDate : undefined, 
                 isClosed: body.isClosed !== undefined ? body.isClosed : undefined,
                 teamId: body.teamId !== undefined ? body.teamId : undefined,
                 projectId: body.projectId !== undefined ? body.projectId : undefined,
