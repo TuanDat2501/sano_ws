@@ -44,6 +44,7 @@ export async function GET(req: Request) {
             { contentId: userId }, 
             { editorId: userId }, 
             { animatorId: userId }, 
+            { publisherId: userId }, 
             { creatorId: userId },
             { coContentUsers: { some: { id: userId } } },
             { coEditorUsers: { some: { id: userId } } },
