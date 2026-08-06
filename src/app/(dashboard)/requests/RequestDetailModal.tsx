@@ -138,19 +138,25 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
     const startDate = getVal('startDate');
     const endDate = getVal('endDate');
     const targetDate = getVal('targetDate') || getVal('date'); 
-    const time = getVal('time'); // 🚀 Hứng giá trị time
+    const time = getVal('time'); 
     const leaveType = getVal('leaveType');
+    const timeSlot = getVal('timeSlot'); // 🚀 ĐÃ BỔ SUNG: Khung giờ nghỉ
     const itemName = getVal('itemName');
     const amount = getVal('amount');
     const reason = getVal('reason');
 
-    // 🚀 BỔ SUNG: Tính toán số ngày nghỉ để in ra phiếu
+    // 🚀 BỔ SUNG: Tính toán số ngày nghỉ chuẩn xác kể cả nửa ngày
     let numDays = 0;
     if (startDate && endDate) {
         const start = new Date(startDate);
         const end = new Date(endDate);
         if (end >= start) {
-            numDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 3600 * 24)) + 1;
+            const dayDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 3600 * 24)) + 1;
+            if (timeSlot === "MORNING" || timeSlot === "AFTERNOON") {
+                numDays = dayDiff > 1 ? dayDiff - 0.5 : 0.5;
+            } else {
+                numDays = dayDiff;
+            }
         }
     }
 
@@ -218,19 +224,24 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
                                     {startDate && endDate && (
                                         <div className="border-b border-slate-50 pb-3">
                                             <p className="text-[11px] text-slate-400 font-bold mb-2">Thời gian & Chế độ nghỉ</p>
-                                            <p className="text-sm text-slate-900 font-black flex items-center gap-2 mb-2">
+                                            <p className="text-sm text-slate-900 font-black flex items-center flex-wrap gap-2 mb-2">
                                                 Từ <span className="text-blue-600">{new Date(startDate).toLocaleDateString('vi-VN')}</span> đến <span className="text-blue-600">{new Date(endDate).toLocaleDateString('vi-VN')}</span>
                                                 {numDays > 0 && <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-md text-[11px]">({numDays} ngày)</span>}
                                             </p>
                                             
-                                            {/* 🚀 HIỂN THỊ LOẠI NGHỈ PHÉP */}
-                                            {leaveType && (
-                                                <div className="mt-1.5">
+                                            {/* 🚀 HIỂN THỊ LOẠI NGHỈ PHÉP VÀ KHUNG GIỜ NGHỈ */}
+                                            <div className="mt-1.5 flex flex-wrap gap-2">
+                                                {timeSlot && timeSlot !== "FULL_DAY" && (
+                                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border bg-purple-50 text-purple-700 border-purple-200">
+                                                        <Clock size={12} /> {timeSlot === 'MORNING' ? 'Nửa buổi sáng' : 'Nửa buổi chiều'}
+                                                    </span>
+                                                )}
+                                                {leaveType && (
                                                     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border ${leaveType === 'PAID' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-orange-50 text-orange-700 border-orange-200'}`}>
                                                         {leaveType === 'PAID' ? '✅ Nghỉ phép có lương' : '⚠️ Nghỉ không lương'}
                                                     </span>
-                                                </div>
-                                            )}
+                                                )}
+                                            </div>
                                         </div>
                                     )}
                                     {targetDate && (
@@ -238,7 +249,6 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
                                             <p className="text-[11px] text-slate-400 font-bold mb-1">Ngày & Giờ áp dụng</p>
                                             <p className="text-sm text-slate-900 font-black flex items-center gap-2">
                                                 {new Date(targetDate).toLocaleDateString('vi-VN')}
-                                                {/* 🚀 HIỂN THỊ MỐC THỜI GIAN CỤ THỂ NẾU LÀ ĐI MUỘN/VỀ SỚM */}
                                                 {time && <span className="text-red-600 bg-red-50 border border-red-100 px-2 py-0.5 rounded-md text-[11px]"><Clock size={12} className="inline mr-1 mb-0.5" />{time}</span>}
                                             </p>
                                         </div>

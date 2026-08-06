@@ -15,7 +15,7 @@ export async function POST(req: Request) {
         const user = session.user as any;
         const userId = user.id;
         
-        // 🚀 ĐÃ SỬA: Dùng quyền duyệt đơn (ACTION_APPROVE_REQUEST) hoặc Role Quản lý để quyết định luồng đi của đơn
+        // 🚀 Dùng quyền duyệt đơn (ACTION_APPROVE_REQUEST) hoặc Role Quản lý để quyết định luồng đi của đơn
         const isLeader = user.permissions?.includes("ACTION_APPROVE_REQUEST") || ["LEADER", "ADMIN", "BAN_GIAM_DOC"].includes(user.role);
 
         const body = await req.json();
@@ -57,7 +57,7 @@ export async function POST(req: Request) {
                 amount,
                 itemName,
                 reason,
-                contentData
+                contentData // Dữ liệu timeSlot và các field tuỳ biến khác sẽ được nhét gọn vào đây
             }
         });
 
@@ -117,7 +117,7 @@ export async function GET(req: Request) {
         const tab = searchParams.get("tab") || "MY_REQUESTS";
         const searchKeyword = searchParams.get("search") || "";
 
-        // 🚀 ĐÃ SỬA: Nhận diện Quản lý tổng và Leader
+        // Nhận diện Quản lý tổng và Leader
         const canViewAllCompany = user.permissions?.includes("MENU_TEAMS") || 
                                   user.permissions?.includes("DEPARTMENT_LEADER") || 
                                   ["ADMIN", "BAN_GIAM_DOC", "HR"].includes(user.role);
@@ -135,16 +135,13 @@ export async function GET(req: Request) {
             };
         } else if (tab === "ALL_REQUESTS") {
             if (canViewAllCompany) {
-                // Ban giám đốc, HR, Admin xem toàn bộ
                 whereClause = {}; 
             } else if (isTeamLeader && user.teamId) {
-                // Leader chỉ xem của team mình
                 whereClause = { teamId: user.teamId }; 
             } else {
                 return NextResponse.json({ error: "Forbidden" }, { status: 403 });
             }
         } else {
-            // Tab Đơn của tôi
             whereClause = { requesterId: user.id };
         }
 

@@ -6,13 +6,12 @@ import { getContinuousWeekRange } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
-
 export async function GET(req: Request) {
     try {
         const session = await getServerSession(authOptions);
         if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-        // 🚀 2. TÌM XEM HÔM NAY LÀ TUẦN MẤY THEO LOGIC CỦA SẾP
+        // 🚀 1. TÌM XEM HÔM NAY LÀ TUẦN MẤY THEO LOGIC CỦA SẾP
         const now = new Date();
         const year = now.getFullYear();
         const month = now.getMonth() + 1;
@@ -22,24 +21,22 @@ export async function GET(req: Request) {
         const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
         const startOfFirstWeek = new Date(year, month - 1, 1 + diffToMonday);
 
-        // Đổi sang UTC để trừ ngày không bị lệch do Timezone/Daylight saving
         const todayUTC = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
         const startUTC = Date.UTC(startOfFirstWeek.getFullYear(), startOfFirstWeek.getMonth(), startOfFirstWeek.getDate());
         const diffDays = Math.floor((todayUTC - startUTC) / (24 * 60 * 60 * 1000));
         
         const currentWeekNumber = Math.floor(diffDays / 7) + 1;
 
-        // 🚀 3. LẤY NGÀY ĐẦU VÀ CUỐI TUẦN TỪ HÀM CỦA SẾP
+        // 🚀 2. LẤY NGÀY ĐẦU VÀ CUỐI TUẦN
         const { start, end } = getContinuousWeekRange(year, month, currentWeekNumber);
         
-        // Fix cứng giờ phút giây để query Database chuẩn xác 100%
         const startOfWeek = new Date(start);
         startOfWeek.setHours(0, 0, 0, 0);
 
         const endOfWeek = new Date(end);
         endOfWeek.setHours(23, 59, 59, 999);
 
-        // 4. Query lấy User kèm theo Target KPI của tuần (Đã có cả year, month, weekNumber)
+        // 3. Query lấy User kèm theo Target KPI
         const users = await prisma.user.findMany({
             where: { isActive: true },
             select: {
@@ -50,35 +47,110 @@ export async function GET(req: Request) {
                 teamId: true,
                 isActive: true,
                 weeklyKPIs: {
-                    // 🚀 Fetch chính xác KPI theo Tháng và Tuần của Sếp
                     where: { year: year, month: month, weekNumber: currentWeekNumber },
                     take: 1
                 }
             }
         });
 
-        // 5. Lấy Lịch sử làm việc (TaskLog) trong mốc thời gian của Sếp để tính Actual
+        // 4. Lấy Lịch sử làm việc (TaskLog)
+        // 🚀 ĐÃ SỬA: Lấy thêm action DAILY_REPORT và include task để bóc tách thời lượng, kênh
         const taskLogs = await prisma.taskLog.findMany({
             where: {
                 createdAt: { gte: startOfWeek, lte: endOfWeek },
                 action: { 
-                    in: ["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK"] 
+                    in: ["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK", "DAILY_REPORT"] 
                 }
             },
-            select: { userId: true, taskId: true }
+            include: {
+                task: {
+                    select: {
+                        duration: true,
+                        isRework: true,
+                        channelId: true
+                    }
+                }
+            }
         });
 
-        // Dùng Set để lọc trùng (1 video làm nhiều lần vẫn tính là 1 task hoàn thành)
-        const userActuals: Record<string, Set<string>> = {};
+        // Lọc bỏ trùng lặp DAILY_REPORT trong cùng 1 ngày để đảm bảo công bằng
+        const validTaskLogs: typeof taskLogs = [];
+        const dailyReportTracker = new Set<string>();
+
         taskLogs.forEach(log => {
-            if (!userActuals[log.userId]) userActuals[log.userId] = new Set();
-            userActuals[log.userId].add(log.taskId); 
+            if (log.action === "DAILY_REPORT") {
+                const dateString = new Date(log.createdAt).toISOString().split('T')[0];
+                const uniqueKey = `${log.userId}_${log.taskId}_${dateString}`;
+                
+                if (!dailyReportTracker.has(uniqueKey)) {
+                    dailyReportTracker.add(uniqueKey);
+                    validTaskLogs.push(log);
+                }
+            } else {
+                validTaskLogs.push(log);
+            }
         });
 
-        // 6. Lắp ráp dữ liệu chuẩn Form Frontend cần
+        // 5. Lắp ráp dữ liệu và TÍNH KPI CHUẨN
         const formattedUsers = users.map(user => {
-            const target = user.weeklyKPIs.length > 0 ? user.weeklyKPIs[0].targetValue : 0;
-            const actual = userActuals[user.id] ? userActuals[user.id].size : 0;
+            const kpiRecord = user.weeklyKPIs.length > 0 ? user.weeklyKPIs[0] : null;
+            const targetValue = kpiRecord?.targetValue || 0;
+            const targetDetailsRaw = kpiRecord?.targetDetails;
+            let targetDetails: any[] = [];
+            
+            try {
+                if (targetDetailsRaw) targetDetails = typeof targetDetailsRaw === 'string' ? JSON.parse(targetDetailsRaw) : targetDetailsRaw;
+            } catch(e) {}
+
+            const userLogs = validTaskLogs.filter(log => log.userId === user.id);
+            let actualCount = 0;
+
+            // 🚀 ĐÃ SỬA: Áp dụng thuật toán chia điểm KPI theo Channel & Rework
+            if (targetDetails && targetDetails.length > 0) {
+                let totalEquivalentVideos = 0;
+
+                targetDetails.forEach(detail => {
+                    const logsOfChannel = userLogs.filter(log => {
+                        const isMatchChannel = log.task?.channelId === detail.channelId;
+                        if (!isMatchChannel) return false;
+                        return detail.isRework ? log.task?.isRework === true : log.task?.isRework !== true;
+                    });
+                    
+                    const uniqueTaskIds = new Set<string>();
+                    let actualMinutes = 0;
+                    logsOfChannel.forEach(log => {
+                        if (!uniqueTaskIds.has(log.taskId)) {
+                            uniqueTaskIds.add(log.taskId);
+                            actualMinutes += Number(log.task?.duration || 0);
+                        }
+                    });
+                    
+                    const equivalent = detail.duration > 0 ? actualMinutes / detail.duration : actualMinutes;
+                    const equivalentRounded = Math.round(equivalent * 10) / 10;
+                    
+                    totalEquivalentVideos += equivalentRounded;
+                });
+
+                // Các task lọt ra ngoài vùng target (Vượt tuyến)
+                const uniqueOutsideTaskIds = new Set<string>();
+                const logsOutside = userLogs.filter(log => {
+                    const isCovered = targetDetails.some(d => {
+                        const isMatchChannel = d.channelId === log.task?.channelId;
+                        const isMatchRework = d.isRework ? log.task?.isRework === true : log.task?.isRework !== true;
+                        return isMatchChannel && isMatchRework;
+                    });
+                    return !isCovered;
+                });
+                
+                logsOutside.forEach(log => uniqueOutsideTaskIds.add(log.taskId));
+                totalEquivalentVideos += uniqueOutsideTaskIds.size;
+
+                actualCount = Math.round(totalEquivalentVideos * 10) / 10;
+            } else {
+                // Fallback nếu người dùng chưa có target chi tiết (Logic đếm task)
+                const uniqueTasksCount = new Set(userLogs.map(l => l.taskId)).size;
+                actualCount = uniqueTasksCount;
+            }
 
             return {
                 id: user.id,
@@ -88,8 +160,8 @@ export async function GET(req: Request) {
                 teamId: user.teamId,
                 isActive: user.isActive,
                 currentWeekStats: {
-                    target: target,
-                    actual: actual
+                    target: targetValue,
+                    actual: actualCount
                 }
             };
         });

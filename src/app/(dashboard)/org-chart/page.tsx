@@ -65,7 +65,6 @@ export default function OrgChartPage() {
             fetch("/api/users/org-chart").then(async res => {
                 if (!res.ok) return [];
                 const data = await res.json();
-                // Vì API mới trả thẳng ra mảng user luôn nên không cần data.users nữa
                 return data.filter((u: any) => u.isActive === true);
             })
         ]).then(([teamsData, deptsData, usersData]) => {
@@ -119,38 +118,32 @@ export default function OrgChartPage() {
                 const actual = user.currentWeekStats?.actual || 0;
                 const target = user.currentWeekStats?.target || 0;
 
+                // 🚀 ĐÃ SỬA: Cấp thẻ Đỏ cho Leader
                 initialNodes.push({
                     id: userNodeId, type: 'custom', position: { x: 0, y: 0 },
                     data: { 
                         label: user.fullName, role: user.role, actual: actual, target: target,
                         avatar: user.avatarUrl || null,
-                        borderColor: user.role === 'LEADER' ? 'border-blue-300' : 'border-slate-200', 
-                        textColor: user.role === 'LEADER' ? 'text-blue-600' : 'text-slate-500',
+                        borderColor: user.role === 'LEADER' ? 'border-red-300' : 'border-slate-200', 
+                        textColor: user.role === 'LEADER' ? 'text-red-600' : 'text-slate-500',
                         fullUserObj: user,
-                        targetPosition: 'left' // 🚀 Ra lệnh cho node này cắm cổng bên trái
+                        targetPosition: 'left'
                     }
                 });
                 initialEdges.push({ id: `e_${parentId}-${userNodeId}`, source: parentId, target: userNodeId, type: 'smoothstep' });
             });
 
-            // =================================================================
-            // 🚀 BẮT ĐẦU THUẬT TOÁN CUSTOM LAYOUT XƯƠNG CÁ (VERTICAL TREE)
-            // =================================================================
-            
-            // 1. Tách mảng: Chỉ cho các Node Hệ thống (BGD, Phòng, Team) đi dàn hàng ngang
             const systemNodes = initialNodes.filter(n => n.data.isSystemNode || n.data.role === "Giám Đốc" || n.data.role === "Phó Giám Đốc");
             const systemEdges = initialEdges.filter(e => systemNodes.some(n => n.id === e.source) && systemNodes.some(n => n.id === e.target));
 
             const userNodes = initialNodes.filter(n => !systemNodes.some(sn => sn.id === n.id));
             const userEdges = initialEdges.filter(e => !systemEdges.some(se => se.id === e.id));
 
-            // 2. Chạy thuật toán Dagre cho bộ khung hệ thống
             const { nodes: layoutedSystemNodes, edges: layoutedSystemEdges } = getLayoutedElements(systemNodes, systemEdges);
 
             const finalNodes = [...layoutedSystemNodes];
             const finalEdges = [...layoutedSystemEdges];
 
-            // 3. Nhóm các nhân viên theo Team quản lý
             const usersByParent: any = {};
             userEdges.forEach(edge => {
                 if (!usersByParent[edge.source]) usersByParent[edge.source] = [];
@@ -158,16 +151,19 @@ export default function OrgChartPage() {
                 if (uNode) usersByParent[edge.source].push(uNode);
             });
 
-            // 4. Bắt đầu xếp dọc nhân viên dưới hộp Team
             Object.keys(usersByParent).forEach(parentId => {
                 const parentNode = layoutedSystemNodes.find((n: any) => n.id === parentId);
                 if (!parentNode) return;
 
-                // Tính toán toạ độ xương sống: Tâm của node Team
                 const spineX = parentNode.position.x + 100; 
-                
-                // 🚀 1. KÉO GIÃN TỪ TEAM XUỐNG NGƯỜI ĐẦU TIÊN (Tăng từ 130 lên 160)
                 let currentY = parentNode.position.y + 160; 
+
+                // 🚀 ĐÃ BỔ SUNG: Sắp xếp Leader ngoi lên đầu
+                usersByParent[parentId].sort((a: any, b: any) => {
+                    if (a.data.role === 'LEADER' && b.data.role !== 'LEADER') return -1;
+                    if (a.data.role !== 'LEADER' && b.data.role === 'LEADER') return 1;
+                    return 0;
+                });
 
                 usersByParent[parentId].forEach((uNode: any) => {
                     uNode.position = { x: spineX, y: currentY };
@@ -183,8 +179,6 @@ export default function OrgChartPage() {
                         finalEdges.push(uEdge);
                     }
 
-                    // 🚀 2. KÉO GIÃN KHOẢNG CÁCH GIỮA TỪNG NGƯỜI (Tăng từ 120 lên 160)
-                    // Nếu thấy vẫn sát, sếp có thể tăng số 160 này lên 170 hoặc 180 tùy ý
                     currentY += 160; 
                 });
             });
@@ -215,8 +209,6 @@ export default function OrgChartPage() {
                 </div>
             </div>
 
-            {/* VÙNG VẼ CANVAS CỦA REACT FLOW */}
-            {/* Bo góc giảm xuống trên mobile (rounded-2xl thay vì 32px) */}
             <div className="flex-1 bg-white rounded-2xl md:rounded-[32px] border border-slate-200 shadow-xl overflow-hidden relative z-0">
                 {loading ? (
                     <div className="h-full flex flex-col items-center justify-center text-slate-400 font-medium gap-3">
@@ -225,7 +217,7 @@ export default function OrgChartPage() {
                     </div>
                 ) : (
                     <ReactFlow
-                        nodesDraggable={false} 
+                        nodesDraggable={true} 
                         nodes={nodes}
                         edges={edges}
                         onNodesChange={onNodesChange}
@@ -239,7 +231,6 @@ export default function OrgChartPage() {
                     >
                         <Background color="#cbd5e1" gap={20} size={1} />
                         <Controls className="!bg-white !shadow-lg !border-slate-200 !rounded-xl overflow-hidden hidden sm:flex" showInteractive={false}/>
-                        {/* Ẩn Minimap trên Mobile vì vướng chỗ */}
                         <MiniMap className="!bg-white !border-slate-200 !rounded-xl !shadow-lg hidden md:block" />
                     </ReactFlow>
                 )}
