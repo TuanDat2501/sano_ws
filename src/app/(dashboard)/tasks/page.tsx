@@ -888,7 +888,7 @@ export default function KanbanBoard() {
                 )}
                 {canCreateTask && (
                     <button onClick={handleClearDoneTasks} disabled={isClearing} className="flex-1 sm:flex-none bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 px-3 py-2 rounded-xl font-bold flex items-center justify-center gap-1.5 whitespace-nowrap text-xs transition-colors shadow-sm">
-                        {isClearing ? <Loader2 size={14} className="animate-spin" /> : <Archive size={14} />} Lưu trữ
+                        {isClearing ? <Loader2 size={14} className="animate-spin" /> : <Archive size={14} />} Đóng Video Đã Xong
                     </button>
                 )}
                 {canCreateTask && (
