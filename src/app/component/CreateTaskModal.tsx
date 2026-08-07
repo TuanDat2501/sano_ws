@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, UsersIcon, Loader2, FileEdit, Film, Clock, Link as LinkIcon, FileText, Key, CalendarDays, MonitorPlay, UserCheck } from "lucide-react";
+import { X, UsersIcon, Loader2, FileEdit, Film, Clock, Link as LinkIcon, FileText, Key, CalendarDays, MonitorPlay, UserCheck, RefreshCw, Search, Check } from "lucide-react";
 import { createPortal } from "react-dom";
 
 interface CreateTaskModalProps {
@@ -51,7 +51,6 @@ const MultiSelectUser = ({ label, icon: Icon, options, selectedIds, onChange, di
 export default function CreateTaskModal({ isOpen, onClose, teams, initialData, onSubmit, isSubmitting, errors }: CreateTaskModalProps) {
   const [mounted, setMounted] = useState(false);
 
-  // 🚀 BỔ SUNG: Thêm publisherId vào state
   const [newTask, setNewTask] = useState({
     id: "", title: "", keywords: "", linkContent: "", 
     contentIds: [] as string[], 
@@ -66,9 +65,13 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [teamChannels, setTeamChannels] = useState<any[]>([]);
   const [usersTeam, setUsersTeam] = useState<any[]>([]);
-  
-  // 🚀 BỔ SUNG: Danh sách Quản lý kênh
   const [teamPublishers, setTeamPublishers] = useState<any[]>([]);
+
+  const [isRework, setIsRework] = useState(false);
+  const [doneTasks, setDoneTasks] = useState<any[]>([]);
+  const [searchReworkTask, setSearchReworkTask] = useState("");
+  const [selectedSourceTaskId, setSelectedSourceTaskId] = useState("");
+  const [isLoadingDoneTasks, setIsLoadingDoneTasks] = useState(false);
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -97,11 +100,15 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
           duration: initialData.duration || "",
           publishDate: initialData.publishDate ? new Date(initialData.publishDate).toISOString().split('T')[0] : "",
           channelId: initialData.channelId || "",
-          publisherId: initialData.publisherId || "", // 🚀 Load data cũ
+          publisherId: initialData.publisherId || "",
           priority: initialData.priority || "NORMAL"
         });
+        setIsRework(initialData.isRework || false);
       } else {
         setNewTask({ id: "", title: "", keywords: "", linkContent: "", contentIds: [], editorIds: [], animatorIds: [], teamId: "", projectId: "", duration: "", publishDate: "", channelId: "", publisherId: "", priority: "NORMAL" });
+        setIsRework(false);
+        setSelectedSourceTaskId("");
+        setSearchReworkTask("");
       }
     }
   }, [isOpen, initialData]);
@@ -128,7 +135,6 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
           setTeamContents(listUsers.filter((u: any) => ['CONTENT', 'LEADER'].includes(u.role)));
           setTeamEditors(listUsers.filter((u: any) => ['EDITOR', 'LEADER'].includes(u.role)));
           setUsersTeam(listUsers.filter((u: any) => ['EDITOR', 'LEADER','CONTENT','PUBLISHER'].includes(u.role)));
-          // 🚀 Lấy danh sách Quản lý kênh
           setTeamPublishers(listUsers.filter((u: any) => ['PUBLISHER', 'CHANNEL_MANAGER', 'LEADER'].includes(u.role)));
         }
       } catch (error) { } finally { setIsLoadingData(false); }
@@ -136,17 +142,45 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
     if (isOpen && newTask.teamId) fetchTeamData();
   }, [newTask.teamId, isOpen]);
 
+  useEffect(() => {
+    if (isOpen && isRework && newTask.teamId) {
+      setIsLoadingDoneTasks(true);
+      fetch(`/api/tasks/done?teamId=${newTask.teamId}`)
+        .then(res => res.json())
+        .then(data => {
+          setDoneTasks(Array.isArray(data) ? data : []);
+        })
+        .catch(() => {})
+        .finally(() => setIsLoadingDoneTasks(false));
+    }
+  }, [isOpen, isRework, newTask.teamId]);
+
   if (!isOpen || !mounted) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const payload = { ...newTask, duration: newTask.duration ? Number(newTask.duration) : null };
+    const payload = { 
+        ...newTask, 
+        duration: newTask.duration ? Number(newTask.duration) : null,
+        isRework: isRework 
+    };
     onSubmit(payload);
   };
 
   const selectedChannel = teamChannels.find(c => c.id === newTask.channelId);
   const isTongHopChannel = selectedChannel?.category === 'TONG_HOP';
   const filteredProjects = newTask.channelId ? teamProjects.filter(p => p.channelId === newTask.channelId) : teamProjects;
+  
+  const filteredDoneTasks = doneTasks.filter(t => t.title.toLowerCase().includes(searchReworkTask.toLowerCase()));
+
+  const handleSelectSourceTask = (task: any) => {
+      setSelectedSourceTaskId(task.id);
+      setNewTask(prev => ({
+          ...prev,
+          title: prev.title === "" ? `[XÀO LẠI] ${task.title}` : prev.title,
+          linkContent: prev.linkContent === "" ? (task.publishLink || task.videoLink || task.scriptLink || "") : prev.linkContent
+      }));
+  };
 
   const modalContent = (
     <>
@@ -174,6 +208,84 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
                   <h3 className="font-bold text-[13px] text-slate-800 border-b border-slate-100 pb-2 flex items-center gap-2">
                     <FileText className="text-blue-500" size={14} /> Thông tin Video
                   </h3>
+
+                  {/* 🚀 BOX: XÀO LẠI VIDEO CŨ */}
+                  <div className="col-span-1 md:col-span-2">
+                      <label className="flex items-center gap-2 cursor-pointer mb-2 w-fit group">
+                          <input 
+                              type="checkbox" 
+                              checked={isRework} 
+                              onChange={e => setIsRework(e.target.checked)} 
+                              className="w-4 h-4 text-rose-600 rounded border-slate-300 focus:ring-rose-500" 
+                          />
+                          <span className="text-[12px] font-black text-rose-600 uppercase tracking-widest flex items-center gap-1.5 group-hover:text-rose-700 transition-colors">
+                              <RefreshCw size={14}/> Sửa lại Video (Xào lại)
+                          </span>
+                      </label>
+
+                      {isRework && (
+                          <div className="bg-rose-50/40 border border-rose-100 rounded-xl p-4 animate-fade-in mt-2 mb-4 shadow-sm">
+                              {!newTask.teamId ? (
+                                  <p className="text-[11px] text-rose-500 italic font-medium">Vui lòng chọn Team ở cột bên phải để hiển thị danh sách video.</p>
+                              ) : (
+                                  <>
+                                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+                                          <label className="text-[11px] font-black text-slate-600 uppercase tracking-widest">
+                                              Tìm & Chọn video cũ
+                                          </label>
+                                          <div className="relative flex-1 sm:max-w-xs">
+                                              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                                              <input 
+                                                  type="text" 
+                                                  placeholder="Tìm tên tập..." 
+                                                  className="border border-slate-200 rounded-lg pl-8 pr-3 py-1.5 text-xs outline-none focus:border-rose-500 w-full bg-white shadow-sm" 
+                                                  value={searchReworkTask} 
+                                                  onChange={e => setSearchReworkTask(e.target.value)} 
+                                              />
+                                          </div>
+                                      </div>
+                                      
+                                      {/* 🚀 ĐÃ TỐI ƯU UI: Thêm giới hạn hiển thị, tăng chiều cao khung */}
+                                      <div className="max-h-[220px] overflow-y-auto custom-scrollbar border border-slate-200 rounded-lg bg-white p-1.5">
+                                          {isLoadingDoneTasks ? (
+                                              <div className="flex flex-col items-center justify-center p-6 gap-2 text-slate-400">
+                                                  <Loader2 size={18} className="animate-spin" />
+                                                  <span className="text-[11px] font-medium">Đang tải danh sách...</span>
+                                              </div>
+                                          ) : filteredDoneTasks.length > 0 ? (
+                                              <div className="space-y-1">
+                                                  {/* 🚀 Chỉ hiển thị 50 kết quả đầu tiên */}
+                                                  {filteredDoneTasks.slice(0, 50).map(t => (
+                                                      <div 
+                                                          key={t.id} 
+                                                          onClick={() => handleSelectSourceTask(t)} 
+                                                          className={`p-2.5 text-xs font-bold cursor-pointer rounded-lg border transition-all flex items-center gap-2.5 ${selectedSourceTaskId === t.id ? 'bg-rose-50 border-rose-200 text-rose-700' : 'hover:bg-slate-50 border-transparent text-slate-600'}`}
+                                                      >
+                                                          <div className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 transition-colors ${selectedSourceTaskId === t.id ? 'border-rose-500 bg-rose-500 text-white' : 'border-slate-300'}`}>
+                                                              {selectedSourceTaskId === t.id && <Check size={10} strokeWidth={4} />}
+                                                          </div>
+                                                          <span className="truncate flex-1">{t.title}</span>
+                                                      </div>
+                                                  ))}
+                                                  {/* Cảnh báo khi có quá nhiều kết quả */}
+                                                  {filteredDoneTasks.length > 50 && (
+                                                      <div className="p-2.5 mt-1 text-center text-[10px] font-bold text-slate-500 bg-slate-50 rounded-lg border border-dashed border-slate-200">
+                                                          Hiển thị 50 / {filteredDoneTasks.length} kết quả. Nhập từ khóa để tìm thêm...
+                                                      </div>
+                                                  )}
+                                              </div>
+                                          ) : (
+                                              <div className="flex items-center justify-center p-8">
+                                                  <p className="text-[11px] text-slate-400 italic font-medium">Không tìm thấy tập nào phù hợp.</p>
+                                              </div>
+                                          )}
+                                      </div>
+                                  </>
+                              )}
+                          </div>
+                      )}
+                  </div>
+
                   <div>
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tiêu đề / Ý tưởng <span className="text-red-500">*</span></label>
                     <textarea required autoFocus rows={2} className="w-full mt-1 bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition-all font-bold focus:border-blue-500 focus:bg-white resize-none" placeholder="Nhập tiêu đề video..." value={newTask.title} onChange={(e) => setNewTask({ ...newTask, title: e.target.value })} />
@@ -239,7 +351,6 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
                       </select>
                     </div>
                     
-                    {/* 🚀 BỔ SUNG: Dropdown chọn Quản lý Kênh */}
                     <div className="col-span-2">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block flex items-center gap-1.5"><UserCheck size={12} /> Quản lý kênh</label>
                       <select disabled={!newTask.teamId || isLoadingData} className="w-full border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-sm text-slate-900 bg-slate-50 disabled:opacity-50 disabled:text-slate-400" value={newTask.publisherId} onChange={(e) => setNewTask({ ...newTask, publisherId: e.target.value })}>

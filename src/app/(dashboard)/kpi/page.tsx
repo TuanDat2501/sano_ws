@@ -2,15 +2,15 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import { TrendingUp, Calendar, Users, ChevronLeft, ChevronRight } from "lucide-react";
+import { TrendingUp, Calendar, Users, ChevronLeft, ChevronRight, Database } from "lucide-react";
 import { useToast } from "@/app/component/ToastProvider";
 
 import KpiEmployeeDetail from "./components/KpiEmployeeDetail";
 import KpiTeamTable from "./components/KpiTeamTable";
 import KpiDrawer from "./components/KpiDrawer";
+import TaskLogManager from "./components/TaskLogManager"; // Nhúng Tool mới vào
 import { getContinuousWeekRange } from "@/lib/utils";
 
-// --- BỘ CÔNG CỤ TÍNH LỊCH CHUẨN ---
 function getMonthlyWeekRange(year: number, month: number, weekNumber: number) {
     const firstDayOfMonth = new Date(year, month - 1, 1);
     const lastDayOfMonth = new Date(year, month, 0);
@@ -40,8 +40,6 @@ function getMonthlyWeekRange(year: number, month: number, weekNumber: number) {
 function getCurrentWeekNumber(date: Date) {
     const year = date.getFullYear();
     const month = date.getMonth() + 1;
-
-    // Đưa ngày hiện tại về mốc 0h00 để so sánh cho chuẩn
     const todayTime = new Date(year, month - 1, date.getDate()).getTime();
 
     for (let w = 1; w <= 5; w++) {
@@ -50,7 +48,6 @@ function getCurrentWeekNumber(date: Date) {
         const endTime = new Date(range.end.getFullYear(), range.end.getMonth(), range.end.getDate()).getTime();
 
         if (todayTime >= startTime && todayTime <= endTime) {
-            // Giới hạn max là tuần 4 (Nếu sang tuần 5 thì vẫn gộp số liệu vào tuần 4)
             return w > 4 ? 4 : w;
         }
     }
@@ -64,10 +61,11 @@ export default function KpiDashboard() {
     const teamId = currentUser?.teamId;
     const { showToast } = useToast();
 
-
     const isHighLevel = ["BAN_GIAM_DOC", "ADMIN", "HR", "KE_TOAN"].includes(userRole);
-
     const isManager = ["LEADER", "BAN_GIAM_DOC", "ADMIN", "HR", "KE_TOAN"].includes(userRole);
+
+    // 🚀 TAB QUẢN LÝ (Chỉ dùng cho ADMIN)
+    const [mainTab, setMainTab] = useState<'KPI' | 'LOGS'>('KPI');
 
     const [teams, setTeams] = useState<any[]>([]);
     const [selectedTeamFilter, setSelectedTeamFilter] = useState<string>("ALL");
@@ -102,7 +100,6 @@ export default function KpiDashboard() {
         setIsLoading(true);
         try {
             if (isManager) {
-                // 🚀 QUẢN LÝ GỌI API LẤY DATA CỦA CẢ TEAM
                 if (!queryTeamId) {
                     setIsLoading(false);
                     return;
@@ -122,7 +119,6 @@ export default function KpiDashboard() {
                     showToast("error", data.error || "Không thể tải dữ liệu");
                 }
             } else {
-                // 🚀 NHÂN VIÊN GỌI API RIÊNG THEO ID CỦA CHÍNH HỌ
                 if (!currentUser?.id) return;
                 const res = await fetch(`/api/kpi/${currentUser.id}?year=${selectedYear}&month=${selectedMonth}&week=${selectedWeek}`);
                 const data = await res.json();
@@ -142,9 +138,11 @@ export default function KpiDashboard() {
     };
 
     useEffect(() => {
-        setCurrentPage(1);
-        if (currentUser) fetchKpiData();
-    }, [selectedYear, selectedMonth, selectedWeek, selectedTeamFilter, currentUser]);
+        if (mainTab === 'KPI') {
+            setCurrentPage(1);
+            if (currentUser) fetchKpiData();
+        }
+    }, [selectedYear, selectedMonth, selectedWeek, selectedTeamFilter, currentUser, mainTab]);
 
     useEffect(() => {
         if (isManager && kpiList.length > 0 && !viewingUserId) {
@@ -153,12 +151,10 @@ export default function KpiDashboard() {
         }
     }, [kpiList, currentUser, viewingUserId, isManager]);
 
-    // 🚀 BỔ SUNG: Tham số thứ 3 (targetDetails) để nhận mảng từ KpiTeamTable
     const handleUpdateTarget = async (userId: string, newTarget: string | number, targetDetails: any[] = []) => {
         const targetNum = parseInt(newTarget as string);
         if (isNaN(targetNum) || targetNum < 0) return;
 
-        // Tạm cập nhật UI trước cho mượt
         setKpiList(prev => prev.map(k => {
             if (k.userId === userId) {
                 const newPercent = targetNum > 0 ? Math.round((k.actualValue / targetNum) * 100) : 0;
@@ -172,12 +168,8 @@ export default function KpiDashboard() {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    userId,
-                    year: selectedYear,
-                    month: selectedMonth,
-                    weekNumber: selectedWeek,
-                    targetValue: targetNum,
-                    targetDetails // Đẩy mảng detail xuống API
+                    userId, year: selectedYear, month: selectedMonth, weekNumber: selectedWeek,
+                    targetValue: targetNum, targetDetails 
                 })
             });
 
@@ -202,112 +194,141 @@ export default function KpiDashboard() {
     return (
         <div className="h-full flex flex-col p-3 md:p-8 bg-slate-50 overflow-hidden animate-fade-in relative">
 
-            <div className="shrink-0 flex flex-col xl:flex-row justify-between items-start xl:items-center mb-4 md:mb-6 gap-3 md:gap-4">
-                <div>
-                    <h1 className="text-xl md:text-2xl font-black text-slate-900 flex items-center gap-2">
-                        <TrendingUp className="text-red-600 w-5 h-5 md:w-6 md:h-6" /> Bảng Theo Dõi KPI
-                    </h1>
-                    <p className="text-xs md:text-sm font-medium text-slate-500 mt-1 md:mt-1.5 flex items-center gap-1.5 md:gap-2">
-                        <Calendar size={14} className="md:w-4 md:h-4" />
-                        {selectedWeek === 0 ? `Tháng ${selectedMonth}/${selectedYear}` : getContinuousWeekRange(selectedYear, selectedMonth, selectedWeek).label}
-                    </p>
+            {/* 🚀 TAB CHUYỂN ĐỔI CHỨC NĂNG DÀNH CHO ADMIN */}
+            {userRole === 'ADMIN' && (
+                <div className="flex gap-1 mb-4 border-b border-slate-200 shrink-0">
+                    <button 
+                        onClick={() => setMainTab('KPI')}
+                        className={`px-4 py-2.5 text-sm font-black uppercase tracking-wider transition-colors border-b-2 ${mainTab === 'KPI' ? 'border-blue-600 text-blue-700 bg-blue-50/50' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+                    >
+                        Bảng Theo Dõi KPI
+                    </button>
+                    <button 
+                        onClick={() => setMainTab('LOGS')}
+                        className={`px-4 py-2.5 text-sm font-black uppercase tracking-wider transition-colors border-b-2 flex items-center gap-2 ${mainTab === 'LOGS' ? 'border-rose-600 text-rose-700 bg-rose-50/50' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+                    >
+                        <Database size={16} /> Quản lý Log (Dọn Rác)
+                    </button>
                 </div>
+            )}
 
-                <div className="flex items-center gap-1 md:gap-2 bg-white p-1.5 md:p-2 rounded-xl shadow-sm border border-slate-200 overflow-x-auto w-full xl:w-auto custom-scrollbar-thin">
-                    {isHighLevel && (
-                        <div className="flex items-center gap-1 px-2 md:px-3 border-r border-slate-200 shrink-0">
-                            <Users size={14} className="text-slate-400 md:w-4 md:h-4" />
-                            <select className="bg-transparent text-xs md:text-sm font-black text-slate-800 outline-none cursor-pointer max-w-[100px] md:max-w-[140px] truncate" value={selectedTeamFilter} onChange={(e) => setSelectedTeamFilter(e.target.value)}>
-                                <option value="ALL">Toàn công ty</option>
-                                <option value="" disabled>--- Chọn Team ---</option>
-                                {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                            </select>
-                        </div>
-                    )}
-                    {session?.user.isTeamLeader && (
-                        <div className="flex items-center gap-1 px-2 md:px-3 border-r border-slate-200 shrink-0">
-                            <Users size={14} className="text-slate-400 md:w-4 md:h-4" />
-                            <select className="bg-transparent text-xs md:text-sm font-black text-slate-800 outline-none cursor-pointer max-w-[100px] md:max-w-[140px] truncate" value={selectedTeamFilter} onChange={(e) => setSelectedTeamFilter(e.target.value)}>
-                                <option value="ALL">Toàn công ty</option>
-                                <option value="" disabled>--- Chọn Team ---</option>
-                                {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                            </select>
-                        </div>
-                    )}
-                    <div className="flex items-center gap-1 px-2 md:px-3 border-r border-slate-200 shrink-0">
-                        <span className="text-[10px] md:text-sm font-bold text-slate-500">Tháng:</span>
-                        <select className="bg-transparent text-xs md:text-sm font-black text-slate-800 outline-none cursor-pointer" value={selectedMonth} onChange={(e) => setSelectedMonth(Number(e.target.value))}>
-                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(m => <option key={m} value={m}>T{m}</option>)}
-                        </select>
-                    </div>
-                    <div className="flex items-center gap-1 px-2 md:px-3 shrink-0">
-                        <span className="text-[10px] md:text-sm font-bold text-slate-500">Tuần:</span>
-                        <select className="bg-transparent text-xs md:text-sm font-black text-slate-800 outline-none cursor-pointer" value={selectedWeek} onChange={(e) => setSelectedWeek(Number(e.target.value))}>
-                            <option value={0}>Cả tháng</option>
-                            {availableWeeks.map(w => <option key={w} value={w}>Tuần {w}</option>)}
-                        </select>
-                    </div>
+            {/* --- NỘI DUNG MÀN HÌNH TÙY THEO TAB --- */}
+            {mainTab === 'LOGS' ? (
+                <div className="flex-1 min-h-0">
+                    <TaskLogManager teams={teams} />
                 </div>
-            </div>
-
-            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                {!isManager && (
-                    <div className="flex-1 flex flex-col min-h-0">
-                        <KpiEmployeeDetail activeKpi={activeKpi} isLoading={isLoading} />
-                    </div>
-                )}
-
-                {isManager && (
-                    <div className="flex-1 flex flex-col min-h-0 bg-white rounded-xl md:rounded-[24px] border border-slate-200 shadow-sm overflow-hidden">
-                        <div className="flex-1 flex flex-col min-h-0">
-                            <KpiTeamTable
-                                kpiList={paginatedKpiList}
-                                handleUpdateTarget={handleUpdateTarget}
-                                onRowClick={(id: any) => { setViewingUserId(id); setIsDrawerOpen(true); }}
-                                isLoading={isLoading}
-                                teamId={queryTeamId}
-                                year={selectedYear}
-                                month={selectedMonth}
-                            />
+            ) : (
+                <>
+                    {/* KHU VỰC HEADER CỦA BẢNG KPI */}
+                    <div className="shrink-0 flex flex-col xl:flex-row justify-between items-start xl:items-center mb-4 md:mb-6 gap-3 md:gap-4">
+                        <div>
+                            <h1 className="text-xl md:text-2xl font-black text-slate-900 flex items-center gap-2">
+                                <TrendingUp className="text-blue-600 w-5 h-5 md:w-6 md:h-6" /> Thống Kê KPI
+                            </h1>
+                            <p className="text-xs md:text-sm font-medium text-slate-500 mt-1 md:mt-1.5 flex items-center gap-1.5 md:gap-2">
+                                <Calendar size={14} className="md:w-4 md:h-4" />
+                                {selectedWeek === 0 ? `Tháng ${selectedMonth}/${selectedYear}` : getContinuousWeekRange(selectedYear, selectedMonth, selectedWeek).label}
+                            </p>
                         </div>
 
-                        {!isLoading && kpiList.length > 0 && (
-                            <div className="shrink-0 p-3 md:p-4 border-t border-slate-100 flex justify-between items-center bg-slate-50/50">
-                                <span className="text-[10px] md:text-sm text-slate-500 font-medium hidden sm:inline">
-                                    Hiển thị <span className="font-bold text-slate-800">{(currentPage - 1) * itemsPerPage + 1} - {Math.min(currentPage * itemsPerPage, kpiList.length)}</span> / <span className="font-bold text-slate-800">{kpiList.length}</span>
-                                </span>
-                                <span className="text-[10px] text-slate-500 font-medium sm:hidden">
-                                    Tổng: <span className="font-bold text-slate-800">{kpiList.length}</span>
-                                </span>
-
-                                <div className="flex items-center gap-1.5 md:gap-2">
-                                    <button
-                                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                                        disabled={currentPage === 1}
-                                        className="p-1.5 md:p-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-sm active:scale-95"
-                                    >
-                                        <ChevronLeft size={16} className="md:w-[18px] md:h-[18px]" />
-                                    </button>
-
-                                    <span className="text-xs md:text-sm font-black text-slate-700 px-2">
-                                        {currentPage} <span className="text-slate-400 font-medium">/ {totalPages}</span>
-                                    </span>
-
-                                    <button
-                                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                                        disabled={currentPage === totalPages || totalPages === 0}
-                                        className="p-1.5 md:p-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-sm active:scale-95"
-                                    >
-                                        <ChevronRight size={16} className="md:w-[18px] md:h-[18px]" />
-                                    </button>
+                        <div className="flex items-center gap-1 md:gap-2 bg-white p-1.5 md:p-2 rounded-xl shadow-sm border border-slate-200 overflow-x-auto w-full xl:w-auto custom-scrollbar-thin">
+                            {isHighLevel && (
+                                <div className="flex items-center gap-1 px-2 md:px-3 border-r border-slate-200 shrink-0">
+                                    <Users size={14} className="text-slate-400 md:w-4 md:h-4" />
+                                    <select className="bg-transparent text-xs md:text-sm font-black text-slate-800 outline-none cursor-pointer max-w-[100px] md:max-w-[140px] truncate" value={selectedTeamFilter} onChange={(e) => setSelectedTeamFilter(e.target.value)}>
+                                        <option value="ALL">Toàn công ty</option>
+                                        <option value="" disabled>--- Chọn Team ---</option>
+                                        {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                                    </select>
                                 </div>
+                            )}
+                            {session?.user.isTeamLeader && (
+                                <div className="flex items-center gap-1 px-2 md:px-3 border-r border-slate-200 shrink-0">
+                                    <Users size={14} className="text-slate-400 md:w-4 md:h-4" />
+                                    <select className="bg-transparent text-xs md:text-sm font-black text-slate-800 outline-none cursor-pointer max-w-[100px] md:max-w-[140px] truncate" value={selectedTeamFilter} onChange={(e) => setSelectedTeamFilter(e.target.value)}>
+                                        <option value="ALL">Toàn công ty</option>
+                                        <option value="" disabled>--- Chọn Team ---</option>
+                                        {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                                    </select>
+                                </div>
+                            )}
+                            <div className="flex items-center gap-1 px-2 md:px-3 border-r border-slate-200 shrink-0">
+                                <span className="text-[10px] md:text-sm font-bold text-slate-500">Tháng:</span>
+                                <select className="bg-transparent text-xs md:text-sm font-black text-slate-800 outline-none cursor-pointer" value={selectedMonth} onChange={(e) => setSelectedMonth(Number(e.target.value))}>
+                                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map(m => <option key={m} value={m}>T{m}</option>)}
+                                </select>
+                            </div>
+                            <div className="flex items-center gap-1 px-2 md:px-3 shrink-0">
+                                <span className="text-[10px] md:text-sm font-bold text-slate-500">Tuần:</span>
+                                <select className="bg-transparent text-xs md:text-sm font-black text-slate-800 outline-none cursor-pointer" value={selectedWeek} onChange={(e) => setSelectedWeek(Number(e.target.value))}>
+                                    <option value={0}>Cả tháng</option>
+                                    {availableWeeks.map(w => <option key={w} value={w}>Tuần {w}</option>)}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* NỘI DUNG BẢNG KPI */}
+                    <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                        {!isManager && (
+                            <div className="flex-1 flex flex-col min-h-0">
+                                <KpiEmployeeDetail activeKpi={activeKpi} isLoading={isLoading} />
+                            </div>
+                        )}
+
+                        {isManager && (
+                            <div className="flex-1 flex flex-col min-h-0 bg-white rounded-xl md:rounded-[24px] border border-slate-200 shadow-sm overflow-hidden">
+                                <div className="flex-1 flex flex-col min-h-0">
+                                    <KpiTeamTable
+                                        kpiList={paginatedKpiList}
+                                        handleUpdateTarget={handleUpdateTarget}
+                                        onRowClick={(id: any) => { setViewingUserId(id); setIsDrawerOpen(true); }}
+                                        isLoading={isLoading}
+                                        teamId={queryTeamId}
+                                        year={selectedYear}
+                                        month={selectedMonth}
+                                    />
+                                </div>
+
+                                {!isLoading && kpiList.length > 0 && (
+                                    <div className="shrink-0 p-3 md:p-4 border-t border-slate-100 flex justify-between items-center bg-slate-50/50">
+                                        <span className="text-[10px] md:text-sm text-slate-500 font-medium hidden sm:inline">
+                                            Hiển thị <span className="font-bold text-slate-800">{(currentPage - 1) * itemsPerPage + 1} - {Math.min(currentPage * itemsPerPage, kpiList.length)}</span> / <span className="font-bold text-slate-800">{kpiList.length}</span>
+                                        </span>
+                                        <span className="text-[10px] text-slate-500 font-medium sm:hidden">
+                                            Tổng: <span className="font-bold text-slate-800">{kpiList.length}</span>
+                                        </span>
+
+                                        <div className="flex items-center gap-1.5 md:gap-2">
+                                            <button
+                                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                                disabled={currentPage === 1}
+                                                className="p-1.5 md:p-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-sm active:scale-95"
+                                            >
+                                                <ChevronLeft size={16} className="md:w-[18px] md:h-[18px]" />
+                                            </button>
+
+                                            <span className="text-xs md:text-sm font-black text-slate-700 px-2">
+                                                {currentPage} <span className="text-slate-400 font-medium">/ {totalPages}</span>
+                                            </span>
+
+                                            <button
+                                                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                                disabled={currentPage === totalPages || totalPages === 0}
+                                                className="p-1.5 md:p-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-sm active:scale-95"
+                                            >
+                                                <ChevronRight size={16} className="md:w-[18px] md:h-[18px]" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
-                )}
-            </div>
+                </>
+            )}
 
-            {isManager && (
+            {isManager && mainTab === 'KPI' && (
                 <KpiDrawer isOpen={isDrawerOpen} onClose={() => setIsDrawerOpen(false)} activeKpi={activeKpi} />
             )}
         </div>

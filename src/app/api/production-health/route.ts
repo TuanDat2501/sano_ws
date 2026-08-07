@@ -20,9 +20,11 @@ export async function GET(req: Request) {
                                 status: { not: "BACKLOG" }
                             },
                             select: {
-                                id: true,       // 🚀 BỔ SUNG LẤY ID
-                                title: true,    // 🚀 BỔ SUNG LẤY TIÊU ĐỀ
+                                id: true,
+                                title: true,
                                 scriptLink: true,
+                                animationLink: true,
+                                roughProjectLink: true,
                                 videoLink: true,
                                 publishLink: true,
                                 duration: true,
@@ -39,16 +41,21 @@ export async function GET(req: Request) {
         let stt = 1;
 
         teams.forEach(team => {
-            let teamRows: any[] = []; // Mảng chứa các dòng của 1 Team
+            let teamRows: any[] = []; 
             
             team.channels.forEach((channel) => {
                 const tasks = channel.tasks || [];
 
-                // Lọc ra các task dư (Content dư HOẶC Video dư)
+                // 🚀 Lọc task dư: Loại trừ các task đã lên kênh (có Publish Link)
                 let surplusTasks = tasks.filter((t: any) => {
-                    const isContent = t.scriptLink && t.scriptLink.trim() !== "" && (!t.videoLink || t.videoLink.trim() === "");
-                    const isVideo = t.videoLink && t.videoLink.trim() !== "" && (!t.publishLink || t.publishLink.trim() === "");
-                    return isContent || isVideo;
+                    const hasScript = t.scriptLink && t.scriptLink.trim() !== "";
+                    const hasAnim = t.animationLink && t.animationLink.trim() !== "";
+                    const hasRough = t.roughProjectLink && t.roughProjectLink.trim() !== "";
+                    const hasVideo = t.videoLink && t.videoLink.trim() !== "";
+                    const hasPublish = t.publishLink && t.publishLink.trim() !== "";
+
+                    if (hasPublish) return false;
+                    return hasScript || hasAnim || hasRough || hasVideo;
                 });
 
                 if (surplusTasks.length === 0) {
@@ -57,34 +64,44 @@ export async function GET(req: Request) {
                         channelName: channel.name,
                         isFirstOfChannel: true,
                         channelRowSpan: 1,
-                        videoCount: 0,
-                        videoDuration: "",
+                        duration: "",
                         contentCount: 0,
-                        contentDuration: "",
+                        animationCount: 0,
+                        roughCount: 0,
+                        videoCount: 0,
                         notes: []
                     });
                 } else {
-                    // 🚀 BƯỚC QUAN TRỌNG: GOM NHÓM THEO THỜI LƯỢNG (DURATION)
                     const durationGroups: Record<string, any> = {};
                     
                     surplusTasks.forEach((t: any) => {
                         const d = t.duration || "Không rõ";
                         if (!durationGroups[d]) {
-                            // 🚀 Thêm mảng videoTasks và contentTasks để chứa thông tin chi tiết
-                            durationGroups[d] = { videoCount: 0, contentCount: 0, notesCount: {}, videoTasks: [], contentTasks: [] };
+                            durationGroups[d] = { 
+                                contentCount: 0, animationCount: 0, roughCount: 0, videoCount: 0, 
+                                contentTasks: [], animationTasks: [], roughTasks: [], videoTasks: [], 
+                                notesCount: {} 
+                            };
                         }
                         
-                        const isContent = t.scriptLink && t.scriptLink.trim() !== "" && (!t.videoLink || t.videoLink.trim() === "");
-                        const isVideo = t.videoLink && t.videoLink.trim() !== "" && (!t.publishLink || t.publishLink.trim() === "");
+                        const hasScript = t.scriptLink && t.scriptLink.trim() !== "";
+                        const hasAnim = t.animationLink && t.animationLink.trim() !== "";
+                        const hasRough = t.roughProjectLink && t.roughProjectLink.trim() !== "";
+                        const hasVideo = t.videoLink && t.videoLink.trim() !== "";
                         
-                        // 🚀 Vừa đếm số lượng, vừa nhét thông tin bài vào mảng chi tiết
-                        if (isContent) {
-                            durationGroups[d].contentCount++;
-                            durationGroups[d].contentTasks.push({ id: t.id, title: t.title });
-                        }
-                        if (isVideo) {
+                        // 🚀 Phân loại theo mức độ hoàn thiện cao nhất
+                        if (hasVideo) {
                             durationGroups[d].videoCount++;
                             durationGroups[d].videoTasks.push({ id: t.id, title: t.title });
+                        } else if (hasRough) {
+                            durationGroups[d].roughCount++;
+                            durationGroups[d].roughTasks.push({ id: t.id, title: t.title });
+                        } else if (hasAnim) {
+                            durationGroups[d].animationCount++;
+                            durationGroups[d].animationTasks.push({ id: t.id, title: t.title });
+                        } else if (hasScript) {
+                            durationGroups[d].contentCount++;
+                            durationGroups[d].contentTasks.push({ id: t.id, title: t.title });
                         }
                         
                         if (t.note && t.note.trim() !== "") {
@@ -93,14 +110,12 @@ export async function GET(req: Request) {
                         }
                     });
 
-                    // Sắp xếp các thời lượng từ nhỏ đến lớn
                     const durations = Object.keys(durationGroups).sort((a,b) => {
                         if (a === "Không rõ") return 1;
                         if (b === "Không rõ") return -1;
                         return Number(a) - Number(b);
                     });
 
-                    // Chẻ thành nhiều dòng dựa trên số lượng nhóm Thời lượng
                     durations.forEach((d, dIdx) => {
                         const group = durationGroups[d];
                         const noteStrings = Object.entries(group.notesCount).map(([note, count]) => `${note}: ${count}`);
@@ -111,13 +126,19 @@ export async function GET(req: Request) {
                             isFirstOfChannel: dIdx === 0, 
                             channelRowSpan: durations.length, 
                             
-                            videoCount: group.videoCount,
-                            videoTasks: group.videoTasks, // 🚀 Trả về danh sách chi tiết Video dư
-                            videoDuration: d === "Không rõ" ? "" : d,
-                            
+                            duration: d === "Không rõ" ? "" : d,
+
                             contentCount: group.contentCount,
-                            contentTasks: group.contentTasks, // 🚀 Trả về danh sách chi tiết Content dư
-                            contentDuration: d === "Không rõ" ? "" : d,
+                            contentTasks: group.contentTasks,
+                            
+                            animationCount: group.animationCount,
+                            animationTasks: group.animationTasks,
+                            
+                            roughCount: group.roughCount,
+                            roughTasks: group.roughTasks,
+                            
+                            videoCount: group.videoCount,
+                            videoTasks: group.videoTasks, 
                             
                             notes: noteStrings
                         });
@@ -125,15 +146,14 @@ export async function GET(req: Request) {
                 }
             });
 
-            // Gắn dữ liệu Team vào và đẩy ra kết quả cuối cùng
             if (teamRows.length > 0) {
                 teamRows.forEach((row, rIdx) => {
                     reportData.push({
                         ...row,
                         teamName: team.name,
-                        stt: rIdx === 0 ? stt++ : "", // STT chỉ hiện ở dòng đầu của Team
-                        isFirstChannelOfTeam: rIdx === 0, // Đánh dấu dòng đầu của Team
-                        teamRowSpan: teamRows.length // Gộp ô theo toàn bộ số dòng của Team đó
+                        stt: rIdx === 0 ? stt++ : "", 
+                        isFirstChannelOfTeam: rIdx === 0, 
+                        teamRowSpan: teamRows.length 
                     });
                 });
             }
