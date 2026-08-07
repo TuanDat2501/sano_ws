@@ -521,8 +521,19 @@ model Channel {
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
   tasks           Task[]
+  revenueTargets  ChannelRevenueTarget[]
 }
+model ChannelRevenueTarget {
+  id        String   @id @default(uuid())
+  year      Int
+  month     Int
+  target    Float    @default(0)
 
+  channelId String
+  channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, year, month])
+}
 model DailyRevenue {
   id          String   @id @default(uuid())
   date        DateTime @db.Date 

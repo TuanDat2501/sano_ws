@@ -5,6 +5,8 @@ import { UserPlus, Briefcase, Edit, Loader2, Filter, Users, Search, Lock, Unlock
 import { useToast } from "@/app/component/ToastProvider";
 import UserFormDrawer from "./UserFormDrawer";
 import PermissionGuard from "@/app/component/PermissionGuard";
+// 🚀 IMPORT COMPONENT PHÂN TRANG
+import Pagination from "@/app/component/Pagination";
 
 export default function UsersPage() {
     const { showToast } = useToast();
@@ -322,40 +324,17 @@ export default function UsersPage() {
                                 </table>
                             )}
                         </div>
+                        
+                        {/* 🚀 ĐÃ SỬA: SỬ DỤNG COMPONENT PHÂN TRANG */}
                         {!loading && users.length > 0 && (
-                            <div className="px-4 py-3 md:px-6 md:py-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between bg-slate-50/50 shrink-0 gap-3">
-                                <p className="text-[11px] md:text-xs text-slate-500 font-medium">
-                                    Hiển thị {(currentPage - 1) * limit + 1} - {Math.min(currentPage * limit, totalCount)} trên tổng số {totalCount} nhân sự
-                                </p>
-                                
-                                <div className="flex items-center gap-1.5 md:gap-2">
-                                    <button
-                                        disabled={currentPage === 1}
-                                        onClick={() => setCurrentPage(prev => prev - 1)}
-                                        className="px-2.5 py-1.5 md:px-3 md:py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-bold text-slate-600 disabled:opacity-50 hover:bg-slate-50 transition-colors"
-                                    >
-                                        Trước
-                                    </button>
-                                    
-                                    {[...Array(totalPages)].map((_, i) => (
-                                        <button
-                                            key={i + 1}
-                                            onClick={() => setCurrentPage(i + 1)}
-                                            className={`w-7 h-7 md:w-8 md:h-8 rounded-lg text-xs font-bold transition-all ${currentPage === i + 1 ? 'bg-red-600 text-white shadow-md shadow-red-600/20' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}
-                                        >
-                                            {i + 1}
-                                        </button>
-                                    ))}
-
-                                    <button
-                                        disabled={currentPage === totalPages}
-                                        onClick={() => setCurrentPage(prev => prev + 1)}
-                                        className="px-2.5 py-1.5 md:px-3 md:py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-bold text-slate-600 disabled:opacity-50 hover:bg-slate-50 transition-colors"
-                                    >
-                                        Sau
-                                    </button>
-                                </div>
-                            </div>
+                            <Pagination 
+                                currentPage={currentPage}
+                                totalPages={totalPages}
+                                totalItems={totalCount}
+                                itemsPerPage={limit}
+                                onPageChange={setCurrentPage}
+                                itemName="nhân sự"
+                            />
                         )}
                     </div>
                 </div>

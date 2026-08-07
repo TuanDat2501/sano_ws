@@ -10,6 +10,9 @@ import { useToast } from "@/app/component/ToastProvider";
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 
+// 🚀 IMPORT COMPONENT PHÂN TRANG
+import Pagination from "@/app/component/Pagination";
+
 const REQUEST_TYPES_CONFIG = [
     { id: "NGHI_PHEP", label: "Xin nghỉ phép", category: "HR", allowedRoles: ["ALL"] },
     { id: "DI_MUON_VE_SOM", label: "Đi muộn / Về sớm", category: "HR", allowedRoles: ["ALL"] },
@@ -143,7 +146,6 @@ export default function RequestsPage() {
         fetch("/api/teams").then(res => res.json()).then((data: any) => { if (Array.isArray(data)) setDbTeams(data); });
     }, []);
 
-    // 🚀 HÀM XUẤT EXCEL (ĐÃ CẬP NHẬT TÁCH CỘT VÀ TÍNH NGÀY NGHỈ)
     const handleExportExcel = async () => {
         setIsExporting(true);
         try {
@@ -160,7 +162,6 @@ export default function RequestsPage() {
             const workbook = new ExcelJS.Workbook();
             const worksheet = workbook.addWorksheet('Danh_Sach_Don_Tu');
 
-            // 🚀 BỔ SUNG: Xé nhỏ cột Chi tiết ra thành các cột chuyên biệt
             worksheet.columns = [
                 { header: 'Mã Đơn', key: 'id', width: 12 },
                 { header: 'Loại Đề Xuất', key: 'type', width: 22 },
@@ -196,7 +197,6 @@ export default function RequestsPage() {
             exportData.forEach((req: any) => {
                 const content = req.contentData || {};
                 
-                // 🚀 TÍNH TOÁN SỐ NGÀY NGHỈ
                 let calculatedDays = "";
                 if (req.startDate && req.endDate) {
                     const start = new Date(req.startDate);
@@ -206,7 +206,6 @@ export default function RequestsPage() {
                     }
                 }
 
-                // Nhãn Có Lương / Không Lương
                 let leaveTypeLabel = "";
                 if (content.leaveType === "PAID") leaveTypeLabel = "Có lương";
                 else if (content.leaveType === "UNPAID") leaveTypeLabel = "Không lương";
@@ -218,27 +217,23 @@ export default function RequestsPage() {
                     team: req.team?.name || "---",
                     status: getStatusLabel(req.status),
                     createdAt: new Date(req.createdAt).toLocaleDateString('vi-VN'),
-                    
-                    // Điền dữ liệu vào các cột tách lẻ
                     leaveType: leaveTypeLabel,
                     startDate: req.startDate ? new Date(req.startDate).toLocaleDateString('vi-VN') : "",
                     endDate: req.endDate ? new Date(req.endDate).toLocaleDateString('vi-VN') : "",
-                    numDays: calculatedDays ? Number(calculatedDays) : "", // Để dạng Number để Excel có thể SUM được
+                    numDays: calculatedDays ? Number(calculatedDays) : "", 
                     targetDate: req.targetDate ? new Date(req.targetDate).toLocaleDateString('vi-VN') : "",
                     time: content.time || "",
                     itemName: req.itemName || "",
                     reason: req.reason || "",
-
                     amount: req.amount ? req.amount : "", 
                     approver1: req.firstApprover?.fullName || "---",
                     approver2: req.secondApprover?.fullName || "---",
                 });
             });
 
-            // Styling (Định dạng màu sắc)
             const headerRow = worksheet.getRow(1);
             headerRow.font = { bold: true, color: { argb: 'FFFFFF' } };
-            headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDC2626' } }; // Đỏ 600
+            headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDC2626' } }; 
             headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
             headerRow.height = 25;
 
@@ -249,7 +244,6 @@ export default function RequestsPage() {
                         bottom: { style: 'thin' }, right: { style: 'thin' }
                     };
                     if (rowNumber > 1) {
-                        // Căn phải cho cột Số ngày nghỉ (10) và Số tiền (15). Xuống dòng tự động cho ô Lý do (14).
                         cell.alignment = { 
                             vertical: 'middle', 
                             horizontal: (colNumber === 10 || colNumber === 15) ? 'right' : 'left', 
@@ -259,7 +253,6 @@ export default function RequestsPage() {
                 });
             });
 
-            // Cố định dòng tiêu đề để cuộn không bị mất
             worksheet.views = [{ state: 'frozen', ySplit: 1 }];
 
             const buffer = await workbook.xlsx.writeBuffer();
@@ -413,40 +406,17 @@ export default function RequestsPage() {
                             </table>
                         </div>
                     )}
+                    
+                    {/* 🚀 ĐÃ SỬA: SỬ DỤNG COMPONENT PHÂN TRANG */}
                     {!isLoading && requests.length > 0 && (
-                        <div className="px-4 py-3 md:px-6 md:py-4 border-t border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
-                            <p className="text-[11px] md:text-xs text-slate-500 font-medium">
-                                Hiển thị {(currentPage - 1) * limit + 1} - {Math.min(currentPage * limit, totalCount)} trên {totalCount} đề xuất
-                            </p>
-
-                            <div className="flex items-center gap-2">
-                                <button
-                                    disabled={currentPage === 1}
-                                    onClick={() => setCurrentPage(prev => prev - 1)}
-                                    className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-bold text-slate-600 disabled:opacity-50 hover:bg-slate-50 transition-colors"
-                                >
-                                    Trước
-                                </button>
-
-                                {[...Array(totalPages)].map((_, i) => (
-                                    <button
-                                        key={i + 1}
-                                        onClick={() => setCurrentPage(i + 1)}
-                                        className={`w-8 h-8 rounded-lg text-xs font-bold transition-all ${currentPage === i + 1 ? 'bg-red-600 text-white shadow-md shadow-red-600/20' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}
-                                    >
-                                        {i + 1}
-                                    </button>
-                                ))}
-
-                                <button
-                                    disabled={currentPage === totalPages}
-                                    onClick={() => setCurrentPage(prev => prev + 1)}
-                                    className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-bold text-slate-600 disabled:opacity-50 hover:bg-slate-50 transition-colors"
-                                >
-                                    Sau
-                                </button>
-                            </div>
-                        </div>
+                        <Pagination 
+                            currentPage={currentPage}
+                            totalPages={totalPages}
+                            totalItems={totalCount}
+                            itemsPerPage={limit}
+                            onPageChange={setCurrentPage}
+                            itemName="đề xuất"
+                        />
                     )}
                 </div>
 
