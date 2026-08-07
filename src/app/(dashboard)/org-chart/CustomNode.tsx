@@ -1,4 +1,5 @@
 import { Handle, Position } from "reactflow";
+import { Tv } from "lucide-react"; // 🚀 Import Icon TV
 
 export default function CustomNode({ data }: { data: any }) {
     const actual = data.actual ?? 0;
@@ -11,13 +12,11 @@ export default function CustomNode({ data }: { data: any }) {
     const initials = data.label ? data.label.charAt(0).toUpperCase() : "?";
     const showAvatar = data.role !== "Điều hành" && data.role !== "Phòng Ban";
 
-    // 🚀 LẤY HƯỚNG CẮM DÂY TỪ DATA (Dọc dùng Top, Xương cá dùng Left)
     const targetPos = data.targetPosition === 'left' ? Position.Left : Position.Top;
 
     return (
         <div className={`relative p-2.5 md:p-3 rounded-xl md:rounded-2xl border bg-white shadow-sm hover:shadow-lg transition-all min-w-[200px] md:min-w-[220px] ${data.borderColor}`}>
             
-            {/* 🚀 ĐỔI CỔNG TARGET THEO LINH HOẠT */}
             <Handle type="target" position={targetPos} className="!w-2.5 !h-2.5 !bg-slate-300 !border-white" />
             
             <div className={`flex items-center ${showAvatar ? 'gap-2.5 md:gap-3' : 'justify-center py-1 md:py-2'} mb-2.5 md:mb-3`}>
@@ -25,8 +24,8 @@ export default function CustomNode({ data }: { data: any }) {
                     data.avatar ? (
                         <img src={data.avatar} alt="avatar" className="w-8 h-8 md:w-10 md:h-10 rounded-full object-cover border border-slate-100 shadow-sm shrink-0" />
                     ) : (
-                        <div className={`w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center font-black text-white shrink-0 shadow-sm text-xs md:text-sm ${data.role === 'EDITOR' ? 'bg-purple-500' : data.role === 'LEADER' ? 'bg-blue-500' : data.role === 'Team' ? 'bg-amber-500' : 'bg-slate-600'}`}>
-                            {initials}
+                        <div className={`w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center font-black text-white shrink-0 shadow-sm text-xs md:text-sm ${data.role === 'EDITOR' ? 'bg-purple-500' : data.role === 'LEADER' ? 'bg-blue-500' : data.role === 'Kênh' ? 'bg-teal-500' : data.role === 'Team' ? 'bg-amber-500' : 'bg-slate-600'}`}>
+                            {data.role === 'Kênh' ? <Tv size={16} /> : initials}
                         </div>
                     )
                 )}
@@ -41,7 +40,7 @@ export default function CustomNode({ data }: { data: any }) {
                 </div>
             </div>
             
-            {data.target !== undefined && (
+            {data.target !== undefined && data.role !== 'Kênh' && (
                 <div className="bg-slate-50 p-1.5 md:p-2 rounded-lg md:rounded-xl border border-slate-100 mt-1">
                     <div className="flex justify-between text-[9px] md:text-[10px] font-black mb-1 md:mb-1.5">
                         <span className="text-slate-400 uppercase tracking-widest">Tiến độ</span>

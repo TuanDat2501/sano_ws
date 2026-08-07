@@ -14,14 +14,16 @@ const nodeTypes = {
     custom: CustomNode,
 };
 
+// 🚀 THUẬT TOÁN TỰ ĐỘNG SẮP XẾP SƠ ĐỒ
 const getLayoutedElements = (nodes: any[], edges: any[], direction = 'TB') => {
     const dagreGraph = new dagre.graphlib.Graph();
     dagreGraph.setDefaultEdgeLabel(() => ({}));
     
-    const nodeWidth = 200;
-    const nodeHeight = 100;
+    const nodeWidth = 240; 
+    const nodeHeight = 140;
 
-    dagreGraph.setGraph({ rankdir: direction });
+    // Khoảng cách giữa các node
+    dagreGraph.setGraph({ rankdir: direction, nodesep: 40, ranksep: 60 });
 
     nodes.forEach((node) => { dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight }); });
     edges.forEach((edge) => { dagreGraph.setEdge(edge.source, edge.target); });
@@ -53,7 +55,6 @@ export default function OrgChartPage() {
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
     const onNodeClick = useCallback((event: React.MouseEvent, node: any) => {
-        console.log(node)
         setSelectedNodeData(node.data);
         setIsDrawerOpen(true);
     }, []);
@@ -66,8 +67,9 @@ export default function OrgChartPage() {
                 if (!res.ok) return [];
                 const data = await res.json();
                 return data.filter((u: any) => u.isActive === true);
-            })
-        ]).then(([teamsData, deptsData, usersData]) => {
+            }),
+            fetch("/api/channels").then(res => res.ok ? res.json() : [])
+        ]).then(([teamsData, deptsData, usersData, channelsData]) => {
             const initialNodes: any[] = [];
             const initialEdges: any[] = [];
             
@@ -75,10 +77,11 @@ export default function OrgChartPage() {
             const bgdTeamIds = bgdUsers.map((u: any) => u.teamId).filter(Boolean);
             const bgdDeptIds = bgdTeamIds.map((tid: string) => teamsData.find((t:any) => t.id === tid)?.departmentId).filter(Boolean);
 
+            // 1. GỐC BAN GIÁM ĐỐC
             const rootId = "root_bgd";
             initialNodes.push({
                 id: rootId, type: 'custom', position: { x: 0, y: 0 },
-                data: { label: "Ban Giám Đốc", role: "Điều hành", borderColor: "border-red-500", textColor: "text-red-500", isSystemNode: true }
+                data: { label: "Ban Giám Đốc", role: "Điều hành", borderColor: "border-red-500", textColor: "text-red-500", isSystemNode: true, targetPosition: 'top' }
             });
 
             bgdUsers.forEach((user: any) => {
@@ -87,101 +90,139 @@ export default function OrgChartPage() {
                     id: userNodeId, type: 'custom', position: { x: 0, y: 0 },
                     data: { 
                         label: user.fullName, role: user.role === "ADMIN" ? "Giám Đốc" : "Phó Giám Đốc", 
-                        borderColor: 'border-red-300', textColor: 'text-red-600', fullUserObj: user 
+                        borderColor: 'border-red-300', textColor: 'text-red-600', fullUserObj: user, targetPosition: 'top'
                     }
                 });
                 initialEdges.push({ id: `e_${rootId}-${userNodeId}`, source: rootId, target: userNodeId, type: 'smoothstep', animated: true });
             });
 
+            // 2. PHÒNG BAN
             deptsData.filter((d: any) => !bgdDeptIds.includes(d.id)).forEach((dept: any) => {
                 const deptNodeId = `dept_${dept.id}`;
                 initialNodes.push({
                     id: deptNodeId, type: 'custom', position: { x: 0, y: 0 },
-                    data: { label: dept.name, role: "Phòng Ban", borderColor: "border-slate-800", textColor: "text-slate-800", isSystemNode: true, desc: dept.description }
+                    data: { label: dept.name, role: "Phòng Ban", borderColor: "border-slate-800", textColor: "text-slate-800", isSystemNode: true, desc: dept.description, targetPosition: 'top' }
                 });
                 initialEdges.push({ id: `e_${rootId}-${deptNodeId}`, source: rootId, target: deptNodeId, type: 'smoothstep' });
             });
 
+            // 3. TEAM
             teamsData.filter((t: any) => !bgdTeamIds.includes(t.id)).forEach((team: any) => {
                 const teamNodeId = `team_${team.id}`;
                 const parentId = team.departmentId && !bgdDeptIds.includes(team.departmentId) ? `dept_${team.departmentId}` : rootId; 
                 initialNodes.push({
                     id: teamNodeId, type: 'custom', position: { x: 0, y: 0 },
-                    data: { label: team.name, role: "Team", borderColor: "border-slate-800", textColor: "text-slate-800", isSystemNode: true, desc: team.description }
+                    data: { label: team.name, role: "Team", borderColor: "border-slate-800", textColor: "text-slate-800", isSystemNode: true, desc: team.description, targetPosition: 'top' }
                 });
                 initialEdges.push({ id: `e_${parentId}-${teamNodeId}`, source: parentId, target: teamNodeId, type: 'smoothstep' });
             });
 
+            // 4. NHÁNH "CHƯA CÓ TEAM"
+            const noTeamId = "no_team";
+            initialNodes.push({
+                id: noTeamId, type: 'custom', position: { x: 0, y: 0 },
+                data: { label: "Chưa phân bổ (No Team)", role: "Phòng Ban", borderColor: "border-slate-400", textColor: "text-slate-500", isSystemNode: true, desc: "Nhân sự & Kênh chưa được gắn vào Team cụ thể.", targetPosition: 'top' }
+            });
+            initialEdges.push({ id: `e_${rootId}-${noTeamId}`, source: rootId, target: noTeamId, type: 'smoothstep', animated: true });
+
+            // 5. GOM NHÓM DỮ LIỆU
+            const groupedUsers: Record<string, any[]> = {};
+            const groupedChannels: Record<string, any[]> = {};
+
+            channelsData.forEach((channel: any) => {
+                const pId = channel.teamId && !bgdTeamIds.includes(channel.teamId) ? `team_${channel.teamId}` : noTeamId;
+                if (!groupedChannels[pId]) groupedChannels[pId] = [];
+                groupedChannels[pId].push(channel);
+            });
+
             usersData.filter((u: any) => u.role !== "BAN_GIAM_DOC" && u.role !== "ADMIN").forEach((user: any) => {
-                const userNodeId = `user_${user.id}`;
-                const parentId = user.teamId && !bgdTeamIds.includes(user.teamId) ? `team_${user.teamId}` : rootId;
-                const actual = user.currentWeekStats?.actual || 0;
-                const target = user.currentWeekStats?.target || 0;
-
-                // 🚀 ĐÃ SỬA: Cấp thẻ Đỏ cho Leader
-                initialNodes.push({
-                    id: userNodeId, type: 'custom', position: { x: 0, y: 0 },
-                    data: { 
-                        label: user.fullName, role: user.role, actual: actual, target: target,
-                        avatar: user.avatarUrl || null,
-                        borderColor: user.role === 'LEADER' ? 'border-red-300' : 'border-slate-200', 
-                        textColor: user.role === 'LEADER' ? 'text-red-600' : 'text-slate-500',
-                        fullUserObj: user,
-                        targetPosition: 'left'
-                    }
-                });
-                initialEdges.push({ id: `e_${parentId}-${userNodeId}`, source: parentId, target: userNodeId, type: 'smoothstep' });
+                let pId = user.teamId && !bgdTeamIds.includes(user.teamId) ? `team_${user.teamId}` : noTeamId;
+                if (!groupedUsers[pId]) groupedUsers[pId] = [];
+                groupedUsers[pId].push(user);
             });
 
-            const systemNodes = initialNodes.filter(n => n.data.isSystemNode || n.data.role === "Giám Đốc" || n.data.role === "Phó Giám Đốc");
-            const systemEdges = initialEdges.filter(e => systemNodes.some(n => n.id === e.source) && systemNodes.some(n => n.id === e.target));
+            const allParentIds = new Set([...Object.keys(groupedUsers), ...Object.keys(groupedChannels)]);
 
-            const userNodes = initialNodes.filter(n => !systemNodes.some(sn => sn.id === n.id));
-            const userEdges = initialEdges.filter(e => !systemEdges.some(se => se.id === e.id));
+            // 6. XÂY DỰNG ĐƯỜNG TRUYỀN DỌC & BUNG NGANG KÊNH
+            allParentIds.forEach(parentId => {
+                const users = groupedUsers[parentId] || [];
+                const channels = groupedChannels[parentId] || [];
 
-            const { nodes: layoutedSystemNodes, edges: layoutedSystemEdges } = getLayoutedElements(systemNodes, systemEdges);
+                // Lọc Leader ưu tiên lên đầu đường truyền
+                const leaders = users.filter(u => u.role === 'LEADER');
+                const members = users.filter(u => u.role !== 'LEADER');
 
-            const finalNodes = [...layoutedSystemNodes];
-            const finalEdges = [...layoutedSystemEdges];
+                let lastLeaderId = parentId;
 
-            const usersByParent: any = {};
-            userEdges.forEach(edge => {
-                if (!usersByParent[edge.source]) usersByParent[edge.source] = [];
-                const uNode = userNodes.find(n => n.id === edge.target);
-                if (uNode) usersByParent[edge.source].push(uNode);
-            });
-
-            Object.keys(usersByParent).forEach(parentId => {
-                const parentNode = layoutedSystemNodes.find((n: any) => n.id === parentId);
-                if (!parentNode) return;
-
-                const spineX = parentNode.position.x + 100; 
-                let currentY = parentNode.position.y + 160; 
-
-                // 🚀 ĐÃ BỔ SUNG: Sắp xếp Leader ngoi lên đầu
-                usersByParent[parentId].sort((a: any, b: any) => {
-                    if (a.data.role === 'LEADER' && b.data.role !== 'LEADER') return -1;
-                    if (a.data.role !== 'LEADER' && b.data.role === 'LEADER') return 1;
-                    return 0;
+                // Nối dọc các LEADER
+                leaders.forEach(u => {
+                    const uId = `user_${u.id}`;
+                    initialNodes.push({
+                        id: uId, type: 'custom', position: { x: 0, y: 0 },
+                        data: { 
+                            label: u.fullName, role: u.role, actual: u.currentWeekStats?.actual || 0, target: u.currentWeekStats?.target || 0,
+                            avatar: u.avatarUrl || null, borderColor: 'border-red-300', textColor: 'text-red-600', fullUserObj: u, targetPosition: 'top'
+                        }
+                    });
+                    initialEdges.push({ id: `e_${lastLeaderId}-${uId}`, source: lastLeaderId, target: uId, type: 'smoothstep' });
+                    lastLeaderId = uId;
                 });
 
-                usersByParent[parentId].forEach((uNode: any) => {
-                    uNode.position = { x: spineX, y: currentY };
-                    uNode.targetPosition = 'left';
-                    uNode.sourcePosition = 'bottom';
-                    finalNodes.push(uNode);
+                // Nối KÊNH và chia đều Nhân Sự xuống dưới
+                if (channels.length > 0) {
+                    const membersByChannel: Record<string, any[]> = {};
+                    channels.forEach(c => membersByChannel[c.id] = []);
+                    
+                    const unassigned: any[] = [];
+                    members.forEach(u => unassigned.push(u));
 
-                    const uEdge = userEdges.find(e => e.target === uNode.id);
-                    if (uEdge) {
-                        uEdge.type = 'smoothstep';
-                        uEdge.sourcePosition = 'bottom';
-                        uEdge.targetPosition = 'left';
-                        finalEdges.push(uEdge);
-                    }
+                    unassigned.forEach((u, idx) => {
+                        membersByChannel[channels[idx % channels.length].id].push(u);
+                    });
 
-                    currentY += 160; 
-                });
+                    channels.forEach(c => {
+                        const cId = `channel_${c.id}`;
+                        initialNodes.push({
+                            id: cId, type: 'custom', position: { x: 0, y: 0 },
+                            data: { 
+                                label: c.name, role: "Kênh", borderColor: "border-teal-300", textColor: "text-teal-600", 
+                                isSystemNode: false, fullChannelObj: c, targetPosition: 'top'
+                            }
+                        });
+                        initialEdges.push({ id: `e_${lastLeaderId}-${cId}`, source: lastLeaderId, target: cId, type: 'smoothstep' });
+
+                        let lastNodeId = cId;
+                        membersByChannel[c.id].forEach(u => {
+                            const uId = `user_${u.id}`;
+                            initialNodes.push({
+                                id: uId, type: 'custom', position: { x: 0, y: 0 },
+                                data: { 
+                                    label: u.fullName, role: u.role, actual: u.currentWeekStats?.actual || 0, target: u.currentWeekStats?.target || 0,
+                                    avatar: u.avatarUrl || null, borderColor: 'border-slate-200', textColor: 'text-slate-500', fullUserObj: u, targetPosition: 'top'
+                                }
+                            });
+                            initialEdges.push({ id: `e_${lastNodeId}-${uId}`, source: lastNodeId, target: uId, type: 'smoothstep' });
+                            lastNodeId = uId;
+                        });
+                    });
+                } else {
+                    let lastNodeId = lastLeaderId;
+                    members.forEach(u => {
+                        const uId = `user_${u.id}`;
+                        initialNodes.push({
+                            id: uId, type: 'custom', position: { x: 0, y: 0 },
+                            data: { 
+                                label: u.fullName, role: u.role, actual: u.currentWeekStats?.actual || 0, target: u.currentWeekStats?.target || 0,
+                                avatar: u.avatarUrl || null, borderColor: 'border-slate-200', textColor: 'text-slate-500', fullUserObj: u, targetPosition: 'top'
+                            }
+                        });
+                        initialEdges.push({ id: `e_${lastNodeId}-${uId}`, source: lastNodeId, target: uId, type: 'smoothstep' });
+                        lastNodeId = uId;
+                    });
+                }
             });
+
+            const { nodes: finalNodes, edges: finalEdges } = getLayoutedElements(initialNodes, initialEdges, 'TB');
 
             setNodes(finalNodes); 
             setEdges(finalEdges); 
@@ -197,23 +238,26 @@ export default function OrgChartPage() {
     return (
         <PermissionGuard moduleId="MENU_ORG_CHART">
         
-        <div className="h-full flex flex-col p-3 md:p-6 lg:p-8 animate-fade-in bg-slate-50 relative overflow-hidden">
-            {/* HEADER */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 shrink-0 mb-4 md:mb-6 z-10 relative">
+        {/* 🚀 ĐÃ SỬA: Loại bỏ toàn bộ padding thừa thãi, thiết lập tràn viền */}
+        <div className="h-full w-full flex flex-col animate-fade-in bg-white relative overflow-hidden">
+            
+            {/* 🚀 ĐÃ SỬA: Header biến thành thanh Toolbar phẳng, bám sát mí trên */}
+            <div className="px-5 py-3 md:px-6 md:py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 shrink-0 bg-white border-b border-slate-200 z-10 shadow-sm">
                 <div>
-                    <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight flex items-center gap-2 md:gap-3">
-                        <Network className="text-red-600 w-6 h-6 md:w-8 md:h-8" />
+                    <h1 className="text-lg md:text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+                        <Network className="text-red-600 w-5 h-5 md:w-6 md:h-6" />
                         Sơ Đồ <span className="text-red-600">Tổ Chức</span>
                     </h1>
-                    <p className="text-[11px] md:text-sm text-slate-500 font-medium mt-1">Dùng 2 ngón tay (vuốt chuột) để Zoom. Kéo thả để xem tổng quan bộ máy.</p>
+                    <p className="text-[10px] md:text-xs text-slate-500 font-medium mt-0.5">Dùng 2 ngón tay hoặc con lăn chuột để Zoom. Kéo thả vùng trống để di chuyển.</p>
                 </div>
             </div>
 
-            <div className="flex-1 bg-white rounded-2xl md:rounded-[32px] border border-slate-200 shadow-xl overflow-hidden relative z-0">
+            {/* 🚀 ĐÃ SỬA: Box chứa ReactFlow giờ chiếm trọn 100% không gian còn lại */}
+            <div className="flex-1 w-full h-full bg-slate-50 relative z-0">
                 {loading ? (
-                    <div className="h-full flex flex-col items-center justify-center text-slate-400 font-medium gap-3">
-                        <Loader2 size={24} className="animate-spin text-red-500 md:w-8 md:h-8" /> 
-                        <span className="text-xs md:text-sm">Đang tính toán toạ độ sơ đồ...</span>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 font-medium gap-3 bg-white/50 backdrop-blur-sm z-20">
+                        <Loader2 size={28} className="animate-spin text-red-500" /> 
+                        <span className="text-sm">Đang tính toán toạ độ sơ đồ...</span>
                     </div>
                 ) : (
                     <ReactFlow
@@ -225,13 +269,14 @@ export default function OrgChartPage() {
                         onConnect={onConnect}
                         nodeTypes={nodeTypes}
                         fitView 
+                        fitViewOptions={{ padding: 0.15, minZoom: 0.1, maxZoom: 1.2 }} // 🚀 Chống Zoom quá mức
                         attributionPosition="bottom-right"
-                        className="bg-slate-50/50"
+                        className="bg-transparent"
                         onNodeClick={onNodeClick}
                     >
                         <Background color="#cbd5e1" gap={20} size={1} />
-                        <Controls className="!bg-white !shadow-lg !border-slate-200 !rounded-xl overflow-hidden hidden sm:flex" showInteractive={false}/>
-                        <MiniMap className="!bg-white !border-slate-200 !rounded-xl !shadow-lg hidden md:block" />
+                        <Controls className="!bg-white !shadow-md !border-slate-200 !rounded-xl overflow-hidden hidden sm:flex" showInteractive={false}/>
+                        <MiniMap className="!bg-white !border-slate-200 !rounded-xl !shadow-md hidden md:block" />
                     </ReactFlow>
                 )}
             </div>

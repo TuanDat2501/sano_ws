@@ -94,6 +94,17 @@ export default function KanbanBoard() {
   const [toDate, setToDate] = useState(searchParams.get("toDate") || "");
   const [currentPage, setCurrentPage] = useState(Number(searchParams.get("page")) || 1);
 
+  // 🚀 BỔ SUNG STATE: Công tắc gập/mở cột Chuyển động
+  const [showAnimationCols, setShowAnimationCols] = useState(true);
+
+  // 🚀 LẤY GIÁ TRỊ TỪ LOCAL STORAGE KHI LOAD TRANG
+  useEffect(() => {
+    const storedPref = localStorage.getItem("sano_showAnimationCols");
+    if (storedPref !== null) {
+      setShowAnimationCols(storedPref === "true");
+    }
+  }, []);
+
   const userRole = (session?.user as any)?.role;
   const canReject = userRole === 'ADMIN' || userRole === 'LEADER' || userRole === 'BAN_GIAM_DOC';
   const canCreateTask = ["ADMIN", "BAN_GIAM_DOC", "LEADER"].includes(userRole);
@@ -130,12 +141,9 @@ export default function KanbanBoard() {
   const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
   const [isMerging, setIsMerging] = useState(false);
 
-  // 🚀 LOGIC CŨ: Mặc định là 7 cột, chỉ khi lọc kênh AI thì mới xóa bớt thành 5 cột
-  const activeChannelObj = channels.find(c => c.id === filterChannel);
-  const isAiChannel = activeChannelObj?.category === 'AI'; 
-  
+  // 🚀 CẬP NHẬT LOGIC: Xóa bớt cột nếu Toggle bị tắt (False)
   const BOARD_COLUMNS = { ...COLUMNS };
-  if (isAiChannel) {
+  if (!showAnimationCols) {
     delete (BOARD_COLUMNS as any).ANIMATION_DOING;
     delete (BOARD_COLUMNS as any).ANIMATION_REVIEW;
   }
@@ -180,7 +188,6 @@ export default function KanbanBoard() {
         return;
       }
 
-      // Ép trạng thái về ALL nếu đang ở màn Kanban để tránh bị mất task trong các cột
       const currentStatus = viewMode === 'backlog' ? 'BACKLOG' : (viewMode === 'board' ? 'ALL' : filterStatus);
       const currentLimit = viewMode === 'backlog' ? "50" : ITEMS_PER_PAGE.toString();
 
@@ -923,6 +930,26 @@ export default function KanbanBoard() {
             {viewMode !== 'surplus' && (
                 <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto flex-1 justify-start xl:justify-end">
                     
+                    {/* 🚀 TOGGLE CỘT CHUYỂN ĐỘNG (LƯU LOCALSTORAGE) */}
+                    {viewMode === 'board' && (
+                        <label className="flex items-center gap-2 cursor-pointer bg-white border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm shrink-0 hover:bg-slate-50 transition-colors" title="Bật/Tắt khâu chuyển động (5 cột / 7 cột)">
+                            <span className="text-[11px] font-black text-slate-600 uppercase tracking-widest">Chuyển động</span>
+                            <div className={`relative w-8 h-4 rounded-full transition-colors ${showAnimationCols ? 'bg-purple-500' : 'bg-slate-200'}`}>
+                                <div className={`absolute top-[2px] w-3 h-3 bg-white rounded-full transition-all ${showAnimationCols ? 'left-[18px]' : 'left-0.5'}`}></div>
+                            </div>
+                            <input 
+                                type="checkbox" 
+                                className="hidden" 
+                                checked={showAnimationCols} 
+                                onChange={(e) => {
+                                    const isChecked = e.target.checked;
+                                    setShowAnimationCols(isChecked);
+                                    localStorage.setItem("sano_showAnimationCols", String(isChecked));
+                                }} 
+                            />
+                        </label>
+                    )}
+
                     {/* Channel Filter */}
                     {viewMode !== 'backlog' && (
                         <div className="relative flex items-center bg-white border border-slate-200 rounded-lg shadow-sm shrink-0">

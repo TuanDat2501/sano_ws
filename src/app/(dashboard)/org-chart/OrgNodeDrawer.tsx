@@ -1,4 +1,4 @@
-import { X, UserCircle2, Briefcase, Target, CheckCircle2 } from "lucide-react";
+import { X, UserCircle2, Briefcase, Target, CheckCircle2, Tv } from "lucide-react";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -22,8 +22,8 @@ export default function OrgNodeDrawer({ isOpen, onClose, nodeData }: { isOpen: b
                             nodeData.avatar ? (
                                 <img src={nodeData.avatar} alt="avatar" className="w-12 h-12 md:w-14 md:h-14 rounded-full object-cover border-2 border-white shadow-md shrink-0" />
                             ) : (
-                                <div className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-slate-200 flex items-center justify-center font-black text-slate-500 text-lg md:text-xl border-2 border-white shadow-md shrink-0">
-                                    {nodeData.label.charAt(0).toUpperCase()}
+                                <div className={`w-12 h-12 md:w-14 md:h-14 rounded-full flex items-center justify-center font-black text-white text-lg md:text-xl border-2 border-white shadow-md shrink-0 ${nodeData.role === 'Kênh' ? 'bg-teal-500' : 'bg-slate-200 text-slate-500'}`}>
+                                    {nodeData.role === 'Kênh' ? <Tv size={24} /> : nodeData.label.charAt(0).toUpperCase()}
                                 </div>
                             )
                         )}
@@ -45,12 +45,10 @@ export default function OrgNodeDrawer({ isOpen, onClose, nodeData }: { isOpen: b
                                 <h3 className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-200 pb-2 mb-2 md:mb-3">Thông tin hồ sơ</h3>
                                 <div className="flex items-center gap-2 md:gap-3 text-xs md:text-sm font-medium text-slate-600">
                                     <UserCircle2 size={16} className="text-slate-400" /> 
-                                    {/* 🚀 ĐÃ BỔ SUNG LẤY USERNAME */}
                                     Tài khoản: <span className="font-bold text-slate-900 truncate">{nodeData.fullUserObj.username || "Chưa cập nhật"}</span>
                                 </div>
                                 <div className="flex items-center gap-2 md:gap-3 text-xs md:text-sm font-medium text-slate-600">
                                     <Briefcase size={16} className="text-slate-400" /> 
-                                    {/* 🚀 ĐÃ BỔ SUNG LẤY TÊN TEAM */}
                                     Thuộc team: <span className="font-bold text-slate-900 truncate">{nodeData.fullUserObj.teamName || "Độc lập"}</span>
                                 </div>
                             </div>
@@ -86,6 +84,17 @@ export default function OrgNodeDrawer({ isOpen, onClose, nodeData }: { isOpen: b
                                 </div>
                             )}
                         </div>
+                    ) : nodeData.fullChannelObj ? (
+                        // 🚀 BỔ SUNG: Hiển thị chi tiết KÊNH
+                        <div className="space-y-4 md:space-y-6">
+                            <div className="bg-teal-50 p-4 rounded-xl md:rounded-2xl border border-teal-100 space-y-2 md:space-y-3">
+                                <h3 className="text-[9px] md:text-[10px] font-black text-teal-500 uppercase tracking-widest border-b border-teal-200 pb-2 mb-2 md:mb-3">Thông tin Kênh</h3>
+                                <div className="flex items-center gap-2 md:gap-3 text-xs md:text-sm font-medium text-teal-800">
+                                    <Tv size={16} className="text-teal-500" />
+                                    Loại kênh: <span className="font-bold uppercase bg-teal-100 px-2 py-0.5 rounded border border-teal-200">{nodeData.fullChannelObj.category === 'AI' ? 'Kênh AI' : 'Kênh Tổng Hợp'}</span>
+                                </div>
+                            </div>
+                        </div>
                     ) : (
                         <div className="text-center text-slate-500 py-8 md:py-12 bg-slate-50 rounded-xl md:rounded-2xl border border-dashed border-slate-200 mx-4 md:mx-0">
                             <p className="text-xs md:text-sm font-medium">{nodeData.desc || "Khối quản trị hệ thống."}</p>
@@ -93,7 +102,6 @@ export default function OrgNodeDrawer({ isOpen, onClose, nodeData }: { isOpen: b
                     )}
                 </div>
 
-                {/* 🚀 --- NÚT ĐÓNG DƯỚI ĐÁY CHO DỄ BẤM TRÊN MOBILE --- */}
                 <div className="p-4 md:p-6 border-t border-slate-100 bg-white shrink-0">
                     <button 
                         onClick={onClose}
