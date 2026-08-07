@@ -69,6 +69,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
             where: { user_time_unique: { userId: targetUserId, year, month, weekNumber: weekIndex } }
         });
 
+        // Chỉ lấy những LOG thực sự đã nộp/báo cáo
         const userLogs = await prisma.taskLog.findMany({
             where: {
                 userId: targetUserId,
@@ -86,19 +87,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
             orderBy: { createdAt: "desc" }
         });
 
-        const activeTasks = await prisma.task.findMany({
-            where: {
-                OR: [ { contentId: targetUserId }, { editorId: targetUserId }, { publisherId: targetUserId } ],
-                isClosed: false,
-                createdAt: { gte: start, lte: end }
-            },
-            select: { 
-                id: true, title: true, status: true, duration: true, isRework: true,
-                contentId: true, editorId: true, publisherId: true, 
-                scriptLink: true, videoLink: true, publishLink: true, createdAt: true,
-                channel: { select: { id: true, name: true } }
-            }
-        });
+        // 🚀 ĐÃ XÓA: Bỏ toàn bộ logic query `activeTasks` và mảng `pendingLogs` (Chờ nộp link)
 
         const validUserLogs: any[] = [];
         const dailyReportTracker = new Set<string>();
@@ -127,20 +116,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
             return { ...log, typeStr };
         });
 
-        const pendingLogs: any[] = [];
-        activeTasks.forEach(task => {
-            if (task.contentId === targetUserId && (!task.scriptLink || task.scriptLink.trim() === "")) {
-                pendingLogs.push({ id: `pending-script-${task.id}`, task, typeStr: "Script", action: "PENDING", createdAt: task.createdAt });
-            }
-            if (task.editorId === targetUserId && (!task.videoLink || task.videoLink.trim() === "")) {
-                pendingLogs.push({ id: `pending-edit-${task.id}`, task, typeStr: "Edit", action: "PENDING", createdAt: task.createdAt });
-            }
-            if (task.publisherId === targetUserId && (!task.publishLink || task.publishLink.trim() === "")) {
-                pendingLogs.push({ id: `pending-pub-${task.id}`, task, typeStr: "Publish", action: "PENDING", createdAt: task.createdAt });
-            }
-        });
-
-        const allUserLogs = [...mappedLogs, ...pendingLogs].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        // 🚀 ĐÃ SỬA: allUserLogs giờ chỉ chứa danh sách đã nộp (mappedLogs)
+        const allUserLogs = [...mappedLogs].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
         
         const targetValue = kpiRecord?.targetValue || 0;
         
@@ -159,7 +136,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
             let totalEquivalentVideos = 0;
 
             targetDetails.forEach(detail => {
-                // 🚀 SỬA LỖI: Bắt buộc cùng Kênh trước, sau đó mới xét Xào Lại / Làm mới
                 const logsOfChannel = validUserLogs.filter(log => {
                     const isMatchChannel = log.task?.channel?.id === detail.channelId;
                     if (!isMatchChannel) return false;
@@ -187,9 +163,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
                 totalActualMinutes += actualMinutes; 
             });
 
-            // Lọc log vượt tuyến
             const logsOutside = validUserLogs.filter(log => {
-                // 🚀 SỬA LỖI: Xem log này có nằm trong ĐÚNG kênh + ĐÚNG trạng thái rework của bất kỳ target nào không
                 const isCovered = targetDetails.some(d => {
                     const isMatchChannel = d.channelId === log.task?.channel?.id;
                     const isMatchRework = d.isRework ? log.task?.isRework === true : log.task?.isRework !== true;

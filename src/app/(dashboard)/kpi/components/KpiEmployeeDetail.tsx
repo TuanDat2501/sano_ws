@@ -99,7 +99,7 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                 </div>
             </div>
 
-            {/* CỘT PHẢI: LỊCH SỬ CÔNG VIỆC */}
+            {/* CỘT PHẢI: LỊCH SỬ CÔNG VIỆC CHỈ HIỆN ĐÃ NỘP */}
             <div className="w-full lg:w-2/3 flex flex-col gap-4 md:gap-6 flex-1 min-h-0">
                 <div className="bg-white rounded-xl md:rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full min-h-0">
                     {isLoading ? <InlineLoading className="h-full" /> : (
@@ -117,7 +117,8 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                                 ) : (
                                     activeKpi.logs.map((log: any) => (
                                         <div key={log.id} className="p-3.5 border border-slate-200 rounded-xl bg-white shadow-sm flex flex-col gap-2.5 relative overflow-hidden">
-                                            <div className={`absolute left-0 top-0 bottom-0 w-1 ${log.action === "PENDING" ? 'bg-slate-300' : 'bg-green-500'}`}></div>
+                                            {/* 🚀 BỎ LOGIC PENDING Ở ĐÂY CHỈ HIỂN THỊ XANH */}
+                                            <div className="absolute left-0 top-0 bottom-0 w-1 bg-green-500"></div>
                                             
                                             <div className="flex justify-between items-start pl-2">
                                                 <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 bg-slate-100 px-2 py-0.5 rounded">{log.typeStr}</span>
@@ -144,11 +145,7 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
 
                                             <div className="flex justify-between items-center border-t border-slate-50 pt-2.5 mt-1 pl-2">
                                                 <div className="flex items-center gap-2">
-                                                    {log.action === "PENDING" ? (
-                                                        <span className="text-[10px] font-black text-slate-500 bg-slate-100 px-2 py-1 rounded">Chờ nộp link</span>
-                                                    ) : (
-                                                        <span className="text-[10px] font-black text-green-700 bg-green-100 border border-green-200 px-2 py-1 rounded flex items-center gap-1"><CheckCircle size={10} /> Hoàn thành</span>
-                                                    )}
+                                                    <span className="text-[10px] font-black text-green-700 bg-green-100 border border-green-200 px-2 py-1 rounded flex items-center gap-1"><CheckCircle size={10} /> Đã nộp</span>
                                                 </div>
                                                 <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-1 rounded-md border border-blue-100">
                                                     {new Date(log.createdAt).toLocaleTimeString('vi-VN', {hour:'2-digit', minute:'2-digit'})}
@@ -159,7 +156,7 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                                 )}
                             </div>
 
-                            {/* View cho PC: Dùng flex-1 min-h-0 để scroll gói gọn bên trong */}
+                            {/* View cho PC */}
                             <div className="hidden md:block flex-1 min-h-0 overflow-auto custom-scrollbar bg-white">
                                 <table className="w-full text-left text-sm text-slate-600 min-w-[750px] relative">
                                     <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[11px] sticky top-0 z-10 shadow-[0_1px_2px_rgba(0,0,0,0.02)] border-b border-slate-200">
@@ -186,6 +183,7 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                                                     
                                                     <td className="px-5 py-4">
                                                         <p className="font-bold text-slate-800 text-sm truncate max-w-[220px]" title={log.task?.title}>{log.task?.title}</p>
+                                                        {/* 🚀 BẢM ĐẢM TYPESTR Ở ĐÂY ĐÚNG TỪ API (Không còn PENDING) */}
                                                         <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mt-1 bg-blue-50 w-fit px-2 py-0.5 rounded">{log.typeStr}</p>
                                                     </td>
 
@@ -214,11 +212,10 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                                                     </td>
 
                                                     <td className="px-5 py-4 text-center">
-                                                        {log.action === "PENDING" ? (
-                                                            <span className="text-[10px] font-black text-slate-500 bg-slate-100 px-2 py-1 rounded border border-slate-200 whitespace-nowrap">Chờ nộp link</span>
-                                                        ) : (
-                                                            <span className="text-[10px] font-black text-green-700 bg-green-100 px-2 py-1 rounded border border-green-200 inline-flex items-center justify-center gap-1 w-fit whitespace-nowrap"><CheckCircle size={12} /> Đã nộp</span>
-                                                        )}
+                                                        {/* 🚀 CHỈ RENDER DUY NHẤT TRẠNG THÁI "ĐÃ NỘP" Ở ĐÂY */}
+                                                        <span className="text-[10px] font-black text-green-700 bg-green-100 px-2 py-1 rounded border border-green-200 inline-flex items-center justify-center gap-1 w-fit whitespace-nowrap">
+                                                            <CheckCircle size={12} /> Đã nộp
+                                                        </span>
                                                     </td>
                                                 </tr>
                                             ))

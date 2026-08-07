@@ -64,7 +64,8 @@ export async function GET(req: Request) {
         const userIds = users.map(u => u.id);
         const { start, end } = getWeekDateRangeByMonth(year, month, weekIndex);
 
-        const [allKpis, allLogs, allActiveTasks] = await Promise.all([
+        // 🚀 ĐÃ XÓA: Lệnh query `allActiveTasks` không còn cần thiết, giúp API chạy cực nhanh
+        const [allKpis, allLogs] = await Promise.all([
             prisma.weeklyKPI.findMany({
                 where: { userId: { in: userIds }, year, month, weekNumber: weekIndex }
             }),
@@ -81,19 +82,6 @@ export async function GET(req: Request) {
                             channel: { select: { id: true, name: true } }
                         } 
                     } 
-                }
-            }),
-            prisma.task.findMany({
-                where: {
-                    OR: [ { contentId: { in: userIds } }, { editorId: { in: userIds } }, { publisherId: { in: userIds } } ],
-                    isClosed: false,
-                    createdAt: { gte: start, lte: end }
-                },
-                select: { 
-                    id: true, title: true, status: true, duration: true, isRework: true,
-                    contentId: true, editorId: true, publisherId: true,
-                    scriptLink: true, videoLink: true, publishLink: true, createdAt: true,
-                    channel: { select: { id: true, name: true } }
                 }
             })
         ]);
@@ -128,22 +116,10 @@ export async function GET(req: Request) {
                 return { ...log, typeStr }; 
             });
 
-            const userActiveTasks = allActiveTasks.filter(t => t.contentId === user.id || t.editorId === user.id || t.publisherId === user.id);
-            const pendingLogs: any[] = [];
-            
-            userActiveTasks.forEach(task => {
-                if (task.contentId === user.id && (!task.scriptLink || task.scriptLink.trim() === "")) {
-                    pendingLogs.push({ id: `pending-script-${task.id}`, task, typeStr: "Script", action: "PENDING", createdAt: task.createdAt });
-                }
-                if (task.editorId === user.id && (!task.videoLink || task.videoLink.trim() === "")) {
-                    pendingLogs.push({ id: `pending-edit-${task.id}`, task, typeStr: "Edit", action: "PENDING", createdAt: task.createdAt });
-                }
-                if (task.publisherId === user.id && (!task.publishLink || task.publishLink.trim() === "")) {
-                    pendingLogs.push({ id: `pending-pub-${task.id}`, task, typeStr: "Publish", action: "PENDING", createdAt: task.createdAt });
-                }
-            });
+            // 🚀 ĐÃ XÓA: Toàn bộ vòng lặp duyệt qua `userActiveTasks` để sinh ra `pendingLogs`
 
-            const allUserLogs = [...mappedLogs, ...pendingLogs].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+            // Gán trực tiếp danh sách đã nộp
+            const allUserLogs = [...mappedLogs].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
             
             const targetValue = kpiRecord?.targetValue || 0;
             const targetDetailsRaw = kpiRecord?.targetDetails;
@@ -161,7 +137,6 @@ export async function GET(req: Request) {
                 let totalEquivalentVideos = 0;
 
                 targetDetails.forEach(detail => {
-                    // 🚀 SỬA LỖI: Bắt buộc cùng Kênh trước, sau đó mới xét Xào Lại / Làm mới
                     const logsOfChannel = validUserLogs.filter(log => {
                         const isMatchChannel = log.task?.channel?.id === detail.channelId;
                         if (!isMatchChannel) return false;
@@ -188,10 +163,8 @@ export async function GET(req: Request) {
                     totalActualMinutes += actualMinutes; 
                 });
 
-                // Các task lọt ra ngoài vùng target
                 const uniqueOutsideTaskIds = new Set<string>();
                 const logsOutside = validUserLogs.filter(log => {
-                    // 🚀 SỬA LỖI: Xem log này có nằm trong ĐÚNG kênh + ĐÚNG trạng thái rework của bất kỳ target nào không
                     const isCovered = targetDetails.some(d => {
                         const isMatchChannel = d.channelId === log.task?.channel?.id;
                         const isMatchRework = d.isRework ? log.task?.isRework === true : log.task?.isRework !== true;
