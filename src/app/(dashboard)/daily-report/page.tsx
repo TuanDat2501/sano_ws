@@ -1,11 +1,21 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useSession } from "next-auth/react";
-import { AlertCircle, CheckCircle2, Loader2, Calendar, FileBarChart, ExternalLink, Users, XCircle, Search, Filter } from "lucide-react";
+import { AlertCircle, Check, Loader2, Calendar, FileBarChart, ExternalLink, Users, Search, Filter, ChevronLeft, ChevronRight, X, Download } from "lucide-react";
 import PermissionGuard from "@/app/component/PermissionGuard";
+import ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
+import { useToast } from "@/app/component/ToastProvider";
 
-// Hàm helper để tô màu nhãn (Badge) tùy theo loại Link
+// Hàm helper lấy danh sách ngày trong tháng
+const getDaysOfMonth = (currentDate: Date) => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const numDays = new Date(year, month + 1, 0).getDate();
+    return Array.from({ length: numDays }).map((_, i) => new Date(year, month, i + 1, 12, 0, 0));
+};
+
 const getBadgeColor = (type: string) => {
     const t = type.toLowerCase();
     if (t.includes('kịch bản') || t.includes('eng')) return 'bg-orange-100 text-orange-700 border-orange-200';
@@ -14,159 +24,278 @@ const getBadgeColor = (type: string) => {
     if (t.includes('bố cục') || t.includes('thumb')) return 'bg-blue-100 text-blue-700 border-blue-200';
     if (t.includes('đã đăng')) return 'bg-emerald-100 text-emerald-700 border-emerald-200';
     if (t.includes('ghi chú')) return 'bg-slate-100 text-slate-700 border-slate-200';
-    return 'bg-slate-100 text-slate-600 border-slate-200'; // Default
+    return 'bg-slate-100 text-slate-600 border-slate-200';
 };
 
 export default function DailyReportPage() {
     const { data: session, status } = useSession();
-    const currentUser = session?.user as any;
+    const { showToast } = useToast();
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-    const [reports, setReports] = useState<any[]>([]);
+    // ================= STATES: THỜI GIAN =================
+    const [currentMonthDate, setCurrentMonthDate] = useState(new Date());
+    const tableDays = useMemo(() => getDaysOfMonth(currentMonthDate), [currentMonthDate]);
+    const tableStartDateStr = tableDays[0].toISOString().split('T')[0];
+    const tableEndDateStr = tableDays[tableDays.length - 1].toISOString().split('T')[0];
+
+    // ================= STATES: DATA & BỘ LỌC =================
+    const [usersData, setUsersData] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-
-    // 🚀 ĐÃ SỬA: Tính toán ngày hôm nay làm giá trị mặc định cho Date Picker
-    const today = new Date();
-    const offset = today.getTimezoneOffset() * 60000;
-    const localISOTime = (new Date(today.getTime() - offset)).toISOString().split('T')[0];
-    
-    // State lưu trữ ngày báo cáo đang xem
-    const [selectedDate, setSelectedDate] = useState(localISOTime);
-
-    // STATE CHO BỘ LỌC
+    const [isExporting, setIsExporting] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
     const [filterTeam, setFilterTeam] = useState("ALL");
-    const [filterStatus, setFilterStatus] = useState("ALL");
+    
+    // ================= STATES: UI TƯƠNG TÁC =================
+    const [focusedCol, setFocusedCol] = useState<number | null>(null);
+    const [selectedCell, setSelectedCell] = useState<{ user: any, date: Date, links: any[] } | null>(null);
 
+    // Tự động cuộn đến ngày hôm nay khi load
+    useEffect(() => {
+        const todayObj = new Date();
+        todayObj.setHours(12, 0, 0, 0);
+        const todayKey = todayObj.toISOString().split('T')[0];
+
+        const todayElem = document.getElementById(`day-col-${todayKey}`);
+        if (todayElem && scrollContainerRef.current) {
+            setTimeout(() => {
+                const scrollLeft = todayElem.offsetLeft - 300; 
+                scrollContainerRef.current?.scrollTo({ left: Math.max(0, scrollLeft), behavior: 'smooth' });
+            }, 200);
+        }
+    }, [tableDays]);
+
+    // Gọi API lấy dữ liệu cả tháng
     useEffect(() => {
         if (status === "loading") return;
 
-        setIsLoading(true); // Bật loading mỗi khi đổi ngày
-
-        // 🚀 ĐÃ SỬA: Đính kèm tham số date vào API call
-        fetch(`/api/reports/daily?date=${selectedDate}`)
+        setIsLoading(true);
+        fetch(`/api/reports/daily?startDate=${tableStartDateStr}&endDate=${tableEndDateStr}`)
             .then(res => res.json())
             .then(data => {
                 if (Array.isArray(data)) {
-                    // Sắp xếp: Ai CHƯA báo cáo bị đẩy lên đầu bảng
-                    const sorted = data.sort((a, b) => {
-                        if (a.hasReported === b.hasReported) return 0;
-                        return a.hasReported ? 1 : -1; 
-                    });
-                    setReports(sorted);
+                    setUsersData(data);
                 }
                 setIsLoading(false);
             })
             .catch(err => {
-                console.error(err);
+                console.error("Lỗi fetch báo cáo:", err);
                 setIsLoading(false);
             });
-    }, [currentUser, status, selectedDate]); // Chạy lại Effect khi đổi mốc ngày
+    }, [tableStartDateStr, tableEndDateStr, status]);
 
-    // LẤY DANH SÁCH TEAM ĐỘNG (Dành cho Dropdown Lọc)
+    const changeMonth = (offset: number) => {
+        const newDate = new Date(currentMonthDate);
+        newDate.setMonth(newDate.getMonth() + offset);
+        setCurrentMonthDate(newDate);
+    };
+
+    // Lọc danh sách Team
     const uniqueTeams = useMemo(() => {
-        const teams = new Set(reports.map(r => r.teamName));
-        return Array.from(teams).filter(Boolean).sort();
-    }, [reports]);
+        const teams = new Set(usersData.map(r => r.teamName || r.team?.name));
+        return Array.from(teams).filter(Boolean).sort() as string[];
+    }, [usersData]);
 
-    // XỬ LÝ LỌC DỮ LIỆU
-    const filteredReports = useMemo(() => {
-        return reports.filter(user => {
-            const matchSearch = user.fullName.toLowerCase().includes(searchTerm.toLowerCase());
-            const matchTeam = filterTeam === "ALL" || user.teamName === filterTeam;
-            const matchStatus = filterStatus === "ALL" 
-                || (filterStatus === "REPORTED" && user.hasReported)
-                || (filterStatus === "MISSING" && !user.hasReported);
-            
-            return matchSearch && matchTeam && matchStatus;
+    // Xử lý Lọc Nhân sự & Nhóm theo Team
+    const filteredUsers = useMemo(() => {
+        let result = [...usersData];
+
+        if (filterTeam !== "ALL") {
+            result = result.filter(u => (u.teamName || u.team?.name) === filterTeam);
+        }
+
+        if (searchTerm) {
+            result = result.filter(u => u.fullName?.toLowerCase().includes(searchTerm.toLowerCase()));
+        }
+
+        return result.sort((a, b) => {
+            const nameA = a.teamName || a.team?.name || "ZZZ";
+            const nameB = b.teamName || b.team?.name || "ZZZ";
+            return nameA.localeCompare(nameB);
         });
-    }, [reports, searchTerm, filterTeam, filterStatus]);
+    }, [usersData, searchTerm, filterTeam]);
 
-    if (status === "loading" || (isLoading && reports.length === 0)) {
-        return <div className="h-full flex items-center justify-center"><Loader2 className="animate-spin text-blue-600 h-10 w-10" /></div>;
-    }
+    // 🚀 BỔ SUNG: Tính tổng số đã nộp / thiếu theo từng ngày
+    const dailyStats = useMemo(() => {
+        const stats: Record<string, { reported: number, missing: number }> = {};
+        tableDays.forEach(day => {
+            const dateKey = day.toISOString().split('T')[0];
+            let reported = 0;
+            let missing = 0;
+            filteredUsers.forEach(user => {
+                if (user.dailyReports?.[dateKey]?.hasReported) {
+                    reported++;
+                } else {
+                    missing++;
+                }
+            });
+            stats[dateKey] = { reported, missing };
+        });
+        return stats;
+    }, [tableDays, filteredUsers]);
 
-    // THỐNG KÊ (Nhảy số tự động theo bộ lọc)
-    const totalUsers = filteredReports.length;
-    const reportedUsers = filteredReports.filter(r => r.hasReported).length;
-    const missingUsers = totalUsers - reportedUsers;
+    const teamCounts: Record<string, number> = {};
+    filteredUsers.forEach(u => {
+        const tName = u.teamName || u.team?.name || "No Team";
+        teamCounts[tName] = (teamCounts[tName] || 0) + 1;
+    });
+    let currentTeamForRender = "";
+    const weekDays = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
 
-    // Convert ngày để hiển thị trên Header (từ YYYY-MM-DD sang DD/MM/YYYY)
-    const displayDate = new Date(selectedDate).toLocaleDateString('vi-VN');
+    // 🚀 BỔ SUNG: Chức năng xuất Excel theo format Grid hiện tại
+    const handleExportExcel = async () => {
+        if (filteredUsers.length === 0) {
+            showToast("error", "Không có dữ liệu để xuất!");
+            return;
+        }
+
+        setIsExporting(true);
+        try {
+            const workbook = new ExcelJS.Workbook();
+            const worksheet = workbook.addWorksheet('Báo Cáo Bảng Lưới');
+
+            // Cấu hình cột
+            const cols = [
+                { header: 'Team', key: 'team', width: 15 },
+                { header: 'STT', key: 'stt', width: 5 },
+                { header: 'Họ và tên', key: 'name', width: 25 },
+            ];
+
+            tableDays.forEach(day => {
+                const dateStr = `${day.getDate()}/${day.getMonth() + 1}`;
+                cols.push({ header: dateStr, key: `d_${day.toISOString().split('T')[0]}`, width: 12 });
+            });
+            worksheet.columns = cols;
+
+            // Đổ màu Header
+            worksheet.getRow(1).eachCell(cell => {
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
+                cell.font = { bold: true };
+                cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+            });
+
+            let currentTeamStr = "";
+            let startRowMerge = 2;
+
+            filteredUsers.forEach((user, idx) => {
+                const tName = user.teamName || user.team?.name || "No Team";
+                const currentRow = idx + 2;
+
+                const rowData: any = {
+                    team: tName,
+                    stt: idx + 1,
+                    name: `${user.fullName} (${user.role || ''})`,
+                };
+
+                tableDays.forEach(day => {
+                    const dateKey = day.toISOString().split('T')[0];
+                    const hasReported = user.dailyReports?.[dateKey]?.hasReported;
+                    rowData[`d_${dateKey}`] = hasReported ? '✓' : '✗';
+                });
+
+                worksheet.addRow(rowData);
+
+                // Gộp cột Team
+                if (idx === 0) {
+                    currentTeamStr = tName;
+                    startRowMerge = currentRow;
+                } else if (tName !== currentTeamStr) {
+                    if (currentRow - 1 > startRowMerge) {
+                        worksheet.mergeCells(`A${startRowMerge}:A${currentRow - 1}`);
+                    }
+                    currentTeamStr = tName;
+                    startRowMerge = currentRow;
+                }
+
+                if (idx === filteredUsers.length - 1) {
+                    if (currentRow > startRowMerge) {
+                        worksheet.mergeCells(`A${startRowMerge}:A${currentRow}`);
+                    }
+                }
+            });
+
+            // Format body rows (Border + Color Checkmarks)
+            worksheet.eachRow((row, rowNumber) => {
+                if (rowNumber > 1) {
+                    row.eachCell((cell, colNumber) => {
+                        cell.border = { top: { style: 'thin', color: { argb: 'E2E8F0' } }, left: { style: 'thin', color: { argb: 'E2E8F0' } }, bottom: { style: 'thin', color: { argb: 'E2E8F0' } }, right: { style: 'thin', color: { argb: 'E2E8F0' } } };
+                        cell.alignment = { vertical: 'middle', horizontal: colNumber > 3 ? 'center' : 'left' };
+                        
+                        if (colNumber > 3) {
+                            if (cell.value === '✓') cell.font = { color: { argb: 'FF10B981' }, bold: true }; // Xanh
+                            else if (cell.value === '✗') cell.font = { color: { argb: 'FFEF4444' }, bold: true }; // Đỏ
+                        }
+                    });
+                }
+            });
+
+            // Bổ sung các hàng Footer tính tổng
+            const reportedRow: any = { team: 'TỔNG ĐÃ NỘP', stt: '', name: '' };
+            const missingRow: any = { team: 'TỔNG THIẾU', stt: '', name: '' };
+
+            tableDays.forEach(day => {
+                const dateKey = day.toISOString().split('T')[0];
+                reportedRow[`d_${dateKey}`] = dailyStats[dateKey].reported;
+                missingRow[`d_${dateKey}`] = dailyStats[dateKey].missing;
+            });
+
+            const rRow = worksheet.addRow(reportedRow);
+            const mRow = worksheet.addRow(missingRow);
+
+            worksheet.mergeCells(`A${rRow.number}:C${rRow.number}`);
+            worksheet.mergeCells(`A${mRow.number}:C${mRow.number}`);
+
+            [rRow, mRow].forEach((row, idx) => {
+                row.eachCell((cell, colNum) => {
+                    cell.font = { bold: true, color: colNum > 3 ? (idx === 0 ? { argb: 'FF10B981' } : { argb: 'FFEF4444' }) : { argb: 'FFFFFFFF' } };
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } }; // Nền tối
+                    cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+                    if (colNum <= 3) cell.alignment = { horizontal: 'center', vertical: 'middle' };
+                });
+            });
+
+            worksheet.views = [{ state: 'frozen', xSplit: 3, ySplit: 1 }];
+
+            const buffer = await workbook.xlsx.writeBuffer();
+            saveAs(new Blob([buffer]), `BaoCao_HangNgay_${tableStartDateStr}_${tableEndDateStr}.xlsx`);
+            showToast("success", "Đã xuất file Excel thành công!");
+
+        } catch (error) {
+            showToast("error", "Lỗi xuất file Excel!");
+        } finally {
+            setIsExporting(false);
+        }
+    };
 
     return (
         <PermissionGuard moduleId="MENU_DAILY_REPORT">
-            <div className="h-full max-h-[calc(100vh-80px)] flex flex-col p-4 md:p-6 bg-slate-50 overflow-hidden animate-fade-in gap-4 md:gap-6">
+            <div className="h-full max-h-[calc(100vh-60px)] flex flex-col p-2 md:p-4 bg-slate-50 overflow-hidden animate-fade-in gap-3 md:gap-4 relative">
                 
-                {/* HEADER & THỐNG KÊ */}
-                <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 shrink-0 bg-white p-4 md:p-5 rounded-2xl shadow-sm border border-slate-200 relative z-10">
+                {/* ================= HEADER & TOOLBAR ================= */}
+                <div className="shrink-0 flex flex-col lg:flex-row justify-between items-start lg:items-center bg-white p-2.5 md:p-3 rounded-xl border border-slate-200 gap-3 shadow-sm z-10">
                     <div>
-                        <h1 className="text-xl md:text-2xl font-black text-slate-900 flex items-center gap-2 tracking-tight">
-                            <FileBarChart className="text-blue-600 w-6 h-6 md:w-7 md:h-7" /> Báo Cáo Hằng Ngày
+                        <h1 className="text-base md:text-lg font-black text-slate-900 flex items-center gap-1.5">
+                            <FileBarChart className="text-blue-600 w-4 h-4 md:w-5 md:h-5" /> Bảng Theo Dõi Báo Cáo
                         </h1>
-                        <p className="text-xs md:text-sm font-medium text-slate-500 mt-1.5 flex items-center gap-2">
-                            <Calendar size={14} className="text-slate-400" /> 
-                            <span>Phòng ban: <strong className="text-slate-700">Sản xuất</strong></span>
-                            <span className="text-slate-300">|</span>
-                            <span>Ngày: <strong className="text-blue-700">{displayDate}</strong></span>
-                        </p>
+                        <p className="text-[9px] md:text-[10px] text-slate-500 font-medium mt-0.5">Kiểm soát tiến độ nộp báo cáo hằng ngày của nhân sự.</p>
                     </div>
 
-                    {/* Thống kê dạng Card */}
-                    <div className="flex w-full xl:w-auto gap-3">
-                        <div className="flex-1 xl:flex-none flex items-center gap-3 bg-slate-50 px-4 py-2.5 rounded-xl border border-slate-200">
-                            <div className="p-2 bg-blue-100 text-blue-600 rounded-lg hidden sm:block"><Users size={18} /></div>
-                            <div>
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Tổng NV</p>
-                                <p className="text-lg font-black text-slate-800 leading-none mt-0.5">{totalUsers}</p>
-                            </div>
-                        </div>
-                        <div className="flex-1 xl:flex-none flex items-center gap-3 bg-emerald-50 px-4 py-2.5 rounded-xl border border-emerald-100">
-                            <div className="p-2 bg-emerald-100 text-emerald-600 rounded-lg hidden sm:block"><CheckCircle2 size={18} /></div>
-                            <div>
-                                <p className="text-[10px] font-bold text-emerald-600/70 uppercase tracking-widest">Đã Nộp</p>
-                                <p className="text-lg font-black text-emerald-700 leading-none mt-0.5">{reportedUsers}</p>
-                            </div>
-                        </div>
-                        <div className="flex-1 xl:flex-none flex items-center gap-3 bg-red-50 px-4 py-2.5 rounded-xl border border-red-100">
-                            <div className="p-2 bg-red-100 text-red-600 rounded-lg hidden sm:block"><XCircle size={18} /></div>
-                            <div>
-                                <p className="text-[10px] font-bold text-red-600/70 uppercase tracking-widest">Thiếu</p>
-                                <p className="text-lg font-black text-red-700 leading-none mt-0.5">{missingUsers}</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* THANH CÔNG CỤ BỘ LỌC */}
-                <div className="shrink-0 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-white p-3 md:p-4 rounded-xl shadow-sm border border-slate-200">
-                    <div className="flex items-center gap-3 w-full sm:w-auto">
-                        <div className="relative w-full sm:w-64">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full lg:w-auto">
+                        <div className="relative flex items-center bg-slate-50 border border-slate-200 rounded-lg h-9 px-2 flex-1 sm:flex-none sm:w-48">
+                            <Search size={14} className="text-slate-400 mr-1.5 shrink-0" />
                             <input 
                                 type="text" 
-                                placeholder="Tìm tên nhân sự..." 
-                                className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-medium focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
+                                placeholder="Tên nhân sự..." 
+                                className="bg-transparent text-xs font-bold text-slate-700 outline-none w-full"
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                             />
                         </div>
-                        {/* 🚀 ĐÃ SỬA: Nút chọn ngày */}
-                        <div className="relative flex-1 sm:flex-none flex items-center bg-slate-50 border border-slate-200 rounded-lg h-9 md:h-10 px-3">
-                            <Calendar size={14} className="text-slate-400 mr-2 shrink-0" />
-                            <input
-                                type="date"
-                                className="bg-transparent text-xs md:text-sm font-bold text-slate-700 outline-none w-full sm:w-36 cursor-pointer"
-                                value={selectedDate}
-                                onChange={(e) => setSelectedDate(e.target.value)}
-                            />
-                        </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-3 w-full sm:w-auto">
-                        <div className="relative flex-1 sm:flex-none flex items-center bg-slate-50 border border-slate-200 rounded-lg h-9 md:h-10 px-3">
-                            <Filter size={14} className="text-slate-400 mr-2 shrink-0" />
+
+                        <div className="relative flex items-center bg-slate-50 border border-slate-200 rounded-lg h-9 px-2 w-full sm:w-auto">
+                            <Filter size={14} className="text-slate-400 mr-1.5 shrink-0" />
                             <select
-                                className="bg-transparent text-xs md:text-sm font-bold text-slate-700 outline-none w-full sm:w-32 cursor-pointer"
+                                className="bg-transparent text-xs font-bold text-slate-700 outline-none w-full sm:w-28 cursor-pointer"
                                 value={filterTeam}
                                 onChange={(e) => setFilterTeam(e.target.value)}
                             >
@@ -176,131 +305,225 @@ export default function DailyReportPage() {
                                 ))}
                             </select>
                         </div>
-                        <div className="relative flex-1 sm:flex-none flex items-center bg-slate-50 border border-slate-200 rounded-lg h-9 md:h-10 px-3">
-                            <Filter size={14} className="text-slate-400 mr-2 shrink-0" />
-                            <select
-                                className="bg-transparent text-xs md:text-sm font-bold text-slate-700 outline-none w-full sm:w-36 cursor-pointer"
-                                value={filterStatus}
-                                onChange={(e) => setFilterStatus(e.target.value)}
-                            >
-                                <option value="ALL">Mọi trạng thái</option>
-                                <option value="REPORTED">✅ Đã báo cáo</option>
-                                <option value="MISSING">❌ Trống báo cáo</option>
-                            </select>
+
+                        <div className="flex items-center gap-1.5 bg-slate-50 p-1 rounded-lg border border-slate-200 h-9 w-full sm:w-auto justify-between sm:justify-center ml-0 sm:ml-2">
+                            <button onClick={() => changeMonth(-1)} className="p-1 hover:bg-white rounded transition-all shadow-sm"><ChevronLeft size={16} /></button>
+                            <div className="text-[10px] md:text-[11px] font-black text-slate-700 px-1 uppercase tracking-widest whitespace-nowrap">
+                                THÁNG {currentMonthDate.getMonth() + 1} / {currentMonthDate.getFullYear()}
+                            </div>
+                            <button onClick={() => changeMonth(1)} className="p-1 hover:bg-white rounded transition-all shadow-sm"><ChevronRight size={16} /></button>
                         </div>
+
+                        {/* 🚀 ĐÃ SỬA: Nút Xuất Excel */}
+                        <button 
+                            onClick={handleExportExcel}
+                            disabled={isExporting}
+                            className="h-9 bg-emerald-600 hover:bg-emerald-700 text-white px-4 rounded-lg font-bold flex items-center justify-center gap-1.5 transition-all active:scale-95 text-[11px] md:text-xs w-full sm:w-auto shadow-md shadow-emerald-600/20 ml-0 sm:ml-2 disabled:opacity-70"
+                        >
+                            {isExporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                            <span>Xuất Excel</span>
+                        </button>
                     </div>
                 </div>
 
-                {/* BẢNG BÁO CÁO CHI TIẾT */}
-                <div className="bg-white border border-slate-200 rounded-2xl shadow-sm flex-1 overflow-hidden flex flex-col relative z-0">
-                    {/* Hiển thị mờ đi trong lúc đang đổi ngày/loading */}
+                {/* ================= BẢNG DỮ LIỆU (GRID) ================= */}
+                <div ref={scrollContainerRef} className="flex-1 overflow-auto custom-scrollbar relative bg-white border border-slate-200 rounded-xl shadow-sm">
                     {isLoading && (
-                        <div className="absolute inset-0 bg-white/50 z-30 flex items-center justify-center backdrop-blur-[1px]">
-                            <Loader2 className="animate-spin text-blue-600 h-8 w-8" />
+                        <div className="absolute inset-0 bg-white/60 z-[100] flex flex-col items-center justify-center backdrop-blur-[1px]">
+                            <Loader2 className="animate-spin text-blue-600 h-8 w-8 mb-2" />
+                            <span className="text-xs font-bold text-slate-500">Đang tải dữ liệu tháng...</span>
                         </div>
                     )}
-                    <div className="flex-1 overflow-auto custom-scrollbar">
-                        <table className="w-full text-left border-collapse min-w-[700px] md:min-w-full">
-                            <thead className="sticky top-0 z-20 bg-slate-50 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
-                                <tr>
-                                    <th className="px-6 py-4 font-black text-slate-500 uppercase tracking-widest text-[11px] w-[30%] border-b border-slate-200">Nhân sự & Đội nhóm</th>
-                                    <th className="px-4 py-4 font-black text-slate-500 uppercase tracking-widest text-[11px] w-[20%] border-b border-slate-200">Trạng thái</th>
-                                    <th className="px-4 py-4 font-black text-slate-500 uppercase tracking-widest text-[11px] border-b border-slate-200">Chi tiết công việc (Links)</th>
-                                </tr>
-                            </thead>
-                            
-                            <tbody className="divide-y divide-slate-100">
-                                {filteredReports.map((user) => (
-                                    <tr 
-                                        key={user.id} 
-                                        className={`group transition-colors hover:bg-slate-50/70 ${!user.hasReported ? 'bg-red-50/20' : ''}`}
-                                    >
-                                        <td className={`px-6 py-4 relative`}>
-                                            <div className={`absolute left-0 top-0 bottom-0 w-1 ${user.hasReported ? 'bg-emerald-400 opacity-0 group-hover:opacity-100' : 'bg-red-500'} transition-opacity`}></div>
-                                            
-                                            <div className="flex items-center gap-3 md:gap-4">
-                                                <div className="h-10 w-10 md:h-11 md:w-11 bg-slate-100 rounded-full flex items-center justify-center font-black text-slate-500 overflow-hidden shrink-0 text-sm border border-slate-200 shadow-sm">
-                                                    {user.avatarUrl ? (
-                                                        <img src={user.avatarUrl} alt="avatar" className="w-full h-full object-cover" />
-                                                    ) : (
-                                                        user.fullName.charAt(0).toUpperCase()
-                                                    )}
+                    
+                    <table className="w-full h-full text-left border-separate border-spacing-0 min-w-max">
+                        <thead className="sticky top-0 z-[60] bg-slate-100 shadow-[0_2px_4px_rgba(0,0,0,0.05)] border-b-2 border-slate-300">
+                            <tr className="text-slate-700 text-[9px] md:text-[10px] font-black uppercase tracking-widest">
+                                <th className="p-2 border-r border-slate-300 sticky left-0 z-[70] bg-slate-200 w-[90px] text-center">Team</th>
+                                <th className="p-2 border-r border-slate-300 sticky left-[90px] z-[70] bg-slate-200 w-[40px] text-center">STT</th>
+                                <th className="p-2 border-r-4 border-slate-300 sticky left-[130px] z-[70] bg-slate-200 w-[180px] shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)]">Nhân sự</th>
+
+                                {tableDays.map((day, idx) => {
+                                    const todayObj = new Date();
+                                    todayObj.setHours(12, 0, 0, 0);
+                                    const isToday = day.toISOString().split('T')[0] === todayObj.toISOString().split('T')[0];
+
+                                    return (
+                                        <th 
+                                            id={`day-col-${day.toISOString().split('T')[0]}`} 
+                                            key={idx} 
+                                            className={`p-2 border-r border-slate-300 text-center w-[50px] md:w-[60px] transition-colors duration-300 ${focusedCol === idx ? 'bg-blue-100 border-blue-300 shadow-inner' : 'bg-slate-100'}`}
+                                            onMouseEnter={() => setFocusedCol(idx)}
+                                            onMouseLeave={() => setFocusedCol(null)}
+                                        >
+                                            <div className={`mb-0.5 transition-colors ${focusedCol === idx ? 'text-blue-700 font-black' : 'text-slate-500'}`}>
+                                                {weekDays[day.getDay()]}
+                                            </div>
+                                            <div className={`text-xs md:text-sm ${isToday ? 'text-red-600 font-black' : (focusedCol === idx ? 'text-blue-800 font-black' : '')}`}>
+                                                {day.getDate()}
+                                            </div>
+                                        </th>
+                                    );
+                                })}
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            {filteredUsers.length === 0 ? (
+                                <tr><td colSpan={3 + tableDays.length} className="p-6 h-full text-center align-top pt-16 text-slate-400 italic text-sm">Chưa có dữ liệu nhân sự.</td></tr>
+                            ) : (
+                                filteredUsers.map((user, index) => {
+                                    const teamName = user.teamName || user.team?.name || "No Team";
+                                    const isFirstRowOfTeam = teamName !== currentTeamForRender;
+                                    if (isFirstRowOfTeam) currentTeamForRender = teamName;
+                                    const rowSpanCount = teamCounts[teamName];
+                                    const rowBgClass = index % 2 === 0 ? "bg-white" : "bg-[#f4f5f7]";
+
+                                    return (
+                                        <tr key={user.id} className={`${rowBgClass} hover:bg-[#e2e8f0] focus-within:bg-blue-50/50 transition-colors group`}>
+                                            {isFirstRowOfTeam && (
+                                                <td rowSpan={rowSpanCount} className={`p-1.5 border-b border-r border-slate-300 sticky left-0 z-40 bg-slate-100 align-middle text-center shadow-[2px_0_4px_-2px_rgba(0,0,0,0.1)]`}>
+                                                    <span className="font-black text-slate-600 text-[10px] md:text-xs uppercase tracking-widest">{teamName}</span>
+                                                </td>
+                                            )}
+
+                                            <td className={`p-1.5 border-b border-r border-slate-200 sticky left-[90px] z-30 ${rowBgClass} group-hover:bg-[#e2e8f0] transition-colors text-center font-bold text-slate-500 text-xs`}>
+                                                {index + 1}
+                                            </td>
+
+                                            <td className={`p-2 border-b border-r-4 border-slate-200 sticky left-[130px] z-30 ${rowBgClass} group-hover:bg-[#e2e8f0] transition-colors shadow-[2px_0_4px_-2px_rgba(0,0,0,0.05)]`}>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="h-6 w-6 md:h-7 md:w-7 bg-slate-200 rounded-full flex items-center justify-center font-black text-slate-500 overflow-hidden shrink-0 text-[10px] border border-slate-300">
+                                                        {user.avatarUrl ? <img src={user.avatarUrl} alt="avt" className="w-full h-full object-cover" /> : user.fullName?.charAt(0).toUpperCase()}
+                                                    </div>
+                                                    <div className="flex flex-col">
+                                                        <span className="font-bold text-[11px] md:text-xs text-slate-800 line-clamp-1" title={user.fullName}>{user.fullName}</span>
+                                                        <span className="text-[8px] md:text-[9px] font-black uppercase text-slate-400 tracking-wider">{user.role}</span>
+                                                    </div>
                                                 </div>
-                                                <div className="flex flex-col">
-                                                    <span className={`font-bold text-sm ${!user.hasReported ? 'text-red-700' : 'text-slate-800'}`}>
-                                                        {user.fullName}
-                                                    </span>
-                                                    <span className="text-[10px] font-black uppercase text-slate-400 mt-0.5 tracking-wider">
-                                                        {user.teamName}
-                                                    </span>
+                                            </td>
+
+                                            {tableDays.map((day, idx) => {
+                                                const dateKey = day.toISOString().split('T')[0];
+                                                const dayData = user.dailyReports?.[dateKey]; 
+                                                const hasReported = dayData?.hasReported;
+
+                                                return (
+                                                    <td 
+                                                        key={dateKey} 
+                                                        className={`p-1 border-b border-r border-slate-200/50 last:border-r-0 transition-colors duration-300 text-center ${focusedCol === idx ? 'bg-blue-50/40' : ''}`}
+                                                        onMouseEnter={() => setFocusedCol(idx)}
+                                                        onMouseLeave={() => setFocusedCol(null)}
+                                                    >
+                                                        {hasReported ? (
+                                                            <button 
+                                                                onClick={() => setSelectedCell({ user, date: day, links: dayData.links || [] })}
+                                                                className="w-5 h-5 md:w-6 md:h-6 mx-auto bg-emerald-100 rounded flex items-center justify-center cursor-pointer hover:bg-emerald-200 hover:scale-110 transition-all shadow-sm border border-emerald-200 group/btn relative"
+                                                                title="Xem chi tiết báo cáo"
+                                                            >
+                                                                <Check size={14} className="text-emerald-600" strokeWidth={3} />
+                                                            </button>
+                                                        ) : (
+                                                            <div className="w-5 h-5 md:w-6 md:h-6 mx-auto bg-slate-50 rounded flex items-center justify-center border border-slate-100 opacity-50">
+                                                                <span className="text-slate-300 text-[10px] font-black">-</span>
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                );
+                                            })}
+                                        </tr>
+                                    )
+                                })
+                            )}
+                            {filteredUsers.length > 0 && <tr><td colSpan={3 + tableDays.length} className="h-full border-0 p-0"></td></tr>}
+                        </tbody>
+
+                        {/* 🚀 ĐÃ SỬA: Footer tính tổng */}
+                        <tfoot className="sticky bottom-0 z-[60] shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] bg-slate-800">
+                            <tr className="text-white font-black">
+                                <td colSpan={3} className="p-3 border-r-4 border-slate-700 uppercase tracking-widest text-[10px] md:text-xs sticky left-0 z-[70] bg-slate-800 text-center shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)]">
+                                    Thống Kê Nộp Báo Cáo
+                                </td>
+
+                                {tableDays.map((day, idx) => {
+                                    const dateKey = day.toISOString().split('T')[0];
+                                    const stat = dailyStats[dateKey];
+                                    return (
+                                        <td key={dateKey} className="p-1 border-r border-slate-700 last:border-r-0 bg-slate-800 text-center align-middle">
+                                            <div className="flex flex-col items-center justify-center gap-1">
+                                                <div className="bg-emerald-500/20 text-emerald-400 px-1 py-0.5 rounded text-[9px] w-full max-w-[44px] border border-emerald-500/30">
+                                                    {stat.reported}
+                                                </div>
+                                                <div className="bg-red-500/20 text-red-400 px-1 py-0.5 rounded text-[9px] w-full max-w-[44px] border border-red-500/30">
+                                                    {stat.missing}
                                                 </div>
                                             </div>
                                         </td>
-
-                                        <td className="px-4 py-4">
-                                            {user.hasReported ? (
-                                                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-bold border border-emerald-200 shadow-sm">
-                                                    <CheckCircle2 size={14} className="text-emerald-500" /> Đã cập nhật
-                                                </span>
-                                            ) : (
-                                                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 text-red-700 text-xs font-bold border border-red-200 shadow-sm">
-                                                    <AlertCircle size={14} className="text-red-500 animate-pulse" /> Trống báo cáo
-                                                </span>
-                                            )}
-                                        </td>
-
-                                        <td className="px-4 py-4">
-                                            {user.hasReported ? (
-                                                <div className="flex flex-wrap gap-2">
-                                                    {user.links.map((link: any, idx: number) => {
-                                                        const match = link.name.match(/^\[(.*?)\]\s*(.*)$/);
-                                                        const type = match ? match[1] : 'Link';
-                                                        const title = match ? match[2] : link.name;
-                                                        const badgeStyle = getBadgeColor(type);
-
-                                                        return (
-                                                            <a 
-                                                                key={idx} 
-                                                                href={link.url} 
-                                                                target="_blank" 
-                                                                rel="noreferrer"
-                                                                className="flex items-center max-w-full bg-white border border-slate-200 rounded-lg shadow-sm hover:shadow-md hover:border-blue-300 transition-all group overflow-hidden"
-                                                                title={link.name}
-                                                            >
-                                                                <span className={`px-2 py-1.5 text-[10px] font-black uppercase tracking-wider border-r shrink-0 ${badgeStyle}`}>
-                                                                    {type}
-                                                                </span>
-                                                                <span className="px-2.5 py-1.5 text-xs font-semibold text-slate-700 group-hover:text-blue-600 truncate max-w-[150px] sm:max-w-[200px] lg:max-w-[300px]">
-                                                                    {title}
-                                                                </span>
-                                                                <div className="pr-2.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                    <ExternalLink size={12} className="text-blue-500" />
-                                                                </div>
-                                                            </a>
-                                                        );
-                                                    })}
-                                                </div>
-                                            ) : (
-                                                <span className="text-xs font-medium text-slate-400 italic">
-                                                    Chưa phát sinh dữ liệu trên hệ thống.
-                                                </span>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))}
-                                
-                                {filteredReports.length === 0 && !isLoading && (
-                                    <tr>
-                                        <td colSpan={3} className="p-10 text-center flex flex-col items-center justify-center">
-                                            <AlertCircle className="w-10 h-10 text-slate-300 mb-3" />
-                                            <p className="text-slate-500 text-sm font-medium">Không tìm thấy nhân sự nào khớp với bộ lọc.</p>
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
+                                    );
+                                })}
+                            </tr>
+                        </tfoot>
+                    </table>
                 </div>
+
+                {/* ================= MODAL HIỂN THỊ CHI TIẾT LINK BÁO CÁO CỦA NGÀY ================= */}
+                {selectedCell && (
+                    <div className="fixed inset-0 z-[999] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-fade-in">
+                        <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden flex flex-col animate-scale-up">
+                            
+                            <div className="p-4 border-b border-slate-100 flex justify-between items-start bg-slate-50">
+                                <div>
+                                    <h2 className="text-base font-black text-slate-800 flex items-center gap-2">
+                                        <Check className="text-emerald-500 w-5 h-5" /> Chi Tiết Báo Cáo
+                                    </h2>
+                                    <p className="text-xs font-medium text-slate-500 mt-1">
+                                        Nhân sự: <strong className="text-blue-700">{selectedCell.user.fullName}</strong> • Ngày: <strong className="text-slate-700">{selectedCell.date.toLocaleDateString('vi-VN')}</strong>
+                                    </p>
+                                </div>
+                                <button onClick={() => setSelectedCell(null)} className="p-1.5 bg-slate-200 hover:bg-red-100 hover:text-red-600 text-slate-500 rounded-lg transition-colors">
+                                    <X size={18} />
+                                </button>
+                            </div>
+
+                            <div className="p-4 max-h-[60vh] overflow-y-auto custom-scrollbar">
+                                {selectedCell.links.length === 0 ? (
+                                    <div className="text-center p-6 text-slate-400 italic text-sm">
+                                        Có đánh dấu báo cáo nhưng không đính kèm Link công việc nào.
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col gap-2.5">
+                                        {selectedCell.links.map((link: any, idx: number) => {
+                                            const match = link.name.match(/^\[(.*?)\]\s*(.*)$/);
+                                            const type = match ? match[1] : 'Link';
+                                            const title = match ? match[2] : link.name;
+                                            const badgeStyle = getBadgeColor(type);
+
+                                            return (
+                                                <a 
+                                                    key={idx} 
+                                                    href={link.url} 
+                                                    target="_blank" 
+                                                    rel="noreferrer"
+                                                    className="flex items-center bg-white border border-slate-200 rounded-lg shadow-sm hover:shadow-md hover:border-blue-300 transition-all group overflow-hidden"
+                                                    title={link.url}
+                                                >
+                                                    <span className={`px-2.5 py-2 text-[10px] md:text-xs font-black uppercase tracking-wider border-r shrink-0 ${badgeStyle}`}>
+                                                        {type}
+                                                    </span>
+                                                    <span className="px-3 py-2 text-xs md:text-sm font-semibold text-slate-700 group-hover:text-blue-600 truncate flex-1">
+                                                        {title}
+                                                    </span>
+                                                    <div className="px-3 opacity-50 group-hover:opacity-100 transition-opacity">
+                                                        <ExternalLink size={14} className="text-blue-500" />
+                                                    </div>
+                                                </a>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </PermissionGuard>
     );
