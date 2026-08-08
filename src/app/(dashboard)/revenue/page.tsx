@@ -622,7 +622,37 @@ export default function RevenueEntryPage() {
                                         {/* 🚀 ĐÃ SỬA: Cột Mục Tiêu khóa đối với kênh Chưa BKT */}
                                         <td className={`p-1.5 border-b border-r sticky left-[310px] z-40 transition-colors text-right pr-2 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)] ${isMonetized ? (isTargetReached ? 'border-emerald-200 bg-emerald-50 group-hover:bg-emerald-100 group-focus-within:bg-emerald-100' : 'border-amber-200 bg-amber-50 group-hover:bg-amber-100 group-focus-within:bg-amber-100') : 'bg-slate-50 border-slate-200'}`}>
                                             <div className="flex flex-col gap-0.5 justify-center h-full">
-                                                {isMonetized ? (
+                                                <>
+                                                        <div className="relative flex items-center">
+                                                            <span className={`absolute left-1.5 top-1/2 -translate-y-1/2 text-[9px] font-black uppercase select-none pointer-events-none ${isTargetReached ? 'text-emerald-500' : 'text-amber-500'}`}>$</span>
+                                                            <input
+                                                                key={`target_${channel.id}_${currentMonthDate.getFullYear()}_${currentMonthDate.getMonth()}_${currentTarget}`}
+                                                                type="text"
+                                                                inputMode="decimal"
+                                                                placeholder="0"
+                                                                className={`w-full text-right pl-3 pr-1.5 py-0.5 text-xs font-black bg-white/60 border rounded md:rounded-md outline-none transition-all hover:bg-white shadow-sm ${isTargetReached ? 'border-emerald-300/60 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 text-emerald-700' : 'border-amber-300/60 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 text-amber-700'}`}
+                                                                defaultValue={currentTarget > 0 ? currentTarget.toLocaleString('en-US') : ""}
+                                                                onMouseEnter={(e) => handleTargetTooltip(e, channel.name)}
+                                                                onMouseLeave={clearTooltip}
+                                                                onFocus={(e) => handleTargetTooltip(e, channel.name)}
+                                                                onBlur={(e) => {
+                                                                    clearTooltip();
+                                                                    handleTargetBlur(channel.id, e.target.value);
+                                                                }}
+                                                                onChange={(e) => {
+                                                                    let rawValue = e.target.value.replace(/[^\d.]/g, '');
+                                                                    const parts = rawValue.split('.');
+                                                                    if (parts.length > 2) parts.pop();
+                                                                    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+                                                                    e.target.value = parts.join('.');
+                                                                }}
+                                                            />
+                                                        </div>
+                                                        <div className={`text-[8px] font-bold uppercase tracking-wider mt-[1px] ${isTargetReached ? 'text-emerald-600' : 'text-amber-600/80'}`}>
+                                                            {currentTarget > 0 ? `Đạt ${progressPercent.toFixed(1)}%` : '---'}
+                                                        </div>
+                                                    </>
+                                                {/* {isMonetized ? (
                                                     <>
                                                         <div className="relative flex items-center">
                                                             <span className={`absolute left-1.5 top-1/2 -translate-y-1/2 text-[9px] font-black uppercase select-none pointer-events-none ${isTargetReached ? 'text-emerald-500' : 'text-amber-500'}`}>$</span>
@@ -659,7 +689,7 @@ export default function RevenueEntryPage() {
                                                             Chưa BKT
                                                         </span>
                                                     </div>
-                                                )}
+                                                )} */}
                                             </div>
                                         </td>
 
