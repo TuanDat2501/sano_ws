@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { X, Target, Edit, Loader2, CheckCircle2, Search, Users, Tv } from "lucide-react";
+import { X, Target, Edit, Loader2, CheckCircle2, Search, Users, Tv, Calendar } from "lucide-react";
 import { useToast } from "@/app/component/ToastProvider";
 
 interface TaskManageDrawerProps {
@@ -30,7 +30,10 @@ export default function TaskManageDrawer({ isOpen, onClose, mode, taskId, teams,
     const [assignUserId, setAssignUserId] = useState("");
     const [assignAction, setAssignAction] = useState("DAILY_REPORT");
     
-    // Tìm kiếm Task (Giao diện hiển thị List)
+    // 🚀 ĐÃ BỔ SUNG: State quản lý Ngày gán KPI (mặc định lấy ngày hôm nay)
+    const [assignDate, setAssignDate] = useState(() => new Date().toISOString().split('T')[0]);
+
+    // Tìm kiếm Task (Nếu mở Drawer Gán KPI từ hư không mà chưa có Task)
     const [searchQuery, setSearchQuery] = useState("");
     const [searchResults, setSearchResults] = useState<any[]>([]);
     const [isSearching, setIsSearching] = useState(false);
@@ -49,25 +52,21 @@ export default function TaskManageDrawer({ isOpen, onClose, mode, taskId, teams,
             setSelectedTaskToAssign(null);
             setSearchQuery("");
             setSearchResults([]);
+            setAssignDate(new Date().toISOString().split('T')[0]); // Mở modal thì tự nhảy về ngày nay
 
-            // Nạp dữ liệu nếu là Mode Edit
             if (taskId && mode === 'EDIT_TASK') {
                 fetchTaskDetail(taskId);
             }
 
-            // Nạp danh sách Task hiển thị ngay nếu là Mode Assign
             if (mode === 'ASSIGN_KPI') {
                 fetchAllTasks();
             }
 
-            // Nạp Kênh (Chỉ lấy 1 lần)
             if (channels.length === 0 && mode === 'EDIT_TASK') {
                 fetch(`/api/kpi/manage-task?getChannels=true`)
                     .then(res => res.json())
-                    .then(data => {
-                        setChannels(Array.isArray(data) ? data : []);
-                    })
-                    .catch(() => setChannels([])); // Bảo vệ nếu API tạch
+                    .then(data => setChannels(Array.isArray(data) ? data : []))
+                    .catch(() => setChannels([])); 
             }
         }
     }, [isOpen, taskId, mode]);
@@ -146,7 +145,8 @@ export default function TaskManageDrawer({ isOpen, onClose, mode, taskId, teams,
                 body: JSON.stringify({
                     taskId: selectedTaskToAssign.id,
                     userId: assignUserId,
-                    actionType: assignAction
+                    actionType: assignAction,
+                    assignedDate: assignDate // 🚀 Gửi kèm Ngày đã chọn
                 })
             });
             if (res.ok) {
@@ -313,6 +313,22 @@ export default function TaskManageDrawer({ isOpen, onClose, mode, taskId, teams,
                                     <div className={`transition-all duration-300 ${!selectedTaskToAssign ? 'opacity-30 pointer-events-none' : ''}`}>
                                         <label className="text-[11px] font-black text-slate-600 uppercase tracking-wider block mb-3">Bước 2: Phân bổ Điểm KPI</label>
                                         <div className="flex flex-col gap-4 p-5 bg-white border border-slate-200 rounded-2xl shadow-sm">
+                                            
+                                            {/* 🚀 ĐÃ BỔ SUNG: CỘT NGÀY THÁNG GÁN KPI */}
+                                            <div className="flex gap-4">
+                                                <div className="flex-1">
+                                                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                                        <Calendar size={14} className="text-emerald-500" /> Ngày báo cáo (KPI)
+                                                    </label>
+                                                    <input 
+                                                        type="date" 
+                                                        className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-black outline-none focus:border-emerald-500 focus:bg-white text-emerald-800 cursor-pointer"
+                                                        value={assignDate}
+                                                        onChange={(e) => setAssignDate(e.target.value)}
+                                                    />
+                                                </div>
+                                            </div>
+
                                             <div>
                                                 <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">1. Chọn Team</label>
                                                 <select 

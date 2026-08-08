@@ -160,7 +160,6 @@ export default function RevenueEntryPage() {
     // 🚀 BỔ SUNG: Chỉ cộng tổng Mục tiêu của những kênh ĐÃ BẬT KIẾM TIỀN
     const totalSystemTarget = useMemo(() => {
         return filteredChannels
-            .filter(ch => ch.monetization === 'DA_BAT')
             .reduce((sum, channel) => sum + (targets[channel.id] || 0), 0);
     }, [filteredChannels, targets]);
     

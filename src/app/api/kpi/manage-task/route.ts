@@ -16,10 +16,9 @@ export async function GET(req: Request) {
         const getChannels = searchParams.get("getChannels");
         const getList = searchParams.get("list");
         
-        // Nhận thêm tham số lọc
         const channelId = searchParams.get("channelId");
-        const status = searchParams.get("status"); // 'ALL', 'DONE', 'TODO', 'REJECTED'
-        const isClosed = searchParams.get("isClosed"); // 'true', 'false', 'ALL'
+        const status = searchParams.get("status"); 
+        const isClosed = searchParams.get("isClosed"); 
 
         if (getChannels) {
             const channels = await prisma.channel.findMany({ select: { id: true, name: true } });
@@ -35,7 +34,6 @@ export async function GET(req: Request) {
         }
 
         if (getList === "true" || search !== null) {
-            // Xây dựng bộ lọc động
             let whereClause: any = {};
             
             if (search) {
@@ -101,7 +99,8 @@ export async function POST(req: Request) {
         if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
         const body = await req.json();
-        const { taskId, userId, actionType } = body;
+        // 🚀 ĐÃ BỔ SUNG: Nhận thêm biến assignedDate để ghi đè thời gian
+        const { taskId, userId, actionType, assignedDate } = body;
 
         if (!taskId || !userId || !actionType) {
             return NextResponse.json({ error: "Thiếu tham số" }, { status: 400 });
@@ -114,13 +113,24 @@ export async function POST(req: Request) {
         if (actionType === "DAILY_REPORT") details = "Báo cáo ngày (Gán thủ công)";
         if (actionType === "COMPLETE_TASK") details = "Nghiệm thu Task (Gán thủ công)";
 
+        // Xử lý tạo Log
+        const logData: any = {
+            taskId,
+            userId,
+            action: actionType,
+            details
+        };
+
+        // Nếu sếp có truyền ngày cụ thể, thì set cứng vào createdAt luôn
+        if (assignedDate) {
+            // Ép về đúng múi giờ giữa trưa để tránh nhảy ngày
+            const forcedDate = new Date(assignedDate);
+            forcedDate.setHours(12, 0, 0, 0);
+            logData.createdAt = forcedDate;
+        }
+
         const newLog = await prisma.taskLog.create({
-            data: {
-                taskId,
-                userId,
-                action: actionType,
-                details
-            }
+            data: logData
         });
 
         return NextResponse.json({ success: true, log: newLog });
