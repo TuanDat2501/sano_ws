@@ -1,1079 +1,414 @@
 "use client";
 
-import * as XLSX from 'xlsx';
-import ExcelJS from 'exceljs';
-import { saveAs } from 'file-saver';
-import { useState, useEffect, useRef } from "react";
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
-import { useSession } from "next-auth/react";
-import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
-import { Plus, Link as LinkIcon, AlertCircle, FileText, CheckCircle2, Clock, PlayCircle, Loader2, X, UsersIcon, Send, MessageSquare, Users, Archive, Download, Video, Filter, Upload } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Plus, Users, Trash2, X, Loader2, Building2, ArrowRightLeft, LayoutGrid, FolderTree, Pencil } from "lucide-react";
 import { useToast } from "@/app/component/ToastProvider";
-import { io, Socket } from "socket.io-client";
-import CreateTaskModal from "@/app/component/CreateTaskModal";
-import TaskDetailDrawer from "@/app/component/TaskDetailDrawer";
-import ListView from "@/app/component/ListView/ListView";
-import BoardView from "@/app/component/BoardView/BoardView";
+import TeamDetailDrawer from "./TeamDetailDrawer";
 import PermissionGuard from "@/app/component/PermissionGuard";
-import BacklogView from "./BacklogView";
-import PushTaskModal from "./PushTaskModal";
-import MergeVideoModal from './MergeVideoModal';
-import SurplusView from "./SurplusView"; 
+import DeptModal from "./DeptModal";
+import TeamModal from "./TeamModal";
+import MoveTeamModal from "./MoveTeamModal";
+import EditTeamModal from "./EditTeamModal";
+export default function TeamsPage() {
+    const { showToast } = useToast();
 
-// FULL 7 CỘT MẶC ĐỊNH
-const COLUMNS = {
-  TODO: { id: "TODO", title: "Chờ Kịch Bản", icon: <FileText size={18} className="text-slate-700" />, color: "text-slate-800", iconBg: "bg-slate-300", columnBg: "bg-slate-200", borderColor: "border-slate-300" },
-  CONTENT_REVIEW: { id: "CONTENT_REVIEW", title: "Duyệt Kịch Bản", icon: <CheckCircle2 size={18} className="text-orange-700"/>, color: "text-orange-800", iconBg: "bg-orange-300", columnBg: "bg-orange-50", borderColor: "border-orange-200" },
-  
-  ANIMATION_DOING: { id: "ANIMATION_DOING", title: "Đang làm CĐ", icon: <PlayCircle size={18} className="text-purple-700" />, color: "text-purple-800", iconBg: "bg-purple-300", columnBg: "bg-purple-50", borderColor: "border-purple-200" },
-  ANIMATION_REVIEW: { id: "ANIMATION_REVIEW", title: "Duyệt CĐ", icon: <Clock size={18} className="text-pink-700" />, color: "text-pink-800", iconBg: "bg-pink-300", columnBg: "bg-pink-50", borderColor: "border-pink-200" },
-  
-  EDIT_DOING: { id: "EDIT_DOING", title: "Đang Dựng", icon: <Video size={18} className="text-cyan-700" />, color: "text-cyan-800", iconBg: "bg-cyan-300", columnBg: "bg-cyan-50", borderColor: "border-cyan-200" },
-  EDIT_REVIEW: { id: "EDIT_REVIEW", title: "Chờ Đăng", icon: <Clock size={18} className="text-indigo-700" />, color: "text-indigo-800", iconBg: "bg-indigo-300", columnBg: "bg-indigo-50", borderColor: "border-indigo-200" },
-  
-  DONE: { id: "DONE", title: "Hoàn Thành", icon: <CheckCircle2 size={18} className="text-green-700" />, color: "text-green-800", iconBg: "bg-green-300", columnBg: "bg-green-100", borderColor: "border-green-300" },
-};
+    // --- DATA STATES ---
+    const [teams, setTeams] = useState<any[]>([]);
+    const [departments, setDepartments] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [activeDept, setActiveDept] = useState<string>("ALL");
 
-const TEAM_COLORS = [
-  { bg: "bg-blue-600", text: "text-white", border: "border-blue-600" },
-  { bg: "bg-purple-600", text: "text-white", border: "border-purple-600" },
-  { bg: "bg-orange-500", text: "text-white", border: "border-orange-500" },
-  { bg: "bg-pink-600", text: "text-white", border: "border-pink-600" },
-  { bg: "bg-cyan-600", text: "text-white", border: "border-cyan-600" },
-  { bg: "bg-indigo-600", text: "text-white", border: "border-indigo-600" },
-  { bg: "bg-rose-600", text: "text-white", border: "border-rose-600" },
-];
+    // --- MODAL STATES ---
+    const [isTeamModalOpen, setIsTeamModalOpen] = useState(false);
+    const [teamName, setTeamName] = useState("");
+    const [teamDesc, setTeamDesc] = useState("");
+    const [selectedDept, setSelectedDept] = useState("");
+    const [isSubmittingTeam, setIsSubmittingTeam] = useState(false);
 
-const getTeamColor = (teamId?: string) => {
-  if (!teamId) return { bg: "bg-slate-50", text: "text-slate-500", border: "border-slate-300" };
-  let hash = 0;
-  for (let i = 0; i < teamId.length; i++) hash = teamId.charCodeAt(i) + ((hash << 5) - hash);
-  return TEAM_COLORS[Math.abs(hash) % TEAM_COLORS.length];
-};
+    const [isDeptModalOpen, setIsDeptModalOpen] = useState(false);
+    const [deptName, setDeptName] = useState("");
+    const [deptDesc, setDeptDesc] = useState("");
+    const [isSubmittingDept, setIsSubmittingDept] = useState(false);
 
-export default function KanbanBoard() {
-  const { data: session } = useSession();
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const [channels, setChannels] = useState<any[]>([]);
-  const [tasks, setTasks] = useState<{ [key: string]: any[] }>({ 
-      TODO: [], CONTENT_REVIEW: [], 
-      ANIMATION_DOING: [], ANIMATION_REVIEW: [], 
-      EDIT_DOING: [], EDIT_REVIEW: [], DONE: [] 
-  });
-  const [rawTasks, setRawTasks] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  
-  // 🚀 BỔ SUNG STATE: Loading riêng cho lúc lọc API
-  const [isFetchingData, setIsFetchingData] = useState(false);
+    const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
+    const [teamToMove, setTeamToMove] = useState<any>(null);
+    const [targetDeptId, setTargetDeptId] = useState("");
+    const [isMoving, setIsMoving] = useState(false);
 
-  const [isExporting, setIsExporting] = useState(false);
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [selectedTask, setSelectedTask] = useState<any>(null);
-  const [taskLinks, setTaskLinks] = useState({
-    scriptLink: "", englishScriptLink: "", storyboardLink: "",
-    audioLink: "", thumbnailLink: "", videoLink: "", publishLink: "", note: "",animationLink:""
-  });
-  const [isSavingLinks, setIsSavingLinks] = useState(false);
-  const { showToast } = useToast();
-  const [linksError, setLinksError] = useState("");
-  const [chatMessage, setChatMessage] = useState("");
-  const [messages, setMessages] = useState([{ id: 1, sender: "Hệ thống", text: "Chào mừng đến với không gian thảo luận Task!", time: new Date().toLocaleTimeString(), isMine: false }]);
-  const [socket, setSocket] = useState<Socket | null>(null);
+    const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+    const [selectedTeam, setSelectedTeam] = useState<any>(null);
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [users, setUsers] = useState<any[]>([]);
-  const [newTask, setNewTask] = useState({ title: "", linkContent: "", contentId: "", editorId: "", teamId: "" });
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [teams, setTeams] = useState<any[]>([]);
-  const [projects, setProjects] = useState<any[]>([]);
+    const [isEditTeamModalOpen, setIsEditTeamModalOpen] = useState(false);
+    const [teamToEdit, setTeamToEdit] = useState<any>(null);
+    const [editTeamName, setEditTeamName] = useState("");
+    const [editTeamDesc, setEditTeamDesc] = useState("");
+    const [editSelectedDept, setEditSelectedDept] = useState("");
+    const [isSubmittingEditTeam, setIsSubmittingEditTeam] = useState(false);
 
-  const [viewMode, setViewMode] = useState<'board' | 'list' | 'backlog' | 'surplus'>((searchParams.get("viewMode") as 'board' | 'list' | 'backlog' | 'surplus') || 'board');
-  const [isLoadingDetail, setIsLoadingDetail] = useState(false);
-  const [searchTerm, setSearchTerm] = useState(searchParams.get("search") || "");
-  const [filterStatus, setFilterStatus] = useState(searchParams.get("status") || "ALL");
-  const [filterChannel, setFilterChannel] = useState(searchParams.get("channelId") || "ALL");
-  const [fromDate, setFromDate] = useState(searchParams.get("fromDate") || "");
-  const [toDate, setToDate] = useState(searchParams.get("toDate") || "");
-  const [currentPage, setCurrentPage] = useState(Number(searchParams.get("page")) || 1);
-
-  const [showAnimationCols, setShowAnimationCols] = useState(true);
-
-  useEffect(() => {
-    const storedPref = localStorage.getItem("sano_showAnimationCols");
-    if (storedPref !== null) {
-      setShowAnimationCols(storedPref === "true");
-    }
-  }, []);
-
-  const userRole = (session?.user as any)?.role;
-  const canReject = userRole === 'ADMIN' || userRole === 'LEADER' || userRole === 'BAN_GIAM_DOC';
-  const canCreateTask = ["ADMIN", "BAN_GIAM_DOC", "LEADER"].includes(userRole);
-
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalItems, setTotalItems] = useState(0);
-  const ITEMS_PER_PAGE = 7;
-
-  const [modalErrors, setModalErrors] = useState<{ [key: string]: string }>({});
-  const [drawerErrors, setDrawerErrors] = useState<{ [key: string]: string }>({});
-  const [boardUpdateSignal, setBoardUpdateSignal] = useState(0);
-  const [isClearing, setIsClearing] = useState(false);
-
-  const [isPushModalOpen, setIsPushModalOpen] = useState(false);
-  const [taskToPush, setTaskToPush] = useState<any>(null);
-  const [isPushing, setIsPushing] = useState(false);
-
-  const [editingTask, setEditingTask] = useState<any>(null);
-  const [isImporting, setIsImporting] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  
-  const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
-  const [isMerging, setIsMerging] = useState(false);
-
-  const BOARD_COLUMNS = { ...COLUMNS };
-  if (!showAnimationCols) {
-    delete (BOARD_COLUMNS as any).ANIMATION_DOING;
-    delete (BOARD_COLUMNS as any).ANIMATION_REVIEW;
-  }
-
-  // 🚀 ĐÃ SỬA: Loại bỏ hàm lọc filter() dư thừa. Trực tiếp lấy danh sách trả về từ API.
-  const backlogTasks = rawTasks.filter(t => t.status === 'BACKLOG');
-  const filteredTasks = rawTasks.filter(t => t.status !== 'BACKLOG');
-
-  const handleMergeSubmit = async (mergeData: any) => {
-    setIsMerging(true);
-    try {
-        const res = await fetch("/api/tasks/merge", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(mergeData)
+    // --- FETCH DATA ---
+    useEffect(() => {
+        Promise.all([
+            fetch("/api/teams").then(res => res.ok ? res.json() : []),
+            fetch("/api/departments").then(res => res.ok ? res.json() : [])
+        ]).then(([teamsData, deptsData]) => {
+            setTeams(teamsData);
+            setDepartments(deptsData);
+            setLoading(false);
+        }).catch(() => {
+            showToast("error", "Lỗi tải dữ liệu Đội ngũ");
+            setLoading(false);
         });
-        const data = await res.json();
+    }, []);
 
-        if (res.ok) {
-            showToast("success", "Đã tạo Video Ghép thành công!");
-            setIsMergeModalOpen(false);
-            fetchTasks(); 
-            if (socket) {
-                socket.emit("board_updated");
-                socket.emit("assign_task", {
-                    taskId: data.task?.id,
-                    taskName: data.task?.title,
-                    assigneeId: mergeData.assigneeId,
-                    assignerName: (session?.user as any)?.fullName || "Quản lý"
-                });
-            }
-        } else {
-            showToast("error", data.error || "Có lỗi xảy ra khi gộp");
-        }
-    } catch (error) {
-        showToast("error", "Lỗi kết nối Server");
-    } finally {
-        setIsMerging(false);
-    }
-  };
-
-  const fetchTasks = async () => {
-    // 🚀 BẬT HIỆU ỨNG LOADING MỖI KHI GỌI API LỌC
-    setIsFetchingData(true);
-    
-    try {
-      if (viewMode === 'surplus') {
-        setLoading(false);
-        setIsFetchingData(false);
-        return;
-      }
-
-      const currentStatus = viewMode === 'backlog' ? 'BACKLOG' : (viewMode === 'board' ? 'ALL' : filterStatus);
-      const currentLimit = viewMode === 'backlog' ? "50" : ITEMS_PER_PAGE.toString();
-
-      const params = new URLSearchParams({
-        viewMode, page: currentPage.toString(), limit: currentLimit,
-        search: searchTerm, status: currentStatus, fromDate, toDate,
-        ...(filterChannel !== "ALL" && { channelId: filterChannel })
-      });
-
-      const res = await fetch(`/api/tasks?${params}`);
-      const data = await res.json();
-
-      if (!data.tasks) { 
-          setLoading(false); 
-          setIsFetchingData(false);
-          return; 
-      }
-
-      if (viewMode === 'board') {
-        const groupedTasks = { TODO: [], CONTENT_REVIEW: [], ANIMATION_DOING: [], ANIMATION_REVIEW: [], EDIT_DOING: [], EDIT_REVIEW: [], DONE: [] };
-        
-        data.tasks.forEach((task: any) => {
-          if (filterChannel !== "ALL" && task.channelId !== filterChannel) return;
-          if (groupedTasks[task.status as keyof typeof groupedTasks]) {
-            (groupedTasks[task.status as keyof typeof groupedTasks] as any[]).push(task);
-          }
-        });
-        setTasks(groupedTasks);
-      } else {
-        setRawTasks(data.tasks);
-        setTotalPages(data.totalPages || 1);
-        setTotalItems(data.total || 0);
-      }
-
-    } catch (err) { 
-        console.error(err);
-    } finally {
-        setLoading(false);
-        setIsFetchingData(false);
-    }
-  };
-
-  const loadProjects = async () => {
-    try { const res = await fetch("/api/projects"); const data = await res.json(); if (Array.isArray(data)) setProjects(data); } catch (error) { }
-  };
-
-  const loadUsers = async () => {
-    try { const res = await fetch("/api/users"); const data = await res.json(); if (Array.isArray(data)) setUsers(data); } catch (error) { }
-  };
-
-  const loadTeams = async () => {
-    try { const res = await fetch("/api/teams"); const data = await res.json(); if (Array.isArray(data)) setTeams(data); } catch (error) { }
-  };
-
-  const loadChannels = async () => {
-    try {
-      const res = await fetch("/api/channels");
-      const data = await res.json();
-      if (Array.isArray(data)) setChannels(data);
-    } catch (error) { }
-  };
-
-  useEffect(() => {
-    const taskIdFromUrl = searchParams.get("taskId");
-    if (taskIdFromUrl && !selectedTask && !isDrawerOpen) {
-      const fetchAndOpenTask = async () => {
+    // --- CRUD DEPARTMENTS ---
+    const handleCreateDept = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsSubmittingDept(true);
         try {
-          const res = await fetch(`/api/tasks/${taskIdFromUrl}`);
-          if (res.ok) {
-            const taskData = await res.json();
-            handleOpenTaskDetail(taskData);
-          }
-        } catch (err) { console.error("Lỗi khi tự động mở task:", err); }
-      };
-      fetchAndOpenTask();
-    }
-  }, [searchParams]);
-
-  useEffect(() => {
-    const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || "https://socket.sanogroup.tv";
-    const newSocket = io(socketUrl, { transports: ['websocket', 'polling'] });
-    setSocket(newSocket);
-    newSocket.on("receive_message", (data: any) => {
-      setMessages((prev) => {
-        if (prev.some(m => m.id === data.id)) return prev;
-        return [...prev, {
-          id: data.id, 
-          sender: data.sender, 
-          text: data.text,
-          imageUrl: data.imageUrl, 
-          time: data.time || new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-          isMine: data.senderId === (session?.user as any)?.id
-        }];
-      });
-    });
-    newSocket.on("reload_board", () => { setBoardUpdateSignal(prev => prev + 1); });
-    
-    loadUsers(); loadTeams(); loadProjects(); loadChannels(); fetchTasks();
-    return () => { newSocket.disconnect(); };
-  }, []);
-
-  const isFirstRender = useRef(true);
-  useEffect(() => {
-    if (isFirstRender.current) { isFirstRender.current = false; return; }
-
-    const params = new URLSearchParams(searchParams.toString());
-    params.set("viewMode", viewMode);
-    params.set("page", currentPage.toString());
-
-    if (searchTerm) params.set("search", searchTerm); else params.delete("search");
-    if (filterStatus !== "ALL") params.set("status", filterStatus); else params.delete("status");
-    if (filterChannel !== "ALL") params.set("channelId", filterChannel); else params.delete("channelId"); 
-    if (fromDate) params.set("fromDate", fromDate); else params.delete("fromDate");
-    if (toDate) params.set("toDate", toDate); else params.delete("toDate");
-
-    const newQueryString = params.toString();
-    if (searchParams.toString() !== newQueryString) {
-      router.replace(`${pathname}?${newQueryString}`, { scroll: false });
-    }
-
-    const timeoutId = setTimeout(() => { fetchTasks(); }, 300);
-    return () => clearTimeout(timeoutId);
-  }, [currentPage, searchTerm, filterStatus, filterChannel, fromDate, toDate, viewMode, boardUpdateSignal]);
-
-  const handleExportExcel = async () => {
-      setIsExporting(true);
-      try {
-        const res = await fetch('/api/tasks/export');
-        const data = await res.json();
-        if (!res.ok) throw new Error("Lỗi tải dữ liệu");
-  
-        const workbook = new ExcelJS.Workbook();
-        const worksheet = workbook.addWorksheet('Danh sách Task');
-  
-        worksheet.columns = [
-          { header: 'STT', key: 'stt', width: 5 },
-          { header: 'Từ khóa (Key)', key: 'key', width: 25 },
-          { header: 'Tiêu đề Video', key: 'title', width: 35 },
-          { header: 'Video tham khảo', key: 'refLink', width: 20 },
-          { header: 'Text ENG', key: 'eng', width: 20 },
-          { header: 'Bố cục', key: 'story', width: 20 },
-          { header: 'Thumbnail', key: 'thumb', width: 20 },
-          { header: 'Nhân sự Content', key: 'content', width: 20 },
-          { header: 'Audio', key: 'audio', width: 20 },
-          { header: 'Chuyển động (CĐ)', key: 'animator', width: 20 },
-          { header: 'Nhân sự Editor', key: 'editor', width: 20 },
-          { header: 'Video hoàn thành', key: 'video', width: 20 },
-          { header: 'Kênh / Project', key: 'channel', width: 25 },
-          { header: 'LINK YT (Pub)', key: 'pub', width: 20 },
-          { header: 'Ngày đăng', key: 'date', width: 15 },
-          { header: 'Trạng thái', key: 'status', width: 15 },
-        ];
-  
-        data.forEach((item: any, idx: number) => {
-          worksheet.addRow({
-            stt: idx + 1,
-            key: item["Key (Từ khóa)"],
-            title: item["Tiêu đề Video"],
-            refLink: item["Video tham khảo"],
-            eng: item["Text ENG"],
-            story: item["Bố cục"],
-            thumb: item["Thumbnail"],
-            content: item["Nhân sự Content"],
-            audio: item["Link Audio (AI)"],
-            animator: item["Nhân sự Chuyển động"],
-            editor: item["Nhân sự Editor"],
-            video: item["Video hoàn thành"],
-            channel: `${item["Thuộc Kênh"]} - ${item["Dự án"]}`,
-            pub: item["Link Youtube (Pub)"],
-            date: item["Ngày đăng"],
-            status: item["Trạng thái"]
-          });
-        });
-  
-        const headerRow = worksheet.getRow(1);
-        headerRow.height = 30;
-        headerRow.eachCell((cell) => {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFF00' } };
-          cell.font = { name: 'Arial', bold: true, size: 11, color: { argb: '000000' } };
-          cell.alignment = { vertical: 'middle', horizontal: 'center' };
-          cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
-        });
-  
-        worksheet.eachRow((row, rowNumber) => {
-          if (rowNumber > 1) {
-            row.eachCell((cell) => {
-              cell.border = {
-                top: { style: 'thin', color: { argb: 'E2E8F0' } }, left: { style: 'thin', color: { argb: 'E2E8F0' } },
-                bottom: { style: 'thin', color: { argb: 'E2E8F0' } }, right: { style: 'thin', color: { argb: 'E2E8F0' } }
-              };
-              cell.alignment = { vertical: 'middle' };
-              if (String(cell.value).startsWith('http')) {
-                cell.font = { color: { argb: '2563EB' }, underline: true };
-              }
+            const res = await fetch("/api/departments", {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name: deptName, description: deptDesc }),
             });
-          }
-        });
-  
-        worksheet.views = [{ state: 'frozen', ySplit: 1 }];
-        worksheet.autoFilter = 'A1:P1'; 
-        const buffer = await workbook.xlsx.writeBuffer();
-        const fileName = `SanoWS_Export_${new Date().getTime()}.xlsx`;
-        saveAs(new Blob([buffer]), fileName);
-  
-        showToast("success", "Đã xuất file Excel 'siêu đẹp' thành công!");
-      } catch (error) {
-        showToast("error", "Lỗi xuất file rồi sếp ơi!");
-      } finally {
-        setIsExporting(false);
-      }
-  };
-
-  const handleFilterChange = (setter: any, value: any) => { setter(value); setCurrentPage(1); };
-
-  const handleSwitchTab = (mode: 'board' | 'list' | 'backlog' | 'surplus') => {
-    setViewMode(mode);
-    setCurrentPage(1);
-    setSearchTerm("");
-  };
-
-  const loadTaskComments = async (taskId: string) => {
-    try {
-      const res = await fetch(`/api/tasks/${taskId}/comments`);
-      if (res.ok) {
-        const data = await res.json();
-        const formattedMessages = data.map((c: any) => ({
-          id: c.id, 
-          sender: c.user?.fullName || "Ẩn danh", 
-          text: c.text,
-          imageUrl: c.imageUrl, 
-          time: new Date(c.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-          isMine: c.userId === (session?.user as any)?.id
-        }));
-        setMessages([
-          { id: "system", sender: "Hệ thống", text: "Chào mừng đến với không gian thảo luận Task!", time: "", isMine: false },
-          ...formattedMessages
-        ]);
-      }
-    } catch (error) {}
-  };
-
-  const handleOpenTaskDetail = async (task: any) => {
-    setIsLoadingDetail(true);
-    setIsDrawerOpen(true);
-    
-    setSelectedTask(task);
-    setTaskLinks({
-      scriptLink: task.scriptLink || "", englishScriptLink: task.englishScriptLink || "", storyboardLink: task.storyboardLink || "",
-      audioLink: task.audioLink || "", thumbnailLink: task.thumbnailLink || "", videoLink: task.videoLink || "",
-      publishLink: task.publishLink || "", note: task.note || "",animationLink:task.animationLink
-    });
-
-    try {
-      const res = await fetch(`/api/tasks/${task.id}`);
-      if (res.ok) {
-        const fullTask = await res.json();
-        setSelectedTask(fullTask); 
-        setTaskLinks({
-          scriptLink: fullTask.scriptLink || "", englishScriptLink: fullTask.englishScriptLink || "", storyboardLink: fullTask.storyboardLink || "",
-          audioLink: fullTask.audioLink || "", thumbnailLink: fullTask.thumbnailLink || "", videoLink: fullTask.videoLink || "",
-          publishLink: fullTask.publishLink || "", note: fullTask.note || "",animationLink:fullTask.animationLink||""
-        });
-      }
-    } catch (err) {
-       console.error(err);
-    } finally {
-       setIsLoadingDetail(false);
-    }
-
-    loadTaskComments(task.id);
-    if (socket) socket.emit("join_task", task.id);
-
-    const params = new URLSearchParams(searchParams.toString());
-    if (params.get("taskId") !== task.id) {
-      params.set("taskId", task.id);
-      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-    }
-  };
-
-  const handleCloseDrawer = () => {
-    setIsDrawerOpen(false);
-    setTimeout(() => setSelectedTask(null), 300);
-    const params = new URLSearchParams(searchParams.toString());
-    if (params.has("taskId")) {
-      params.delete("taskId");
-      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-    }
-  };
-
-  const onDragEnd = async (result: any) => {
-    if (!result.destination) return;
-    const { source, destination, draggableId } = result;
-    if (source.droppableId === destination.droppableId) return;
-
-    const sourceCol = [...tasks[source.droppableId]];
-    const destCol = [...tasks[destination.droppableId]];
-    const [movedTask] = sourceCol.splice(source.index, 1);
-    movedTask.status = destination.droppableId;
-    destCol.splice(destination.index, 0, movedTask);
-
-    setTasks({ ...tasks, [source.droppableId]: sourceCol, [destination.droppableId]: destCol });
-
-    try {
-      const res = await fetch(`/api/tasks/${draggableId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: destination.droppableId })
-      });
-
-      const data = await res.json();
-
-      if (res.ok) {
-        if (socket) {
-          socket.emit("board_updated");
-          
-          if (data && data.userIdsToNotify && data.userIdsToNotify.length > 0) {
-            socket.emit("send_notification", { userIds: data.userIdsToNotify, notification: data.notifications[0] });
-          } 
-          else {
-            const currentUserId = (session?.user as any)?.id;
-            const currentUserName = (session?.user as any)?.name || (session?.user as any)?.fullName || "Ai đó";
-            
-            const targetIds = new Set<string>();
-
-            const contentIds = [movedTask.contentId, ...(movedTask.coContentUsers?.map((u:any)=>u.id) || [])].filter(Boolean);
-            const editorIds = [movedTask.editorId, ...(movedTask.coEditorUsers?.map((u:any)=>u.id) || [])].filter(Boolean);
-            const animatorIds = [movedTask.animatorId, ...(movedTask.coAnimatorUsers?.map((u:any)=>u.id) || [])].filter(Boolean);
-
-            switch (destination.droppableId) {
-                case "CONTENT_REVIEW":
-                case "ANIMATION_REVIEW":
-                case "EDIT_REVIEW":
-                    if (movedTask.creatorId && movedTask.creatorId !== currentUserId) {
-                        targetIds.add(movedTask.creatorId);
-                    }
-                    break;
-                case "CONTENT_DOING":
-                    contentIds.forEach(id => { if (id !== currentUserId) targetIds.add(id); });
-                    break;
-                case "ANIMATION_DOING":
-                    animatorIds.forEach(id => { if (id !== currentUserId) targetIds.add(id); });
-                    break;
-                case "EDIT_DOING":
-                    editorIds.forEach(id => { if (id !== currentUserId) targetIds.add(id); });
-                    break;
-                case "DONE":
-                    if (movedTask.creatorId && movedTask.creatorId !== currentUserId) targetIds.add(movedTask.creatorId);
-                    contentIds.forEach(id => { if (id !== currentUserId) targetIds.add(id); });
-                    editorIds.forEach(id => { if (id !== currentUserId) targetIds.add(id); });
-                    animatorIds.forEach(id => { if (id !== currentUserId) targetIds.add(id); });
-                    break;
-                default:
-                    if (movedTask.creatorId && movedTask.creatorId !== currentUserId) targetIds.add(movedTask.creatorId);
-                    break;
+            if (res.ok) {
+                const newDept = await res.json();
+                setDepartments([newDept, ...departments]);
+                setIsDeptModalOpen(false); setDeptName(""); setDeptDesc("");
+                showToast("success", "Tạo Phòng ban thành công!");
+                setActiveDept(newDept.id);
+            } else {
+                const err = await res.json(); showToast("error", err.error || "Lỗi tạo Phòng ban");
             }
+        } catch (error) { showToast("error", "Đã xảy ra lỗi hệ thống!"); }
+        finally { setIsSubmittingDept(false); }
+    };
 
-            const targets = Array.from(targetIds);
-
-            if (targets.length > 0) {
-              let actionText = "đã cập nhật trạng thái";
-              if (destination.droppableId === "CONTENT_REVIEW") actionText = "đã nộp kịch bản, chờ duyệt ⏳";
-              if (destination.droppableId === "ANIMATION_DOING") actionText = "đã giao việc làm chuyển động cho bạn 🎬";
-              if (destination.droppableId === "ANIMATION_REVIEW") actionText = "đã nộp bản chuyển động ⏳";
-              if (destination.droppableId === "EDIT_DOING") actionText = "đã giao việc dựng video cho bạn 🎞️";
-              if (destination.droppableId === "EDIT_REVIEW") actionText = "đã nộp video, chờ duyệt đăng 🚀";
-              if (destination.droppableId === "DONE") actionText = "đã nghiệm thu Hoàn Thành 🎉";
-
-              socket.emit("send_notification", {
-                userIds: targets,
-                notification: {
-                  title: destination.droppableId === "DONE" ? "Task Hoàn Thành!" : "Cập nhật tiến độ",
-                  message: `${currentUserName} ${actionText} task: "${movedTask.title || 'Không tên'}"`,
-                  type: destination.droppableId === "DONE" ? "success" : "info",
-                  taskId: movedTask.id,
-                  time: new Date().toISOString()
-                }
-              });
+    const handleDeleteDept = async (deptId: string, deptName: string) => {
+        if (!window.confirm(`Sếp có chắc chắn muốn xóa phòng "${deptName}" không? Các Team bên trong sẽ trở thành Team Độc Lập.`)) return;
+        try {
+            const res = await fetch(`/api/departments/${deptId}`, { method: "DELETE" });
+            if (res.ok) {
+                setDepartments(departments.filter(d => d.id !== deptId));
+                setTeams(teams.map(t => t.departmentId === deptId ? { ...t, departmentId: null } : t));
+                if (activeDept === deptId) setActiveDept("ALL");
+                showToast("success", "Đã xóa Phòng ban!");
+            } else {
+                const err = await res.json(); showToast("error", err.error || "Không thể xóa Phòng ban");
             }
-          }
-        }
-      } else {
-        showToast('error', data.error || 'Lỗi chuyển trạng thái');
-        fetchTasks();
-      }
-    } catch (e) {
-      showToast('error', 'Lỗi kết nối tới Server');
-      fetchTasks();
-    }
-  };
+        } catch (error) { showToast("error", "Lỗi hệ thống"); }
+    };
 
-  const handleCreateTaskSubmit = async (taskData: any) => {
-    setIsSubmitting(true);
-    setModalErrors({});
-    try {
-      const isEditMode = !!taskData.id; 
-      const url = isEditMode ? `/api/tasks/${taskData.id}` : "/api/tasks";
-      const method = isEditMode ? "PATCH" : "POST";
-
-      const res = await fetch(url, {
-        method: method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(taskData)
-      });
-
-      const data = await res.json();
-
-      if (res.ok) {
-        showToast("success", isEditMode ? "Đã cập nhật Task thành công!" : (taskData.status === 'BACKLOG' ? "Đã thêm ý tưởng vào kho!" : "Đã tạo Yêu cầu Video!"));
-        setIsModalOpen(false);
-        setEditingTask(null); 
-        setCurrentPage(1);
-        fetchTasks();
-
-        if (socket) {
-          socket.emit("board_updated");
-          if (data.userIdsToNotify && data.userIdsToNotify.length > 0) {
-            socket.emit("send_notification", { userIds: data.userIdsToNotify, notification: data.notifications[0] });
-          }
-        }
-      } else {
-        setModalErrors({ submit: data.error || "Có lỗi xảy ra" });
-        showToast("error", data.error || "Có lỗi xảy ra");
-      }
-    } catch (error) {
-      showToast("error", "Lỗi kết nối Server");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleSaveLinks = async () => {
-    setIsSavingLinks(true);
-    setDrawerErrors({});
-    try {
-      const res = await fetch(`/api/tasks/${selectedTask.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(taskLinks)
-      });
-      const data = await res.json();
-      if (res.ok) {
-        showToast("success", "Đã lưu cập nhật Link!");
-        fetchTasks();
-        if (socket) socket.emit("board_updated");
-        handleCloseDrawer();
-        setTaskLinks({
-          scriptLink: "", englishScriptLink: "", storyboardLink: "",
-          audioLink: "", thumbnailLink: "", videoLink: "", publishLink: "", note: "",animationLink:""
-        });
-        setLinksError("");
-      } else {
-        if (data.field) setDrawerErrors({ [data.field]: data.error });
-        showToast("error", data.error || "Lỗi lưu link");
-      }
-    } catch (error) {
-      showToast("error", "Lỗi kết nối Server");
-    } finally {
-      setIsSavingLinks(false);
-    }
-  };
-
-  const handleToggleCloseTask = async () => {
-    if (!confirm(`Bạn chắc chắn muốn ${selectedTask.isClosed ? 'MỞ LẠI' : 'ĐÓNG (Nghiệm thu)'} task này?`)) return;
-    const newClosedState = !selectedTask.isClosed;
-    try {
-      const res = await fetch(`/api/tasks/${selectedTask.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isClosed: newClosedState })
-      });
-      const data = await res.json();
-      if (res.ok) {
-        showToast("success", newClosedState ? "Đã đóng Task!" : "Đã mở lại Task!");
-        setIsDrawerOpen(false);
-        fetchTasks();
-
-        if (socket) {
-          socket.emit("board_updated");
-          if (newClosedState) {
-            if (data.userIdsToNotify && data.userIdsToNotify.length > 0) {
-              socket.emit("send_notification", { userIds: data.userIdsToNotify, notification: data.notifications[0] });
-            } 
-          }
-        }
-      }
-    } catch (error) { showToast("error", "Lỗi thao tác"); }
-  };
-
-  const handleRejectTask = async (reason: string, priority: string) => {
-    if (!reason) return;
-
-    try {
-      const res = await fetch(`/api/tasks/${selectedTask.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isClosed: false, status: "TODO", priority: priority })
-      });
-      const data = await res.json();
-      
-      if (res.ok) {
-        const chatRes = await fetch(`/api/tasks/${selectedTask.id}/comments`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: `[YÊU CẦU LÀM LẠI]: ${reason}` })
-        });
-        const chatData = await chatRes.json();
-
-        showToast("success", "Đã trả Task về làm lại!");
-        setIsDrawerOpen(false);
-        fetchTasks();
-
-        if (socket) {
-          socket.emit("board_updated");
-          
-          if (chatRes.ok && chatData.comment) {
-             const savedComment = chatData.comment;
-             socket.emit("send_message", {
-                id: savedComment.id,
-                taskId: selectedTask.id,
-                sender: savedComment.user.fullName,
-                senderId: savedComment.userId,
-                text: savedComment.text,
-                time: new Date(savedComment.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
-             });
-          }
-
-          if (data.userIdsToNotify && data.userIdsToNotify.length > 0) {
-            socket.emit("send_notification", { userIds: data.userIdsToNotify, notification: data.notifications[0] });
-          }
-        }
-      }
-    } catch (error) { showToast("error", "Lỗi thao tác"); }
-  };
-
-  const handleClearDoneTasks = async () => {
-    if (!confirm("Sếp có chắc chắn muốn dọn dẹp Bảng? Các Task 'Hoàn thành' sẽ được cất vào kho lưu trữ!")) return;
-    setIsClearing(true);
-    try {
-      const res = await fetch('/api/tasks/clear-done', { method: 'POST' });
-      const data = await res.json();
-      if (res.ok) {
-        showToast('success', `Đã cất ${data.count} task vào kho lưu trữ!`);
-        fetchTasks();
-        if (socket) socket.emit("board_updated");
-      } else { showToast('error', data.error || 'Có lỗi xảy ra!'); }
-    } catch (error) { showToast('error', 'Lỗi kết nối!'); } 
-    finally { setIsClearing(false); }
-  };
-
-  const handlePushTaskSubmit = async (pushData: { teamId: string, projectId: string, contentId: string, editorId: string }) => {
-    if (!taskToPush) return;
-    setIsPushing(true);
-    try {
-      const res = await fetch(`/api/tasks/${taskToPush.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          status: "TODO",
-          teamId: pushData.teamId || undefined,
-          projectId: pushData.projectId || undefined,
-          contentId: pushData.contentId || undefined,
-          editorId: pushData.editorId || undefined
-        })
-      });
-      const data = await res.json();
-      if (res.ok) {
-        showToast('success', 'Đã giao việc! Task đã bay sang Kanban.');
-        setIsPushModalOpen(false);
-        fetchTasks();
-
-        if (socket) {
-          socket.emit("board_updated");
-          if (data.userIdsToNotify && data.userIdsToNotify.length > 0) {
-            socket.emit("send_notification", { userIds: data.userIdsToNotify, notification: data.notifications[0] });
-          }
-        }
-      } else { showToast('error', data.error || 'Lỗi giao việc'); }
-    } catch (error) { showToast('error', 'Lỗi kết nối Server'); } 
-    finally { setIsPushing(false); }
-  };
-
-  const handleUploadImage = async (file: File): Promise<string | null> => {
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      
-      const res = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!res.ok) throw new Error("Upload failed");
-      const data = await res.json();
-      
-      return data.url; 
-    } catch (error) {
-      showToast("error", "Lỗi tải ảnh lên!");
-      return null;
-    }
-  };
-
-  const handleDeleteTask = async (taskId: string) => {
-    try {
-        const res = await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
-        if (res.ok) {
-            showToast("success", "Đã xóa Task thành công!");
-            setSelectedTask(null); 
-            fetchTasks(); 
-        } else {
-            const data = await res.json();
-            showToast("error", data.error || "Lỗi khi xóa Task.");
-        }
-    } catch (error) {
-        showToast("error", "Mất kết nối đến máy chủ, vui lòng thử lại!");
-    }
-  };
-
-  const handleSendMessage = async (imageUrl?: string) => {
-    if ((chatMessage.trim() !== '' || imageUrl) && socket && selectedTask) {
-      const textToSend = chatMessage;
-      setChatMessage(""); 
-      
-      try {
-        const res = await fetch(`/api/tasks/${selectedTask.id}/comments`, {
-          method: "POST", 
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: textToSend, imageUrl: imageUrl }),
-        });
-        
-        if (res.ok) {
-          const data = await res.json();
-          const savedComment = data.comment;
-          
-          await loadTaskComments(selectedTask.id);
-          
-          const newMsg = {
-            id: savedComment.id, 
-            taskId: selectedTask.id, 
-            sender: savedComment.user.fullName,
-            senderId: savedComment.userId, 
-            text: savedComment.text,
-            imageUrl: savedComment.imageUrl, 
-            time: new Date(savedComment.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-          };
-          
-          socket.emit("send_message", newMsg);
-          if (data.userIdsToNotify.length > 0) {
-            socket.emit("send_notification", { userIds: data.userIdsToNotify, notification: data.notifications[0] });
-          }
-        }
-      } catch (error) { 
-        showToast('error', 'Lỗi gửi tin nhắn!'); 
-      }
-    }
-  };
-
-  const handleEvaluationSubmit = async (score: number, criteriaData: any, note: string) => {
-    try {
-      const res = await fetch(`/api/tasks/${selectedTask.id}/evaluate`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ score, criteria: criteriaData, note })
-      });
-      const data = await res.json();
-      if (res.ok) {
-        showToast("success", "Đã lưu đánh giá KPI thành công!");
-        fetchTasks();
-        if (socket) {
-          socket.emit("board_updated");
-          
-          const targetIds = new Set<string>();
-          [
-             selectedTask.editorId, selectedTask.contentId, selectedTask.animatorId,
-             ...(selectedTask.coContentUsers?.map((u:any)=>u.id) || []),
-             ...(selectedTask.coEditorUsers?.map((u:any)=>u.id) || []),
-             ...(selectedTask.coAnimatorUsers?.map((u:any)=>u.id) || [])
-          ].forEach(id => { if(id) targetIds.add(id); });
-
-          if (targetIds.size > 0) {
-            socket.emit("send_notification", {
-              userIds: Array.from(targetIds),
-              notification: {
-                title: "Đánh giá Task 🌟",
-                message: `Task "${selectedTask.title}" của bạn vừa được đánh giá ${score} điểm!`,
-                type: "success", taskId: selectedTask.id, time: new Date().toISOString()
-              }
+    // --- CRUD TEAMS ---
+    const handleCreateTeam = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsSubmittingTeam(true);
+        try {
+            const res = await fetch("/api/teams", {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ name: teamName, description: teamDesc, departmentId: selectedDept || null }),
             });
-          }
-        }
-        handleCloseDrawer();
-      } else { showToast("error", data.error || "Lỗi khi lưu đánh giá"); }
-    } catch (error) { showToast("error", "Lỗi kết nối tới Server"); }
-  };
+            if (res.ok) {
+                const newTeam = await res.json();
+                setTeams([{ ...newTeam, _count: { users: 0 } }, ...teams]);
+                setIsTeamModalOpen(false); setTeamName(""); setTeamDesc(""); setSelectedDept("");
+                showToast("success", "Tạo Team thành công!");
+                if (selectedDept) setActiveDept(selectedDept);
+            } else {
+                const err = await res.json(); showToast("error", err.error || "Lỗi tạo Team");
+            }
+        } catch (error) { showToast("error", "Đã xảy ra lỗi hệ thống!"); }
+        finally { setIsSubmittingTeam(false); }
+    };
 
-  if (loading) return <div className="flex h-full items-center justify-center animate-pulse text-slate-400"><Loader2 size={32} className="animate-spin text-blue-500" /></div>;
+    const handleDeleteTeam = async (teamId: string, teamName: string) => {
+        if (!window.confirm(`Xác nhận giải tán "${teamName}"? Nhân sự sẽ được đẩy ra ngoài.`)) return;
+        try {
+            const res = await fetch(`/api/teams/${teamId}`, { method: "DELETE" });
+            if (res.ok) {
+                setTeams(teams.filter(t => t.id !== teamId));
+                showToast("success", "Đã giải tán Team!");
+            } else {
+                const err = await res.json(); showToast("error", err.error || "Không thể xóa Team này");
+            }
+        } catch (error) { showToast("error", "Lỗi kết nối"); }
+    };
 
-  return (
-    <PermissionGuard moduleId="MENU_TASKS">
-      <div className="h-full flex flex-col p-3 md:p-5 animate-fade-in bg-slate-50">
-        
-        {/* ROW 1: HEADER & ACTIONS */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 shrink-0 mb-4">
-            <div>
-              <h1 className="text-2xl font-black text-slate-900 tracking-tight leading-none">Dây chuyền <span className="text-red-600">Sản xuất</span></h1>
-              <p className="text-xs text-slate-500 font-medium mt-1.5">Quản lý và theo dõi tiến độ video.</p>
-            </div>
-            
-            {/* Actions Buttons */}
-            <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto [&::-webkit-scrollbar]:hidden shrink-0">
-                {canCreateTask && (
-                    <button onClick={handleExportExcel} disabled={isExporting} className="flex-1 sm:flex-none bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 px-3 py-2 rounded-xl font-bold flex items-center justify-center gap-1.5 whitespace-nowrap text-xs transition-colors shadow-sm">
-                        {isExporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />} Xuất Excel
-                    </button>
-                )}
-                {canCreateTask && (
-                    <button onClick={handleClearDoneTasks} disabled={isClearing} className="flex-1 sm:flex-none bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 px-3 py-2 rounded-xl font-bold flex items-center justify-center gap-1.5 whitespace-nowrap text-xs transition-colors shadow-sm">
-                        {isClearing ? <Loader2 size={14} className="animate-spin" /> : <Archive size={14} />} Đóng Video Đã Xong
-                    </button>
-                )}
-                {canCreateTask && (
-                    <button onClick={() => setIsMergeModalOpen(true)} className="flex-1 sm:flex-none bg-indigo-600 text-white px-3 py-2 rounded-xl font-bold flex items-center justify-center gap-1.5 whitespace-nowrap text-xs hover:bg-indigo-700 transition-colors shadow-sm">
-                        <Video size={14} /> Video Ghép
-                    </button>
-                )}
-                {canCreateTask && (
-                    <button onClick={() => setIsModalOpen(true)} className="flex-1 sm:flex-none bg-red-600 text-white px-3 py-2 rounded-xl font-bold flex items-center justify-center gap-1.5 whitespace-nowrap text-xs hover:bg-red-700 transition-colors shadow-sm">
-                        <Plus size={14} /> Tạo Video
-                    </button>
-                )}
-            </div>
-        </div>
+    const handleMoveTeam = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!teamToMove) return;
+        setIsMoving(true);
+        try {
+            const res = await fetch(`/api/teams/${teamToMove.id}`, {
+                method: "PUT", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ departmentId: targetDeptId === "" ? null : targetDeptId }),
+            });
+            if (res.ok) {
+                setTeams(teams.map(t => t.id === teamToMove.id ? { ...t, departmentId: targetDeptId === "" ? null : targetDeptId } : t));
+                setIsMoveModalOpen(false); setTeamToMove(null);
+                showToast("success", "Đã điều chuyển Team!");
+            } else {
+                const err = await res.json(); showToast("error", err.error || "Lỗi di chuyển");
+            }
+        } catch (error) { showToast("error", "Đã xảy ra lỗi hệ thống!"); }
+        finally { setIsMoving(false); }
+    };
 
-        {/* ROW 2: TABS & FILTERS - SEPARATE & COMPACT */}
-        <div className="flex flex-col xl:flex-row items-start xl:items-center gap-3 shrink-0 mb-4">
-            
-            {/* TABS CỐ ĐỊNH BÊN TRÁI */}
-            <div className="flex bg-slate-200/60 p-1 rounded-xl w-full xl:w-auto overflow-x-auto [&::-webkit-scrollbar]:hidden shrink-0 border border-slate-200/50">
-                <button onClick={() => handleSwitchTab('board')} className={`flex-1 xl:flex-none px-4 py-1.5 rounded-lg font-bold text-xs transition-all whitespace-nowrap ${viewMode === 'board' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'}`}>Kanban</button>
-                <button onClick={() => handleSwitchTab('list')} className={`flex-1 xl:flex-none px-4 py-1.5 rounded-lg font-bold text-xs transition-all whitespace-nowrap ${viewMode === 'list' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'}`}>Danh sách</button>
-                {canCreateTask && (
-                    <button onClick={() => handleSwitchTab('backlog')} className={`flex-1 xl:flex-none px-4 py-1.5 rounded-lg font-bold text-xs transition-all whitespace-nowrap ${viewMode === 'backlog' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'}`}>Kho Ý Tưởng</button>
-                )}
-                {canCreateTask && (
-                    <button onClick={() => handleSwitchTab('surplus')} className={`flex-1 xl:flex-none px-4 py-1.5 rounded-lg font-bold text-xs transition-all whitespace-nowrap ${viewMode === 'surplus' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'}`}>Bài Dư</button>
-                )}
-            </div>
+    const handleEditTeam = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!teamToEdit) return;
+        setIsSubmittingEditTeam(true);
+        try {
+            const res = await fetch(`/api/teams/${teamToEdit.id}`, {
+                method: "PUT", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    name: editTeamName,
+                    description: editTeamDesc,
+                    departmentId: editSelectedDept === "" ? null : editSelectedDept
+                }),
+            });
+            if (res.ok) {
+                const updatedTeam = await res.json();
+                // Cập nhật lại UI
+                setTeams(teams.map(t => t.id === teamToEdit.id ? { ...t, ...updatedTeam } : t));
+                setIsEditTeamModalOpen(false);
+                setTeamToEdit(null);
+                showToast("success", "Cập nhật Team thành công!");
+            } else {
+                const err = await res.json();
+                showToast("error", err.error || "Lỗi cập nhật Team");
+            }
+        } catch (error) { showToast("error", "Đã xảy ra lỗi hệ thống!"); }
+        finally { setIsSubmittingEditTeam(false); }
+    };
 
-            {/* FILTERS ĐỘC LẬP BÊN PHẢI */}
-            {viewMode !== 'surplus' && (
-                <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto flex-1 justify-start xl:justify-end relative">
-                    
-                    {/* 🚀 MÀN CHẮN LOADING KHI ĐANG LỌC API */}
-                    {isFetchingData && (
-                        <div className="absolute -inset-2 bg-slate-50/50 backdrop-blur-[1px] z-10 flex items-center justify-center rounded-xl pointer-events-none">
-                            <Loader2 size={20} className="animate-spin text-blue-500" />
-                        </div>
-                    )}
+    const displayedTeams = activeDept === "ALL"
+        ? teams
+        : activeDept === "INDEPENDENT"
+            ? teams.filter(t => !t.departmentId)
+            : teams.filter(t => t.departmentId === activeDept);
 
-                    {/* 🚀 TOGGLE CỘT CHUYỂN ĐỘNG (LƯU LOCALSTORAGE) */}
-                    {viewMode === 'board' && (
-                        <label className="flex items-center gap-2 cursor-pointer bg-white border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm shrink-0 hover:bg-slate-50 transition-colors" title="Bật/Tắt khâu chuyển động (5 cột / 7 cột)">
-                            <span className="text-[11px] font-black text-slate-600 uppercase tracking-widest">Chuyển động</span>
-                            <div className={`relative w-8 h-4 rounded-full transition-colors ${showAnimationCols ? 'bg-purple-500' : 'bg-slate-200'}`}>
-                                <div className={`absolute top-[2px] w-3 h-3 bg-white rounded-full transition-all ${showAnimationCols ? 'left-[18px]' : 'left-0.5'}`}></div>
-                            </div>
-                            <input 
-                                type="checkbox" 
-                                className="hidden" 
-                                checked={showAnimationCols} 
-                                onChange={(e) => {
-                                    const isChecked = e.target.checked;
-                                    setShowAnimationCols(isChecked);
-                                    localStorage.setItem("sano_showAnimationCols", String(isChecked));
-                                }} 
-                            />
-                        </label>
-                    )}
+    return (
+        <PermissionGuard moduleId="MENU_TEAMS">
+            <div className="h-full flex flex-col p-3 md:p-6 lg:p-8 animate-fade-in bg-slate-50">
 
-                    {/* Channel Filter */}
-                    {viewMode !== 'backlog' && (
-                        <div className="relative flex items-center bg-white border border-slate-200 rounded-lg shadow-sm shrink-0">
-                            <div className="pl-2.5 py-1.5 shrink-0"><Filter size={14} className="text-slate-400"/></div>
-                            <select className="bg-transparent text-xs font-bold text-slate-700 px-2 py-1.5 outline-none cursor-pointer max-w-[140px] truncate" value={filterChannel} onChange={(e) => handleFilterChange(setFilterChannel, e.target.value)}>
-                                <option value="ALL">Tất cả Kênh</option>
-                                {channels.map((ch: any) => (<option key={ch.id} value={ch.id}>{ch.name}</option>))}
-                            </select>
-                        </div>
-                    )}
+                {/* ================= HEADER ================= */}
+                <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 shrink-0 mb-4 md:mb-6">
+                    <div>
+                        <h1 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">Cơ Cấu <span className="text-red-600">Đội Ngũ</span></h1>
+                        <p className="text-xs md:text-sm text-slate-500 font-medium mt-1">Phân bổ nhân sự theo Mô hình Phòng Ban.</p>
+                    </div>
 
-                    {/* Status Filter (ONLY LIST) */}
-                    {viewMode === 'list' && (
-                        <select className="bg-white border border-slate-200 text-xs font-bold text-slate-700 px-3 py-1.5 rounded-lg shadow-sm outline-none cursor-pointer shrink-0" value={filterStatus} onChange={(e) => handleFilterChange(setFilterStatus, e.target.value)}>
-                            <option value="ALL">Mọi trạng thái</option>
-                            <option value="TODO">Chờ Kịch bản</option>
-                            <option value="CONTENT_REVIEW">Chờ duyệt Content</option>
-                            <option value="ANIMATION_DOING">Đang làm CĐ</option>
-                            <option value="ANIMATION_REVIEW">Chờ duyệt CĐ</option>
-                            <option value="EDIT_DOING">Đang Dựng Video</option>
-                            <option value="EDIT_REVIEW">Chờ Đăng</option>
-                            <option value="DONE">Hoàn thành</option>
-                        </select>
-                    )}
-
-                    {/* Search */}
-                    <input type="text" placeholder="Tìm tên task..." className="bg-white border border-slate-200 text-xs font-medium px-3 py-1.5 rounded-lg shadow-sm outline-none focus:border-blue-500 min-w-[120px] flex-1 xl:flex-none" value={searchTerm} onChange={(e) => handleFilterChange(setSearchTerm, e.target.value)} />
-                    
-                    {/* Date Picker */}
-                    <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-2 py-1 shadow-sm shrink-0">
-                        <span className="text-[9px] font-black text-slate-400 uppercase shrink-0">Từ</span>
-                        <input type="date" className="bg-transparent text-xs font-bold text-slate-600 outline-none w-auto cursor-pointer" value={fromDate} onChange={(e) => handleFilterChange(setFromDate, e.target.value)} />
-                        <div className="w-[1px] h-3 bg-slate-200 shrink-0"></div>
-                        <span className="text-[9px] font-black text-slate-400 uppercase shrink-0">Đến</span>
-                        <input type="date" className="bg-transparent text-xs font-bold text-slate-600 outline-none w-auto cursor-pointer" value={toDate} onChange={(e) => handleFilterChange(setToDate, e.target.value)} />
+                    <div className="flex flex-col sm:flex-row gap-2.5 md:gap-3 w-full lg:w-auto">
+                        <button onClick={() => setIsDeptModalOpen(true)} className="w-full sm:w-auto justify-center bg-white border border-slate-200 hover:bg-slate-100 text-slate-800 px-4 md:px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all shadow-sm active:scale-95 text-sm">
+                            <Building2 size={16} className="md:w-5 md:h-5" /> Thêm Phòng ban
+                        </button>
+                        <button onClick={() => setIsTeamModalOpen(true)} className="w-full sm:w-auto justify-center bg-red-600 hover:bg-red-700 text-white px-4 md:px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-all shadow-md shadow-red-600/20 active:scale-95 text-sm">
+                            <Plus size={16} className="md:w-5 md:h-5" /> Thêm Team
+                        </button>
                     </div>
                 </div>
-            )}
-        </div>
 
-        <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden pb-2">
-          {viewMode === 'board' && (
-            <BoardView 
-                tasks={tasks} 
-                columns={BOARD_COLUMNS} 
-                getTeamColor={getTeamColor} 
-                onDragEnd={onDragEnd} 
-                onOpenTaskDetail={handleOpenTaskDetail} 
-                userRole={userRole} 
-                currentUserId={(session?.user as any)?.id} 
-            />
-          )}
+                {/* ================= BODY AREA ================= */}
+                {loading ? (
+                    <div className="flex-1 flex flex-col items-center justify-center text-slate-400 font-medium gap-3">
+                        <Loader2 size={24} className="animate-spin text-red-500 md:w-8 md:h-8" />
+                        <span className="text-sm">Đang đồng bộ sơ đồ...</span>
+                    </div>
+                ) : (
+                    <div className="flex-1 flex flex-col md:flex-row gap-4 md:gap-6 min-h-0 overflow-hidden">
 
-          {viewMode === 'list' && (
-            <ListView filteredTasks={filteredTasks} columns={COLUMNS} onOpenTaskDetail={handleOpenTaskDetail} currentPage={currentPage} setCurrentPage={setCurrentPage} totalPages={totalPages} totalItems={totalItems} itemsPerPage={ITEMS_PER_PAGE} />
-          )}
+                        {/* --- BỘ LỌC PHÒNG BAN --- */}
 
-          {viewMode === 'backlog' && (
-            <BacklogView
-              backlogTasks={backlogTasks}
-              onQuickAdd={handleCreateTaskSubmit}
-              onPushToBoard={(task: any) => {
-                setTaskToPush(task);
-                setIsPushModalOpen(true);
-              }}
-              channels={channels}
-              onDelete={handleDeleteTask}
-            />
-          )}
+                        {/* 1. GIAO DIỆN MOBILE: DẠNG SELECT DROPDOWN */}
+                        <div className="md:hidden w-full bg-white rounded-xl border border-slate-200 shadow-sm p-1.5 shrink-0">
+                            <div className="flex items-center px-3 py-2.5 bg-slate-50 rounded-lg border border-slate-100 focus-within:ring-2 focus-within:ring-red-500/20 focus-within:border-red-500 transition-all">
+                                <LayoutGrid size={16} className="text-slate-400 shrink-0 mr-2" />
+                                <select
+                                    className="w-full bg-transparent outline-none font-bold text-slate-700 text-sm cursor-pointer"
+                                    value={activeDept}
+                                    onChange={(e) => setActiveDept(e.target.value)}
+                                >
+                                    <option value="ALL">Tất Cả Team</option>
+                                    {departments.map(dept => (
+                                        <option key={dept.id} value={dept.id}>{dept.name}</option>
+                                    ))}
+                                    <option value="INDEPENDENT">Team Độc Lập ({teams.filter(t => !t.departmentId).length})</option>
+                                </select>
+                            </div>
+                        </div>
 
-          {viewMode === 'surplus' && (
-            <SurplusView />
-          )}
-        </div>
+                        {/* 2. GIAO DIỆN DESKTOP: DẠNG CỘT DANH SÁCH */}
+                        <div className="hidden md:flex w-[240px] lg:w-[280px] xl:w-[320px] shrink-0 bg-white rounded-[24px] border border-slate-200 shadow-sm flex-col min-h-0 overflow-hidden">
+                            <div className="p-5 border-b border-slate-100 shrink-0 bg-slate-50/50">
+                                <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                    <LayoutGrid size={14} /> Danh sách Phòng Ban
+                                </h2>
+                            </div>
 
-        <CreateTaskModal isOpen={isModalOpen} initialData={editingTask} onClose={() => { setIsModalOpen(false); setEditingTask(null); }} users={users} teams={teams} onSubmit={handleCreateTaskSubmit} isSubmitting={isSubmitting} errors={modalErrors} projects={projects} />
+                            <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-1 bg-white">
+                                <button onClick={() => setActiveDept("ALL")} className={`w-full text-left px-4 py-3.5 rounded-xl transition-all flex items-center gap-3 text-sm ${activeDept === "ALL" ? 'bg-red-50 text-red-600 font-bold' : 'text-slate-600 hover:bg-slate-50 font-medium'}`}>
+                                    <LayoutGrid size={18} className={activeDept === "ALL" ? "text-red-500" : "text-slate-400"} />
+                                    Tất Cả Team
+                                </button>
 
-        <TaskDetailDrawer isOpen={isDrawerOpen} onClose={handleCloseDrawer} selectedTask={selectedTask} taskLinks={taskLinks} setTaskLinks={setTaskLinks} errors={drawerErrors} isSavingLinks={isSavingLinks} onSaveLinks={handleSaveLinks} onToggleClose={handleToggleCloseTask} onReject={handleRejectTask} canReject={canReject} messages={messages} chatMessage={chatMessage} setChatMessage={setChatMessage} onSendMessage={handleSendMessage} userRole={userRole} sessionUserId={(session?.user as any)?.id} onSubmitEvaluation={handleEvaluationSubmit}
-          onEditTask={() => {
-            setIsDrawerOpen(false); 
-            setEditingTask(selectedTask); 
-            setIsModalOpen(true); 
-          }}
-          onRefreshBoard={() => {
-            fetchTasks(); 
-            if (socket) socket.emit("board_updated"); 
-          }}
-          onDeleteTask={handleDeleteTask}
-          isLoading={isLoadingDetail}
-          onUploadImage={handleUploadImage}
-        />
+                                {departments.map(dept => (
+                                    <div key={dept.id} className={`group flex items-center justify-between px-4 py-3.5 rounded-xl transition-all cursor-pointer text-sm ${activeDept === dept.id ? 'bg-red-50 text-red-600 font-bold' : 'text-slate-600 hover:bg-slate-50 font-medium'}`} onClick={() => setActiveDept(dept.id)}>
+                                        <div className="flex items-center gap-3 truncate">
+                                            <Building2 size={18} className={`shrink-0 ${activeDept === dept.id ? "text-red-500" : "text-slate-400"}`} />
+                                            <span className="truncate">{dept.name}</span>
+                                        </div>
+                                        <button onClick={(e) => { e.stopPropagation(); handleDeleteDept(dept.id, dept.name); }} className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-600 p-1 transition-all shrink-0" title="Xóa phòng ban">
+                                            <Trash2 size={16} />
+                                        </button>
+                                    </div>
+                                ))}
 
-        <PushTaskModal
-          isOpen={isPushModalOpen}
-          onClose={() => setIsPushModalOpen(false)}
-          task={taskToPush}
-          teams={teams}
-          session={session}
-          onSubmit={handlePushTaskSubmit}
-          isSubmitting={isPushing}
-        />
+                                <button onClick={() => setActiveDept("INDEPENDENT")} className={`w-full text-left px-4 py-3.5 rounded-xl transition-all flex items-center gap-3 text-sm ${activeDept === "INDEPENDENT" ? 'bg-red-50 text-red-600 font-bold' : 'text-slate-600 hover:bg-slate-50 font-medium'}`}>
+                                    <FolderTree size={18} className={activeDept === "INDEPENDENT" ? "text-red-500" : "text-slate-400"} />
+                                    Team Độc Lập
+                                    <span className="ml-auto text-[10px] font-black bg-slate-200 text-slate-500 px-2 py-0.5 rounded-full">{teams.filter(t => !t.departmentId).length}</span>
+                                </button>
+                            </div>
+                        </div>
 
-        <MergeVideoModal 
-            isOpen={isMergeModalOpen}
-            onClose={() => setIsMergeModalOpen(false)}
-            projects={projects}
-            teams={teams}
-            channels={channels}
-            onSubmit={handleMergeSubmit}
-            isSubmitting={isMerging}
-        />
-      </div>
-    </PermissionGuard>
-  );
+                        {/* --- CỘT PHẢI: BẢNG TEAM --- */}
+                        <div className="flex-1 bg-white rounded-xl md:rounded-[24px] border border-slate-200 shadow-sm flex flex-col min-w-0 overflow-hidden mt-0">
+                            <div className="flex-1 overflow-y-auto overflow-x-auto custom-scrollbar relative bg-white">
+                                {displayedTeams.length === 0 ? (
+                                    <div className="h-full flex flex-col items-center justify-center text-slate-400 space-y-3 md:space-y-4 p-6 md:p-8">
+                                        <div className="bg-slate-100 p-4 md:p-6 rounded-full"><Users size={24} className="md:w-8 md:h-8 text-slate-300" /></div>
+                                        <p className="font-medium text-xs md:text-sm">Chưa có Team nào trong mục này.</p>
+                                    </div>
+                                ) : (
+                                    <table className="w-full text-left border-collapse min-w-[550px] md:min-w-[600px]">
+                                        <thead className="bg-slate-50 sticky top-0 z-5 shadow-sm">
+                                            <tr>
+                                                <th className="px-4 md:px-6 py-3 md:py-4 text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest border-b border-slate-200">Tên Team</th>
+                                                <th className="px-4 md:px-6 py-3 md:py-4 text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest border-b border-slate-200">Mô tả</th>
+                                                <th className="px-4 md:px-6 py-3 md:py-4 text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest border-b border-slate-200 text-center">Nhân sự</th>
+                                                <th className="px-4 md:px-6 py-3 md:py-4 text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest border-b border-slate-200 text-right">Tác vụ</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100">
+                                            {displayedTeams.map(team => (
+                                                <tr key={team.id} className="hover:bg-red-50/50 transition-colors group cursor-pointer" onClick={() => {
+                                                    setSelectedTeam(team);
+                                                    setIsDrawerOpen(true);
+                                                }}>
+                                                    <td className="px-4 md:px-6 py-3 md:py-4">
+                                                        <div className="flex items-center gap-2.5 md:gap-3">
+                                                            <div className="bg-slate-100 text-slate-600 p-2 md:p-2.5 rounded-lg md:rounded-xl group-hover:bg-red-50 group-hover:text-red-600 transition-colors shrink-0">
+                                                                <Users size={16} className="md:w-[18px] md:h-[18px]" />
+                                                            </div>
+                                                            <span className="font-bold text-slate-900 text-xs md:text-[15px]">{team.name}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-4 md:px-6 py-3 md:py-4 text-xs md:text-sm text-slate-500 font-medium max-w-[150px] md:max-w-[200px] truncate" title={team.description}>
+                                                        {team.description || "—"}
+                                                    </td>
+                                                    <td className="px-4 md:px-6 py-3 md:py-4 text-center">
+                                                        <span className="inline-flex items-center justify-center bg-slate-100 text-slate-700 font-bold px-2.5 md:px-3 py-1 rounded-full text-[10px] md:text-xs whitespace-nowrap">
+                                                            {team._count?.users || 0} mem
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-4 md:px-6 py-3 md:py-4 text-right">
+                                                        <div className="flex justify-end gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                                                            {/* Nút Sửa */}
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setTeamToEdit(team);
+                                                                    setEditTeamName(team.name);
+                                                                    setEditTeamDesc(team.description || "");
+                                                                    setEditSelectedDept(team.departmentId || "");
+                                                                    setIsEditTeamModalOpen(true);
+                                                                }}
+                                                                className="text-slate-400 hover:text-emerald-600 p-1.5 md:p-2 hover:bg-emerald-50 rounded-lg transition-all"
+                                                                title="Sửa thông tin Team"
+                                                            >
+                                                                <Pencil size={14} className="md:w-4 md:h-4" />
+                                                            </button>
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setTeamToMove(team);
+                                                                    setTargetDeptId(team.departmentId || "");
+                                                                    setIsMoveModalOpen(true);
+                                                                }}
+                                                                className="text-slate-400 hover:text-blue-600 p-1.5 md:p-2 hover:bg-blue-100 rounded-lg transition-all"
+                                                                title="Điều chuyển Team"
+                                                            >
+                                                                <ArrowRightLeft size={14} className="md:w-4 md:h-4" />
+                                                            </button>
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleDeleteTeam(team.id, team.name);
+                                                                }}
+                                                                className="text-slate-400 hover:text-red-600 p-1.5 md:p-2 hover:bg-red-50 rounded-lg transition-all"
+                                                                title="Giải tán Team"
+                                                            >
+                                                                <Trash2 size={14} className="md:w-4 md:h-4" />
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* ================= MODALS ĐÃ TÁCH ================= */}
+                <DeptModal
+                    isOpen={isDeptModalOpen}
+                    onClose={() => setIsDeptModalOpen(false)}
+                    onSubmit={handleCreateDept}
+                    deptName={deptName} setDeptName={setDeptName}
+                    deptDesc={deptDesc} setDeptDesc={setDeptDesc}
+                    isSubmitting={isSubmittingDept}
+                />
+
+                <TeamModal
+                    isOpen={isTeamModalOpen}
+                    onClose={() => setIsTeamModalOpen(false)}
+                    onSubmit={handleCreateTeam}
+                    teamName={teamName} setTeamName={setTeamName}
+                    teamDesc={teamDesc} setTeamDesc={setTeamDesc}
+                    selectedDept={selectedDept} setSelectedDept={setSelectedDept}
+                    departments={departments}
+                    isSubmitting={isSubmittingTeam}
+                />
+
+                <MoveTeamModal
+                    isOpen={isMoveModalOpen}
+                    onClose={() => setIsMoveModalOpen(false)}
+                    onSubmit={handleMoveTeam}
+                    teamToMove={teamToMove}
+                    targetDeptId={targetDeptId} setTargetDeptId={setTargetDeptId}
+                    departments={departments}
+                    isMoving={isMoving}
+                />
+
+                <TeamDetailDrawer
+                    isOpen={isDrawerOpen}
+                    onClose={() => setIsDrawerOpen(false)}
+                    team={selectedTeam}
+                />
+
+                <EditTeamModal
+                    isOpen={isEditTeamModalOpen}
+                    onClose={() => setIsEditTeamModalOpen(false)}
+                    onSubmit={handleEditTeam}
+                    teamName={editTeamName} setTeamName={setEditTeamName}
+                    teamDesc={editTeamDesc} setTeamDesc={setEditTeamDesc}
+                    selectedDept={editSelectedDept} setSelectedDept={setEditSelectedDept}
+                    departments={departments}
+                    isSubmitting={isSubmittingEditTeam}
+                />
+            </div>
+        </PermissionGuard>
+    );
 }

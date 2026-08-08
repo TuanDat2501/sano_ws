@@ -64,6 +64,10 @@ export default function KanbanBoard() {
   });
   const [rawTasks, setRawTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // 🚀 BỔ SUNG STATE: Loading riêng cho lúc lọc API
+  const [isFetchingData, setIsFetchingData] = useState(false);
+
   const [isExporting, setIsExporting] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<any>(null);
@@ -94,10 +98,8 @@ export default function KanbanBoard() {
   const [toDate, setToDate] = useState(searchParams.get("toDate") || "");
   const [currentPage, setCurrentPage] = useState(Number(searchParams.get("page")) || 1);
 
-  // 🚀 BỔ SUNG STATE: Công tắc gập/mở cột Chuyển động
   const [showAnimationCols, setShowAnimationCols] = useState(true);
 
-  // 🚀 LẤY GIÁ TRỊ TỪ LOCAL STORAGE KHI LOAD TRANG
   useEffect(() => {
     const storedPref = localStorage.getItem("sano_showAnimationCols");
     if (storedPref !== null) {
@@ -122,31 +124,22 @@ export default function KanbanBoard() {
   const [taskToPush, setTaskToPush] = useState<any>(null);
   const [isPushing, setIsPushing] = useState(false);
 
-  const backlogTasks = rawTasks.filter(t => t.status === 'BACKLOG');
   const [editingTask, setEditingTask] = useState<any>(null);
   const [isImporting, setIsImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  const filteredTasks = rawTasks.filter((task) => {
-    if (task.status === 'BACKLOG') return false;
-    const matchSearch = task.title.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchStatus = filterStatus === "ALL" || task.status === filterStatus;
-    const matchChannel = filterChannel === "ALL" || task.channelId === filterChannel;
-    const taskDate = new Date(task.createdAt).toISOString().split('T')[0];
-    const matchFrom = fromDate === "" || taskDate >= fromDate;
-    const matchTo = toDate === "" || taskDate <= toDate;
-    return matchSearch && matchStatus && matchChannel && matchFrom && matchTo;
-  });
-
   const [isMergeModalOpen, setIsMergeModalOpen] = useState(false);
   const [isMerging, setIsMerging] = useState(false);
 
-  // 🚀 CẬP NHẬT LOGIC: Xóa bớt cột nếu Toggle bị tắt (False)
   const BOARD_COLUMNS = { ...COLUMNS };
   if (!showAnimationCols) {
     delete (BOARD_COLUMNS as any).ANIMATION_DOING;
     delete (BOARD_COLUMNS as any).ANIMATION_REVIEW;
   }
+
+  // 🚀 ĐÃ SỬA: Loại bỏ hàm lọc filter() dư thừa. Trực tiếp lấy danh sách trả về từ API.
+  const backlogTasks = rawTasks.filter(t => t.status === 'BACKLOG');
+  const filteredTasks = rawTasks.filter(t => t.status !== 'BACKLOG');
 
   const handleMergeSubmit = async (mergeData: any) => {
     setIsMerging(true);
@@ -182,9 +175,13 @@ export default function KanbanBoard() {
   };
 
   const fetchTasks = async () => {
+    // 🚀 BẬT HIỆU ỨNG LOADING MỖI KHI GỌI API LỌC
+    setIsFetchingData(true);
+    
     try {
       if (viewMode === 'surplus') {
         setLoading(false);
+        setIsFetchingData(false);
         return;
       }
 
@@ -200,7 +197,11 @@ export default function KanbanBoard() {
       const res = await fetch(`/api/tasks?${params}`);
       const data = await res.json();
 
-      if (!data.tasks) { setLoading(false); return; }
+      if (!data.tasks) { 
+          setLoading(false); 
+          setIsFetchingData(false);
+          return; 
+      }
 
       if (viewMode === 'board') {
         const groupedTasks = { TODO: [], CONTENT_REVIEW: [], ANIMATION_DOING: [], ANIMATION_REVIEW: [], EDIT_DOING: [], EDIT_REVIEW: [], DONE: [] };
@@ -218,8 +219,12 @@ export default function KanbanBoard() {
         setTotalItems(data.total || 0);
       }
 
-      setLoading(false);
-    } catch (err) { setLoading(false); }
+    } catch (err) { 
+        console.error(err);
+    } finally {
+        setLoading(false);
+        setIsFetchingData(false);
+    }
   };
 
   const loadProjects = async () => {
@@ -928,8 +933,15 @@ export default function KanbanBoard() {
 
             {/* FILTERS ĐỘC LẬP BÊN PHẢI */}
             {viewMode !== 'surplus' && (
-                <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto flex-1 justify-start xl:justify-end">
+                <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto flex-1 justify-start xl:justify-end relative">
                     
+                    {/* 🚀 MÀN CHẮN LOADING KHI ĐANG LỌC API */}
+                    {isFetchingData && (
+                        <div className="absolute -inset-2 bg-slate-50/50 backdrop-blur-[1px] z-10 flex items-center justify-center rounded-xl pointer-events-none">
+                            <Loader2 size={20} className="animate-spin text-blue-500" />
+                        </div>
+                    )}
+
                     {/* 🚀 TOGGLE CỘT CHUYỂN ĐỘNG (LƯU LOCALSTORAGE) */}
                     {viewMode === 'board' && (
                         <label className="flex items-center gap-2 cursor-pointer bg-white border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm shrink-0 hover:bg-slate-50 transition-colors" title="Bật/Tắt khâu chuyển động (5 cột / 7 cột)">
@@ -981,10 +993,10 @@ export default function KanbanBoard() {
                     {/* Date Picker */}
                     <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-2 py-1 shadow-sm shrink-0">
                         <span className="text-[9px] font-black text-slate-400 uppercase shrink-0">Từ</span>
-                        <input type="date" className="bg-transparent text-xs font-bold text-slate-600 outline-none w-auto cursor-pointer" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+                        <input type="date" className="bg-transparent text-xs font-bold text-slate-600 outline-none w-auto cursor-pointer" value={fromDate} onChange={(e) => handleFilterChange(setFromDate, e.target.value)} />
                         <div className="w-[1px] h-3 bg-slate-200 shrink-0"></div>
                         <span className="text-[9px] font-black text-slate-400 uppercase shrink-0">Đến</span>
-                        <input type="date" className="bg-transparent text-xs font-bold text-slate-600 outline-none w-auto cursor-pointer" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+                        <input type="date" className="bg-transparent text-xs font-bold text-slate-600 outline-none w-auto cursor-pointer" value={toDate} onChange={(e) => handleFilterChange(setToDate, e.target.value)} />
                     </div>
                 </div>
             )}
@@ -1032,7 +1044,6 @@ export default function KanbanBoard() {
             setIsDrawerOpen(false); 
             setEditingTask(selectedTask); 
             setIsModalOpen(true); 
-            
           }}
           onRefreshBoard={() => {
             fetchTasks(); 
