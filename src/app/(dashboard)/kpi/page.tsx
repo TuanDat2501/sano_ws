@@ -2,14 +2,17 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import { TrendingUp, Calendar, Users, ChevronLeft, ChevronRight, Database } from "lucide-react";
+import { TrendingUp, Calendar, Users, ChevronLeft, ChevronRight, Database, Download, Loader2 } from "lucide-react";
 import { useToast } from "@/app/component/ToastProvider";
 
 import KpiEmployeeDetail from "./components/KpiEmployeeDetail";
 import KpiTeamTable from "./components/KpiTeamTable";
 import KpiDrawer from "./components/KpiDrawer";
-import TaskLogManager from "./components/TaskLogManager"; // Nhúng Tool mới vào
+import TaskLogManager from "./components/TaskLogManager"; 
 import { getContinuousWeekRange } from "@/lib/utils";
+
+import ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
 
 function getMonthlyWeekRange(year: number, month: number, weekNumber: number) {
     const firstDayOfMonth = new Date(year, month - 1, 1);
@@ -64,7 +67,6 @@ export default function KpiDashboard() {
     const isHighLevel = ["BAN_GIAM_DOC", "ADMIN", "HR", "KE_TOAN"].includes(userRole);
     const isManager = ["LEADER", "BAN_GIAM_DOC", "ADMIN", "HR", "KE_TOAN"].includes(userRole);
 
-    // 🚀 TAB QUẢN LÝ (Chỉ dùng cho ADMIN)
     const [mainTab, setMainTab] = useState<'KPI' | 'LOGS'>('KPI');
 
     const [teams, setTeams] = useState<any[]>([]);
@@ -87,6 +89,7 @@ export default function KpiDashboard() {
     const [kpiList, setKpiList] = useState<any[]>([]);
     const [weekInfo, setWeekInfo] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [isExporting, setIsExporting] = useState(false);
 
     const availableWeeks = [1, 2, 3, 4, 5];
 
@@ -185,6 +188,249 @@ export default function KpiDashboard() {
         }
     };
 
+    const handleExportExcelThang = async () => {
+        setIsExporting(true);
+        try {
+            const weekPromises = [1, 2, 3, 4, 5].map(w => 
+                fetch(`/api/kpi?teamId=${queryTeamId}&year=${selectedYear}&month=${selectedMonth}&week=${w}`).then(res => res.json())
+            );
+            const weeksData = await Promise.all(weekPromises);
+
+            const userMap = new Map();
+            
+            weeksData.forEach((weekRes, index) => {
+                const w = index + 1;
+                const list = weekRes.kpiList || [];
+                
+                list.forEach((userKpi: any) => {
+                    if (!userMap.has(userKpi.userId)) {
+                        userMap.set(userKpi.userId, {
+                            id: userKpi.userId,
+                            fullName: userKpi.fullName,
+                            role: userKpi.role,
+                            teamName: userKpi.teamName || "Chưa có team", // 🔥 NHẬN DỮ LIỆU CHUẨN TỪ API
+                            weeks: {},
+                            targets: new Map() 
+                        });
+                    }
+                    
+                    const uData = userMap.get(userKpi.userId);
+                    uData.weeks[w] = userKpi;
+
+                    if (userKpi.targetDetails && userKpi.targetDetails.length > 0) {
+                        userKpi.targetDetails.forEach((td: any) => {
+                            const tKey = `${td.channelName}_${td.duration}_${td.isRework}`;
+                            if (!uData.targets.has(tKey)) {
+                                uData.targets.set(tKey, {
+                                    channelName: td.channelName || "Khác",
+                                    duration: td.duration || 0,
+                                    isRework: td.isRework || false
+                                });
+                            }
+                        });
+                    } else if (userKpi.targetValue > 0 || userKpi.actualValue > 0) {
+                        const tKey = `Chung_0_false`;
+                        if (!uData.targets.has(tKey)) {
+                            uData.targets.set(tKey, { channelName: "Chung", duration: 0, isRework: false });
+                        }
+                    }
+                });
+            });
+
+            const users = Array.from(userMap.values());
+            if (users.length === 0) {
+                showToast("error", "Không có dữ liệu trong tháng này.");
+                setIsExporting(false);
+                return;
+            }
+
+            // 🚀 BƯỚC SẮP XẾP CHỦ CHỐT: Gom ai cùng Team đứng cạnh nhau, sau đó mới xếp theo Tên
+            users.sort((a, b) => {
+                const teamA = a.teamName || "ZZZ";
+                const teamB = b.teamName || "ZZZ";
+                if (teamA !== teamB) return teamA.localeCompare(teamB);
+                return a.fullName.localeCompare(b.fullName);
+            });
+
+            const workbook = new ExcelJS.Workbook();
+            const ws = workbook.addWorksheet(`KPI_Thang_${selectedMonth}`);
+
+            const cols = [
+                { width: 5 },  
+                { width: 15 }, 
+                { width: 25 }, 
+                { width: 15 }, 
+                { width: 22 }, 
+            ];
+            for (let i = 1; i <= 5; i++) {
+                cols.push({ width: 10 }); 
+                cols.push({ width: 10 }); 
+                cols.push({ width: 10 }); 
+                cols.push({ width: 12 }); 
+            }
+            ws.columns = cols;
+
+            const row1 = ws.addRow([]);
+            row1.height = 40;
+            ws.mergeCells('A1:E1');
+            const titleCell = ws.getCell('A1');
+            titleCell.value = `THÁNG ${selectedMonth}`;
+            titleCell.font = { name: 'Times New Roman', size: 18, bold: true, color: { argb: 'FFFF0000' } };
+            titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF00FFFF' } }; 
+            titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
+
+            for (let w = 1; w <= 5; w++) {
+                const startCol = 5 + (w - 1) * 4 + 1;
+                const endCol = startCol + 3;
+                
+                ws.mergeCells(1, startCol, 1, endCol);
+                const weekCell = ws.getCell(1, startCol);
+                
+                const weekDataRes = weeksData[w-1]?.weekData;
+                let dateStr = "";
+                if (weekDataRes && weekDataRes.startDate) {
+                    const sd = new Date(weekDataRes.startDate);
+                    const ed = new Date(weekDataRes.endDate);
+                    dateStr = `(${sd.getDate()}-${ed.getDate()}/${ed.getMonth()+1})`;
+                }
+
+                weekCell.value = `KHỐI LƯỢNG CÔNG VIỆC TUẦN ${w}\n${dateStr}`;
+                weekCell.font = { name: 'Times New Roman', size: 10, bold: true };
+                weekCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF00FFFF' } };
+                weekCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+            }
+
+            const headers = ['STT', 'TEAM', 'HỌ TÊN NHÂN SỰ', 'CÔNG VIỆC', 'KÊNH PHỤ TRÁCH'];
+            for (let w = 1; w <= 5; w++) {
+                headers.push('Thời lượng video (phút)', 'KPI được giao/Tuần', 'KPI hoàn thành/Tuần', 'Mức độ hoàn thành');
+            }
+            const row2 = ws.addRow(headers);
+            row2.height = 45;
+            row2.eachCell((cell) => {
+                cell.font = { name: 'Times New Roman', size: 10, bold: true };
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF00FFFF' } };
+                cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+                cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+            });
+            
+            for(let i=1; i<=25; i++) {
+                ws.getCell(1, i).border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+            }
+
+            let startRow = 3;
+            let currentTeamStr = "";
+            let startTeamRow = 3;
+
+            users.forEach((u, uIdx) => {
+                const targetList = Array.from(u.targets.values());
+                if (targetList.length === 0) targetList.push({ channelName: '', duration: '', isRework: false });
+                
+                const numRows = targetList.length;
+
+                targetList.forEach((tg: any, tIdx: number) => {
+                    const rowData = [];
+                    rowData.push(uIdx + 1); 
+                    rowData.push(u.teamName);
+                    rowData.push(u.fullName);
+                    
+                    let roleStr = u.role;
+                    if (roleStr === "CONTENT") roleStr = "Content";
+                    if (roleStr === "EDITOR") roleStr = "Edit";
+                    if (roleStr === "PUBLISHER") roleStr = "QLK";
+                    rowData.push(roleStr);
+                    
+                    rowData.push(tg.channelName + (tg.isRework ? " (Xào)" : ""));
+
+                    for (let w = 1; w <= 5; w++) {
+                        const weekKpi = u.weeks[w];
+                        let tMins = "";
+                        let giao: number | string = "";
+                        let hoanThanh: number | string = "";
+                        let percentStr = "";
+
+                        if (weekKpi) {
+                            if (tIdx === 0) {
+                                percentStr = `${weekKpi.percent || 0},00%`;
+                            }
+
+                            if (weekKpi.targetDetails && weekKpi.targetDetails.length > 0) {
+                                const detail = weekKpi.targetDetails.find((d:any) => d.channelName === tg.channelName && d.duration === tg.duration && d.isRework === tg.isRework);
+                                if (detail) {
+                                    tMins = detail.duration || "";
+                                    giao = detail.targetCount || 0;
+                                    hoanThanh = detail.actualCount || 0;
+                                }
+                            } else if (tg.channelName === 'Chung') {
+                                tMins = "0";
+                                giao = weekKpi.targetValue || 0;
+                                hoanThanh = weekKpi.actualValue || 0;
+                            }
+                        }
+
+                        rowData.push(tMins, giao, hoanThanh, percentStr);
+                    }
+
+                    const r = ws.addRow(rowData);
+                    r.eachCell((cell) => {
+                        cell.font = { name: 'Times New Roman', size: 11 };
+                        cell.alignment = { vertical: 'middle', horizontal: 'center' };
+                        cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+                        
+                        if (uIdx % 2 === 0) {
+                            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2EFDA' } };
+                        } else {
+                            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9E1F2' } }; 
+                        }
+                    });
+                });
+
+                if (numRows > 1) {
+                    ws.mergeCells(startRow, 1, startRow + numRows - 1, 1); 
+                    ws.mergeCells(startRow, 3, startRow + numRows - 1, 3); 
+                    ws.mergeCells(startRow, 4, startRow + numRows - 1, 4); 
+                    
+                    for (let w = 1; w <= 5; w++) {
+                        const pCol = 5 + (w - 1) * 4 + 4; 
+                        ws.mergeCells(startRow, pCol, startRow + numRows - 1, pCol); 
+                    }
+                }
+
+                // 🚀 THUẬT TOÁN GỘP (MERGE) CỘT TEAM 
+                if (uIdx === 0) {
+                    currentTeamStr = u.teamName;
+                    startTeamRow = startRow;
+                } else if (u.teamName !== currentTeamStr) {
+                    if (startRow - 1 > startTeamRow) {
+                        ws.mergeCells(startTeamRow, 2, startRow - 1, 2);
+                    }
+                    currentTeamStr = u.teamName;
+                    startTeamRow = startRow;
+                }
+
+                startRow += numRows;
+
+                // Xử lý dòng cuối cùng của bảng để chốt Merge
+                if (uIdx === users.length - 1) {
+                    if (startRow - 1 > startTeamRow) {
+                        ws.mergeCells(startTeamRow, 2, startRow - 1, 2); 
+                    }
+                }
+            });
+
+            ws.views = [{ state: 'frozen', xSplit: 5, ySplit: 2 }];
+
+            const buffer = await workbook.xlsx.writeBuffer();
+            saveAs(new Blob([buffer]), `KPI_Thang_${selectedMonth}_${selectedYear}.xlsx`);
+            showToast("success", "Đã xuất file Excel thành công!");
+
+        } catch (error) {
+            console.error(error);
+            showToast("error", "Lỗi xuất file Excel!");
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
     if (isManager && !isHighLevel && !queryTeamId) return <div className="h-full flex-1 p-8 text-center text-slate-500 flex items-center justify-center font-medium">Bạn chưa được phân vào Team nào để xem KPI.</div>;
 
     const activeKpi = kpiList.find(k => k.userId === viewingUserId);
@@ -194,7 +440,6 @@ export default function KpiDashboard() {
     return (
         <div className="h-full flex flex-col p-3 md:p-8 bg-slate-50 overflow-hidden animate-fade-in relative">
 
-            {/* 🚀 TAB CHUYỂN ĐỔI CHỨC NĂNG DÀNH CHO ADMIN */}
             {userRole === 'ADMIN' && (
                 <div className="flex gap-1 mb-4 border-b border-slate-200 shrink-0">
                     <button 
@@ -212,14 +457,12 @@ export default function KpiDashboard() {
                 </div>
             )}
 
-            {/* --- NỘI DUNG MÀN HÌNH TÙY THEO TAB --- */}
             {mainTab === 'LOGS' ? (
                 <div className="flex-1 min-h-0">
                     <TaskLogManager teams={teams} />
                 </div>
             ) : (
                 <>
-                    {/* KHU VỰC HEADER CỦA BẢNG KPI */}
                     <div className="shrink-0 flex flex-col xl:flex-row justify-between items-start xl:items-center mb-4 md:mb-6 gap-3 md:gap-4">
                         <div>
                             <h1 className="text-xl md:text-2xl font-black text-slate-900 flex items-center gap-2">
@@ -265,10 +508,18 @@ export default function KpiDashboard() {
                                     {availableWeeks.map(w => <option key={w} value={w}>Tuần {w}</option>)}
                                 </select>
                             </div>
+                            
+                            <button 
+                                onClick={handleExportExcelThang}
+                                disabled={isExporting}
+                                className="h-7 md:h-8 bg-emerald-600 hover:bg-emerald-700 text-white px-3 rounded-lg font-bold flex items-center justify-center gap-1.5 transition-all shadow-md ml-1 disabled:opacity-70 text-xs whitespace-nowrap active:scale-95"
+                            >
+                                {isExporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                                Xuất Báo Cáo Tháng
+                            </button>
                         </div>
                     </div>
 
-                    {/* NỘI DUNG BẢNG KPI */}
                     <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
                         {!isManager && (
                             <div className="flex-1 flex flex-col min-h-0">

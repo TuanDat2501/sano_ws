@@ -11,17 +11,29 @@ export async function POST(req: Request) {
         }
 
         const user = session.user as any;
+        
         // Chỉ cấp quyền cho cấp Quản lý
         if (!["ADMIN", "BAN_GIAM_DOC", "LEADER"].includes(user.role)) {
             return NextResponse.json({ error: "Không có quyền dọn dẹp bảng!" }, { status: 403 });
         }
 
-        // Cập nhật tất cả task DONE thành isClosed = true
+        // 🚀 TẠO ĐIỀU KIỆN MẶC ĐỊNH
+        let whereClause: any = {
+            status: 'DONE',
+            isClosed: false
+        };
+
+        // 🚀 LỌC RIÊNG CHO LEADER: Chỉ được phép clear task của Team mình
+        if (user.role === "LEADER") {
+            if (!user.teamId) {
+                return NextResponse.json({ error: "Leader chưa được gán Team, không thể dọn dẹp!" }, { status: 400 });
+            }
+            whereClause.teamId = user.teamId;
+        }
+
+        // Cập nhật các task DONE thành isClosed = true theo điều kiện
         const result = await prisma.task.updateMany({
-            where: {
-                status: 'DONE',
-                isClosed: false
-            },
+            where: whereClause,
             data: {
                 isClosed: true
             }

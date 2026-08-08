@@ -40,24 +40,34 @@ export async function GET(req: Request) {
         const month = parseInt(searchParams.get("month") || String(new Date().getMonth() + 1));
         const weekIndex = parseInt(searchParams.get("week") || "1");
 
-        let userWhere: any = { isActive: true };
+        // 🚀 MÀNG LỌC 1: Loại bỏ ngay từ DB các Role không liên quan KPI
+        let userWhere: any = { 
+            isActive: true,
+            role: { notIn: ["ADMIN", "BAN_GIAM_DOC", "HR", "KE_TOAN"] }
+        };
 
         const canFilterTeam = currentUser.permissions?.includes("MENU_TEAMS") || ["ADMIN", "BAN_GIAM_DOC", "KE_TOAN"].includes(currentUser.role);
 
-        if (currentUser.role === "ADMIN") {
-            if (teamId && teamId !== "ALL") userWhere.teamId = teamId;
-        } else if (canFilterTeam || currentUser.role === "LEADER") {
-            userWhere.role = { not: "ADMIN" };
+        if (currentUser.role === "ADMIN" || canFilterTeam || currentUser.role === "LEADER") {
             if (teamId && teamId !== "ALL") userWhere.teamId = teamId;
         } else {
             if (!teamId || teamId === "ALL") return NextResponse.json({ error: "Thiếu Team ID" }, { status: 400 });
             userWhere.teamId = teamId;
         }
 
-        const users = await prisma.user.findMany({
+        const usersRaw = await prisma.user.findMany({
             where: userWhere,
-            select: { id: true, fullName: true, role: true, avatarUrl: true }
+            select: { 
+                id: true, 
+                fullName: true, 
+                role: true, 
+                avatarUrl: true,
+                team: { select: { name: true } } // 🚀 BỔ SUNG: Lấy Tên Team từ DB
+            }
         });
+
+        // 🚀 MÀNG LỌC 2: Loại bỏ triệt để ai thuộc Team "Nhân sự" (Nếu DB khai báo tên này)
+        const users = usersRaw.filter(u => u.team?.name !== "Nhân sự" && u.team?.name !== "HR");
 
         if (users.length === 0) return NextResponse.json({ weekData: { year, month, weekIndex }, kpiList: [] });
 
@@ -129,7 +139,6 @@ export async function GET(req: Request) {
             let totalActualMinutes = 0;
             let actualCount = 0;
 
-            // 🚀 BƯỚC 1: Lấy danh sách Task độc nhất để không bị đếm trùng phút
             const uniqueTasks = new Map<string, any>();
             validUserLogs.forEach(log => {
                 if (log.task && !uniqueTasks.has(log.taskId)) {
@@ -137,7 +146,6 @@ export async function GET(req: Request) {
                 }
             });
 
-            // 🚀 BƯỚC 2: Gom tổng số phút thực tế theo từng Cụm (Kênh + trạng thái Mới/Xào)
             const bucketMins: Record<string, number> = {};
             uniqueTasks.forEach(task => {
                 const key = `${task.channel?.id || 'no_channel'}_${task.isRework ? 'rework' : 'new'}`;
@@ -147,7 +155,6 @@ export async function GET(req: Request) {
             if (targetDetails && targetDetails.length > 0) {
                 let totalEquivalentVideos = 0;
 
-                // 🚀 BƯỚC 3: Phân nhóm các Target (vì user có thể tạo nhiều Target cho cùng 1 Kênh)
                 const targetsByBucket: Record<string, any[]> = {};
                 targetDetails.forEach(d => {
                     const key = `${d.channelId}_${d.isRework ? 'rework' : 'new'}`;
@@ -155,24 +162,21 @@ export async function GET(req: Request) {
                     targetsByBucket[key].push(d);
                 });
 
-                // 🚀 BƯỚC 4: Rót phút thực tế vào các Target (Chống Double-Count)
                 Object.keys(targetsByBucket).forEach(key => {
                     const targets = targetsByBucket[key];
-                    let minsLeft = bucketMins[key] || 0; // Tổng phút có thể tiêu xài
+                    let minsLeft = bucketMins[key] || 0; 
 
                     targets.forEach((t, index) => {
-                        const tMins = Number(t.targetCount) * Number(t.duration); // Phút cần đạt
+                        const tMins = Number(t.targetCount) * Number(t.duration); 
                         totalTargetMinutes += tMins;
 
                         let assignedMins = 0;
                         if (index === targets.length - 1) {
-                            // Target cuối cùng của Kênh này: Ôm trọn số phút còn dư
                             assignedMins = minsLeft;
                         } else {
-                            // Các Target đầu: Chỉ lấy đúng số phút nó cần, dư để Target sau
                             assignedMins = Math.min(minsLeft, tMins);
                         }
-                        minsLeft -= assignedMins; // Cập nhật lại số phút còn lại
+                        minsLeft -= assignedMins; 
 
                         t.actualMinutes = assignedMins;
                         const eq = t.duration > 0 ? assignedMins / t.duration : assignedMins;
@@ -183,13 +187,18 @@ export async function GET(req: Request) {
                     });
                 });
 
-                // 🚀 BƯỚC 5: Xử lý các task "Vượt tuyến" (làm kênh không nằm trong KPI)
-                uniqueTasks.forEach(task => {
-                    const key = `${task.channel?.id || 'no_channel'}_${task.isRework ? 'rework' : 'new'}`;
-                    if (!targetsByBucket[key]) {
-                        totalEquivalentVideos += 1; // Task ngoài KPI vẫn tính là 1 Video
-                    }
+                const uniqueOutsideTaskIds = new Set<string>();
+                const logsOutside = validUserLogs.filter(log => {
+                    const isCovered = targetDetails.some(d => {
+                        const isMatchChannel = d.channelId === log.task?.channel?.id;
+                        const isMatchRework = d.isRework ? log.task?.isRework === true : log.task?.isRework !== true;
+                        return isMatchChannel && isMatchRework;
+                    });
+                    return !isCovered;
                 });
+                
+                logsOutside.forEach(log => uniqueOutsideTaskIds.add(log.taskId));
+                totalEquivalentVideos += uniqueOutsideTaskIds.size;
 
                 actualCount = Math.round(totalEquivalentVideos * 10) / 10;
                 percent = totalTargetMinutes > 0 ? Math.round((totalActualMinutes / totalTargetMinutes) * 100) : 0;
@@ -199,10 +208,13 @@ export async function GET(req: Request) {
             }
 
             return {
-                userId: user.id, fullName: user.fullName, role: user.role,
+                userId: user.id, 
+                fullName: user.fullName, 
+                role: user.role,
+                teamName: user.team?.name || "Chưa có team", // 🚀 Dữ liệu Vàng để Frontend phân nhóm
                 targetValue, actualValue: actualCount, percent, logs: allUserLogs, 
                 targetDetails, totalTargetMinutes, totalActualMinutes,
-                avatarUrl: (user as any).avatarUrl || null
+                avatarUrl: user.avatarUrl || null
             };
         });
 
@@ -214,6 +226,7 @@ export async function GET(req: Request) {
     }
 }
 
+// ... KHỐI POST() PHÍA DƯỚI GIỮ NGUYÊN NHƯ CŨ ...
 export async function POST(req: Request) {
     try {
         const session = await getServerSession(authOptions);
