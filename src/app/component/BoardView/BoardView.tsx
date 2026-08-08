@@ -170,5 +170,6 @@ export default function BoardView({ tasks, columns, getTeamColor, onDragEnd, onO
         ))}
       </div>
     </DragDropContext>
+    
   );
 }
