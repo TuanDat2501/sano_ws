@@ -453,10 +453,10 @@ export default function DailyReportPage() {
                                         <td key={dateKey} className="p-1 border-r border-slate-700 last:border-r-0 bg-slate-800 text-center align-middle">
                                             <div className="flex flex-col items-center justify-center gap-1">
                                                 <div className="bg-emerald-500/20 text-emerald-400 px-1 py-0.5 rounded text-[9px] w-full max-w-[44px] border border-emerald-500/30">
-                                                    Đạt: {stat.reported}
+                                                    {stat.reported}
                                                 </div>
                                                 <div className="bg-red-500/20 text-red-400 px-1 py-0.5 rounded text-[9px] w-full max-w-[44px] border border-red-500/30">
-                                                    Thiếu: {stat.missing}
+                                                    {stat.missing}
                                                 </div>
                                             </div>
                                         </td>
