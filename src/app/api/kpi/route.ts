@@ -64,7 +64,6 @@ export async function GET(req: Request) {
         const userIds = users.map(u => u.id);
         const { start, end } = getWeekDateRangeByMonth(year, month, weekIndex);
 
-        // 🚀 ĐÃ XÓA: Lệnh query `allActiveTasks` không còn cần thiết, giúp API chạy cực nhanh
         const [allKpis, allLogs] = await Promise.all([
             prisma.weeklyKPI.findMany({
                 where: { userId: { in: userIds }, year, month, weekNumber: weekIndex }
@@ -78,7 +77,7 @@ export async function GET(req: Request) {
                 include: { 
                     task: { 
                         select: { 
-                            title: true, status: true, duration: true, isRework: true,
+                            id: true, title: true, status: true, duration: true, isRework: true,
                             channel: { select: { id: true, name: true } }
                         } 
                     } 
@@ -116,9 +115,6 @@ export async function GET(req: Request) {
                 return { ...log, typeStr }; 
             });
 
-            // 🚀 ĐÃ XÓA: Toàn bộ vòng lặp duyệt qua `userActiveTasks` để sinh ra `pendingLogs`
-
-            // Gán trực tiếp danh sách đã nộp
             const allUserLogs = [...mappedLogs].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
             
             const targetValue = kpiRecord?.targetValue || 0;
@@ -133,54 +129,72 @@ export async function GET(req: Request) {
             let totalActualMinutes = 0;
             let actualCount = 0;
 
+            // 🚀 BƯỚC 1: Lấy danh sách Task độc nhất để không bị đếm trùng phút
+            const uniqueTasks = new Map<string, any>();
+            validUserLogs.forEach(log => {
+                if (log.task && !uniqueTasks.has(log.taskId)) {
+                    uniqueTasks.set(log.taskId, log.task);
+                }
+            });
+
+            // 🚀 BƯỚC 2: Gom tổng số phút thực tế theo từng Cụm (Kênh + trạng thái Mới/Xào)
+            const bucketMins: Record<string, number> = {};
+            uniqueTasks.forEach(task => {
+                const key = `${task.channel?.id || 'no_channel'}_${task.isRework ? 'rework' : 'new'}`;
+                bucketMins[key] = (bucketMins[key] || 0) + Number(task.duration || 0);
+            });
+
             if (targetDetails && targetDetails.length > 0) {
                 let totalEquivalentVideos = 0;
 
-                targetDetails.forEach(detail => {
-                    const logsOfChannel = validUserLogs.filter(log => {
-                        const isMatchChannel = log.task?.channel?.id === detail.channelId;
-                        if (!isMatchChannel) return false;
-                        return detail.isRework ? log.task?.isRework === true : log.task?.isRework !== true;
-                    });
-                    
-                    const uniqueTaskIds = new Set<string>();
-                    let actualMinutes = 0;
-                    logsOfChannel.forEach(log => {
-                        if (!uniqueTaskIds.has(log.taskId)) {
-                            uniqueTaskIds.add(log.taskId);
-                            actualMinutes += Number(log.task?.duration || 0);
-                        }
-                    });
-                    
-                    detail.actualMinutes = actualMinutes;
-                    const equivalent = detail.duration > 0 ? actualMinutes / detail.duration : actualMinutes;
-                    const equivalentRounded = Math.round(equivalent * 10) / 10;
-                    
-                    detail.actualCount = equivalentRounded;
-                    totalEquivalentVideos += equivalentRounded;
-                    totalTargetMinutes += (Number(detail.targetCount) * Number(detail.duration));
-                    
-                    totalActualMinutes += actualMinutes; 
+                // 🚀 BƯỚC 3: Phân nhóm các Target (vì user có thể tạo nhiều Target cho cùng 1 Kênh)
+                const targetsByBucket: Record<string, any[]> = {};
+                targetDetails.forEach(d => {
+                    const key = `${d.channelId}_${d.isRework ? 'rework' : 'new'}`;
+                    if (!targetsByBucket[key]) targetsByBucket[key] = [];
+                    targetsByBucket[key].push(d);
                 });
 
-                const uniqueOutsideTaskIds = new Set<string>();
-                const logsOutside = validUserLogs.filter(log => {
-                    const isCovered = targetDetails.some(d => {
-                        const isMatchChannel = d.channelId === log.task?.channel?.id;
-                        const isMatchRework = d.isRework ? log.task?.isRework === true : log.task?.isRework !== true;
-                        return isMatchChannel && isMatchRework;
+                // 🚀 BƯỚC 4: Rót phút thực tế vào các Target (Chống Double-Count)
+                Object.keys(targetsByBucket).forEach(key => {
+                    const targets = targetsByBucket[key];
+                    let minsLeft = bucketMins[key] || 0; // Tổng phút có thể tiêu xài
+
+                    targets.forEach((t, index) => {
+                        const tMins = Number(t.targetCount) * Number(t.duration); // Phút cần đạt
+                        totalTargetMinutes += tMins;
+
+                        let assignedMins = 0;
+                        if (index === targets.length - 1) {
+                            // Target cuối cùng của Kênh này: Ôm trọn số phút còn dư
+                            assignedMins = minsLeft;
+                        } else {
+                            // Các Target đầu: Chỉ lấy đúng số phút nó cần, dư để Target sau
+                            assignedMins = Math.min(minsLeft, tMins);
+                        }
+                        minsLeft -= assignedMins; // Cập nhật lại số phút còn lại
+
+                        t.actualMinutes = assignedMins;
+                        const eq = t.duration > 0 ? assignedMins / t.duration : assignedMins;
+                        t.actualCount = Math.round(eq * 10) / 10;
+                        
+                        totalEquivalentVideos += t.actualCount;
+                        totalActualMinutes += assignedMins;
                     });
-                    return !isCovered;
                 });
-                
-                logsOutside.forEach(log => uniqueOutsideTaskIds.add(log.taskId));
-                totalEquivalentVideos += uniqueOutsideTaskIds.size;
+
+                // 🚀 BƯỚC 5: Xử lý các task "Vượt tuyến" (làm kênh không nằm trong KPI)
+                uniqueTasks.forEach(task => {
+                    const key = `${task.channel?.id || 'no_channel'}_${task.isRework ? 'rework' : 'new'}`;
+                    if (!targetsByBucket[key]) {
+                        totalEquivalentVideos += 1; // Task ngoài KPI vẫn tính là 1 Video
+                    }
+                });
 
                 actualCount = Math.round(totalEquivalentVideos * 10) / 10;
                 percent = totalTargetMinutes > 0 ? Math.round((totalActualMinutes / totalTargetMinutes) * 100) : 0;
             } else {
-                const uniqueTasksCount = new Set(validUserLogs.map(l => l.taskId)).size;
-                actualCount = uniqueTasksCount;
+                actualCount = uniqueTasks.size;
                 percent = targetValue > 0 ? Math.round((actualCount / targetValue) * 100) : 0;
             }
 
