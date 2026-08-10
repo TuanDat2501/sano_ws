@@ -1,8 +1,134 @@
 "use client";
 
-import { Eye, Target, TrendingUp, AlertCircle, X, Plus, Trash2, CheckCircle2, Loader2, Layers } from "lucide-react";
+import { Eye, Target, TrendingUp, AlertCircle, Edit2, X, Plus, Trash2, CheckCircle2, Loader2, Layers, CheckSquare, Zap, Copy, ArrowDown } from "lucide-react";
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
+import { useToast } from "@/app/component/ToastProvider";
+import { useSession } from "next-auth/react"; // 🚀 Import Session để check quyền
+
+// ========================================================
+// 🚀 COMPONENT MODAL: SAO CHÉP TARGET TỪ TUẦN CŨ SANG TUẦN MỚI
+// ========================================================
+const CopyTargetModal = ({ isOpen, onClose, onConfirm, currentMonth, currentYear }: any) => {
+    const [sourceMonth, setSourceMonth] = useState(currentMonth === 1 ? 12 : currentMonth - 1 || 1);
+    const [sourceWeek, setSourceWeek] = useState(4);
+    
+    const [destMonth, setDestMonth] = useState(currentMonth);
+    const [destWeek, setDestWeek] = useState(1);
+    
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => { setMounted(true); }, []);
+
+    if (!isOpen || !mounted) return null;
+
+    const handleConfirm = async () => {
+        setIsProcessing(true);
+        await onConfirm(sourceMonth, sourceWeek, destMonth, destWeek);
+        setIsProcessing(false);
+        onClose();
+    };
+
+    const modalContent = (
+        <>
+            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100000] animate-fade-in" onClick={onClose} />
+            <div className="fixed inset-0 z-[100001] flex items-center justify-center p-4 pointer-events-none">
+                <div className="bg-white rounded-[24px] shadow-2xl w-full max-w-lg pointer-events-auto flex flex-col overflow-hidden animate-scale-in border border-slate-100">
+                    
+                    <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50 shrink-0">
+                        <div>
+                            <h2 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                                <Copy className="text-indigo-600" size={20} /> Sao Chép Target KPI
+                            </h2>
+                            <p className="text-xs font-bold text-slate-500 mt-1">
+                                Chuyển dữ liệu chỉ tiêu từ tuần này sang tuần khác
+                            </p>
+                        </div>
+                        <button onClick={onClose} className="p-2 bg-white rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors shadow-sm">
+                            <X size={20} />
+                        </button>
+                    </div>
+
+                    <div className="p-6 bg-white space-y-6">
+                        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 relative shadow-inner">
+                            <span className="absolute -top-2.5 left-4 bg-slate-100 px-3 py-0.5 text-[10px] font-black text-slate-500 uppercase tracking-widest rounded-full border border-slate-200">Từ (Nguồn)</span>
+                            <div className="grid grid-cols-2 gap-4 mt-2">
+                                <div>
+                                    <label className="text-[11px] font-bold text-slate-600 block mb-1.5">Tháng</label>
+                                    <select 
+                                        className="w-full border border-slate-200 rounded-xl p-3 text-sm font-black text-slate-800 bg-white outline-none focus:border-indigo-500 cursor-pointer shadow-sm hover:bg-slate-50 transition-colors"
+                                        value={sourceMonth}
+                                        onChange={e => setSourceMonth(Number(e.target.value))}
+                                    >
+                                        {[1,2,3,4,5,6,7,8,9,10,11,12].map(m => <option key={m} value={m}>Tháng {m}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-[11px] font-bold text-slate-600 block mb-1.5">Tuần</label>
+                                    <select 
+                                        className="w-full border border-slate-200 rounded-xl p-3 text-sm font-black text-slate-800 bg-white outline-none focus:border-indigo-500 cursor-pointer shadow-sm hover:bg-slate-50 transition-colors"
+                                        value={sourceWeek}
+                                        onChange={e => setSourceWeek(Number(e.target.value))}
+                                    >
+                                        {[1,2,3,4,5].map(w => <option key={w} value={w}>Tuần {w}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex justify-center -my-3 relative z-10">
+                            <div className="bg-indigo-100 text-indigo-600 p-2 rounded-full border-4 border-white shadow-sm">
+                                <ArrowDown size={18} strokeWidth={3} />
+                            </div>
+                        </div>
+
+                        <div className="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-5 relative shadow-sm">
+                            <span className="absolute -top-2.5 left-4 bg-indigo-100 px-3 py-0.5 text-[10px] font-black text-indigo-700 uppercase tracking-widest rounded-full border border-indigo-200 shadow-sm">Đến (Đích)</span>
+                            <div className="grid grid-cols-2 gap-4 mt-2">
+                                <div>
+                                    <label className="text-[11px] font-bold text-indigo-700 block mb-1.5">Tháng</label>
+                                    <select 
+                                        className="w-full border border-indigo-200 rounded-xl p-3 text-sm font-black text-indigo-900 bg-white outline-none focus:border-indigo-500 cursor-pointer shadow-sm focus:ring-4 focus:ring-indigo-500/10 hover:bg-slate-50 transition-colors"
+                                        value={destMonth}
+                                        onChange={e => setDestMonth(Number(e.target.value))}
+                                    >
+                                        {[1,2,3,4,5,6,7,8,9,10,11,12].map(m => <option key={m} value={m}>Tháng {m}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-[11px] font-bold text-indigo-700 block mb-1.5">Tuần</label>
+                                    <select 
+                                        className="w-full border border-indigo-200 rounded-xl p-3 text-sm font-black text-indigo-900 bg-white outline-none focus:border-indigo-500 cursor-pointer shadow-sm focus:ring-4 focus:ring-indigo-500/10 hover:bg-slate-50 transition-colors"
+                                        value={destWeek}
+                                        onChange={e => setDestWeek(Number(e.target.value))}
+                                    >
+                                        {[1,2,3,4,5].map(w => <option key={w} value={w}>Tuần {w}</option>)}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-rose-50 text-rose-700 text-xs font-medium p-3 rounded-xl border border-rose-100 flex items-start gap-2 shadow-inner">
+                            <AlertCircle size={16} className="shrink-0 mt-0.5" />
+                            <span>Lưu ý: Thao tác này sẽ ghi đè toàn bộ chỉ tiêu của các nhân sự trong Tuần Đích bằng dữ liệu từ Tuần Nguồn.</span>
+                        </div>
+                    </div>
+
+                    <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 shrink-0">
+                        <button onClick={onClose} className="px-5 py-2.5 rounded-xl font-bold text-sm text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 transition-colors shadow-sm">Hủy</button>
+                        <button onClick={handleConfirm} disabled={isProcessing || (sourceMonth === destMonth && sourceWeek === destWeek)} className="px-6 py-2.5 rounded-xl font-black text-sm text-white bg-indigo-600 hover:bg-indigo-700 transition-colors shadow-md shadow-indigo-500/30 flex items-center gap-2 active:scale-95 disabled:opacity-50">
+                            {isProcessing ? <Loader2 size={18} className="animate-spin" /> : <Copy size={18} />} Bắt đầu Copy
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </>
+    );
+
+    return createPortal(modalContent, document.body);
+};
+
 
 // ========================================================
 // 🚀 COMPONENT MODAL: THIẾT LẬP KPI CHI TIẾT (LARK STYLE)
@@ -28,7 +154,6 @@ const TargetSettingModal = ({ isOpen, onClose, user, onSave }: any) => {
                 setDetails([{ id: Date.now(), channelId: "", channelName: "", duration: 10, isRework: false, targetCount: 1 }]);
             }
 
-            // Tải danh sách Kênh để chọn
             fetch("/api/channels").then(res => res.json()).then(data => {
                 setChannels(Array.isArray(data) ? data : []);
                 setIsLoading(false);
@@ -95,7 +220,6 @@ const TargetSettingModal = ({ isOpen, onClose, user, onSave }: any) => {
                     </div>
 
                     <div className="flex-1 overflow-y-auto p-6 bg-white custom-scrollbar">
-                        {/* TABS */}
                         <div className="flex p-1 bg-slate-100 rounded-xl mb-6 w-fit border border-slate-200 shadow-inner">
                             <button 
                                 onClick={() => setMode('CHUNG')} 
@@ -226,7 +350,77 @@ export default function KpiTeamTable({
     year,
     month
 }: any) {
+    const { data: session } = useSession(); // 🚀 Khai báo lấy thông tin Session
+    const currentUser = session?.user as any;
+    const isAdmin = currentUser?.role === "ADMIN"; // Kiểm tra quyền Admin
+
+    const { showToast } = useToast();
     const [editingUser, setEditingUser] = useState<any>(null);
+    
+    // STATES CHO GÁN HÀNG LOẠT
+    const [bulkTarget, setBulkTarget] = useState("");
+    const [isBulking, setIsBulking] = useState(false);
+
+    // STATES CHO SAO CHÉP TARGET CŨ
+    const [isCopyModalOpen, setIsCopyModalOpen] = useState(false);
+
+    const handleBulkAssign = async () => {
+        const num = parseInt(bulkTarget);
+        if (isNaN(num) || num < 0) return;
+        if (!confirm(`Sếp có chắc muốn gán đồng loạt chỉ tiêu [ ${num} ] cho TẤT CẢ ${kpiList.length} nhân sự bên dưới?`)) return;
+
+        setIsBulking(true);
+        try {
+            for (const user of kpiList) {
+                if (user.targetValue !== num) {
+                    await handleUpdateTarget(user.userId, num, []);
+                }
+            }
+            setBulkTarget("");
+            showToast("success", "Đã gán hàng loạt xong!");
+        } catch (error) {
+            console.error(error);
+            showToast("error", "Lỗi gán hàng loạt");
+        } finally {
+            setIsBulking(false);
+        }
+    };
+
+    const handleCopyFromPast = async (sMonth: number, sWeek: number, dMonth: number, dWeek: number) => {
+        try {
+            const teamQuery = teamId ? `&teamId=${teamId}` : `&teamId=ALL`;
+            const res = await fetch(`/api/kpi?year=${year}&month=${sMonth}&week=${sWeek}${teamQuery}`);
+            const data = await res.json();
+            const pastKpis = data.kpiList || [];
+
+            let count = 0;
+            for (const pKpi of pastKpis) {
+                if (pKpi.targetValue > 0) {
+                    await fetch("/api/kpi", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            userId: pKpi.userId, 
+                            year: year, 
+                            month: dMonth, 
+                            weekNumber: dWeek,
+                            targetValue: pKpi.targetValue, 
+                            targetDetails: pKpi.targetDetails 
+                        })
+                    });
+                    count++;
+                }
+            }
+            showToast("success", `Đã kéo thành công chỉ tiêu của ${count} nhân sự sang Tháng ${dMonth} Tuần ${dWeek}!`);
+            
+            setTimeout(() => {
+                window.location.reload();
+            }, 1500);
+        } catch(e) {
+            console.error(e);
+            showToast("error", "Có lỗi khi sao chép dữ liệu.");
+        }
+    };
 
     if (isLoading) {
         return (
@@ -252,109 +446,163 @@ export default function KpiTeamTable({
 
     return (
         <>
-            <div className="w-full h-full overflow-auto custom-scrollbar bg-white">
-                <table className="w-full text-left border-collapse min-w-[900px]">
-                    <thead className="bg-slate-100 text-[10px] md:text-[11px] uppercase font-black text-slate-500 sticky top-0 z-30 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
-                        <tr>
-                            <th className="border border-slate-200 p-3 text-center sticky left-0 bg-slate-200 z-40 w-[50px] shadow-[1px_0_0_0_#e2e8f0]">STT</th>
-                            <th className="border border-slate-200 p-3 sticky left-[50px] bg-slate-200 z-40 w-[250px] shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)]">Nhân sự</th>
-                            
-                            <th className="border border-slate-200 p-3 w-[120px] text-center">Team</th>
-                            <th className="border border-slate-200 p-3 w-[120px] text-center">Vai trò</th>
-                            
-                            <th className="border border-slate-200 p-3 w-[140px] text-center text-blue-700 bg-blue-50/50">Chỉ tiêu (Target)</th>
-                            <th className="border border-slate-200 p-3 w-[140px] text-center text-emerald-700 bg-emerald-50/50">Đã làm (Actual)</th>
-                            <th className="border border-slate-200 p-3 w-[140px] text-center text-purple-700 bg-purple-50/50">Tiến độ (%)</th>
-                            
-                            <th className="border border-slate-200 p-3 text-center sticky right-0 bg-slate-200 z-40 w-[100px] shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.1)]">Chi tiết</th>
-                        </tr>
-                    </thead>
-                    <tbody className="bg-white">
-                        {kpiList.map((user: any, index: number) => {
-                            let percentColor = "text-slate-600 bg-slate-100";
-                            if (user.percent >= 100) percentColor = "text-emerald-700 bg-emerald-100 border-emerald-300";
-                            else if (user.percent >= 80) percentColor = "text-blue-700 bg-blue-100 border-blue-300";
-                            else if (user.percent >= 50) percentColor = "text-amber-700 bg-amber-100 border-amber-300";
-                            else if (user.percent > 0) percentColor = "text-rose-700 bg-rose-100 border-rose-300";
-
-                            return (
-                                <tr 
-                                    key={user.userId} 
-                                    className="transition-colors group odd:bg-white even:bg-slate-50/80 hover:bg-blue-50/40 cursor-pointer"
-                                    onClick={() => onRowClick(user.userId)}
+            <div className="w-full h-full flex flex-col bg-white">
+                
+                {/* THANH CÔNG CỤ: GÁN HÀNG LOẠT VÀ SAO CHÉP DATA CŨ */}
+                <div className="shrink-0 p-3 border-b border-slate-200 bg-slate-50/50 flex flex-wrap items-center justify-between gap-3 z-20">
+                    <div className="flex items-center gap-2.5">
+                        <div className="bg-blue-100 text-blue-600 p-2 rounded-lg shadow-sm"><Zap size={16} /></div>
+                        <div>
+                            <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest">Gán Hàng Loạt</h3>
+                            <p className="text-[10px] font-medium text-slate-500 hidden sm:block">Áp dụng chung 1 mức KPI cho toàn bộ nhân sự bên dưới</p>
+                        </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-2 flex-wrap justify-end">
+                        
+                        {/* 🚀 CHỈ HIỂN THỊ NÚT NÀY NẾU LÀ ADMIN */}
+                        {isAdmin && (
+                            <>
+                                <button 
+                                    onClick={() => setIsCopyModalOpen(true)}
+                                    className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
                                 >
-                                    <td className="border border-slate-200 p-3 text-center font-bold text-slate-400 sticky left-0 z-20 shadow-[1px_0_0_0_#e2e8f0] bg-inherit align-middle">
-                                        {index + 1}
-                                    </td>
+                                    <Copy size={14} /> Kéo Target từ Tuần cũ
+                                </button>
+                                <div className="w-[1px] h-6 bg-slate-300 mx-1 hidden sm:block"></div>
+                            </>
+                        )}
 
-                                    <td className="border border-slate-200 p-3 sticky left-[50px] z-20 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.05)] bg-inherit align-middle">
-                                        <div className="flex items-center gap-3">
-                                            {user.avatarUrl ? (
-                                                <img src={user.avatarUrl} alt={user.fullName} className="w-8 h-8 rounded-full object-cover shadow-sm border border-slate-200" />
-                                            ) : (
-                                                <div className="w-8 h-8 rounded-full bg-slate-800 text-white flex items-center justify-center font-black text-[10px] shadow-sm">
-                                                    {user.fullName.charAt(0)}
-                                                </div>
-                                            )}
-                                            <span className="font-bold text-slate-800 text-[13px] truncate">{user.fullName}</span>
-                                        </div>
-                                    </td>
+                        <div className="flex items-center gap-2">
+                            <input 
+                                type="number" 
+                                min="0"
+                                placeholder="Nhập số..."
+                                className="w-24 border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-bold outline-none focus:border-blue-500 shadow-inner bg-white"
+                                value={bulkTarget}
+                                onChange={e => setBulkTarget(e.target.value)}
+                                onKeyDown={e => e.key === 'Enter' && handleBulkAssign()}
+                            />
+                            <button 
+                                disabled={!bulkTarget || isBulking}
+                                onClick={handleBulkAssign}
+                                className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold text-xs px-3 py-2 rounded-lg flex items-center gap-1.5 transition-all shadow-md active:scale-95"
+                            >
+                                {isBulking ? <Loader2 size={14} className="animate-spin" /> : <CheckSquare size={14} />}
+                                <span className="hidden sm:inline">Áp dụng tất cả</span>
+                                <span className="sm:hidden">Lưu</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
 
-                                    <td className="border border-slate-200 p-3 text-center align-middle bg-inherit">
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200 shadow-sm">
-                                            {user.teamName}
-                                        </span>
-                                    </td>
+                {/* BẢNG DỮ LIỆU */}
+                <div className="flex-1 overflow-auto custom-scrollbar bg-white">
+                    <table className="w-full text-left border-collapse min-w-[900px]">
+                        <thead className="bg-slate-100 text-[10px] md:text-[11px] uppercase font-black text-slate-500 sticky top-0 z-30 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+                            <tr>
+                                <th className="border border-slate-200 p-3 text-center sticky left-0 bg-slate-200 z-40 w-[50px] shadow-[1px_0_0_0_#e2e8f0]">STT</th>
+                                <th className="border border-slate-200 p-3 sticky left-[50px] bg-slate-200 z-40 w-[250px] shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)]">Nhân sự</th>
+                                
+                                <th className="border border-slate-200 p-3 w-[120px] text-center">Team</th>
+                                <th className="border border-slate-200 p-3 w-[120px] text-center">Vai trò</th>
+                                
+                                <th className="border border-slate-200 p-3 w-[140px] text-center text-blue-700 bg-blue-50/50">Chỉ tiêu (Target)</th>
+                                <th className="border border-slate-200 p-3 w-[140px] text-center text-emerald-700 bg-emerald-50/50">Đã làm (Actual)</th>
+                                <th className="border border-slate-200 p-3 w-[140px] text-center text-purple-700 bg-purple-50/50">Tiến độ (%)</th>
+                                
+                                <th className="border border-slate-200 p-3 text-center sticky right-0 bg-slate-200 z-40 w-[100px] shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.1)]">Thao tác</th>
+                            </tr>
+                        </thead>
+                        <tbody className="bg-white">
+                            {kpiList.map((user: any, index: number) => {
+                                let percentColor = "text-slate-600 bg-slate-100";
+                                if (user.percent >= 100) percentColor = "text-emerald-700 bg-emerald-100 border-emerald-300";
+                                else if (user.percent >= 80) percentColor = "text-blue-700 bg-blue-100 border-blue-300";
+                                else if (user.percent >= 50) percentColor = "text-amber-700 bg-amber-100 border-amber-300";
+                                else if (user.percent > 0) percentColor = "text-rose-700 bg-rose-100 border-rose-300";
 
-                                    <td className="border border-slate-200 p-3 text-center align-middle bg-inherit">
-                                        <span className="text-[10px] font-bold text-slate-600 bg-white border border-slate-200 px-2 py-1 rounded shadow-sm">
-                                            {user.role}
-                                        </span>
-                                    </td>
-
-                                    {/* 🚀 CỘT TARGET: CLick để mở Bảng Giao Việc Chi Tiết */}
-                                    <td 
-                                        className="border border-slate-200 p-2 text-center align-middle bg-inherit group/cell cursor-pointer transition-colors hover:bg-blue-50/50"
-                                        onClick={(e) => { e.stopPropagation(); setEditingUser(user); }}
-                                        title="Bấm để giao KPI chi tiết"
+                                return (
+                                    <tr 
+                                        key={user.userId} 
+                                        className="transition-colors group odd:bg-white even:bg-slate-50/80 hover:bg-blue-50/40 cursor-pointer"
+                                        onClick={() => onRowClick(user.userId)}
                                     >
-                                        <div className="font-black text-[15px] text-blue-600 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors border border-transparent group-hover/cell:border-blue-200 w-fit mx-auto bg-white shadow-sm">
-                                            <Target size={14} className="opacity-60 shrink-0" />
-                                            {user.targetValue > 0 ? (
-                                                <div className="flex flex-col items-center leading-none gap-0.5 mt-0.5">
-                                                    <span className="drop-shadow-sm leading-none">{user.targetValue}</span>
-                                                    {user.targetDetails?.length > 0 && <span className="text-[8px] text-blue-500 font-bold uppercase tracking-widest bg-blue-50 px-1 rounded border border-blue-100">Chi tiết</span>}
-                                                </div>
-                                            ) : (
-                                                <span className="text-blue-500 text-xs italic font-bold px-1">+ Gán</span>
-                                            )}
-                                        </div>
-                                    </td>
+                                        <td className="border border-slate-200 p-3 text-center font-bold text-slate-400 sticky left-0 z-20 shadow-[1px_0_0_0_#e2e8f0] bg-inherit align-middle">
+                                            {index + 1}
+                                        </td>
 
-                                    <td className="border border-slate-200 p-3 text-center align-middle bg-inherit">
-                                        <span className="font-black text-[15px] text-emerald-600 drop-shadow-sm">
-                                            {user.actualValue}
-                                        </span>
-                                    </td>
+                                        <td className="border border-slate-200 p-3 sticky left-[50px] z-20 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.05)] bg-inherit align-middle">
+                                            <div className="flex items-center gap-3">
+                                                {user.avatarUrl ? (
+                                                    <img src={user.avatarUrl} alt={user.fullName} className="w-8 h-8 rounded-full object-cover shadow-sm border border-slate-200" />
+                                                ) : (
+                                                    <div className="w-8 h-8 rounded-full bg-slate-800 text-white flex items-center justify-center font-black text-[10px] shadow-sm">
+                                                        {user.fullName.charAt(0)}
+                                                    </div>
+                                                )}
+                                                <span className="font-bold text-slate-800 text-[13px] truncate">{user.fullName}</span>
+                                            </div>
+                                        </td>
 
-                                    <td className="border border-slate-200 p-3 text-center align-middle bg-inherit">
-                                        <span className={`inline-flex items-center justify-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-black border shadow-sm w-[70px] ${percentColor}`}>
-                                            <TrendingUp size={12} /> {user.percent}%
-                                        </span>
-                                    </td>
+                                        <td className="border border-slate-200 p-3 text-center align-middle bg-inherit">
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200 shadow-sm">
+                                                {user.teamName}
+                                            </span>
+                                        </td>
 
-                                    <td className="border border-slate-200 p-3 text-center sticky right-0 z-20 shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.05)] bg-inherit align-middle">
-                                        <button 
-                                            className="text-[10px] bg-slate-800 hover:bg-slate-900 text-white font-bold px-3 py-1.5 rounded-lg transition-colors active:scale-95 whitespace-nowrap shadow-md border border-slate-700 flex items-center justify-center gap-1.5 w-full"
+                                        <td className="border border-slate-200 p-3 text-center align-middle bg-inherit">
+                                            <span className="text-[10px] font-bold text-slate-600 bg-white border border-slate-200 px-2 py-1 rounded shadow-sm">
+                                                {user.role}
+                                            </span>
+                                        </td>
+
+                                        {/* Click vào ô này để mở giao diện gán Target chi tiết */}
+                                        <td 
+                                            className="border border-slate-200 p-2 text-center align-middle bg-inherit group/cell cursor-pointer transition-colors hover:bg-blue-50/50"
+                                            onClick={(e) => { e.stopPropagation(); setEditingUser(user); }}
+                                            title="Bấm để giao KPI chi tiết"
                                         >
-                                            <Eye size={12} /> Xem Log
-                                        </button>
-                                    </td>
-                                </tr>
-                            );
-                        })}
-                    </tbody>
-                </table>
+                                            <div className="font-black text-[15px] text-blue-600 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors border border-transparent group-hover/cell:border-blue-200 w-fit mx-auto bg-white shadow-sm">
+                                                <Target size={14} className="opacity-60 shrink-0" />
+                                                {user.targetValue > 0 ? (
+                                                    <div className="flex flex-col items-center leading-none gap-0.5 mt-0.5">
+                                                        <span className="drop-shadow-sm leading-none">{user.targetValue}</span>
+                                                        {user.targetDetails?.length > 0 && <span className="text-[8px] text-blue-500 font-bold uppercase tracking-widest bg-blue-50 px-1 rounded border border-blue-100">Chi tiết</span>}
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-blue-500 text-xs italic font-bold px-1">+ Gán</span>
+                                                )}
+                                            </div>
+                                        </td>
+
+                                        <td className="border border-slate-200 p-3 text-center align-middle bg-inherit">
+                                            <span className="font-black text-[15px] text-emerald-600 drop-shadow-sm">
+                                                {user.actualValue}
+                                            </span>
+                                        </td>
+
+                                        <td className="border border-slate-200 p-3 text-center align-middle bg-inherit">
+                                            <span className={`inline-flex items-center justify-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-black border shadow-sm w-[70px] ${percentColor}`}>
+                                                <TrendingUp size={12} /> {user.percent}%
+                                            </span>
+                                        </td>
+
+                                        <td className="border border-slate-200 p-3 text-center sticky right-0 z-20 shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.1)] bg-inherit align-middle">
+                                            <div className="flex flex-col gap-1.5">
+                                                <button 
+                                                    className="text-[10px] bg-slate-800 hover:bg-slate-900 text-white font-bold px-3 py-1.5 rounded-lg transition-colors active:scale-95 whitespace-nowrap shadow-md border border-slate-700 flex items-center justify-center gap-1.5 w-full"
+                                                >
+                                                    <Eye size={12} /> Xem Log
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
             <TargetSettingModal 
@@ -362,6 +610,14 @@ export default function KpiTeamTable({
                 onClose={() => setEditingUser(null)} 
                 user={editingUser} 
                 onSave={handleUpdateTarget} 
+            />
+
+            <CopyTargetModal 
+                isOpen={isCopyModalOpen}
+                onClose={() => setIsCopyModalOpen(false)}
+                onConfirm={handleCopyFromPast}
+                currentMonth={month}
+                currentYear={year}
             />
         </>
     );
