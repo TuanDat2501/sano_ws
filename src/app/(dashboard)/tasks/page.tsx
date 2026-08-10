@@ -65,7 +65,7 @@ export default function KanbanBoard() {
   const [rawTasks, setRawTasks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // 🚀 BỔ SUNG STATE: Loading riêng cho lúc lọc API
+  // 🚀 Loading khi gọi API Lọc
   const [isFetchingData, setIsFetchingData] = useState(false);
 
   const [isExporting, setIsExporting] = useState(false);
@@ -91,9 +91,12 @@ export default function KanbanBoard() {
 
   const [viewMode, setViewMode] = useState<'board' | 'list' | 'backlog' | 'surplus'>((searchParams.get("viewMode") as 'board' | 'list' | 'backlog' | 'surplus') || 'board');
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
+  
+  // 🚀 CÁC STATE BỘ LỌC
   const [searchTerm, setSearchTerm] = useState(searchParams.get("search") || "");
   const [filterStatus, setFilterStatus] = useState(searchParams.get("status") || "ALL");
   const [filterChannel, setFilterChannel] = useState(searchParams.get("channelId") || "ALL");
+  const [filterTeam, setFilterTeam] = useState(searchParams.get("teamId") || "ALL"); // 🚀 BỘ LỌC TEAM
   const [fromDate, setFromDate] = useState(searchParams.get("fromDate") || "");
   const [toDate, setToDate] = useState(searchParams.get("toDate") || "");
   const [currentPage, setCurrentPage] = useState(Number(searchParams.get("page")) || 1);
@@ -110,6 +113,7 @@ export default function KanbanBoard() {
   const userRole = (session?.user as any)?.role;
   const canReject = userRole === 'ADMIN' || userRole === 'LEADER' || userRole === 'BAN_GIAM_DOC';
   const canCreateTask = ["ADMIN", "BAN_GIAM_DOC", "LEADER"].includes(userRole);
+  const canFilterTeam = ["ADMIN", "BAN_GIAM_DOC", "KE_TOAN"].includes(userRole); // Quyền Lọc Team
 
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
@@ -137,7 +141,7 @@ export default function KanbanBoard() {
     delete (BOARD_COLUMNS as any).ANIMATION_REVIEW;
   }
 
-  // 🚀 ĐÃ SỬA: Loại bỏ hàm lọc filter() dư thừa. Trực tiếp lấy danh sách trả về từ API.
+  // 🚀 Dữ liệu sạch sẽ lấy thẳng từ Raw
   const backlogTasks = rawTasks.filter(t => t.status === 'BACKLOG');
   const filteredTasks = rawTasks.filter(t => t.status !== 'BACKLOG');
 
@@ -175,8 +179,7 @@ export default function KanbanBoard() {
   };
 
   const fetchTasks = async () => {
-    // 🚀 BẬT HIỆU ỨNG LOADING MỖI KHI GỌI API LỌC
-    setIsFetchingData(true);
+    setIsFetchingData(true); // Bật Loading Màn Hình
     
     try {
       if (viewMode === 'surplus') {
@@ -188,10 +191,12 @@ export default function KanbanBoard() {
       const currentStatus = viewMode === 'backlog' ? 'BACKLOG' : (viewMode === 'board' ? 'ALL' : filterStatus);
       const currentLimit = viewMode === 'backlog' ? "50" : ITEMS_PER_PAGE.toString();
 
+      // 🚀 Đã đóng gói đẩy đủ tham số Kênh, Search, Team, Status xuống API
       const params = new URLSearchParams({
         viewMode, page: currentPage.toString(), limit: currentLimit,
         search: searchTerm, status: currentStatus, fromDate, toDate,
-        ...(filterChannel !== "ALL" && { channelId: filterChannel })
+        ...(filterChannel !== "ALL" && { channelId: filterChannel }),
+        ...(filterTeam !== "ALL" && { teamId: filterTeam }) // Đẩy Team ID xuống
       });
 
       const res = await fetch(`/api/tasks?${params}`);
@@ -207,7 +212,6 @@ export default function KanbanBoard() {
         const groupedTasks = { TODO: [], CONTENT_REVIEW: [], ANIMATION_DOING: [], ANIMATION_REVIEW: [], EDIT_DOING: [], EDIT_REVIEW: [], DONE: [] };
         
         data.tasks.forEach((task: any) => {
-          if (filterChannel !== "ALL" && task.channelId !== filterChannel) return;
           if (groupedTasks[task.status as keyof typeof groupedTasks]) {
             (groupedTasks[task.status as keyof typeof groupedTasks] as any[]).push(task);
           }
@@ -297,6 +301,7 @@ export default function KanbanBoard() {
     if (searchTerm) params.set("search", searchTerm); else params.delete("search");
     if (filterStatus !== "ALL") params.set("status", filterStatus); else params.delete("status");
     if (filterChannel !== "ALL") params.set("channelId", filterChannel); else params.delete("channelId"); 
+    if (filterTeam !== "ALL") params.set("teamId", filterTeam); else params.delete("teamId"); 
     if (fromDate) params.set("fromDate", fromDate); else params.delete("fromDate");
     if (toDate) params.set("toDate", toDate); else params.delete("toDate");
 
@@ -307,7 +312,7 @@ export default function KanbanBoard() {
 
     const timeoutId = setTimeout(() => { fetchTasks(); }, 300);
     return () => clearTimeout(timeoutId);
-  }, [currentPage, searchTerm, filterStatus, filterChannel, fromDate, toDate, viewMode, boardUpdateSignal]);
+  }, [currentPage, searchTerm, filterStatus, filterChannel, filterTeam, fromDate, toDate, viewMode, boardUpdateSignal]);
 
   const handleExportExcel = async () => {
       setIsExporting(true);
@@ -891,7 +896,6 @@ export default function KanbanBoard() {
               <p className="text-xs text-slate-500 font-medium mt-1.5">Quản lý và theo dõi tiến độ video.</p>
             </div>
             
-            {/* Actions Buttons */}
             <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto [&::-webkit-scrollbar]:hidden shrink-0">
                 {canCreateTask && (
                     <button onClick={handleExportExcel} disabled={isExporting} className="flex-1 sm:flex-none bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 px-3 py-2 rounded-xl font-bold flex items-center justify-center gap-1.5 whitespace-nowrap text-xs transition-colors shadow-sm">
@@ -919,7 +923,6 @@ export default function KanbanBoard() {
         {/* ROW 2: TABS & FILTERS - SEPARATE & COMPACT */}
         <div className="flex flex-col xl:flex-row items-start xl:items-center gap-3 shrink-0 mb-4">
             
-            {/* TABS CỐ ĐỊNH BÊN TRÁI */}
             <div className="flex bg-slate-200/60 p-1 rounded-xl w-full xl:w-auto overflow-x-auto [&::-webkit-scrollbar]:hidden shrink-0 border border-slate-200/50">
                 <button onClick={() => handleSwitchTab('board')} className={`flex-1 xl:flex-none px-4 py-1.5 rounded-lg font-bold text-xs transition-all whitespace-nowrap ${viewMode === 'board' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'}`}>Kanban</button>
                 <button onClick={() => handleSwitchTab('list')} className={`flex-1 xl:flex-none px-4 py-1.5 rounded-lg font-bold text-xs transition-all whitespace-nowrap ${viewMode === 'list' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'}`}>Danh sách</button>
@@ -931,18 +934,9 @@ export default function KanbanBoard() {
                 )}
             </div>
 
-            {/* FILTERS ĐỘC LẬP BÊN PHẢI */}
             {viewMode !== 'surplus' && (
                 <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto flex-1 justify-start xl:justify-end relative">
                     
-                    {/* 🚀 MÀN CHẮN LOADING KHI ĐANG LỌC API */}
-                    {isFetchingData && (
-                        <div className="absolute -inset-2 bg-slate-50/50 backdrop-blur-[1px] z-10 flex items-center justify-center rounded-xl pointer-events-none">
-                            <Loader2 size={20} className="animate-spin text-blue-500" />
-                        </div>
-                    )}
-
-                    {/* 🚀 TOGGLE CỘT CHUYỂN ĐỘNG (LƯU LOCALSTORAGE) */}
                     {viewMode === 'board' && (
                         <label className="flex items-center gap-2 cursor-pointer bg-white border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm shrink-0 hover:bg-slate-50 transition-colors" title="Bật/Tắt khâu chuyển động (5 cột / 7 cột)">
                             <span className="text-[11px] font-black text-slate-600 uppercase tracking-widest">Chuyển động</span>
@@ -962,7 +956,17 @@ export default function KanbanBoard() {
                         </label>
                     )}
 
-                    {/* Channel Filter */}
+                    {/* 🚀 ĐÃ BỔ SUNG: BỘ LỌC TEAM CHO ADMIN */}
+                    {canFilterTeam && viewMode !== 'backlog' && (
+                        <div className="relative flex items-center bg-white border border-slate-200 rounded-lg shadow-sm shrink-0">
+                            <div className="pl-2.5 py-1.5 shrink-0"><UsersIcon size={14} className="text-slate-400"/></div>
+                            <select className="bg-transparent text-xs font-bold text-slate-700 px-2 py-1.5 outline-none cursor-pointer max-w-[140px] truncate" value={filterTeam} onChange={(e) => handleFilterChange(setFilterTeam, e.target.value)}>
+                                <option value="ALL">Tất cả Team</option>
+                                {teams.map((t: any) => (<option key={t.id} value={t.id}>{t.name}</option>))}
+                            </select>
+                        </div>
+                    )}
+
                     {viewMode !== 'backlog' && (
                         <div className="relative flex items-center bg-white border border-slate-200 rounded-lg shadow-sm shrink-0">
                             <div className="pl-2.5 py-1.5 shrink-0"><Filter size={14} className="text-slate-400"/></div>
@@ -973,7 +977,6 @@ export default function KanbanBoard() {
                         </div>
                     )}
 
-                    {/* Status Filter (ONLY LIST) */}
                     {viewMode === 'list' && (
                         <select className="bg-white border border-slate-200 text-xs font-bold text-slate-700 px-3 py-1.5 rounded-lg shadow-sm outline-none cursor-pointer shrink-0" value={filterStatus} onChange={(e) => handleFilterChange(setFilterStatus, e.target.value)}>
                             <option value="ALL">Mọi trạng thái</option>
@@ -987,10 +990,8 @@ export default function KanbanBoard() {
                         </select>
                     )}
 
-                    {/* Search */}
                     <input type="text" placeholder="Tìm tên task..." className="bg-white border border-slate-200 text-xs font-medium px-3 py-1.5 rounded-lg shadow-sm outline-none focus:border-blue-500 min-w-[120px] flex-1 xl:flex-none" value={searchTerm} onChange={(e) => handleFilterChange(setSearchTerm, e.target.value)} />
                     
-                    {/* Date Picker */}
                     <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-2 py-1 shadow-sm shrink-0">
                         <span className="text-[9px] font-black text-slate-400 uppercase shrink-0">Từ</span>
                         <input type="date" className="bg-transparent text-xs font-bold text-slate-600 outline-none w-auto cursor-pointer" value={fromDate} onChange={(e) => handleFilterChange(setFromDate, e.target.value)} />
@@ -1002,7 +1003,16 @@ export default function KanbanBoard() {
             )}
         </div>
 
-        <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden pb-2">
+        {/* 🚀 ĐÃ BỔ SUNG: Màn Chắn Loading Xoay Xoay Bọc Toàn Bộ Data */}
+        <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden pb-2 relative">
+          
+          {isFetchingData && (
+              <div className="absolute inset-0 bg-slate-50/50 backdrop-blur-sm z-50 flex flex-col items-center justify-center rounded-2xl transition-all">
+                 <Loader2 size={36} className="animate-spin text-blue-600 mb-2 drop-shadow-md" />
+                 <p className="text-sm font-black text-blue-700 animate-pulse uppercase tracking-widest">Đang tải dữ liệu...</p>
+              </div>
+          )}
+
           {viewMode === 'board' && (
             <BoardView 
                 tasks={tasks} 
