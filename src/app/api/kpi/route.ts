@@ -117,6 +117,7 @@ export async function GET(req: Request) {
                 }
             });
 
+            // 🚀 MAP DỮ LIỆU LOG VÀ ĐÍNH KÈM CỜ "isCounted" BAN ĐẦU
             const mappedLogs = validUserLogs.map(log => {
                 let typeStr = "Khác";
                 if (log.action === "SUBMIT_SCRIPT") typeStr = "Script";
@@ -124,7 +125,46 @@ export async function GET(req: Request) {
                 else if (log.action === "PUBLISH_VIDEO") typeStr = "Publish";
                 else if (log.action === "COMPLETE_TASK") typeStr = "Nghiệm thu";
                 else if ((log.action as string) === "DAILY_REPORT") typeStr = "Báo cáo";
-                return { ...log, typeStr }; 
+                
+                return { ...log, typeStr, isCounted: false }; 
+            });
+
+            // 🚀 BỘ LỌC KỶ LUẬT: KIỂM TRA ROLE ĐỂ TÍNH KPI CHUẨN XÁC
+            const uniqueTasks = new Map<string, any>();
+            
+            mappedLogs.forEach(log => {
+                if (!log.task) return;
+
+                let isKpiQualifying = false;
+                const actionStr = (log.action as string).toUpperCase();
+                const noteStr = (log.note || "").toLowerCase();
+
+                // Các action được tính là Hoàn thành tuyệt đối
+                if (["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK"].includes(actionStr)) {
+                    isKpiQualifying = true;
+                } 
+                // Kiểm tra các Action dạng Report chung
+                else if (actionStr === "DAILY_REPORT" || actionStr === "UPDATE_TASK") {
+                    if (user.role === "CONTENT" && (noteStr.includes("kịch bản") || noteStr.includes("script"))) {
+                        isKpiQualifying = true;
+                    } else if (user.role === "EDITOR" && (noteStr.includes("video render") || noteStr.includes("video hoàn thiện"))) {
+                        isKpiQualifying = true;
+                    } else if (user.role === "ANIMATOR" && (noteStr.includes("chuyển động") || noteStr.includes("animation"))) {
+                        isKpiQualifying = true;
+                    } else if (user.role === "PUBLISHER" && (noteStr.includes("đăng") || noteStr.includes("publish"))) {
+                        isKpiQualifying = true;
+                    } else if (["ADMIN", "BAN_GIAM_DOC", "LEADER"].includes(user.role)) {
+                        isKpiQualifying = true; // Quản lý có thể tính linh động
+                    }
+                }
+
+                // Nếu là Log thỏa điều kiện hoàn thành Role -> Lấy ghi nhận vào Target
+                if (isKpiQualifying) {
+                    if (!uniqueTasks.has(log.taskId)) {
+                        uniqueTasks.set(log.taskId, log.task);
+                        log.isCounted = true; // Báo hiệu cho UI vẽ thẻ CÓ TÍNH KPI
+                    }
+                }
             });
 
             const allUserLogs = [...mappedLogs].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
@@ -140,13 +180,6 @@ export async function GET(req: Request) {
             let totalTargetMinutes = 0;
             let totalActualMinutes = 0;
             let actualCount = 0;
-
-            const uniqueTasks = new Map<string, any>();
-            validUserLogs.forEach(log => {
-                if (log.task && !uniqueTasks.has(log.taskId)) {
-                    uniqueTasks.set(log.taskId, log.task);
-                }
-            });
 
             const bucketMins: Record<string, number> = {};
             uniqueTasks.forEach(task => {
@@ -189,17 +222,19 @@ export async function GET(req: Request) {
                     });
                 });
 
+                // Các task không khớp kênh Target sẽ đẩy vào logs ngoài lề
                 const uniqueOutsideTaskIds = new Set<string>();
-                const logsOutside = validUserLogs.filter(log => {
+                const validArray = Array.from(uniqueTasks.values());
+                const logsOutside = validArray.filter((task: any) => {
                     const isCovered = targetDetails.some(d => {
-                        const isMatchChannel = d.channelId === log.task?.channel?.id;
-                        const isMatchRework = d.isRework ? log.task?.isRework === true : log.task?.isRework !== true;
+                        const isMatchChannel = d.channelId === task.channel?.id;
+                        const isMatchRework = d.isRework ? task.isRework === true : task.isRework !== true;
                         return isMatchChannel && isMatchRework;
                     });
                     return !isCovered;
                 });
                 
-                logsOutside.forEach(log => uniqueOutsideTaskIds.add(log.taskId));
+                logsOutside.forEach((task: any) => uniqueOutsideTaskIds.add(task.id));
                 totalEquivalentVideos += uniqueOutsideTaskIds.size;
 
                 actualCount = Math.round(totalEquivalentVideos * 10) / 10;
@@ -247,25 +282,47 @@ export async function POST(req: Request) {
         const pWeek = parseInt(weekNumber);
         const pTarget = parseInt(targetValue);
 
-        if (!userId || !pYear || !pMonth || !pWeek || isNaN(pTarget)) return NextResponse.json({ error: "Thiếu dữ liệu" }, { status: 400 });
+        if (!userId || !pYear || !pMonth || !pWeek || isNaN(pTarget)) {
+            return NextResponse.json({ error: "Thiếu dữ liệu" }, { status: 400 });
+        }
 
         const targetDetailsJson = targetDetails ? targetDetails : [];
 
-        const kpiRecord = await prisma.weeklyKPI.upsert({
-            where: { user_time_unique: { userId: userId, year: pYear, month: pMonth, weekNumber: pWeek } },
-            update: { 
-                targetValue: pTarget,
-                targetDetails: targetDetailsJson 
-            },
-            create: { 
-                userId, year: pYear, month: pMonth, weekNumber: pWeek, 
-                targetValue: pTarget,
-                targetDetails: targetDetailsJson
+        const existingKPI = await prisma.weeklyKPI.findFirst({
+            where: {
+                userId: userId,
+                year: pYear,
+                month: pMonth,
+                weekNumber: pWeek
             }
         });
+
+        let kpiRecord;
+
+        if (existingKPI) {
+            kpiRecord = await prisma.weeklyKPI.update({
+                where: { id: existingKPI.id },
+                data: { 
+                    targetValue: pTarget,
+                    targetDetails: targetDetailsJson 
+                }
+            });
+        } else {
+            kpiRecord = await prisma.weeklyKPI.create({
+                data: { 
+                    userId, 
+                    year: pYear, 
+                    month: pMonth, 
+                    weekNumber: pWeek, 
+                    targetValue: pTarget,
+                    targetDetails: targetDetailsJson
+                }
+            });
+        }
         
         return NextResponse.json({ message: "Giao KPI thành công", data: kpiRecord }, { status: 200 });
     } catch (error) {
+        console.error("LỖI GÁN KPI:", error);
         return NextResponse.json({ error: "Lỗi hệ thống" }, { status: 500 });
     }
 }
