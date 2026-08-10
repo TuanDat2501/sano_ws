@@ -13,7 +13,6 @@ function getWeekDateRangeByMonth(year: number, month: number, weekNumber: number
     const thursdayOfFirstWeek = new Date(startOfFirstWeek);
     thursdayOfFirstWeek.setDate(startOfFirstWeek.getDate() + 3);
     
-    // Nếu Thứ 5 của tuần đầu rơi vào tháng trước -> Dịch tuần 1 sang tuần sau
     if (thursdayOfFirstWeek.getMonth() !== month - 1) {
         startOfFirstWeek.setDate(startOfFirstWeek.getDate() + 7);
     }
@@ -83,10 +82,16 @@ export async function GET(req: Request) {
             prisma.taskLog.findMany({
                 where: {
                     userId: { in: userIds },
-                    createdAt: { gte: start, lte: end },
-                    action: { in: ["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK", "DAILY_REPORT"] } 
+                    createdAt: { gte: start, lte: end }
                 },
-                include: { 
+                // 🚀 ĐÃ SỬA CHUẨN: Chỉ lấy trường "details" vì TaskLog không có trường "note"
+                select: {
+                    id: true,
+                    action: true,
+                    details: true,
+                    createdAt: true,
+                    taskId: true,
+                    userId: true,
                     task: { 
                         select: { 
                             id: true, title: true, status: true, duration: true, isRework: true,
@@ -103,11 +108,16 @@ export async function GET(req: Request) {
             const validUserLogs: typeof rawUserLogs = [];
             const dailyReportTracker = new Set<string>();
 
+            // Lọc log an toàn trên RAM
             rawUserLogs.forEach(log => {
-                if ((log.action as string) === "DAILY_REPORT") {
-                    const dateString = new Date(log.createdAt).toISOString().split('T')[0];
-                    const uniqueKey = `${log.taskId}_${dateString}`;
+                const actionStr = String(log.action || "").toUpperCase();
+                if (!["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK", "DAILY_REPORT", "UPDATE_TASK", "UPDATE"].includes(actionStr)) {
+                    return; 
+                }
 
+                if (actionStr === "DAILY_REPORT") {
+                    const dateString = log.createdAt ? new Date(log.createdAt).toISOString().split('T')[0] : "";
+                    const uniqueKey = `${log.taskId}_${dateString}`;
                     if (!dailyReportTracker.has(uniqueKey)) {
                         dailyReportTracker.add(uniqueKey);
                         validUserLogs.push(log);
@@ -117,52 +127,48 @@ export async function GET(req: Request) {
                 }
             });
 
-            // 🚀 MAP DỮ LIỆU LOG VÀ ĐÍNH KÈM CỜ "isCounted" BAN ĐẦU
             const mappedLogs = validUserLogs.map(log => {
                 let typeStr = "Khác";
-                if (log.action === "SUBMIT_SCRIPT") typeStr = "Script";
-                else if (log.action === "SUBMIT_VIDEO") typeStr = "Edit";
-                else if (log.action === "PUBLISH_VIDEO") typeStr = "Publish";
-                else if (log.action === "COMPLETE_TASK") typeStr = "Nghiệm thu";
-                else if ((log.action as string) === "DAILY_REPORT") typeStr = "Báo cáo";
-                
+                const act = String(log.action || "").toUpperCase();
+                if (act === "SUBMIT_SCRIPT") typeStr = "Script";
+                else if (act === "SUBMIT_VIDEO") typeStr = "Edit";
+                else if (act === "PUBLISH_VIDEO") typeStr = "Publish";
+                else if (act === "COMPLETE_TASK") typeStr = "Nghiệm thu";
+                else if (act === "DAILY_REPORT") typeStr = "Báo cáo";
+                else if (act === "UPDATE_TASK" || act === "UPDATE") typeStr = "Cập nhật";
                 return { ...log, typeStr, isCounted: false }; 
             });
 
-            // 🚀 BỘ LỌC KỶ LUẬT: KIỂM TRA ROLE ĐỂ TÍNH KPI CHUẨN XÁC
+            // BỘ LỌC KỶ LUẬT THÔNG MINH (BLACKLIST - Mặc định cho qua)
             const uniqueTasks = new Map<string, any>();
             
             mappedLogs.forEach(log => {
                 if (!log.task) return;
 
-                let isKpiQualifying = false;
-                const actionStr = (log.action as string).toUpperCase();
-                const noteStr = (log.note || "").toLowerCase();
+                let isKpiQualifying = true; 
+                
+                const actionStr = String(log.action || "").toUpperCase();
+                
+                // 🚀 ĐÃ SỬA: Chỉ kiểm tra theo nội dung trường "details"
+                const combinedText = String(log.details || "").toLowerCase();
 
-                // Các action được tính là Hoàn thành tuyệt đối
-                if (["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK"].includes(actionStr)) {
-                    isKpiQualifying = true;
-                } 
-                // Kiểm tra các Action dạng Report chung
-                else if (actionStr === "DAILY_REPORT" || actionStr === "UPDATE_TASK") {
-                    if (user.role === "CONTENT" && (noteStr.includes("kịch bản") || noteStr.includes("script"))) {
-                        isKpiQualifying = true;
-                    } else if (user.role === "EDITOR" && (noteStr.includes("video render") || noteStr.includes("video hoàn thiện"))) {
-                        isKpiQualifying = true;
-                    } else if (user.role === "ANIMATOR" && (noteStr.includes("chuyển động") || noteStr.includes("animation"))) {
-                        isKpiQualifying = true;
-                    } else if (user.role === "PUBLISHER" && (noteStr.includes("đăng") || noteStr.includes("publish"))) {
-                        isKpiQualifying = true;
-                    } else if (["ADMIN", "BAN_GIAM_DOC", "LEADER"].includes(user.role)) {
-                        isKpiQualifying = true; // Quản lý có thể tính linh động
+                // Quét cờ Blacklist để trừ các báo cáo nháp không liên quan đến vai trò
+                if (actionStr === "DAILY_REPORT" || actionStr === "UPDATE_TASK" || actionStr === "UPDATE") {
+                    if (user.role === "EDITOR") {
+                        if (combinedText.includes("prj thô") || combinedText.includes("âm thanh") || combinedText.includes("audio")) {
+                            isKpiQualifying = false;
+                        }
+                    } else if (user.role === "CONTENT") {
+                        if (combinedText.includes("ý tưởng") && !combinedText.includes("kịch bản")) {
+                            isKpiQualifying = false;
+                        }
                     }
                 }
 
-                // Nếu là Log thỏa điều kiện hoàn thành Role -> Lấy ghi nhận vào Target
                 if (isKpiQualifying) {
                     if (!uniqueTasks.has(log.taskId)) {
                         uniqueTasks.set(log.taskId, log.task);
-                        log.isCounted = true; // Báo hiệu cho UI vẽ thẻ CÓ TÍNH KPI
+                        log.isCounted = true; 
                     }
                 }
             });
@@ -179,68 +185,97 @@ export async function GET(req: Request) {
             let percent = 0;
             let totalTargetMinutes = 0;
             let totalActualMinutes = 0;
-            let actualCount = 0;
+            
+            // ACTUAL COUNT TỔNG: LUÔN LÀ SỐ BÀI THỰC TẾ
+            let actualCount = uniqueTasks.size;
 
             const bucketMins: Record<string, number> = {};
+            const bucketTaskCount: Record<string, number> = {};
+
             uniqueTasks.forEach(task => {
                 const key = `${task.channel?.id || 'no_channel'}_${task.isRework ? 'rework' : 'new'}`;
                 bucketMins[key] = (bucketMins[key] || 0) + Number(task.duration || 0);
+                bucketTaskCount[key] = (bucketTaskCount[key] || 0) + 1; 
             });
 
+            // THUẬT TOÁN PHÂN BỔ KPI CHÍNH XÁC (SỐ NGUYÊN)
             if (targetDetails && targetDetails.length > 0) {
-                let totalEquivalentVideos = 0;
+                const specificTargets: Record<string, any[]> = {};
+                const anyTargets: Record<string, any[]> = {};
 
-                const targetsByBucket: Record<string, any[]> = {};
-                targetDetails.forEach(d => {
-                    const key = `${d.channelId}_${d.isRework ? 'rework' : 'new'}`;
-                    if (!targetsByBucket[key]) targetsByBucket[key] = [];
-                    targetsByBucket[key].push(d);
+                targetDetails.forEach(t => {
+                    t.actualMinutes = 0;
+                    t.actualCount = 0; // Reset
+
+                    if (t.channelId) {
+                        const key = `${t.channelId}_${t.isRework ? 'rework' : 'new'}`;
+                        if (!specificTargets[key]) specificTargets[key] = [];
+                        specificTargets[key].push(t);
+                    } else {
+                        const key = t.isRework ? 'rework' : 'new';
+                        if (!anyTargets[key]) anyTargets[key] = [];
+                        anyTargets[key].push(t);
+                    }
                 });
 
-                Object.keys(targetsByBucket).forEach(key => {
-                    const targets = targetsByBucket[key];
-                    let minsLeft = bucketMins[key] || 0; 
-
+                const distributeToTargets = (targets: any[], minsLeft: number, tasksLeft: number) => {
+                    let assignedMinsTotal = 0;
                     targets.forEach((t, index) => {
-                        const tMins = Number(t.targetCount) * Number(t.duration); 
+                        const tMins = Number(t.targetCount) * Number(t.duration);
                         totalTargetMinutes += tMins;
 
                         let assignedMins = 0;
+                        let assignedTasks = 0;
+
                         if (index === targets.length - 1) {
+                            // Target cuối ôm trọn phần dư thừa của bucket
                             assignedMins = minsLeft;
+                            assignedTasks = tasksLeft;
                         } else {
                             assignedMins = Math.min(minsLeft, tMins);
+                            assignedTasks = Math.min(tasksLeft, Number(t.targetCount));
                         }
-                        minsLeft -= assignedMins; 
 
-                        t.actualMinutes = assignedMins;
-                        const eq = t.duration > 0 ? assignedMins / t.duration : assignedMins;
-                        t.actualCount = Math.round(eq * 10) / 10;
-                        
-                        totalEquivalentVideos += t.actualCount;
-                        totalActualMinutes += assignedMins;
+                        minsLeft -= assignedMins;
+                        tasksLeft -= assignedTasks;
+                        assignedMinsTotal += assignedMins;
+
+                        t.actualMinutes = (t.actualMinutes || 0) + assignedMins;
+                        t.actualCount = (t.actualCount || 0) + assignedTasks; 
                     });
+                    return { minsLeft, tasksLeft, assignedMinsTotal };
+                };
+
+                // 1. Phân bổ cho Target có ĐÚNG KÊNH
+                Object.keys(specificTargets).forEach(key => {
+                    const targets = specificTargets[key];
+                    const res = distributeToTargets(targets, bucketMins[key] || 0, bucketTaskCount[key] || 0);
+                    totalActualMinutes += res.assignedMinsTotal;
+                    
+                    bucketMins[key] = res.minsLeft;
+                    bucketTaskCount[key] = res.tasksLeft;
                 });
 
-                // Các task không khớp kênh Target sẽ đẩy vào logs ngoài lề
-                const uniqueOutsideTaskIds = new Set<string>();
-                const validArray = Array.from(uniqueTasks.values());
-                const logsOutside = validArray.filter((task: any) => {
-                    const isCovered = targetDetails.some(d => {
-                        const isMatchChannel = d.channelId === task.channel?.id;
-                        const isMatchRework = d.isRework ? task.isRework === true : task.isRework !== true;
-                        return isMatchChannel && isMatchRework;
+                // 2. Phân bổ phần còn dư cho Target "DÙNG CHUNG KÊNH" (Nguồn hở)
+                Object.keys(anyTargets).forEach(reworkKey => {
+                    const targets = anyTargets[reworkKey];
+                    let remainingMins = 0;
+                    let remainingTasks = 0;
+                    Object.keys(bucketMins).forEach(bKey => {
+                        if (bKey.endsWith(`_${reworkKey}`)) {
+                            remainingMins += bucketMins[bKey];
+                            remainingTasks += bucketTaskCount[bKey];
+                            bucketMins[bKey] = 0; 
+                            bucketTaskCount[bKey] = 0;
+                        }
                     });
-                    return !isCovered;
-                });
-                
-                logsOutside.forEach((task: any) => uniqueOutsideTaskIds.add(task.id));
-                totalEquivalentVideos += uniqueOutsideTaskIds.size;
 
-                actualCount = Math.round(totalEquivalentVideos * 10) / 10;
+                    const res = distributeToTargets(targets, remainingMins, remainingTasks);
+                    totalActualMinutes += res.assignedMinsTotal;
+                });
+
                 percent = totalTargetMinutes > 0 ? Math.round((totalActualMinutes / totalTargetMinutes) * 100) : 0;
             } else {
-                actualCount = uniqueTasks.size;
                 percent = targetValue > 0 ? Math.round((actualCount / targetValue) * 100) : 0;
             }
 
@@ -259,6 +294,7 @@ export async function GET(req: Request) {
 
         return NextResponse.json({ weekData: { year, month, weekIndex, startDate: start, endDate: end }, kpiList: kpiData });
     } catch (error) {
+        console.error("LỖI API KPI GET:", error);
         return NextResponse.json({ error: "Lỗi hệ thống" }, { status: 500 });
     }
 }
