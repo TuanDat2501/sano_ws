@@ -3,13 +3,20 @@ import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
 
+// 🚀 LOGIC CHUẨN ISO 8601
 function getWeekDateRangeByMonth(year: number, month: number, weekNumber: number) {
     const firstDayOfMonth = new Date(year, month - 1, 1);
-    const lastDayOfMonth = new Date(year, month, 0);
-
     const dayOfWeek = firstDayOfMonth.getDay(); 
     const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
     const startOfFirstWeek = new Date(year, month - 1, 1 + diffToMonday);
+
+    const thursdayOfFirstWeek = new Date(startOfFirstWeek);
+    thursdayOfFirstWeek.setDate(startOfFirstWeek.getDate() + 3);
+    
+    // Nếu Thứ 5 của tuần đầu rơi vào tháng trước -> Dịch tuần 1 sang tuần sau
+    if (thursdayOfFirstWeek.getMonth() !== month - 1) {
+        startOfFirstWeek.setDate(startOfFirstWeek.getDate() + 7);
+    }
 
     const startOfWeek = new Date(startOfFirstWeek);
     startOfWeek.setDate(startOfFirstWeek.getDate() + (weekNumber - 1) * 7);
@@ -17,13 +24,10 @@ function getWeekDateRangeByMonth(year: number, month: number, weekNumber: number
     const endOfWeek = new Date(startOfWeek);
     endOfWeek.setDate(startOfWeek.getDate() + 6);
 
-    const actualStart = startOfWeek < firstDayOfMonth ? firstDayOfMonth : startOfWeek;
-    const actualEnd = endOfWeek > lastDayOfMonth ? lastDayOfMonth : endOfWeek;
+    startOfWeek.setHours(0, 0, 0, 0);
+    endOfWeek.setHours(23, 59, 59, 999);
 
-    actualStart.setHours(0, 0, 0, 0);
-    actualEnd.setHours(23, 59, 59, 999);
-
-    return { start: actualStart, end: actualEnd };
+    return { start: startOfWeek, end: endOfWeek };
 }
 
 export const dynamic = "force-dynamic";
@@ -40,7 +44,6 @@ export async function GET(req: Request) {
         const month = parseInt(searchParams.get("month") || String(new Date().getMonth() + 1));
         const weekIndex = parseInt(searchParams.get("week") || "1");
 
-        // 🚀 MÀNG LỌC 1: Loại bỏ ngay từ DB các Role không liên quan KPI
         let userWhere: any = { 
             isActive: true,
             role: { notIn: ["ADMIN", "BAN_GIAM_DOC", "HR", "KE_TOAN"] }
@@ -62,11 +65,10 @@ export async function GET(req: Request) {
                 fullName: true, 
                 role: true, 
                 avatarUrl: true,
-                team: { select: { name: true } } // 🚀 BỔ SUNG: Lấy Tên Team từ DB
+                team: { select: { name: true } }
             }
         });
 
-        // 🚀 MÀNG LỌC 2: Loại bỏ triệt để ai thuộc Team "Nhân sự" (Nếu DB khai báo tên này)
         const users = usersRaw.filter(u => u.team?.name !== "Nhân sự" && u.team?.name !== "HR");
 
         if (users.length === 0) return NextResponse.json({ weekData: { year, month, weekIndex }, kpiList: [] });
@@ -211,7 +213,7 @@ export async function GET(req: Request) {
                 userId: user.id, 
                 fullName: user.fullName, 
                 role: user.role,
-                teamName: user.team?.name || "Chưa có team", // 🚀 Dữ liệu Vàng để Frontend phân nhóm
+                teamName: user.team?.name || "Chưa có team", 
                 targetValue, actualValue: actualCount, percent, logs: allUserLogs, 
                 targetDetails, totalTargetMinutes, totalActualMinutes,
                 avatarUrl: user.avatarUrl || null
@@ -226,7 +228,6 @@ export async function GET(req: Request) {
     }
 }
 
-// ... KHỐI POST() PHÍA DƯỚI GIỮ NGUYÊN NHƯ CŨ ...
 export async function POST(req: Request) {
     try {
         const session = await getServerSession(authOptions);

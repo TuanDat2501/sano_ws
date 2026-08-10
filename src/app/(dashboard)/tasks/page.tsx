@@ -117,7 +117,7 @@ export default function KanbanBoard() {
 
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
-  const ITEMS_PER_PAGE = 7;
+  const ITEMS_PER_PAGE = 8;
 
   const [modalErrors, setModalErrors] = useState<{ [key: string]: string }>({});
   const [drawerErrors, setDrawerErrors] = useState<{ [key: string]: string }>({});

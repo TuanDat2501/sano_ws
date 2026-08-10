@@ -1,23 +1,40 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Loader2, X, Video, FileText, MonitorPlay, Film } from "lucide-react";
+import { Loader2, X, Video, FileText, MonitorPlay, Film, Filter, UsersIcon } from "lucide-react";
 import { useToast } from "@/app/component/ToastProvider";
 import { createPortal } from "react-dom";
+import { useSession } from "next-auth/react"; // 🚀 Import Session
 
 export default function SurplusView() {
+    const { data: session } = useSession();
+    const currentUser = session?.user as any;
+    // 🚀 Lấy quyền tương tự như API
+    const canFilterTeam = ["ADMIN", "BAN_GIAM_DOC", "KE_TOAN"].includes(currentUser?.role) || currentUser?.permissions?.includes("MENU_TEAMS");
+
     const [data, setData] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const { showToast } = useToast();
     
     const [selectedRow, setSelectedRow] = useState<any>(null);
     const [mounted, setMounted] = useState(false);
+    
+    const [teams, setTeams] = useState<any[]>([]);
+    // 🚀 Nếu không có quyền lọc, bỏ qua và lấy team của mình
+    const [selectedTeam, setSelectedTeam] = useState<string>("ALL");
 
     useEffect(() => {
         setMounted(true);
+        if (canFilterTeam) {
+            fetch("/api/teams").then(res => res.ok ? res.json() : []).then(setTeams);
+        }
+    }, [canFilterTeam]);
+
+    useEffect(() => {
         const fetchData = async () => {
+            setIsLoading(true);
             try {
-                const res = await fetch("/api/production-health");
+                const res = await fetch(`/api/production-health?teamId=${selectedTeam}`);
                 if (res.ok) {
                     const result = await res.json();
                     setData(result);
@@ -31,7 +48,7 @@ export default function SurplusView() {
             }
         };
         fetchData();
-    }, []);
+    }, [selectedTeam]);
 
     const drawerContent = selectedRow && (
         <>
@@ -204,6 +221,25 @@ export default function SurplusView() {
                     </tbody>
                 </table>
             </div>
+
+            {/* 🚀 THANH CÔNG CỤ NẰM Ở DƯỚI NẾU CẦN (Do sếp muốn gọn nên tôi để nó nổi ở Header nếu có Quyền) */}
+            {canFilterTeam && (
+                <div className="absolute top-2 right-4 flex items-center justify-end z-20 pointer-events-none">
+                    <div className="relative flex items-center bg-white border border-slate-200 rounded-lg h-8 px-2 w-full sm:w-auto shadow-md pointer-events-auto">
+                        <UsersIcon size={14} className="text-slate-400 mr-1.5 shrink-0" />
+                        <select
+                            className="bg-transparent text-[11px] font-bold text-slate-700 outline-none w-full sm:w-32 cursor-pointer"
+                            value={selectedTeam}
+                            onChange={(e) => setSelectedTeam(e.target.value)}
+                        >
+                            <option value="ALL">Tất cả Team</option>
+                            {teams.map((team: any) => (
+                                <option key={team.id} value={team.id}>{team.name}</option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
+            )}
 
             {mounted && createPortal(drawerContent, document.body)}
         </div>

@@ -10,7 +10,30 @@ export async function GET(req: Request) {
         const session = await getServerSession(authOptions);
         if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+        const currentUser = session.user as any;
+        const { searchParams } = new URL(req.url);
+        const requestedTeamId = searchParams.get("teamId") || "ALL";
+
+        // 🚀 PHÂN QUYỀN BẢO MẬT: Xác định ai được xem tất cả Team
+        const canViewAll = currentUser.permissions?.includes("MENU_TEAMS") || ["ADMIN", "BAN_GIAM_DOC", "KE_TOAN"].includes(currentUser.role);
+
+        const teamWhereClause: any = {};
+        
+        if (canViewAll) {
+            // Nếu là Admin/GĐ, cho phép lọc theo dropdown
+            if (requestedTeamId !== "ALL") {
+                teamWhereClause.id = requestedTeamId;
+            }
+        } else {
+            // Nếu là Leader hoặc nhân sự, ÉP CỨNG khóa về đúng Team của người đó
+            if (!currentUser.teamId) {
+                return NextResponse.json([]); // Không có team thì trả về mảng rỗng
+            }
+            teamWhereClause.id = currentUser.teamId;
+        }
+
         const teams = await prisma.team.findMany({
+            where: teamWhereClause,
             include: {
                 channels: {
                     include: {
@@ -46,7 +69,6 @@ export async function GET(req: Request) {
             team.channels.forEach((channel) => {
                 const tasks = channel.tasks || [];
 
-                // 🚀 Lọc task dư: Loại trừ các task đã lên kênh (có Publish Link)
                 let surplusTasks = tasks.filter((t: any) => {
                     const hasScript = t.scriptLink && t.scriptLink.trim() !== "";
                     const hasAnim = t.animationLink && t.animationLink.trim() !== "";
@@ -89,7 +111,6 @@ export async function GET(req: Request) {
                         const hasRough = t.roughProjectLink && t.roughProjectLink.trim() !== "";
                         const hasVideo = t.videoLink && t.videoLink.trim() !== "";
                         
-                        // 🚀 Phân loại theo mức độ hoàn thiện cao nhất
                         if (hasVideo) {
                             durationGroups[d].videoCount++;
                             durationGroups[d].videoTasks.push({ id: t.id, title: t.title });

@@ -9,18 +9,25 @@ import KpiEmployeeDetail from "./components/KpiEmployeeDetail";
 import KpiTeamTable from "./components/KpiTeamTable";
 import KpiDrawer from "./components/KpiDrawer";
 import TaskLogManager from "./components/TaskLogManager"; 
-import { getContinuousWeekRange } from "@/lib/utils";
 
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 
-function getMonthlyWeekRange(year: number, month: number, weekNumber: number) {
+// 🚀 ĐÃ SỬA: Hàm sinh Text Tuần chuẩn ISO
+function getWeekData(year: number, month: number, weekNumber: number) {
     const firstDayOfMonth = new Date(year, month - 1, 1);
-    const lastDayOfMonth = new Date(year, month, 0);
-
+    
     const dayOfWeek = firstDayOfMonth.getDay();
     const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    
     const startOfFirstWeek = new Date(year, month - 1, 1 + diffToMonday);
+
+    const thursdayOfFirstWeek = new Date(startOfFirstWeek);
+    thursdayOfFirstWeek.setDate(startOfFirstWeek.getDate() + 3);
+    
+    if (thursdayOfFirstWeek.getMonth() !== month - 1) {
+        startOfFirstWeek.setDate(startOfFirstWeek.getDate() + 7);
+    }
 
     const startOfWeek = new Date(startOfFirstWeek);
     startOfWeek.setDate(startOfFirstWeek.getDate() + (weekNumber - 1) * 7);
@@ -28,33 +35,74 @@ function getMonthlyWeekRange(year: number, month: number, weekNumber: number) {
     const endOfWeek = new Date(startOfWeek);
     endOfWeek.setDate(startOfWeek.getDate() + 6);
 
-    const actualStart = startOfWeek < firstDayOfMonth ? firstDayOfMonth : startOfWeek;
-    const actualEnd = endOfWeek > lastDayOfMonth ? lastDayOfMonth : endOfWeek;
+    startOfWeek.setHours(0, 0, 0, 0);
+    endOfWeek.setHours(23, 59, 59, 999);
 
-    const formatDate = (date: Date) => `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
+    const pad = (num: number) => num.toString().padStart(2, '0');
+    const label = `Tuần ${weekNumber} (${pad(startOfWeek.getDate())}/${pad(startOfWeek.getMonth() + 1)}/${startOfWeek.getFullYear()} - ${pad(endOfWeek.getDate())}/${pad(endOfWeek.getMonth() + 1)}/${endOfWeek.getFullYear()})`;
 
-    return {
-        start: actualStart,
-        end: actualEnd,
-        label: `Tuần ${weekNumber} (${formatDate(actualStart)} - ${formatDate(actualEnd)})`
-    };
+    return { start: startOfWeek, end: endOfWeek, label };
 }
 
-function getCurrentWeekNumber(date: Date) {
-    const year = date.getFullYear();
-    const month = date.getMonth() + 1;
-    const todayTime = new Date(year, month - 1, date.getDate()).getTime();
+// 🚀 BỔ SUNG: Tính xem một tháng có bao nhiêu tuần hợp lệ (4 hay 5)
+function getAvailableWeeks(year: number, month: number) {
+    const weeks = [];
+    const firstDayOfMonth = new Date(year, month - 1, 1);
+    const dayOfWeek = firstDayOfMonth.getDay();
+    const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const startOfFirstWeek = new Date(year, month - 1, 1 + diffToMonday);
+
+    const thursdayOfFirstWeek = new Date(startOfFirstWeek);
+    thursdayOfFirstWeek.setDate(startOfFirstWeek.getDate() + 3);
+    
+    if (thursdayOfFirstWeek.getMonth() !== month - 1) {
+        startOfFirstWeek.setDate(startOfFirstWeek.getDate() + 7);
+    }
 
     for (let w = 1; w <= 5; w++) {
-        const range = getContinuousWeekRange(year, month, w);
-        const startTime = new Date(range.start.getFullYear(), range.start.getMonth(), range.start.getDate()).getTime();
-        const endTime = new Date(range.end.getFullYear(), range.end.getMonth(), range.end.getDate()).getTime();
-
-        if (todayTime >= startTime && todayTime <= endTime) {
-            return w > 4 ? 4 : w;
+        const startOfWeek = new Date(startOfFirstWeek);
+        startOfWeek.setDate(startOfFirstWeek.getDate() + (w - 1) * 7);
+        
+        const thursday = new Date(startOfWeek);
+        thursday.setDate(startOfWeek.getDate() + 3);
+        
+        // Nếu ngày Thứ 5 của tuần này đã chạy sang tháng khác -> Dừng lại!
+        if (thursday.getMonth() !== month - 1) {
+            break;
         }
+        weeks.push(w);
     }
-    return 1;
+    return weeks;
+}
+
+// 🚀 ĐÃ SỬA: Hàm lấy ngày hiện tại (Tự nhận diện tháng và tuần)
+function getCurrentWeekInfo() {
+    const d = new Date();
+    d.setHours(0,0,0,0);
+    
+    const dayOfWeek = d.getDay();
+    const diffToThursday = dayOfWeek === 0 ? -3 : 4 - dayOfWeek;
+    const thursday = new Date(d);
+    thursday.setDate(d.getDate() + diffToThursday);
+    
+    const targetYear = thursday.getFullYear();
+    const targetMonth = thursday.getMonth() + 1;
+    
+    const firstDayOfMonth = new Date(targetYear, targetMonth - 1, 1);
+    const firstDayOfWeek = firstDayOfMonth.getDay();
+    const diffToMonday = firstDayOfWeek === 0 ? -6 : 1 - firstDayOfWeek;
+    const startOfFirstWeek = new Date(targetYear, targetMonth - 1, 1 + diffToMonday);
+    
+    const thursdayOfFirstWeek = new Date(startOfFirstWeek);
+    thursdayOfFirstWeek.setDate(startOfFirstWeek.getDate() + 3);
+    if (thursdayOfFirstWeek.getMonth() !== targetMonth - 1) {
+        startOfFirstWeek.setDate(startOfFirstWeek.getDate() + 7);
+    }
+    
+    const diffTime = d.getTime() - startOfFirstWeek.getTime();
+    const weekNumber = Math.floor(diffTime / (7 * 24 * 60 * 60 * 1000)) + 1;
+    
+    return { year: targetYear, month: targetMonth, week: weekNumber > 0 ? weekNumber : 1 };
 }
 
 export default function KpiDashboard() {
@@ -73,12 +121,10 @@ export default function KpiDashboard() {
     const [selectedTeamFilter, setSelectedTeamFilter] = useState<string>("ALL");
     const queryTeamId = isHighLevel ? selectedTeamFilter : teamId;
 
-    const today = new Date();
-    const currentWeekNum = getCurrentWeekNumber(today);
-
-    const [selectedYear, setSelectedYear] = useState(today.getFullYear());
-    const [selectedMonth, setSelectedMonth] = useState(today.getMonth() + 1);
-    const [selectedWeek, setSelectedWeek] = useState(currentWeekNum);
+    const currentInfo = getCurrentWeekInfo();
+    const [selectedYear, setSelectedYear] = useState(currentInfo.year);
+    const [selectedMonth, setSelectedMonth] = useState(currentInfo.month);
+    const [selectedWeek, setSelectedWeek] = useState(currentInfo.week);
 
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
@@ -91,7 +137,16 @@ export default function KpiDashboard() {
     const [isLoading, setIsLoading] = useState(true);
     const [isExporting, setIsExporting] = useState(false);
 
-    const availableWeeks = [1, 2, 3, 4, 5];
+    // 🚀 Lấy mảng Tuần động theo tháng đang chọn
+    const availableWeeks = getAvailableWeeks(selectedYear, selectedMonth);
+
+    // Ép lại tuần nếu user đổi sang tháng có ít tuần hơn
+    useEffect(() => {
+        const maxWeek = availableWeeks[availableWeeks.length - 1];
+        if (selectedWeek !== 0 && selectedWeek > maxWeek) {
+            setSelectedWeek(maxWeek);
+        }
+    }, [selectedMonth, selectedYear, availableWeeks]);
 
     useEffect(() => {
         if (isHighLevel || session?.user.isTeamLeader) {
@@ -191,7 +246,8 @@ export default function KpiDashboard() {
     const handleExportExcelThang = async () => {
         setIsExporting(true);
         try {
-            const weekPromises = [1, 2, 3, 4, 5].map(w => 
+            // Lặp theo mảng Tuần động
+            const weekPromises = availableWeeks.map(w => 
                 fetch(`/api/kpi?teamId=${queryTeamId}&year=${selectedYear}&month=${selectedMonth}&week=${w}`).then(res => res.json())
             );
             const weeksData = await Promise.all(weekPromises);
@@ -199,7 +255,7 @@ export default function KpiDashboard() {
             const userMap = new Map();
             
             weeksData.forEach((weekRes, index) => {
-                const w = index + 1;
+                const w = availableWeeks[index]; // Lấy đúng tuần
                 const list = weekRes.kpiList || [];
                 
                 list.forEach((userKpi: any) => {
@@ -208,7 +264,7 @@ export default function KpiDashboard() {
                             id: userKpi.userId,
                             fullName: userKpi.fullName,
                             role: userKpi.role,
-                            teamName: userKpi.teamName || "Chưa có team", // 🔥 NHẬN DỮ LIỆU CHUẨN TỪ API
+                            teamName: userKpi.teamName || "Chưa có team", 
                             weeks: {},
                             targets: new Map() 
                         });
@@ -244,7 +300,6 @@ export default function KpiDashboard() {
                 return;
             }
 
-            // 🚀 BƯỚC SẮP XẾP CHỦ CHỐT: Gom ai cùng Team đứng cạnh nhau, sau đó mới xếp theo Tên
             users.sort((a, b) => {
                 const teamA = a.teamName || "ZZZ";
                 const teamB = b.teamName || "ZZZ";
@@ -262,7 +317,7 @@ export default function KpiDashboard() {
                 { width: 15 }, 
                 { width: 22 }, 
             ];
-            for (let i = 1; i <= 5; i++) {
+            for (let i = 1; i <= availableWeeks.length; i++) {
                 cols.push({ width: 10 }); 
                 cols.push({ width: 10 }); 
                 cols.push({ width: 10 }); 
@@ -279,14 +334,15 @@ export default function KpiDashboard() {
             titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF00FFFF' } }; 
             titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
 
-            for (let w = 1; w <= 5; w++) {
-                const startCol = 5 + (w - 1) * 4 + 1;
+            for (let i = 0; i < availableWeeks.length; i++) {
+                const w = availableWeeks[i];
+                const startCol = 5 + (i * 4) + 1;
                 const endCol = startCol + 3;
                 
                 ws.mergeCells(1, startCol, 1, endCol);
                 const weekCell = ws.getCell(1, startCol);
                 
-                const weekDataRes = weeksData[w-1]?.weekData;
+                const weekDataRes = weeksData[i]?.weekData;
                 let dateStr = "";
                 if (weekDataRes && weekDataRes.startDate) {
                     const sd = new Date(weekDataRes.startDate);
@@ -301,7 +357,7 @@ export default function KpiDashboard() {
             }
 
             const headers = ['STT', 'TEAM', 'HỌ TÊN NHÂN SỰ', 'CÔNG VIỆC', 'KÊNH PHỤ TRÁCH'];
-            for (let w = 1; w <= 5; w++) {
+            for (let i = 0; i < availableWeeks.length; i++) {
                 headers.push('Thời lượng video (phút)', 'KPI được giao/Tuần', 'KPI hoàn thành/Tuần', 'Mức độ hoàn thành');
             }
             const row2 = ws.addRow(headers);
@@ -313,7 +369,7 @@ export default function KpiDashboard() {
                 cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
             });
             
-            for(let i=1; i<=25; i++) {
+            for(let i=1; i <= 5 + (availableWeeks.length * 4); i++) {
                 ws.getCell(1, i).border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
             }
 
@@ -341,7 +397,8 @@ export default function KpiDashboard() {
                     
                     rowData.push(tg.channelName + (tg.isRework ? " (Xào)" : ""));
 
-                    for (let w = 1; w <= 5; w++) {
+                    for (let i = 0; i < availableWeeks.length; i++) {
+                        const w = availableWeeks[i];
                         const weekKpi = u.weeks[w];
                         let tMins = "";
                         let giao: number | string = "";
@@ -389,13 +446,12 @@ export default function KpiDashboard() {
                     ws.mergeCells(startRow, 3, startRow + numRows - 1, 3); 
                     ws.mergeCells(startRow, 4, startRow + numRows - 1, 4); 
                     
-                    for (let w = 1; w <= 5; w++) {
-                        const pCol = 5 + (w - 1) * 4 + 4; 
+                    for (let i = 0; i < availableWeeks.length; i++) {
+                        const pCol = 5 + (i * 4) + 4; 
                         ws.mergeCells(startRow, pCol, startRow + numRows - 1, pCol); 
                     }
                 }
 
-                // 🚀 THUẬT TOÁN GỘP (MERGE) CỘT TEAM 
                 if (uIdx === 0) {
                     currentTeamStr = u.teamName;
                     startTeamRow = startRow;
@@ -409,7 +465,6 @@ export default function KpiDashboard() {
 
                 startRow += numRows;
 
-                // Xử lý dòng cuối cùng của bảng để chốt Merge
                 if (uIdx === users.length - 1) {
                     if (startRow - 1 > startTeamRow) {
                         ws.mergeCells(startTeamRow, 2, startRow - 1, 2); 
@@ -470,7 +525,7 @@ export default function KpiDashboard() {
                             </h1>
                             <p className="text-xs md:text-sm font-medium text-slate-500 mt-1 md:mt-1.5 flex items-center gap-1.5 md:gap-2">
                                 <Calendar size={14} className="md:w-4 md:h-4" />
-                                {selectedWeek === 0 ? `Tháng ${selectedMonth}/${selectedYear}` : getContinuousWeekRange(selectedYear, selectedMonth, selectedWeek).label}
+                                {selectedWeek === 0 ? `Tháng ${selectedMonth}/${selectedYear}` : getWeekData(selectedYear, selectedMonth, selectedWeek).label}
                             </p>
                         </div>
 
@@ -505,6 +560,7 @@ export default function KpiDashboard() {
                                 <span className="text-[10px] md:text-sm font-bold text-slate-500">Tuần:</span>
                                 <select className="bg-transparent text-xs md:text-sm font-black text-slate-800 outline-none cursor-pointer" value={selectedWeek} onChange={(e) => setSelectedWeek(Number(e.target.value))}>
                                     <option value={0}>Cả tháng</option>
+                                    {/* 🚀 ĐÃ SỬA: Lặp qua mảng tuần động của riêng tháng đó */}
                                     {availableWeeks.map(w => <option key={w} value={w}>Tuần {w}</option>)}
                                 </select>
                             </div>
@@ -515,7 +571,7 @@ export default function KpiDashboard() {
                                 className="h-7 md:h-8 bg-emerald-600 hover:bg-emerald-700 text-white px-3 rounded-lg font-bold flex items-center justify-center gap-1.5 transition-all shadow-md ml-1 disabled:opacity-70 text-xs whitespace-nowrap active:scale-95"
                             >
                                 {isExporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-                                Xuất Báo Cáo Tháng
+                                Xuất Báo Cáo
                             </button>
                         </div>
                     </div>
