@@ -49,6 +49,131 @@ export async function GET(req: Request) {
             return chartTemplate;
         };
 
+        // 🚀 BỔ SUNG HÀM TÍNH KPI CHUẨN (SAO CHÉP TỪ API KPI) ĐỂ TÁI SỬ DỤNG CHO CẢ LEADER & NHÂN VIÊN
+        const calculateKpiForUser = (userLogs: any[], targetValue: number, targetDetailsRaw: any, userRole: string) => {
+            const dailyReportTracker = new Set<string>();
+            const validUserLogs: any[] = [];
+            
+            userLogs.forEach(log => {
+                const actionStr = String(log.action || "").toUpperCase();
+                if (!["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK", "DAILY_REPORT", "UPDATE_TASK", "UPDATE"].includes(actionStr)) return; 
+                
+                if (actionStr === "DAILY_REPORT") {
+                    const dateString = log.createdAt ? new Date(log.createdAt).toISOString().split('T')[0] : "";
+                    const uniqueKey = `${log.taskId}_${dateString}`;
+                    if (!dailyReportTracker.has(uniqueKey)) {
+                        dailyReportTracker.add(uniqueKey);
+                        validUserLogs.push(log);
+                    }
+                } else {
+                    validUserLogs.push(log);
+                }
+            });
+
+            const uniqueTasks = new Map<string, any>();
+            validUserLogs.forEach(log => {
+                if (!log.task) return;
+                let isKpiQualifying = true; 
+                const actionStr = String(log.action || "").toUpperCase();
+                const combinedText = String(log.details || "").toLowerCase();
+
+                if (actionStr === "DAILY_REPORT" || actionStr === "UPDATE_TASK" || actionStr === "UPDATE") {
+                    if (userRole === "EDITOR") {
+                        if (combinedText.includes("prj thô") || combinedText.includes("âm thanh") || combinedText.includes("audio")) isKpiQualifying = false;
+                    } else if (userRole === "CONTENT") {
+                        if (combinedText.includes("ý tưởng") && !combinedText.includes("kịch bản")) isKpiQualifying = false;
+                    }
+                }
+                if (isKpiQualifying) {
+                    if (!uniqueTasks.has(log.taskId)) uniqueTasks.set(log.taskId, log.task);
+                }
+            });
+
+            let targetDetails: any[] = [];
+            try { if (targetDetailsRaw) targetDetails = typeof targetDetailsRaw === 'string' ? JSON.parse(targetDetailsRaw) : targetDetailsRaw; } catch(e) {}
+
+            let percent = 0;
+            let actualCount = uniqueTasks.size;
+
+            if (targetDetails && targetDetails.length > 0) {
+                let totalTargetMinutes = 0;
+                let totalActualMinutes = 0;
+                const bucketMins: Record<string, number> = {};
+                const bucketTaskCount: Record<string, number> = {};
+
+                uniqueTasks.forEach(task => {
+                    const key = `${task.channel?.id || 'no_channel'}_${task.isRework ? 'rework' : 'new'}`;
+                    bucketMins[key] = (bucketMins[key] || 0) + Number(task.duration || 0);
+                    bucketTaskCount[key] = (bucketTaskCount[key] || 0) + 1; 
+                });
+
+                const specificTargets: Record<string, any[]> = {};
+                const anyTargets: Record<string, any[]> = {};
+
+                targetDetails.forEach(t => {
+                    t.actualCount = 0; 
+                    if (t.channelId) {
+                        const key = `${t.channelId}_${t.isRework ? 'rework' : 'new'}`;
+                        if (!specificTargets[key]) specificTargets[key] = [];
+                        specificTargets[key].push(t);
+                    } else {
+                        const key = t.isRework ? 'rework' : 'new';
+                        if (!anyTargets[key]) anyTargets[key] = [];
+                        anyTargets[key].push(t);
+                    }
+                });
+
+                const distributeToTargets = (targets: any[], minsLeft: number, tasksLeft: number) => {
+                    let assignedMinsTotal = 0;
+                    targets.forEach((t, index) => {
+                        const tMins = Number(t.targetCount) * Number(t.duration);
+                        totalTargetMinutes += tMins;
+                        let assignedMins = 0;
+                        let assignedTasks = 0;
+
+                        if (index === targets.length - 1) {
+                            assignedMins = minsLeft;
+                            assignedTasks = tasksLeft;
+                        } else {
+                            assignedMins = Math.min(minsLeft, tMins);
+                            assignedTasks = Math.min(tasksLeft, Number(t.targetCount));
+                        }
+                        minsLeft -= assignedMins;
+                        tasksLeft -= assignedTasks;
+                        assignedMinsTotal += assignedMins;
+                        t.actualCount = (t.actualCount || 0) + assignedTasks; 
+                    });
+                    return { minsLeft, tasksLeft, assignedMinsTotal };
+                };
+
+                Object.keys(specificTargets).forEach(key => {
+                    const res = distributeToTargets(specificTargets[key], bucketMins[key] || 0, bucketTaskCount[key] || 0);
+                    totalActualMinutes += res.assignedMinsTotal;
+                    bucketMins[key] = res.minsLeft;
+                    bucketTaskCount[key] = res.tasksLeft;
+                });
+
+                Object.keys(anyTargets).forEach(reworkKey => {
+                    let remainingMins = 0, remainingTasks = 0;
+                    Object.keys(bucketMins).forEach(bKey => {
+                        if (bKey.endsWith(`_${reworkKey}`)) {
+                            remainingMins += bucketMins[bKey];
+                            remainingTasks += bucketTaskCount[bKey];
+                            bucketMins[bKey] = 0; bucketTaskCount[bKey] = 0;
+                        }
+                    });
+                    const res = distributeToTargets(anyTargets[reworkKey], remainingMins, remainingTasks);
+                    totalActualMinutes += res.assignedMinsTotal;
+                });
+
+                percent = totalTargetMinutes > 0 ? Math.round((totalActualMinutes / totalTargetMinutes) * 100) : 0;
+            } else {
+                percent = targetValue > 0 ? Math.round((actualCount / targetValue) * 100) : 0;
+            }
+
+            return { percent, actualCount, targetDetails };
+        };
+
         if (isManager) {
             let teamUserIds: string[] = [];
             if (!isTopManagement) {
@@ -58,8 +183,10 @@ export async function GET(req: Request) {
                 });
                 teamUserIds = teamUsers.map(u => u.id);
             }
-
             const taskFilter = isTopManagement ? {} : {
+                teamId: teamId 
+            };
+            /* const taskFilter = isTopManagement ? {} : {
                 OR: [
                     { contentId: { in: teamUserIds } },
                     { editorId: { in: teamUserIds } },
@@ -67,47 +194,34 @@ export async function GET(req: Request) {
                     { publisherId: { in: teamUserIds } },
                     { teamId: teamId } 
                 ]
-            };
+            }; */
 
             const userCondition = isTopManagement ? {} : { userId: { in: teamUserIds } };
 
-            const threeDaysAgo = new Date(today);
-            threeDaysAgo.setDate(today.getDate() - 3);
-
             const [
-                totalActiveTasks,
-                totalPendingTasks,
-                totalOverdueTasks,
+                countChoKichBan,
+                countDuyetKichBan,
+                countDangDung,
+                countChoDang,
+                countHoanThanh,
                 managerLogs7DaysRaw,
                 kpiRecords
             ] = await Promise.all([
-                prisma.task.count({ where: { ...taskFilter, isClosed: false } }),
-                prisma.task.count({
-                    where: {
-                        ...taskFilter,
-                        isClosed: false,
-                        status: { in: ["CONTENT_REVIEW", "ANIMATION_REVIEW", "EDIT_REVIEW", "DONE"] },
-                        NOT: [{ videoLink: null }, { videoLink: "" }]
-                    }
-                }),
-                prisma.task.count({
-                    where: {
-                        ...taskFilter,
-                        isClosed: false,
-                        status: { in: ["TODO", "CONTENT_DOING", "ANIMATION_DOING", "EDIT_DOING"] },
-                        createdAt: { lt: threeDaysAgo }
-                    }
-                }),
+                prisma.task.count({ where: { ...taskFilter, isClosed: false, status: { in: ["TODO", "CONTENT_DOING"] } } }),
+                prisma.task.count({ where: { ...taskFilter, isClosed: false, status: "CONTENT_REVIEW" } }),
+                prisma.task.count({ where: { ...taskFilter, isClosed: false, status: { in: ["EDIT_DOING"] } } }),
+                prisma.task.count({ where: { ...taskFilter, isClosed: false, status: { in: ["EDIT_REVIEW"] } } }),
+                prisma.task.count({ where: { ...taskFilter, isClosed: false, status: "DONE" } }),
                 prisma.taskLog.findMany({
                     where: {
                         createdAt: { gte: sevenDaysAgo },
-                        ...userCondition,
-                        action: { in: ["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK", "DAILY_REPORT", "MERGE_VIDEO"] }
+                        ...userCondition
                     },
                     orderBy: { createdAt: 'desc' },
-                    include: { 
+                    select: {
+                        id: true, action: true, details: true, createdAt: true, taskId: true, userId: true,
                         user: { select: { fullName: true } },
-                        task: { select: { id: true, duration: true, channelId: true, isRework: true } }
+                        task: { select: { id: true, title: true, duration: true, channelId: true, isRework: true, channel: { select: { id: true } } } }
                     }
                 }),
                 prisma.weeklyKPI.findMany({
@@ -124,7 +238,10 @@ export async function GET(req: Request) {
             const validLogs7Days: any[] = [];
             const dailyReportTracker7Days = new Set<string>();
             managerLogs7DaysRaw.forEach((log: any) => {
-                if (log.action === "DAILY_REPORT") {
+                const actionStr = String(log.action || "").toUpperCase();
+                if (!["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK", "DAILY_REPORT", "UPDATE_TASK", "UPDATE"].includes(actionStr)) return;
+                
+                if (actionStr === "DAILY_REPORT") {
                     const dateStr = new Date(log.createdAt).toISOString().split('T')[0];
                     const uniqueKey = `${log.userId}_${log.taskId}_${dateStr}`;
                     if (!dailyReportTracker7Days.has(uniqueKey)) {
@@ -138,63 +255,22 @@ export async function GET(req: Request) {
 
             const logsThisWeek = validLogs7Days.filter(log => new Date(log.createdAt) >= startOfWeek);
 
-            let totalActualPoint = 0;
-            let totalTargetPoint = 0;
-
-            const userLogsMap = new Map<string, any[]>();
-            logsThisWeek.forEach((log: any) => {
-                if (!userLogsMap.has(log.userId)) userLogsMap.set(log.userId, []);
-                userLogsMap.get(log.userId)!.push(log);
-            });
+            let sumPercent = 0;
+            let validKpiUsers = 0;
 
             kpiRecords.forEach((k: any) => {
-                let targetDetails: any[] = [];
-                try {
-                    if (k.targetDetails) targetDetails = typeof k.targetDetails === 'string' ? JSON.parse(k.targetDetails) : k.targetDetails;
-                } catch(e) {}
-
-                const userLogs = userLogsMap.get(k.userId) || [];
-                let userTargetMinutes = 0;
-                let userActualMinutes = 0;
-
-                if (targetDetails && targetDetails.length > 0) {
-                    targetDetails.forEach(detail => {
-                        // 🚀 SỬA LỖI: Bắt buộc cùng Kênh trước, sau đó mới xét Xào Lại / Làm mới
-                        const logsOfChannel = userLogs.filter(log => {
-                            const isMatchChannel = log.task?.channelId === detail.channelId;
-                            if (!isMatchChannel) return false;
-                            return detail.isRework ? log.task?.isRework === true : log.task?.isRework !== true;
-                        });
-                        
-                        const uniqueTaskIds = new Set<string>();
-                        let actualMinutes = 0;
-                        logsOfChannel.forEach(log => {
-                            if (!uniqueTaskIds.has(log.taskId)) {
-                                uniqueTaskIds.add(log.taskId);
-                                actualMinutes += Number(log.task?.duration || 0);
-                            }
-                        });
-                        
-                        userTargetMinutes += (Number(detail.targetCount) * Number(detail.duration));
-                        userActualMinutes += actualMinutes; 
-                    });
-
-                    if (userTargetMinutes > 0) {
-                       totalTargetPoint += 100;
-                       totalActualPoint += Math.round((userActualMinutes / userTargetMinutes) * 100);
-                    }
-                } else {
-                    const uniqueTasksCount = new Set(userLogs.map(l => l.taskId)).size;
-                    const targetVal = k.targetValue || 0;
-                    if (targetVal > 0) {
-                        totalTargetPoint += 100;
-                        totalActualPoint += Math.round((uniqueTasksCount / targetVal) * 100);
-                    }
+                const userLogs = logsThisWeek.filter(log => log.userId === k.userId);
+                const kpiRes = calculateKpiForUser(userLogs, k.targetValue || 0, k.targetDetails, k.user?.role || "CONTENT");
+                
+                if (k.targetValue > 0 || (kpiRes.targetDetails && kpiRes.targetDetails.length > 0)) {
+                    sumPercent += kpiRes.percent;
+                    validKpiUsers++;
                 }
             });
 
-            const avgKpiPercent = totalTargetPoint > 0 ? Math.round((totalActualPoint / totalTargetPoint) * 100) : 0;
+            const avgKpiPercent = validKpiUsers > 0 ? Math.round(sumPercent / validKpiUsers) : 0;
 
+            // 🚀 ĐÃ TRẢ LẠI: Lấy MỌI log hợp lệ (validLogs7Days) để đếm số lượng cho biểu đồ năng suất
             const chartDataArray = generateEmpty7DaysChart();
             validLogs7Days.forEach(log => {
                 const dateStr = new Date(log.createdAt).toLocaleDateString('vi-VN', {
@@ -222,10 +298,12 @@ export async function GET(req: Request) {
                 dbRole: role,
                 isTopManagement,
                 stats: {
-                    activeTasks: totalActiveTasks,
-                    kpiPercent: avgKpiPercent,
-                    pendingQC: totalPendingTasks,
-                    overdue: totalOverdueTasks
+                    choKichBan: countChoKichBan,
+                    duyetKichBan: countDuyetKichBan,
+                    dangDung: countDangDung,
+                    choDang: countChoDang,
+                    hoanThanh: countHoanThanh,
+                    kpiPercent: avgKpiPercent
                 },
                 logs: mappedLogsThisWeek,
                 kpis: kpiRecords,
@@ -254,20 +332,19 @@ export async function GET(req: Request) {
                 }),
                 prisma.taskLog.findMany({
                     where: {
-                        userId: userId,
-                        action: { in: ["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK", "DAILY_REPORT"] }
+                        userId: userId
                     },
-                    select: { taskId: true, action: true, createdAt: true }
+                    select: { taskId: true, action: true, createdAt: true, details: true }
                 }),
                 prisma.taskLog.findMany({
                     where: {
                         userId: userId,
-                        createdAt: { gte: sevenDaysAgo },
-                        action: { in: ["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK", "DAILY_REPORT"] }
+                        createdAt: { gte: sevenDaysAgo }
                     },
                     orderBy: { createdAt: 'desc' },
-                    include: { 
-                        task: { select: { id: true, title: true, duration: true, channelId: true, isRework: true } } 
+                    select: {
+                        id: true, action: true, details: true, createdAt: true, taskId: true, userId: true,
+                        task: { select: { id: true, title: true, duration: true, channelId: true, isRework: true, channel: { select: { id: true } } } }
                     }
                 }),
                 prisma.weeklyKPI.findFirst({
@@ -283,7 +360,10 @@ export async function GET(req: Request) {
             const validLogs7Days: any[] = [];
             const dailyReportTracker7Days = new Set<string>();
             myLogs7DaysRaw.forEach(log => {
-                if (log.action === "DAILY_REPORT") {
+                const actionStr = String(log.action || "").toUpperCase();
+                if (!["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK", "DAILY_REPORT", "UPDATE_TASK", "UPDATE"].includes(actionStr)) return;
+                
+                if (actionStr === "DAILY_REPORT") {
                     const dateStr = new Date(log.createdAt).toISOString().split('T')[0];
                     const uniqueKey = `${log.taskId}_${dateStr}`;
                     if (!dailyReportTracker7Days.has(uniqueKey)) {
@@ -297,77 +377,20 @@ export async function GET(req: Request) {
 
             const logsThisWeek = validLogs7Days.filter(log => new Date(log.createdAt) >= startOfWeek);
 
-            const targetValue = myKpiThisWeek?.targetValue || 0;
-            const targetDetailsRaw = myKpiThisWeek?.targetDetails;
-            let targetDetails: any[] = [];
-            try {
-                if (targetDetailsRaw) targetDetails = typeof targetDetailsRaw === 'string' ? JSON.parse(targetDetailsRaw) : targetDetailsRaw;
-            } catch(e) {}
+            const kpiRes = calculateKpiForUser(logsThisWeek, myKpiThisWeek?.targetValue || 0, myKpiThisWeek?.targetDetails, role);
 
-            let actualCount = 0;
-            let kpiPercent = 0;
+            const uniqueTasksAllTime = new Set();
+            myLogsAllTimeRaw.forEach((log: any) => {
+                const actionStr = String(log.action || "").toUpperCase();
+                if (["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK"].includes(actionStr)) {
+                    uniqueTasksAllTime.add(log.taskId);
+                }
+            });
 
-            if (targetDetails && targetDetails.length > 0) {
-                let totalTargetMinutes = 0;
-                let totalActualMinutes = 0;
-                let totalEquivalentVideos = 0;
-
-                targetDetails.forEach(detail => {
-                    // 🚀 SỬA LỖI: Bắt buộc cùng Kênh trước, sau đó mới xét Xào Lại / Làm mới
-                    const logsOfChannel = logsThisWeek.filter(log => {
-                         const isMatchChannel = log.task?.channelId === detail.channelId;
-                         if (!isMatchChannel) return false;
-                         return detail.isRework ? log.task?.isRework === true : log.task?.isRework !== true;
-                    });
-                    
-                    const uniqueTaskIds = new Set<string>();
-                    let actualMinutes = 0;
-                    logsOfChannel.forEach(log => {
-                        if (!uniqueTaskIds.has(log.taskId)) {
-                            uniqueTaskIds.add(log.taskId);
-                            actualMinutes += Number(log.task?.duration || 0);
-                        }
-                    });
-                    
-                    const equivalent = detail.duration > 0 ? actualMinutes / detail.duration : actualMinutes;
-                    const equivalentRounded = Math.round(equivalent * 10) / 10;
-                    
-                    totalEquivalentVideos += equivalentRounded;
-                    totalTargetMinutes += (Number(detail.targetCount) * Number(detail.duration));
-                    detail.actualCount = equivalentRounded;
-
-                    totalActualMinutes += actualMinutes; 
-                });
-
-                // Các task lọt ra ngoài vùng target
-                const uniqueOutsideTaskIds = new Set<string>();
-                const logsOutside = logsThisWeek.filter(log => {
-                    // 🚀 SỬA LỖI: Xem log này có nằm trong ĐÚNG kênh + ĐÚNG trạng thái rework của bất kỳ target nào không
-                    const isCovered = targetDetails.some(d => {
-                        const isMatchChannel = d.channelId === log.task?.channelId;
-                        const isMatchRework = d.isRework ? log.task?.isRework === true : log.task?.isRework !== true;
-                        return isMatchChannel && isMatchRework;
-                    });
-                    return !isCovered;
-                });
-                
-                logsOutside.forEach(log => uniqueOutsideTaskIds.add(log.taskId));
-                totalEquivalentVideos += uniqueOutsideTaskIds.size;
-
-                actualCount = Math.round(totalEquivalentVideos * 10) / 10;
-                kpiPercent = totalTargetMinutes > 0 ? Math.round((totalActualMinutes / totalTargetMinutes) * 100) : 0;
-            } else {
-                const uniqueTasksThisWeek = new Set(logsThisWeek.map((log: any) => log.taskId));
-                actualCount = uniqueTasksThisWeek.size;
-                kpiPercent = targetValue > 0 ? Math.round((actualCount / targetValue) * 100) : 0;
-            }
-
-            const uniqueTasksAllTime = new Set(myLogsAllTimeRaw.map((log: any) => log.taskId));
-            const myLogsAllTime = uniqueTasksAllTime.size;
-
+            // 🚀 ĐÃ TRẢ LẠI: Lấy MỌI log hợp lệ (validLogs7Days) để đếm số lượng cho biểu đồ năng suất
             const chartDataArray = generateEmpty7DaysChart();
             validLogs7Days.forEach(log => {
-                const dateStr = new Date(log.createdAt).toLocaleDateString('vi-VN', {
+                 const dateStr = new Date(log.createdAt).toLocaleDateString('vi-VN', {
                     day: '2-digit', month: '2-digit', timeZone: 'Asia/Ho_Chi_Minh'
                 }).replace('/', '-');
 
@@ -379,11 +402,13 @@ export async function GET(req: Request) {
 
             const mappedRecentLogs = validLogs7Days.map((log: any) => {
                 let typeStr = "Khác";
-                if (log.action === "SUBMIT_SCRIPT") typeStr = "Script";
-                else if (log.action === "SUBMIT_VIDEO") typeStr = "Edit";
-                else if (log.action === "PUBLISH_VIDEO") typeStr = "Publish";
-                else if (log.action === "COMPLETE_TASK") typeStr = "Nghiệm thu";
-                else if (log.action === "DAILY_REPORT") typeStr = "Báo cáo ngày";
+                const act = String(log.action || "").toUpperCase();
+                if (act === "SUBMIT_SCRIPT") typeStr = "Script";
+                else if (act === "SUBMIT_VIDEO") typeStr = "Edit";
+                else if (act === "PUBLISH_VIDEO") typeStr = "Publish";
+                else if (act === "COMPLETE_TASK") typeStr = "Nghiệm thu";
+                else if (act === "DAILY_REPORT") typeStr = "Báo cáo ngày";
+                else if (act === "UPDATE_TASK" || act === "UPDATE") typeStr = "Cập nhật";
                 return { ...log, typeStr };
             });
 
@@ -392,11 +417,11 @@ export async function GET(req: Request) {
                 dbRole: role,
                 stats: {
                     pendingTasks: myActiveTasks, 
-                    lifetimeLogs: myLogsAllTime,
-                    kpiPercent: kpiPercent,
-                    targetThisWeek: targetValue,
-                    actualThisWeek: actualCount,
-                    targetDetails: targetDetails 
+                    lifetimeLogs: uniqueTasksAllTime.size,
+                    kpiPercent: kpiRes.percent,
+                    targetThisWeek: myKpiThisWeek?.targetValue || 0,
+                    actualThisWeek: kpiRes.actualCount,
+                    targetDetails: kpiRes.targetDetails 
                 },
                 recentLogs: mappedRecentLogs,
                 chartData: chartDataArray

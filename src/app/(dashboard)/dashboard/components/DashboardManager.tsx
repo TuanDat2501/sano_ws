@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { TrendingUp, AlertCircle, Clock, Trophy, Activity, Loader2 } from "lucide-react";
+import { TrendingUp, AlertCircle, Clock, Trophy, Activity, Loader2, CheckCircle2, FileText, MonitorPlay } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { useToast } from "@/app/component/ToastProvider";
 
@@ -30,53 +30,69 @@ export default function DashboardManager() {
         return (
             <div className="flex flex-col items-center justify-center h-[50vh] text-slate-400 gap-3">
                 <Loader2 className="animate-spin text-blue-600" size={40} />
-                <p className="font-medium text-sm">Đang vẽ biểu đồ...</p>
+                <p className="font-medium text-sm">Đang tải biểu đồ...</p>
             </div>
         );
     }
 
     if (!data) return null;
 
-    // 🚀 LẤY TRỰC TIẾP DỮ LIỆU TỪ BACKEND
-    // Nếu chưa có dữ liệu 7 ngày gần nhất, khởi tạo mảng rỗng để Recharts không bị lỗi
     const chartData = data.chartData || [];
 
     return (
         <div className="space-y-6 md:space-y-8">
-            {/* 1. KHỐI THỐNG KÊ NHANH: Ép mobile hiển thị 2 cột (grid-cols-2) thay vì 1 cột cho gọn màn hình */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
-                <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200">
-                    <div className="flex justify-between items-start mb-2 md:mb-4">
-                        <div className="p-2 md:p-3 bg-blue-50 text-blue-600 rounded-xl"><Activity className="w-5 h-5 md:w-6 md:h-6" /></div>
+            {/* 1. KHỐI THỐNG KÊ 5 CỘT KANBAN + 1 CỘT KPI (6 blocks total) */}
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-4">
+                
+                <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
+                    <div className="flex justify-between items-start mb-2">
+                        <div className="p-2 bg-slate-100 text-slate-600 rounded-xl"><FileText size={18} /></div>
                     </div>
-                    <p className="text-2xl md:text-3xl font-black text-slate-800">{data.stats?.activeTasks || 0}</p>
-                    <p className="text-[10px] md:text-sm font-bold text-slate-500 uppercase mt-1 line-clamp-1">Task Đang Chạy</p>
+                    <p className="text-xl md:text-2xl font-black text-slate-800">{data.stats?.choKichBan || 0}</p>
+                    <p className="text-[10px] md:text-xs font-bold text-slate-500 uppercase mt-1">Chờ Kịch Bản</p>
+                </div>
+
+                <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
+                    <div className="flex justify-between items-start mb-2">
+                        <div className="p-2 bg-orange-50 text-orange-600 rounded-xl"><AlertCircle size={18} /></div>
+                    </div>
+                    <p className="text-xl md:text-2xl font-black text-slate-800">{data.stats?.duyetKichBan || 0}</p>
+                    <p className="text-[10px] md:text-xs font-bold text-slate-500 uppercase mt-1">Duyệt Kịch Bản</p>
+                </div>
+
+                <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
+                    <div className="flex justify-between items-start mb-2">
+                        <div className="p-2 bg-blue-50 text-blue-600 rounded-xl"><MonitorPlay size={18} /></div>
+                    </div>
+                    <p className="text-xl md:text-2xl font-black text-slate-800">{data.stats?.dangDung || 0}</p>
+                    <p className="text-[10px] md:text-xs font-bold text-slate-500 uppercase mt-1">Đang Dựng</p>
                 </div>
                 
-                <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200">
-                    <div className="flex justify-between items-start mb-2 md:mb-4">
-                        <div className="p-2 md:p-3 bg-green-50 text-green-600 rounded-xl"><TrendingUp className="w-5 h-5 md:w-6 md:h-6" /></div>
+                <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
+                    <div className="flex justify-between items-start mb-2">
+                        <div className="p-2 bg-yellow-50 text-yellow-600 rounded-xl"><Clock size={18} /></div>
+                        {data.stats?.choDang > 0 && <span className="hidden sm:inline-block text-[8px] font-black text-red-600 bg-red-50 px-1.5 py-0.5 rounded-full animate-pulse">Cần duyệt!</span>}
                     </div>
-                    <p className="text-2xl md:text-3xl font-black text-slate-800">{data.stats?.kpiPercent || 0}%</p>
-                    <p className="text-[10px] md:text-sm font-bold text-slate-500 uppercase mt-1 line-clamp-1">Hoàn thành KPI</p>
+                    <p className="text-xl md:text-2xl font-black text-slate-800">{data.stats?.choDang || 0}</p>
+                    <p className="text-[10px] md:text-xs font-bold text-slate-500 uppercase mt-1">Chờ Đăng</p>
                 </div>
 
-                <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200">
-                    <div className="flex justify-between items-start mb-2 md:mb-4">
-                        <div className="p-2 md:p-3 bg-yellow-50 text-yellow-600 rounded-xl"><Clock className="w-5 h-5 md:w-6 md:h-6" /></div>
-                        {data.stats?.pendingQC > 0 && <span className="hidden sm:inline-block text-[10px] font-black text-red-600 bg-red-50 px-2 py-1 rounded-full animate-pulse">Cần duyệt!</span>}
+                <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
+                    <div className="flex justify-between items-start mb-2">
+                        <div className="p-2 bg-emerald-50 text-emerald-600 rounded-xl"><CheckCircle2 size={18} /></div>
                     </div>
-                    <p className="text-2xl md:text-3xl font-black text-slate-800">{data.stats?.pendingQC || 0}</p>
-                    <p className="text-[10px] md:text-sm font-bold text-slate-500 uppercase mt-1 line-clamp-1">Chờ Đăng</p>
+                    <p className="text-xl md:text-2xl font-black text-slate-800">{data.stats?.hoanThanh || 0}</p>
+                    <p className="text-[10px] md:text-xs font-bold text-slate-500 uppercase mt-1">Hoàn Thành</p>
                 </div>
 
-                <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200">
-                    <div className="flex justify-between items-start mb-2 md:mb-4">
-                        <div className="p-2 md:p-3 bg-red-50 text-red-600 rounded-xl"><AlertCircle className="w-5 h-5 md:w-6 md:h-6" /></div>
+                <div className="bg-white p-4 rounded-2xl shadow-sm border border-emerald-200 border-2">
+                    <div className="flex justify-between items-start mb-2">
+                        <div className="p-2 bg-emerald-100 text-emerald-700 rounded-xl"><TrendingUp size={18} /></div>
                     </div>
-                    <p className="text-2xl md:text-3xl font-black text-slate-800">{data.stats?.overdue || 0}</p>
-                    <p className="text-[10px] md:text-sm font-bold text-slate-500 uppercase mt-1 line-clamp-1">Tồn Đọng</p>
+                    <p className="text-xl md:text-2xl font-black text-emerald-600">{data.stats?.kpiPercent || 0}%</p>
+                    <p className="text-[10px] md:text-xs font-bold text-emerald-600 uppercase mt-1">KPI Team</p>
                 </div>
+
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
@@ -99,8 +115,7 @@ export default function DashboardManager() {
                                         contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                                         labelStyle={{ fontWeight: 'bold', color: '#1e293b' }}
                                     />
-                                    {/* 🚀 ĐÃ SỬA: Map đúng với key "done" trả về từ Backend */}
-                                    <Bar dataKey="done" name="Số bài hoàn thành" fill="#15ff00" radius={[4, 4, 0, 0]} />
+                                    <Bar dataKey="done" name="Số báo cáo" fill="#15ff00" radius={[4, 4, 0, 0]} />
                                 </BarChart>
                             </ResponsiveContainer>
                         )}
