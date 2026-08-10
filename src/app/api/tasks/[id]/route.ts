@@ -147,7 +147,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 const newValue = body[fieldName];
                 const targetUserId = userId; 
 
-                // 🚀 ĐÃ SỬA: Cho phép roughProjectLink (Dựng thô) sinh ra DAILY_REPORT để tính KPI cho Editor 2
                 const isKpiField = ['scriptLink', 'videoLink', 'animationLink', 'publishLink', 'thumbnailLink', 'roughProjectLink'].includes(fieldName);
                 let actionType = isKpiField ? "DAILY_REPORT" : "UPDATE_LINK";
 
@@ -198,11 +197,18 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         if (body.contentId !== undefined && body.contentId !== oldTask.contentId) {
             logsToCreate.push({ action: "ASSIGN_USER", details: `Đã cập nhật phân công nhân sự`, taskId, userId });
         }
+        
+        // =========================================================
+        // 🚀 ĐÃ SỬA: Đón bắt biến isRework do UI "Sửa Task" gửi lên
+        // =========================================================
         let reworkFlag = oldTask.isRework; 
         
-        if (body.status === "TODO" && oldTask.status !== "TODO") {
-            reworkFlag = true; 
+        if (rawBody.isRework !== undefined) {
+            reworkFlag = Boolean(rawBody.isRework); // Nếu có tick ở Form sửa thì ghi đè
+        } else if (body.status === "TODO" && oldTask.status !== "TODO") {
+            reworkFlag = true; // Trả task về làm lại thì mặc định xào lại
         }
+
         const updateTaskPromise = prisma.task.update({
             where: { id: taskId },
             data: {
@@ -228,14 +234,16 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 animationLink: body.animationLink !== undefined ? body.animationLink : undefined,
                 linkProject: body.linkProject !== undefined ? body.linkProject : undefined,
                 roughProjectLink: body.roughProjectLink !== undefined ? body.roughProjectLink : undefined,
-                isRework: reworkFlag,
+                
+                isRework: reworkFlag, // 🚀 FLAG ĐÃ ĐƯỢC CHỐT HẠ THÀNH CÔNG
+                
                 contentId: body.contentId !== undefined ? body.contentId : undefined,
                 editorId: body.editorId !== undefined ? body.editorId : undefined,
                 animatorId: body.animatorId !== undefined ? body.animatorId : undefined,
                 ...(body.coContentUsers && { coContentUsers: body.coContentUsers }),
                 ...(body.coEditorUsers && { coEditorUsers: body.coEditorUsers }),
                 ...(body.coAnimatorUsers && { coAnimatorUsers: body.coAnimatorUsers }),
-                publisherId:body.publisherId !== undefined ? body.publisherId : undefined
+                publisherId: body.publisherId !== undefined ? body.publisherId : undefined
             }
         });
 

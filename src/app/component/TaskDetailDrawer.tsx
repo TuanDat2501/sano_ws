@@ -38,7 +38,6 @@ const MOCK_CRITERIA = [
   { id: 'c3', name: 'TẦNG 3: POLISHING (Độ mượt)', weight: 20, standards: [{ id: 's7', text: 'Nhạc nền không lấn Voice' }, { id: 's8', text: 'Góc máy và Text/Subtitle hỗ trợ cảm xúc' }, { id: 's9', text: 'Không dính lỗi bản quyền, âm thanh rác' }] }
 ];
 
-// 🚀 HÀM ÉP ĐỊNH DẠNG NGÀY THÁNG DD/MM/YYYY CHUẨN VIỆT NAM
 const formatDateCustom = (dateString: string) => {
   if (!dateString) return "";
   const d = new Date(dateString);
@@ -71,8 +70,6 @@ export default function TaskDetailDrawer({
   const [rejectPriority, setRejectPriority] = useState("HIGH"); 
 
   const [localPublishDate, setLocalPublishDate] = useState("");
-  
-  // 🚀 STATE ĐỂ QUẢN LÝ TIỂU XẢO "ÉP ĐỊNH DẠNG" Ô CHỌN NGÀY
   const [isDateFocused, setIsDateFocused] = useState(false);
 
   useEffect(() => setMounted(true), []);
@@ -224,9 +221,12 @@ export default function TaskDetailDrawer({
   ];
 
   let visibleLinkFields = allLinkFields.filter(f => f.categories.includes(channelCategory));
+  
   if (selectedTask?.isCompilation) {
     visibleLinkFields = visibleLinkFields.filter(f => ['thumbnailLink', 'videoLink', 'linkProject', 'roughProjectLink'].includes(f.key));
   }
+
+  // 🚀 ĐÃ GỠ BỎ LOGIC ẨN TRƯỜNG DỮ LIỆU CŨ TẠI ĐÂY
 
   const renderUserGroup = (title: string, users: any[], colorClass: string, bgClass: string, borderClass: string, textClass: string) => {
     if (users.length === 0) return null;
@@ -561,7 +561,7 @@ export default function TaskDetailDrawer({
                         <div className="flex-[2] space-y-1.5">
                             <label className="text-[10px] font-bold text-red-500 uppercase tracking-widest flex items-center justify-between">
                               <span className="flex items-center gap-1.5">
-                                {visibleLinkFields.length + 1}. Link Video Đã Đăng (YT)
+                                Link Video Đã Đăng (YT)
                                 {savingField === 'publishLink' && <Loader2 size={12} className="animate-spin text-blue-500" />}
                                 {savedField === 'publishLink' && <CheckCircle2 size={12} className="text-emerald-500" />}
                               </span>

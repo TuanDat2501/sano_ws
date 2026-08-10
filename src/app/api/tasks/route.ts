@@ -7,7 +7,7 @@ import { authOptions } from "@/lib/auth";
 export const dynamic = "force-dynamic";
 
 // ==========================================
-// 1. API LẤY DANH SÁCH TASK (GET)
+// 1. API LẤY DANH SÁCH TASK (GET) - Giữ nguyên bản chuẩn đếm trang
 // ==========================================
 export async function GET(req: Request) {
   try {
@@ -24,7 +24,6 @@ export async function GET(req: Request) {
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "10");
     
-    // Hứng toàn bộ tham số Lọc
     const search = searchParams.get("search") || "";
     const status = searchParams.get("status") || "ALL";
     const filterChannelId = searchParams.get("channelId") || "ALL"; 
@@ -35,10 +34,8 @@ export async function GET(req: Request) {
     const canViewAll = userData.permissions?.includes("MENU_TEAMS") || ["ADMIN", "BAN_GIAM_DOC", "KE_TOAN"].includes(role);
     const isLeader = role === "LEADER" || userData.permissions?.includes("DEPARTMENT_LEADER");
 
-    // 🚀 BƯỚC 1: KHỞI TẠO ĐIỀU KIỆN LỌC ROOT BẰNG MẢNG AND (Để đếm Total Pages chính xác 100%)
     const AND_CONDITIONS: any[] = [];
 
-    // 1.1 Lọc theo phân quyền User
     if (!canViewAll) {
       if (isLeader) {
         AND_CONDITIONS.push({ teamId: myTeamId });
@@ -62,24 +59,15 @@ export async function GET(req: Request) {
       }
     }
 
-    // 1.2 Lọc theo Kênh
-    if (filterChannelId !== "ALL") {
-      AND_CONDITIONS.push({ channelId: filterChannelId });
-    }
-
-    // 1.3 Lọc theo Tìm kiếm
-    if (search) {
-      AND_CONDITIONS.push({ title: { contains: search } });
-    }
-
-    // 1.4 Lọc theo Trạng thái
+    if (filterChannelId !== "ALL") AND_CONDITIONS.push({ channelId: filterChannelId });
+    if (search) AND_CONDITIONS.push({ title: { contains: search } });
+    
     if (status !== "ALL") {
       AND_CONDITIONS.push({ status: status });
     } else {
-      AND_CONDITIONS.push({ status: { not: "BACKLOG" } }); // Board và List không chứa Backlog
+      AND_CONDITIONS.push({ status: { not: "BACKLOG" } }); 
     }
     
-    // 1.5 Lọc theo Ngày
     if (fromDate || toDate) {
       const dateCondition: any = {};
       if (fromDate) dateCondition.gte = new Date(`${fromDate}T00:00:00.000Z`);
@@ -87,9 +75,7 @@ export async function GET(req: Request) {
       AND_CONDITIONS.push({ createdAt: dateCondition });
     }
 
-    // Gộp tất cả điều kiện vào whereClause
     const whereClause = AND_CONDITIONS.length > 0 ? { AND: AND_CONDITIONS } : {};
-
     const priorityWeight: any = { URGENT: 4, HIGH: 3, NORMAL: 2, LOW: 1 };
     
     const includeQuery = {
@@ -107,7 +93,7 @@ export async function GET(req: Request) {
 
     if (viewMode === "board") {
       const tasks = await prisma.task.findMany({
-        where: { ...whereClause, isClosed: false }, // Board ẩn task đã đóng
+        where: { ...whereClause, isClosed: false },
         include: includeQuery,
         orderBy: { createdAt: "desc" },
       });
@@ -122,9 +108,7 @@ export async function GET(req: Request) {
       return NextResponse.json({ tasks, total: tasks.length, totalPages: 1 });
     }
     else {
-      // Dành cho chế độ List (Có phân trang và đếm chuẩn)
       const skip = (page - 1) * limit;
-
       const [tasks, total] = await Promise.all([
         prisma.task.findMany({
           where: whereClause,
@@ -133,7 +117,7 @@ export async function GET(req: Request) {
           skip: skip,
           take: limit, 
         }),
-        prisma.task.count({ where: whereClause }) // 🚀 ĐÃ SỬA: Đếm theo đúng điều kiện đã lọc
+        prisma.task.count({ where: whereClause }) 
       ]);
 
       tasks.sort((a: any, b: any) => {
@@ -182,47 +166,23 @@ export async function POST(req: Request) {
     }
 
     const currentUser = session.user as any;
-    
     const canCreateTask = currentUser.permissions?.includes("ACTION_CREATE_TASK") || ["ADMIN", "BAN_GIAM_DOC", "LEADER"].includes(currentUser.role);
     
-    if (!canCreateTask) {
-        return NextResponse.json({ error: "Bạn không có quyền tạo Task!" }, { status: 403 });
-    }
+    if (!canCreateTask) return NextResponse.json({ error: "Bạn không có quyền tạo Task!" }, { status: 403 });
 
     const body = await req.json();
     
-    // 🚀 ĐÃ SỬA: Bắt dữ liệu dạng mảng (Array) từ Frontend gửi lên
+    // 🚀 ĐÃ SỬA: Đón toàn bộ các trường Link và cờ isRework
     const { 
         title, linkContent, teamId, projectId, channelId, duration, note, keywords, publishDate, priority,
-        englishScriptLink, storyboardLink, audioLink, thumbnailLink, publisherId,
+        scriptLink, englishScriptLink, storyboardLink, audioLink, thumbnailLink, videoLink, publishLink, linkProject, roughProjectLink, animationLink,
+        publisherId, isRework,
         contentIds = [], editorIds = [], animatorIds = [] 
     } = body;
     
     const creatorId = currentUser.id;
     const rawLink = linkContent;
-    
-    // 1. RADAR CHẶN TRÙNG LINK THÔNG MINH
-    if (rawLink && rawLink.trim() !== "") {
-      const baseIncoming = getBaseUrl(rawLink);
-      const searchKey = baseIncoming.replace(/^https?:\/\//, ''); 
 
-      const potentialTasks = await prisma.task.findMany({
-        where: { linkContent: { contains: searchKey } }
-      });
-
-      /* const isDuplicate = potentialTasks.some(task => {
-        return task.linkContent && getBaseUrl(task.linkContent) === baseIncoming;
-      });
-
-      if (isDuplicate) {
-        return NextResponse.json(
-          { error: "Link này đã tồn tại trong hệ thống (Có thể do team khác đã nhận)!" },
-          { status: 400 }
-        );
-      } */
-    }
-
-    // TÍNH SỐ TẬP (EPISODE NUMBER)
     let nextEpisodeNumber = null;
     if (projectId) {
         const lastTask = await prisma.task.findFirst({
@@ -233,9 +193,6 @@ export async function POST(req: Request) {
         nextEpisodeNumber = (lastTask?.episodeNumber || 0) + 1;
     }
 
-    // =========================================================================
-    // 🚀 LOGIC TÁCH NGƯỜI LÀM CHÍNH & LÀM PHỤ
-    // =========================================================================
     const mainContentId = contentIds.length > 0 ? contentIds[0] : undefined;
     const mainEditorId = editorIds.length > 0 ? editorIds[0] : undefined;
     const mainAnimatorId = animatorIds.length > 0 ? animatorIds[0] : undefined;
@@ -244,20 +201,19 @@ export async function POST(req: Request) {
     const coEditorConnect = editorIds.length > 1 ? editorIds.slice(1).map((id: string) => ({ id })) : [];
     const coAnimatorConnect = animatorIds.length > 1 ? animatorIds.slice(1).map((id: string) => ({ id })) : [];
 
-    // 2. TẠO TASK MỚI
+    // 🚀 ĐÃ SỬA: Bổ sung đẩy Link cũ và isRework vào Database
     const newTask = await prisma.task.create({
       data: {
         title,
         linkContent: rawLink,
         status: body.status ? body.status : "TODO",
         episodeNumber: nextEpisodeNumber,
+        isRework: Boolean(isRework), 
         
-        // Gán người làm chính
         contentId: mainContentId,
         editorId: mainEditorId,
         animatorId: mainAnimatorId,
         
-        // Gán những người làm chung (Mảng connect)
         ...(coContentConnect.length > 0 && { coContentUsers: { connect: coContentConnect } }),
         ...(coEditorConnect.length > 0 && { coEditorUsers: { connect: coEditorConnect } }),
         ...(coAnimatorConnect.length > 0 && { coAnimatorUsers: { connect: coAnimatorConnect } }),
@@ -271,10 +227,17 @@ export async function POST(req: Request) {
         keywords: keywords || undefined,
         publishDate: publishDate ? new Date(publishDate) : undefined,
         priority: priority || undefined,
+        
+        scriptLink: scriptLink || undefined,
         englishScriptLink: englishScriptLink || undefined,
         storyboardLink: storyboardLink || undefined,
         audioLink: audioLink || undefined,
         thumbnailLink: thumbnailLink || undefined,
+        videoLink: videoLink || undefined,
+        publishLink: publishLink || undefined,
+        linkProject: linkProject || undefined,
+        roughProjectLink: roughProjectLink || undefined,
+        animationLink: animationLink || undefined,
         publisherId: publisherId || undefined
       },
       include: {
@@ -290,13 +253,9 @@ export async function POST(req: Request) {
       }
     });
 
-    // =========================================================================
-    // 3. TẠO THÔNG BÁO CHO TẤT CẢ NHỮNG NGƯỜI ĐƯỢC GIAO VIỆC
-    // =========================================================================
     let createdNotifications: any[] = [];
     const targetIds = new Set<string>();
 
-    // Gộp tất cả ID của những người tham gia vào Set để báo Noti một lượt
     [...contentIds, ...editorIds, ...animatorIds, publisherId].forEach(id => {
         if (id && id !== creatorId) targetIds.add(id);
     });
@@ -325,7 +284,6 @@ export async function POST(req: Request) {
     });
 
   } catch (error: any) {
-    console.error(">>> ❌ LỖI POST TASK:", error);
     return NextResponse.json({ error: "Lỗi Server không thể tạo Task" }, { status: 500 });
   }
 }
