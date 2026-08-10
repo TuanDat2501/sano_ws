@@ -51,6 +51,7 @@ const MultiSelectUser = ({ label, icon: Icon, options, selectedIds, onChange, di
 export default function CreateTaskModal({ isOpen, onClose, teams, initialData, onSubmit, isSubmitting, errors }: CreateTaskModalProps) {
   const [mounted, setMounted] = useState(false);
 
+  // 🚀 ĐÃ SỬA LỖI TYPESCRIPT: Bổ sung videoLink vào khởi tạo ban đầu
   const [newTask, setNewTask] = useState({
     id: "", title: "", keywords: "", linkContent: "", 
     contentIds: [] as string[], 
@@ -58,7 +59,7 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
     animatorIds: [] as string[], 
     teamId: "", projectId: "", duration: "", publishDate: "", channelId: "", publisherId: "", priority: "NORMAL",
     scriptLink: "", englishScriptLink: "", audioLink: "", storyboardLink: "", thumbnailLink: "", 
-    linkProject: "", roughProjectLink: "", animationLink: "", publishLink: ""
+    linkProject: "", roughProjectLink: "", animationLink: "", publishLink: "", videoLink: ""
   });
 
   const [teamProjects, setTeamProjects] = useState<any[]>([]);
@@ -105,13 +106,14 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
           linkProject: initialData.linkProject || "",
           roughProjectLink: initialData.roughProjectLink || "",
           animationLink: initialData.animationLink || "",
-          publishLink: initialData.publishLink || ""
+          publishLink: initialData.publishLink || "",
+          videoLink: initialData.videoLink || ""
         });
         setIsRework(initialData.isRework || false);
       } else {
         setNewTask({ 
             id: "", title: "", keywords: "", linkContent: "", contentIds: [], editorIds: [], animatorIds: [], teamId: "", projectId: "", duration: "", publishDate: "", channelId: "", publisherId: "", priority: "NORMAL",
-            scriptLink: "", englishScriptLink: "", audioLink: "", storyboardLink: "", thumbnailLink: "", linkProject: "", roughProjectLink: "", animationLink: "", publishLink: ""
+            scriptLink: "", englishScriptLink: "", audioLink: "", storyboardLink: "", thumbnailLink: "", linkProject: "", roughProjectLink: "", animationLink: "", publishLink: "", videoLink: ""
         });
         setIsRework(false);
         setReworkContent(true);
@@ -175,7 +177,6 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
         payload.animatorIds = [];
     }
 
-    // 🚀 LÀM TRỐNG NHỮNG Ô CẦN NỘP LẠI (TẨY TRẮNG) - CÁC Ô KHÁC GIỮ NGUYÊN LÀM TÀI LIỆU
     if (isRework) {
         if (reworkContent) {
             payload.scriptLink = "";
@@ -187,7 +188,7 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
             payload.thumbnailLink = "";
             payload.linkProject = "";
             payload.roughProjectLink = "";
-            payload.publishLink = ""; // Edit thì cũng cần đăng lại
+            payload.publishLink = ""; 
         }
     }
 
@@ -218,7 +219,8 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
                   linkProject: fullTask.linkProject || "",
                   roughProjectLink: fullTask.roughProjectLink || "",
                   animationLink: fullTask.animationLink || "",
-                  publishLink: fullTask.publishLink || ""
+                  publishLink: fullTask.publishLink || "",
+                  videoLink: fullTask.videoLink || "" // Bổ sung tự động điền Link Video
               }));
           }
       } catch (e) {

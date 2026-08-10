@@ -1,458 +1,368 @@
-import { Users, FileSpreadsheet, Loader2, Plus, Target, X, Check, Clock, Tv, RefreshCw } from "lucide-react";
+"use client";
+
+import { Eye, Target, TrendingUp, AlertCircle, X, Plus, Trash2, CheckCircle2, Loader2, Layers } from "lucide-react";
 import { useState, useEffect } from "react";
-import ExcelJS from 'exceljs';
-import { saveAs } from 'file-saver';
-import { useToast } from "@/app/component/ToastProvider"; 
 import { createPortal } from "react-dom";
 
-export default function KpiTeamTable({ kpiList, handleUpdateTarget, onRowClick, isLoading, month }: any) {
-    const [isExporting, setIsExporting] = useState(false);
-    const { showToast } = useToast();
-    
-    // --- STATE CHO MODAL GIAO KPI ---
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [selectedUser, setSelectedUser] = useState<any>(null);
-    const [targetDetails, setTargetDetails] = useState<any[]>([]);
-
-    const [channels, setChannels] = useState<any[]>([]);
-    const [isSavingTarget, setIsSavingTarget] = useState(false);
+// ========================================================
+// 🚀 COMPONENT MODAL: THIẾT LẬP KPI CHI TIẾT (LARK STYLE)
+// ========================================================
+const TargetSettingModal = ({ isOpen, onClose, user, onSave }: any) => {
     const [mounted, setMounted] = useState(false);
+    const [mode, setMode] = useState<'CHUNG' | 'CHI_TIET'>(user?.targetDetails?.length > 0 ? 'CHI_TIET' : 'CHUNG');
+    const [generalTarget, setGeneralTarget] = useState<number | string>(user?.targetValue || 0);
+    const [details, setDetails] = useState<any[]>([]);
+    const [channels, setChannels] = useState<any[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => { setMounted(true); }, []);
 
     useEffect(() => {
-        if (isModalOpen && channels.length === 0) {
-            fetch("/api/channels").then(res => res.json()).then((data: any) => {
-                if (Array.isArray(data)) setChannels(data);
+        if (isOpen && user) {
+            setGeneralTarget(user.targetValue || 0);
+            setMode(user.targetDetails?.length > 0 ? 'CHI_TIET' : 'CHUNG');
+            
+            if (user.targetDetails?.length > 0) {
+                setDetails(user.targetDetails.map((d: any, idx: number) => ({ ...d, id: Date.now() + idx })));
+            } else {
+                setDetails([{ id: Date.now(), channelId: "", channelName: "", duration: 10, isRework: false, targetCount: 1 }]);
+            }
+
+            // Tải danh sách Kênh để chọn
+            fetch("/api/channels").then(res => res.json()).then(data => {
+                setChannels(Array.isArray(data) ? data : []);
+                setIsLoading(false);
             });
         }
-    }, [isModalOpen]);
+    }, [isOpen, user]);
 
-    const handleOpenTargetModal = (e: React.MouseEvent, user: any) => {
-        e.stopPropagation();
-        setSelectedUser(user);
-        
-        if (user.targetDetails && user.targetDetails.length > 0) {
-            setTargetDetails([...user.targetDetails]);
+    if (!isOpen || !mounted || !user) return null;
+
+    const handleAddRow = () => {
+        setDetails([...details, { id: Date.now(), channelId: "", channelName: "", duration: 10, isRework: false, targetCount: 1 }]);
+    };
+
+    const handleRemoveRow = (id: number) => {
+        setDetails(details.filter(d => d.id !== id));
+    };
+
+    const handleChangeRow = (id: number, field: string, value: any) => {
+        setDetails(details.map(d => {
+            if (d.id === id) {
+                const newData = { ...d, [field]: value };
+                if (field === 'channelId') {
+                    const c = channels.find(x => x.id === value);
+                    if (c) newData.channelName = c.name;
+                }
+                return newData;
+            }
+            return d;
+        }));
+    };
+
+    const handleSave = () => {
+        if (mode === 'CHUNG') {
+            const num = Number(generalTarget);
+            onSave(user.userId, isNaN(num) ? 0 : num, []);
         } else {
-            setTargetDetails([]);
+            const cleanDetails = details.filter(d => Number(d.targetCount) > 0);
+            const total = cleanDetails.reduce((sum, d) => sum + Number(d.targetCount), 0);
+            onSave(user.userId, total, cleanDetails);
         }
-        
-        setIsModalOpen(true);
+        onClose();
     };
 
-    const handleAddTargetRow = () => {
-        setTargetDetails([...targetDetails, { channelId: "", channelName: "", targetCount: 1, duration: 30, isRework: false }]);
-    };
+    const totalDetailCount = details.reduce((sum, d) => sum + Number(d.targetCount || 0), 0);
 
-    const handleRemoveTargetRow = (index: number) => {
-        const newDetails = [...targetDetails];
-        newDetails.splice(index, 1);
-        setTargetDetails(newDetails);
-    };
-
-    const handleTargetChange = (index: number, field: string, value: any) => {
-        const newDetails = [...targetDetails];
-        newDetails[index][field] = value;
-        
-        if (field === "channelId") {
-            const selectedChannel = channels.find(c => c.id === value);
-            newDetails[index].channelName = selectedChannel ? selectedChannel.name : "";
-        }
-        
-        setTargetDetails(newDetails);
-    };
-
-    const handleSaveTarget = async () => {
-        const isValid = targetDetails.every(t => t.channelId && t.targetCount > 0 && t.duration > 0);
-        if (targetDetails.length > 0 && !isValid) {
-            showToast("error", "Vui lòng nhập đầy đủ thông tin Kênh (Số lượng, Thời lượng)!");
-            return;
-        }
-
-        setIsSavingTarget(true);
-        
-        const totalTargetCount = targetDetails.reduce((sum, item) => sum + Number(item.targetCount), 0);
-        await handleUpdateTarget(selectedUser.userId, totalTargetCount, targetDetails);
-        
-        setIsSavingTarget(false);
-        setIsModalOpen(false);
-    };
-
-    const handleExportReport = async () => {
-        if (!kpiList || kpiList.length === 0) {
-            showToast("error", "Chưa có dữ liệu KPI để xuất!");
-            return;
-        }
-
-        setIsExporting(true);
-        try {
-            const workbook = new ExcelJS.Workbook();
-            const worksheet = workbook.addWorksheet(`KPI Tháng ${month}`);
-
-            worksheet.columns = [
-                { header: 'STT', key: 'stt', width: 5 },
-                { header: 'Họ và tên', key: 'name', width: 25 },
-                { header: 'Vị trí (Role)', key: 'role', width: 15 },
-                { header: 'Kênh / Loại Video', key: 'channel', width: 25 },
-                { header: 'Mục tiêu (Bài)', key: 'targetCount', width: 15 },
-                { header: 'Thời lượng (Phút)', key: 'duration', width: 18 },
-                { header: 'Thực đạt (Chi tiết)', key: 'actual', width: 20 },
-                { header: 'Tiến độ (%)', key: 'percent', width: 15 },
-                { header: 'Đánh giá', key: 'status', width: 15 },
-            ];
-
-            let currentRowIndex = 2;
-
-            kpiList.forEach((user: any, idx: number) => {
-                const isCompleted = user.percent >= 100;
-                const percentText = `${user.percent}%`;
-                const statusText = isCompleted ? "Đạt chỉ tiêu" : "Chưa đạt";
-                
-                const hasDetails = user.targetDetails && user.targetDetails.length > 0;
-                const rowCount = hasDetails ? user.targetDetails.length : 1;
-                const startRow = currentRowIndex;
-                const endRow = currentRowIndex + rowCount - 1;
-
-                if (hasDetails) {
-                    user.targetDetails.forEach((detail: any) => {
-                        const detailActualText = detail.actualMinutes > 0 
-                            ? `${detail.actualCount} bài (${detail.actualMinutes}p)` 
-                            : (detail.actualCount > 0 ? `${detail.actualCount} bài` : "0");
-
-                        const channelDisplay = detail.isRework ? `${detail.channelName} (Xào lại)` : detail.channelName;
-
-                        worksheet.addRow({
-                            stt: idx + 1, name: user.fullName || "---", role: user.role || "---",
-                            channel: channelDisplay, targetCount: detail.targetCount, duration: detail.duration,
-                            actual: detailActualText, percent: percentText, status: statusText
-                        });
-                    });
-                } else {
-                    const fallbackActualText = user.totalActualMinutes > 0 ? `${user.actualValue} bài (${user.totalActualMinutes}p)` : user.actualValue;
-                    worksheet.addRow({
-                        stt: idx + 1, name: user.fullName || "---", role: user.role || "---",
-                        channel: user.targetValue > 0 ? "Mục tiêu chung" : "Chưa có chỉ tiêu", targetCount: user.targetValue > 0 ? user.targetValue : 0, duration: "---",
-                        actual: fallbackActualText, percent: percentText, status: statusText
-                    });
-                }
-
-                if (rowCount > 1) {
-                    worksheet.mergeCells(startRow, 1, endRow, 1); 
-                    worksheet.mergeCells(startRow, 2, endRow, 2); 
-                    worksheet.mergeCells(startRow, 3, endRow, 3); 
-                    worksheet.mergeCells(startRow, 8, endRow, 8); 
-                    worksheet.mergeCells(startRow, 9, endRow, 9); 
-                }
-
-                currentRowIndex += rowCount;
-            });
-
-            const headerRow = worksheet.getRow(1);
-            headerRow.height = 30;
-            headerRow.eachCell((cell) => {
-                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFF00' } };
-                cell.font = { name: 'Arial', bold: true, size: 11, color: { argb: '000000' } };
-                cell.alignment = { vertical: 'middle', horizontal: 'center' };
-                cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
-            });
-
-            worksheet.eachRow((row, rowNumber) => {
-                if (rowNumber > 1) {
-                    row.eachCell((cell, colNumber) => {
-                        cell.border = { 
-                            top: { style: 'thin', color: { argb: 'E2E8F0' } }, left: { style: 'thin', color: { argb: 'E2E8F0' } }, 
-                            bottom: { style: 'thin', color: { argb: 'E2E8F0' } }, right: { style: 'thin', color: { argb: 'E2E8F0' } } 
-                        };
-                        
-                        if (colNumber === 2 || colNumber === 4) cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
-                        else cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
-                        
-                        if (colNumber === 9) {
-                            if (cell.value === "Đạt chỉ tiêu") cell.font = { color: { argb: '10B981' }, bold: true }; 
-                            else if (cell.value === "Chưa đạt") cell.font = { color: { argb: 'EF4444' }, bold: true }; 
-                        }
-                    });
-                }
-            });
-
-            worksheet.views = [{ state: 'frozen', ySplit: 1 }];
-            worksheet.autoFilter = 'A1:I1';
-
-            const buffer = await workbook.xlsx.writeBuffer();
-            const fileName = `SanoWS_Bao_Cao_KPI_Thang_${month}_${new Date().getTime()}.xlsx`;
-            saveAs(new Blob([buffer]), fileName);
-
-            showToast("success", `Đã xuất báo cáo KPI tháng ${month} thành công!`);
-        } catch (error) {
-            showToast("error", "Không thể xuất file Excel lúc này.");
-        } finally {
-            setIsExporting(false);
-        }
-    };
-
-    const modalContent = isModalOpen && mounted ? createPortal(
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-4 animate-in fade-in duration-200">
-            <div className="bg-white w-full max-w-3xl rounded-[24px] shadow-2xl flex flex-col max-h-[90vh] overflow-hidden">
-                <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 shrink-0">
-                    <h2 className="text-lg font-black text-slate-800 flex items-center gap-2">
-                        <Target className="text-blue-500 w-5 h-5" /> 
-                        Giao Chỉ Tiêu: <span className="text-blue-600">{selectedUser?.fullName}</span>
-                    </h2>
-                    <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-slate-200 rounded-full text-slate-500 transition-colors">
-                        <X size={20} />
-                    </button>
-                </div>
-
-                <div className="p-6 overflow-y-auto custom-scrollbar flex-1 bg-slate-50">
+    const modalContent = (
+        <>
+            <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100000] animate-fade-in" onClick={onClose} />
+            <div className="fixed inset-0 z-[100001] flex items-center justify-center p-4 pointer-events-none">
+                <div className="bg-white rounded-[24px] shadow-2xl w-full max-w-2xl pointer-events-auto flex flex-col max-h-[90vh] overflow-hidden animate-scale-in">
                     
-                    {targetDetails.length === 0 ? (
-                        <div className="text-center py-8">
-                            <Target className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                            <p className="text-slate-500 font-medium mb-4">Nhân sự này chưa có chỉ tiêu phân bổ theo kênh.</p>
+                    <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50 shrink-0">
+                        <div>
+                            <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
+                                <Target className="text-blue-600" /> Gán KPI Chỉ Tiêu
+                            </h2>
+                            <p className="text-sm font-bold text-slate-500 mt-1 flex items-center gap-2">
+                                Nhân sự: <span className="text-blue-600 bg-blue-100/50 px-2 py-0.5 rounded">{user.fullName}</span>
+                            </p>
+                        </div>
+                        <button onClick={onClose} className="p-2 bg-white rounded-xl text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors shadow-sm">
+                            <X size={20} />
+                        </button>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto p-6 bg-white custom-scrollbar">
+                        {/* TABS */}
+                        <div className="flex p-1 bg-slate-100 rounded-xl mb-6 w-fit border border-slate-200 shadow-inner">
                             <button 
-                                onClick={handleAddTargetRow}
-                                className="bg-white border border-slate-200 hover:border-blue-300 text-blue-600 font-bold px-4 py-2 rounded-xl shadow-sm transition-all flex items-center gap-2 mx-auto"
+                                onClick={() => setMode('CHUNG')} 
+                                className={`px-5 py-2 rounded-lg text-sm font-black transition-all ${mode === 'CHUNG' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
                             >
-                                <Plus size={16} /> Thêm Mục Tiêu
+                                Giao Nhanh (Tổng)
+                            </button>
+                            <button 
+                                onClick={() => setMode('CHI_TIET')} 
+                                className={`px-5 py-2 rounded-lg text-sm font-black transition-all ${mode === 'CHI_TIET' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                            >
+                                Giao Chi Tiết
                             </button>
                         </div>
-                    ) : (
-                        <div className="space-y-4">
-                            <h3 className="text-sm font-black text-blue-800 flex items-center gap-2">
-                                <Tv size={16} /> Danh sách Chỉ tiêu
-                            </h3>
-                            {targetDetails.map((item, index) => (
-                                <div key={index} className={`p-4 rounded-xl border shadow-sm flex flex-col sm:flex-row gap-4 items-start animate-in slide-in-from-bottom-2 transition-colors ${item.isRework ? 'bg-rose-50 border-rose-200' : 'bg-white border-slate-200'}`}>
-                                    <div className="w-full sm:w-2/5 flex flex-col gap-1">
-                                        <div>
-                                            <label className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider flex items-center gap-1">
-                                                <Tv size={12}/> Kênh Đăng
-                                            </label>
-                                            <select 
-                                                className={`w-full text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none font-bold ${item.isRework ? 'bg-white border border-rose-200 text-rose-800' : 'bg-slate-50 border border-slate-200 text-slate-800'}`}
-                                                value={item.channelId}
-                                                onChange={(e) => handleTargetChange(index, "channelId", e.target.value)}
-                                            >
-                                                <option value="" disabled>-- Chọn Kênh --</option>
-                                                {channels.map((ch: any) => (
-                                                    <option key={ch.id} value={ch.id}>{ch.name}</option>
+
+                        {mode === 'CHUNG' ? (
+                            <div className="bg-blue-50/50 border border-blue-100 p-6 rounded-2xl animate-fade-in flex flex-col items-center justify-center py-10">
+                                <label className="text-sm font-black text-blue-800 uppercase tracking-widest mb-4">Tổng số lượng Video / Tuần</label>
+                                <input 
+                                    type="number" 
+                                    min="0"
+                                    className="w-32 text-center text-3xl font-black text-blue-600 bg-white border-2 border-blue-200 rounded-2xl py-3 shadow-inner focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 outline-none transition-all"
+                                    value={generalTarget}
+                                    onChange={e => setGeneralTarget(e.target.value)}
+                                    autoFocus
+                                />
+                                <p className="text-xs font-bold text-blue-500 mt-4 italic">* Không phân biệt Kênh hay Bài mới / cũ</p>
+                            </div>
+                        ) : (
+                            <div className="animate-fade-in flex flex-col gap-4">
+                                {isLoading ? (
+                                    <div className="py-10 flex justify-center"><Loader2 className="animate-spin text-blue-500" /></div>
+                                ) : (
+                                    <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                                        <table className="w-full text-left bg-white">
+                                            <thead className="bg-slate-100 border-b border-slate-200 text-[10px] font-black uppercase text-slate-500 tracking-widest">
+                                                <tr>
+                                                    <th className="p-3">Thuộc Kênh</th>
+                                                    <th className="p-3 w-[100px] text-center">Phút</th>
+                                                    <th className="p-3 w-[140px] text-center">Loại Bài</th>
+                                                    <th className="p-3 w-[100px] text-center">Số lượng</th>
+                                                    <th className="p-3 w-[50px] text-center"></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100">
+                                                {details.map((d, index) => (
+                                                    <tr key={d.id} className="hover:bg-slate-50 transition-colors">
+                                                        <td className="p-2">
+                                                            <select 
+                                                                className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs font-bold text-slate-700 outline-none focus:border-blue-500"
+                                                                value={d.channelId}
+                                                                onChange={e => handleChangeRow(d.id, 'channelId', e.target.value)}
+                                                            >
+                                                                <option value="">-- Dùng Chung --</option>
+                                                                {channels.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                                            </select>
+                                                        </td>
+                                                        <td className="p-2">
+                                                            <input 
+                                                                type="number" min="0" 
+                                                                className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs font-black text-center text-amber-600 outline-none focus:border-blue-500"
+                                                                value={d.duration}
+                                                                onChange={e => handleChangeRow(d.id, 'duration', Number(e.target.value))}
+                                                            />
+                                                        </td>
+                                                        <td className="p-2">
+                                                            <select 
+                                                                className={`w-full border rounded-lg p-2 text-xs font-black outline-none focus:border-blue-500 ${d.isRework ? 'bg-rose-50 border-rose-200 text-rose-600' : 'bg-emerald-50 border-emerald-200 text-emerald-600'}`}
+                                                                value={d.isRework ? "true" : "false"}
+                                                                onChange={e => handleChangeRow(d.id, 'isRework', e.target.value === "true")}
+                                                            >
+                                                                <option value="false">✨ BÀI MỚI</option>
+                                                                <option value="true">♻️ BÀI CŨ (XÀO)</option>
+                                                            </select>
+                                                        </td>
+                                                        <td className="p-2">
+                                                            <input 
+                                                                type="number" min="1" 
+                                                                className="w-full bg-white border-2 border-blue-200 rounded-lg p-2 text-sm font-black text-center text-blue-600 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                                                                value={d.targetCount}
+                                                                onChange={e => handleChangeRow(d.id, 'targetCount', Number(e.target.value))}
+                                                            />
+                                                        </td>
+                                                        <td className="p-2 text-center">
+                                                            <button onClick={() => handleRemoveRow(d.id)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                                                                <Trash2 size={16} />
+                                                            </button>
+                                                        </td>
+                                                    </tr>
                                                 ))}
-                                            </select>
+                                            </tbody>
+                                        </table>
+                                        <div className="p-3 bg-slate-50 flex items-center justify-between border-t border-slate-200">
+                                            <button onClick={handleAddRow} className="text-xs font-bold text-blue-600 bg-blue-100/50 hover:bg-blue-100 px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors">
+                                                <Plus size={14} /> Thêm dòng
+                                            </button>
+                                            <div className="text-sm font-bold text-slate-600 flex items-center gap-2">
+                                                Tổng quy đổi: <span className="text-lg font-black text-blue-600 bg-blue-100 px-3 py-0.5 rounded-lg border border-blue-200">{totalDetailCount}</span>
+                                            </div>
                                         </div>
-                                        
-                                        <label className="flex items-center gap-1.5 cursor-pointer w-fit mt-1.5">
-                                            <input 
-                                                type="checkbox" 
-                                                checked={item.isRework || false} 
-                                                onChange={(e) => handleTargetChange(index, "isRework", e.target.checked)} 
-                                                className="w-4 h-4 rounded border-slate-300 text-rose-500 focus:ring-rose-500 cursor-pointer" 
-                                            />
-                                            <span className={`text-[11px] font-bold uppercase tracking-wider ${item.isRework ? 'text-rose-600' : 'text-slate-400 hover:text-slate-600'}`}>
-                                                Video cũ / Xào lại
-                                            </span>
-                                        </label>
                                     </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
 
-                                    <div className="w-full sm:w-1/4">
-                                        <label className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider flex items-center gap-1">
-                                            <FileSpreadsheet size={12}/> Số Lượng
-                                        </label>
-                                        <input 
-                                            type="number" min="1"
-                                            className={`w-full text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none font-black text-center ${item.isRework ? 'bg-white border border-rose-200 text-rose-800' : 'bg-slate-50 border border-slate-200 text-slate-800'}`}
-                                            value={item.targetCount}
-                                            onChange={(e) => handleTargetChange(index, "targetCount", Number(e.target.value))}
-                                        />
-                                    </div>
-
-                                    <div className="w-full sm:w-1/4">
-                                        <label className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider flex items-center gap-1">
-                                            <Clock size={12}/> Phút/Video
-                                        </label>
-                                        <input 
-                                            type="number" min="1"
-                                            className={`w-full text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none font-black text-center ${item.isRework ? 'bg-white border border-rose-200 text-rose-600' : 'bg-slate-50 border border-slate-200 text-amber-600'}`}
-                                            value={item.duration}
-                                            onChange={(e) => handleTargetChange(index, "duration", Number(e.target.value))}
-                                        />
-                                    </div>
-                                    
-                                    <button 
-                                        onClick={() => handleRemoveTargetRow(index)}
-                                        className="h-[42px] w-full sm:w-10 bg-red-50 hover:bg-red-100 text-red-500 rounded-lg flex items-center justify-center shrink-0 transition-colors mt-2 sm:mt-[22px]"
-                                        title="Xóa dòng này"
-                                    >
-                                        <X size={18} />
-                                    </button>
-                                </div>
-                            ))}
-                            
-                            <button 
-                                onClick={handleAddTargetRow}
-                                className="w-full bg-blue-50/50 hover:bg-blue-50 border border-dashed border-blue-200 text-blue-600 font-bold py-3 rounded-xl transition-all flex items-center justify-center gap-2"
-                            >
-                                <Plus size={18} /> Thêm Mục Tiêu Khác
-                            </button>
-                        </div>
-                    )}
-                </div>
-
-                <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-3 bg-white shrink-0">
-                    <button onClick={() => setIsModalOpen(false)} disabled={isSavingTarget} className="px-5 py-2.5 rounded-xl text-slate-600 font-bold hover:bg-slate-100 transition-colors">Hủy</button>
-                    <button 
-                        onClick={handleSaveTarget} 
-                        disabled={isSavingTarget} 
-                        className="px-6 py-2.5 rounded-xl bg-blue-600 text-white font-black hover:bg-blue-700 transition-all shadow-md shadow-blue-600/20 disabled:opacity-50 flex items-center gap-2"
-                    >
-                        {isSavingTarget ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
-                        {isSavingTarget ? "Đang lưu..." : "Chốt Chỉ Tiêu"}
-                    </button>
+                    <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 shrink-0">
+                        <button onClick={onClose} className="px-5 py-2.5 rounded-xl font-bold text-sm text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 transition-colors shadow-sm">Hủy bỏ</button>
+                        <button onClick={handleSave} className="px-6 py-2.5 rounded-xl font-black text-sm text-white bg-blue-600 hover:bg-blue-700 transition-colors shadow-md shadow-blue-500/30 flex items-center gap-2 active:scale-95">
+                            <CheckCircle2 size={18} /> Chốt Chỉ Tiêu
+                        </button>
+                    </div>
                 </div>
             </div>
-        </div>
-    , document.body) : null;
+        </>
+    );
+
+    return createPortal(modalContent, document.body);
+};
+
+
+export default function KpiTeamTable({
+    kpiList,
+    handleUpdateTarget,
+    onRowClick,
+    isLoading,
+    teamId,
+    year,
+    month
+}: any) {
+    const [editingUser, setEditingUser] = useState<any>(null);
+
+    if (isLoading) {
+        return (
+            <div className="h-full w-full flex items-center justify-center bg-slate-50/50">
+                <div className="flex flex-col items-center gap-3">
+                    <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                    <p className="text-sm font-black text-slate-400 uppercase tracking-widest animate-pulse">Đang tải dữ liệu KPI...</p>
+                </div>
+            </div>
+        );
+    }
+
+    if (!kpiList || kpiList.length === 0) {
+        return (
+            <div className="h-full w-full flex items-center justify-center bg-slate-50/50">
+                <div className="text-center flex flex-col items-center gap-3">
+                    <AlertCircle className="w-12 h-12 text-slate-300" />
+                    <p className="text-sm font-medium text-slate-500">Chưa có dữ liệu KPI cho bộ lọc này.</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
-        <div className="flex flex-col h-full min-h-0">
-            {modalContent}
-            
-            <div className="p-4 md:p-6 lg:p-8 border-b border-slate-100 shrink-0 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 md:gap-4 bg-white z-20">
-                <h2 className="text-lg md:text-xl font-black text-slate-800 flex items-center gap-2">
-                    <Users className="text-blue-600 w-5 h-5 md:w-6 md:h-6" /> Thành Tích Team
-                </h2>
-                
-                <button 
-                    onClick={handleExportReport}
-                    disabled={isExporting || isLoading}
-                    className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white px-4 md:px-5 py-2 md:py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-sm shadow-emerald-600/20 active:scale-95 text-xs md:text-sm disabled:opacity-50"
-                >
-                    {isExporting ? <Loader2 size={16} className="animate-spin md:w-[18px] md:h-[18px]" /> : <FileSpreadsheet size={16} className="md:w-[18px] md:h-[18px]" />} 
-                    {isExporting ? "Đang xuất..." : "Xuất báo cáo"}
-                </button>
-            </div>
+        <>
+            <div className="w-full h-full overflow-auto custom-scrollbar bg-white">
+                <table className="w-full text-left border-collapse min-w-[900px]">
+                    <thead className="bg-slate-100 text-[10px] md:text-[11px] uppercase font-black text-slate-500 sticky top-0 z-30 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+                        <tr>
+                            <th className="border border-slate-200 p-3 text-center sticky left-0 bg-slate-200 z-40 w-[50px] shadow-[1px_0_0_0_#e2e8f0]">STT</th>
+                            <th className="border border-slate-200 p-3 sticky left-[50px] bg-slate-200 z-40 w-[250px] shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)]">Nhân sự</th>
+                            
+                            <th className="border border-slate-200 p-3 w-[120px] text-center">Team</th>
+                            <th className="border border-slate-200 p-3 w-[120px] text-center">Vai trò</th>
+                            
+                            <th className="border border-slate-200 p-3 w-[140px] text-center text-blue-700 bg-blue-50/50">Chỉ tiêu (Target)</th>
+                            <th className="border border-slate-200 p-3 w-[140px] text-center text-emerald-700 bg-emerald-50/50">Đã làm (Actual)</th>
+                            <th className="border border-slate-200 p-3 w-[140px] text-center text-purple-700 bg-purple-50/50">Tiến độ (%)</th>
+                            
+                            <th className="border border-slate-200 p-3 text-center sticky right-0 bg-slate-200 z-40 w-[100px] shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.1)]">Chi tiết</th>
+                        </tr>
+                    </thead>
+                    <tbody className="bg-white">
+                        {kpiList.map((user: any, index: number) => {
+                            let percentColor = "text-slate-600 bg-slate-100";
+                            if (user.percent >= 100) percentColor = "text-emerald-700 bg-emerald-100 border-emerald-300";
+                            else if (user.percent >= 80) percentColor = "text-blue-700 bg-blue-100 border-blue-300";
+                            else if (user.percent >= 50) percentColor = "text-amber-700 bg-amber-100 border-amber-300";
+                            else if (user.percent > 0) percentColor = "text-rose-700 bg-rose-100 border-rose-300";
 
-            <div className="flex-1 overflow-y-auto overflow-x-auto custom-scrollbar relative bg-white">
-                {isLoading ? (
-                    <div className="h-full flex flex-col items-center justify-center text-slate-400 py-12 gap-3">
-                        <Loader2 size={24} className="animate-spin text-blue-500 md:w-8 md:h-8" />
-                        <p className="font-medium text-xs md:text-sm">Đang tải dữ liệu KPI...</p>
-                    </div>
-                ) : kpiList.length === 0 ? (
-                    <div className="h-full flex flex-col items-center justify-center text-slate-400 py-12 gap-3">
-                        <div className="bg-slate-100 p-4 md:p-6 rounded-full"><Users size={24} className="text-slate-300 md:w-8 md:h-8" /></div>
-                        <p className="font-medium text-xs md:text-sm">Không có dữ liệu nhân sự.</p>
-                    </div>
-                ) : (
-                    <table className="w-full text-left border-collapse min-w-[650px] md:min-w-[800px]">
-                        <thead className="bg-slate-50 sticky top-0 z-10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
-                            <tr>
-                                <th className="px-4 md:px-6 py-3 md:py-4 text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest">Nhân sự</th>
-                                <th className="px-4 md:px-6 py-3 md:py-4 text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest text-left w-64">Target Chi Tiết</th>
-                                <th className="px-4 md:px-6 py-3 md:py-4 text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest text-center w-24 md:w-32">Thực đạt</th>
-                                <th className="px-4 md:px-6 py-3 md:py-4 text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-widest text-right w-32 md:w-48">Tiến độ (%)</th>
-                            </tr>
-                        </thead>
-                        
-                        <tbody className="divide-y divide-slate-100">
-                            {kpiList.map((user: any) => {
-                                const isCompleted = user.percent >= 100;
-                                
-                                return (
-                                    <tr 
-                                        key={user.userId} 
-                                        onClick={() => onRowClick(user.userId)}
-                                        className="hover:bg-blue-50/50 transition-colors group cursor-pointer"
+                            return (
+                                <tr 
+                                    key={user.userId} 
+                                    className="transition-colors group odd:bg-white even:bg-slate-50/80 hover:bg-blue-50/40 cursor-pointer"
+                                    onClick={() => onRowClick(user.userId)}
+                                >
+                                    <td className="border border-slate-200 p-3 text-center font-bold text-slate-400 sticky left-0 z-20 shadow-[1px_0_0_0_#e2e8f0] bg-inherit align-middle">
+                                        {index + 1}
+                                    </td>
+
+                                    <td className="border border-slate-200 p-3 sticky left-[50px] z-20 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.05)] bg-inherit align-middle">
+                                        <div className="flex items-center gap-3">
+                                            {user.avatarUrl ? (
+                                                <img src={user.avatarUrl} alt={user.fullName} className="w-8 h-8 rounded-full object-cover shadow-sm border border-slate-200" />
+                                            ) : (
+                                                <div className="w-8 h-8 rounded-full bg-slate-800 text-white flex items-center justify-center font-black text-[10px] shadow-sm">
+                                                    {user.fullName.charAt(0)}
+                                                </div>
+                                            )}
+                                            <span className="font-bold text-slate-800 text-[13px] truncate">{user.fullName}</span>
+                                        </div>
+                                    </td>
+
+                                    <td className="border border-slate-200 p-3 text-center align-middle bg-inherit">
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200 shadow-sm">
+                                            {user.teamName}
+                                        </span>
+                                    </td>
+
+                                    <td className="border border-slate-200 p-3 text-center align-middle bg-inherit">
+                                        <span className="text-[10px] font-bold text-slate-600 bg-white border border-slate-200 px-2 py-1 rounded shadow-sm">
+                                            {user.role}
+                                        </span>
+                                    </td>
+
+                                    {/* 🚀 CỘT TARGET: CLick để mở Bảng Giao Việc Chi Tiết */}
+                                    <td 
+                                        className="border border-slate-200 p-2 text-center align-middle bg-inherit group/cell cursor-pointer transition-colors hover:bg-blue-50/50"
+                                        onClick={(e) => { e.stopPropagation(); setEditingUser(user); }}
+                                        title="Bấm để giao KPI chi tiết"
                                     >
-                                        <td className="px-4 md:px-6 py-3 md:py-4">
-                                            <div className="flex items-center gap-2.5 md:gap-3">
-                                                <div className="h-8 w-8 md:h-10 md:w-10 rounded-full bg-slate-100 flex items-center justify-center font-black text-slate-600 shrink-0 text-xs md:text-base">
-                                                    {user.avatarUrl ? (
-                                                        <img src={user.avatarUrl} alt={user.fullName} className="h-8 w-8 md:h-10 md:w-10 rounded-full object-cover" />
-                                                    ) :  user.fullName?.charAt(0).toUpperCase()}
+                                        <div className="font-black text-[15px] text-blue-600 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors border border-transparent group-hover/cell:border-blue-200 w-fit mx-auto bg-white shadow-sm">
+                                            <Target size={14} className="opacity-60 shrink-0" />
+                                            {user.targetValue > 0 ? (
+                                                <div className="flex flex-col items-center leading-none gap-0.5 mt-0.5">
+                                                    <span className="drop-shadow-sm leading-none">{user.targetValue}</span>
+                                                    {user.targetDetails?.length > 0 && <span className="text-[8px] text-blue-500 font-bold uppercase tracking-widest bg-blue-50 px-1 rounded border border-blue-100">Chi tiết</span>}
                                                 </div>
-                                                <div>
-                                                    <p className="font-bold text-xs md:text-sm text-slate-900 group-hover:text-blue-700 transition-colors line-clamp-1">{user.fullName}</p>
-                                                    <p className="text-[9px] md:text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">{user.role}</p>
-                                                </div>
-                                            </div>
-                                        </td>
+                                            ) : (
+                                                <span className="text-blue-500 text-xs italic font-bold px-1">+ Gán</span>
+                                            )}
+                                        </div>
+                                    </td>
 
-                                        <td className="px-4 md:px-6 py-3 md:py-4" onClick={(e) => e.stopPropagation()}>
-                                            <div className="flex flex-col gap-2 items-start">
-                                                
-                                                {user.targetDetails && user.targetDetails.length > 0 ? (
-                                                    <div className="space-y-1">
-                                                        {/* 🚀 ĐÃ SỬA: Chống tràn Text Tên Kênh bằng truncate */}
-                                                        {user.targetDetails.map((t: any, i: number) => (
-                                                            t.isRework ? (
-                                                                <div key={i} className="text-[10px] md:text-xs font-medium text-slate-600 flex items-center gap-1.5 bg-rose-50 px-2 py-1 rounded border border-rose-100 max-w-full w-fit">
-                                                                    <RefreshCw size={10} className="text-rose-500 shrink-0" />
-                                                                    <span className="font-bold text-rose-800 truncate max-w-[80px] sm:max-w-[100px]" title={t.channelName}>{t.channelName}</span> 
-                                                                    <span className="text-rose-300 shrink-0">|</span> 
-                                                                    <span className="text-rose-600 font-bold shrink-0">{t.targetCount} vid</span> 
-                                                                    <span className="text-amber-500 shrink-0">({t.duration}p)</span>
-                                                                </div>
-                                                            ) : (
-                                                                <div key={i} className="text-[10px] md:text-xs font-medium text-slate-600 flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded border border-slate-100 max-w-full w-fit">
-                                                                    <span className="font-bold text-slate-800 truncate max-w-[80px] sm:max-w-[100px]" title={t.channelName}>{t.channelName}</span> 
-                                                                    <span className="text-slate-300 shrink-0">|</span> 
-                                                                    <span className="text-blue-600 font-bold shrink-0">{t.targetCount} vid</span> 
-                                                                    <span className="text-amber-500 shrink-0">({t.duration}p)</span>
-                                                                </div>
-                                                            )
-                                                        ))}
-                                                    </div>
-                                                ) : user.targetValue > 0 ? (
-                                                    <div className="text-[10px] md:text-xs font-medium text-slate-600 flex items-center gap-1.5 bg-slate-50 px-2 py-1 rounded border border-slate-100 max-w-full w-fit">
-                                                        <span className="font-bold text-slate-800">Mục tiêu chung</span> 
-                                                        <span className="text-slate-300 shrink-0">|</span> 
-                                                        <span className="text-blue-600 font-bold shrink-0">{user.targetValue} bài</span> 
-                                                    </div>
-                                                ) : (
-                                                    <span className="text-[10px] md:text-xs font-bold text-slate-400 italic">Chưa giao cụ thể</span>
-                                                )}
-                                                
-                                                <button 
-                                                    onClick={(e) => handleOpenTargetModal(e, user)}
-                                                    className="text-[10px] md:text-xs font-black text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg border border-blue-100 transition-colors mt-1"
-                                                >
-                                                    {(user.targetDetails && user.targetDetails.length > 0) || user.targetValue > 0 ? "Sửa Chỉ Tiêu" : "Giao Chỉ Tiêu"}
-                                                </button>
-                                            </div>
-                                        </td>
+                                    <td className="border border-slate-200 p-3 text-center align-middle bg-inherit">
+                                        <span className="font-black text-[15px] text-emerald-600 drop-shadow-sm">
+                                            {user.actualValue}
+                                        </span>
+                                    </td>
 
-                                        <td className="px-4 md:px-6 py-3 md:py-4 text-center">
-                                            <div className="flex flex-col items-center justify-center">
-                                                <span className="text-base md:text-lg font-black text-slate-800">{user.actualValue}</span>
-                                                {user.totalActualMinutes > 0 && (
-                                                    <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded mt-0.5 whitespace-nowrap">
-                                                        {user.totalActualMinutes} Phút
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </td>
+                                    <td className="border border-slate-200 p-3 text-center align-middle bg-inherit">
+                                        <span className={`inline-flex items-center justify-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-black border shadow-sm w-[70px] ${percentColor}`}>
+                                            <TrendingUp size={12} /> {user.percent}%
+                                        </span>
+                                    </td>
 
-                                        <td className="px-4 md:px-6 py-3 md:py-4 text-right">
-                                            <div className="flex items-center justify-end gap-2 md:gap-3">
-                                                <span className={`text-xs md:text-sm font-black ${isCompleted ? 'text-emerald-600' : 'text-slate-700'}`}>
-                                                    {user.percent}%
-                                                </span>
-                                                <div className="w-16 md:w-24 h-1.5 md:h-2 bg-slate-200 rounded-full overflow-hidden shrink-0">
-                                                    <div 
-                                                        className={`h-full rounded-full transition-all duration-700 ${isCompleted ? 'bg-emerald-500' : 'bg-blue-500'}`}
-                                                        style={{ width: `${Math.min(user.percent, 100)}%` }}
-                                                    ></div>
-                                                </div>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                )}
+                                    <td className="border border-slate-200 p-3 text-center sticky right-0 z-20 shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.05)] bg-inherit align-middle">
+                                        <button 
+                                            className="text-[10px] bg-slate-800 hover:bg-slate-900 text-white font-bold px-3 py-1.5 rounded-lg transition-colors active:scale-95 whitespace-nowrap shadow-md border border-slate-700 flex items-center justify-center gap-1.5 w-full"
+                                        >
+                                            <Eye size={12} /> Xem Log
+                                        </button>
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
             </div>
-        </div>
+
+            <TargetSettingModal 
+                isOpen={!!editingUser} 
+                onClose={() => setEditingUser(null)} 
+                user={editingUser} 
+                onSave={handleUpdateTarget} 
+            />
+        </>
     );
 }
