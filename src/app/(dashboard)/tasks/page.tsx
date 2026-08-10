@@ -141,7 +141,7 @@ export default function KanbanBoard() {
     delete (BOARD_COLUMNS as any).ANIMATION_REVIEW;
   }
 
-  // 🚀 Dữ liệu sạch sẽ lấy thẳng từ Raw
+  // 🚀 ĐÃ SỬA: Lấy sạch từ rawTasks, vì Backend đã lọc chuẩn 100% rồi
   const backlogTasks = rawTasks.filter(t => t.status === 'BACKLOG');
   const filteredTasks = rawTasks.filter(t => t.status !== 'BACKLOG');
 
@@ -896,6 +896,7 @@ export default function KanbanBoard() {
               <p className="text-xs text-slate-500 font-medium mt-1.5">Quản lý và theo dõi tiến độ video.</p>
             </div>
             
+            {/* Actions Buttons */}
             <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto [&::-webkit-scrollbar]:hidden shrink-0">
                 {canCreateTask && (
                     <button onClick={handleExportExcel} disabled={isExporting} className="flex-1 sm:flex-none bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 px-3 py-2 rounded-xl font-bold flex items-center justify-center gap-1.5 whitespace-nowrap text-xs transition-colors shadow-sm">
@@ -923,6 +924,7 @@ export default function KanbanBoard() {
         {/* ROW 2: TABS & FILTERS - SEPARATE & COMPACT */}
         <div className="flex flex-col xl:flex-row items-start xl:items-center gap-3 shrink-0 mb-4">
             
+            {/* TABS CỐ ĐỊNH BÊN TRÁI */}
             <div className="flex bg-slate-200/60 p-1 rounded-xl w-full xl:w-auto overflow-x-auto [&::-webkit-scrollbar]:hidden shrink-0 border border-slate-200/50">
                 <button onClick={() => handleSwitchTab('board')} className={`flex-1 xl:flex-none px-4 py-1.5 rounded-lg font-bold text-xs transition-all whitespace-nowrap ${viewMode === 'board' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'}`}>Kanban</button>
                 <button onClick={() => handleSwitchTab('list')} className={`flex-1 xl:flex-none px-4 py-1.5 rounded-lg font-bold text-xs transition-all whitespace-nowrap ${viewMode === 'list' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'}`}>Danh sách</button>
@@ -934,9 +936,11 @@ export default function KanbanBoard() {
                 )}
             </div>
 
+            {/* FILTERS ĐỘC LẬP BÊN PHẢI */}
             {viewMode !== 'surplus' && (
                 <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto flex-1 justify-start xl:justify-end relative">
                     
+                    {/* 🚀 TOGGLE CỘT CHUYỂN ĐỘNG (LƯU LOCALSTORAGE) */}
                     {viewMode === 'board' && (
                         <label className="flex items-center gap-2 cursor-pointer bg-white border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm shrink-0 hover:bg-slate-50 transition-colors" title="Bật/Tắt khâu chuyển động (5 cột / 7 cột)">
                             <span className="text-[11px] font-black text-slate-600 uppercase tracking-widest">Chuyển động</span>
@@ -956,7 +960,7 @@ export default function KanbanBoard() {
                         </label>
                     )}
 
-                    {/* 🚀 ĐÃ BỔ SUNG: BỘ LỌC TEAM CHO ADMIN */}
+                    {/* 🚀 ĐÃ BỔ SUNG: BỘ LỌC TEAM DÀNH CHO ADMIN */}
                     {canFilterTeam && viewMode !== 'backlog' && (
                         <div className="relative flex items-center bg-white border border-slate-200 rounded-lg shadow-sm shrink-0">
                             <div className="pl-2.5 py-1.5 shrink-0"><UsersIcon size={14} className="text-slate-400"/></div>
@@ -967,6 +971,7 @@ export default function KanbanBoard() {
                         </div>
                     )}
 
+                    {/* Channel Filter */}
                     {viewMode !== 'backlog' && (
                         <div className="relative flex items-center bg-white border border-slate-200 rounded-lg shadow-sm shrink-0">
                             <div className="pl-2.5 py-1.5 shrink-0"><Filter size={14} className="text-slate-400"/></div>
@@ -977,6 +982,7 @@ export default function KanbanBoard() {
                         </div>
                     )}
 
+                    {/* Status Filter (ONLY LIST) */}
                     {viewMode === 'list' && (
                         <select className="bg-white border border-slate-200 text-xs font-bold text-slate-700 px-3 py-1.5 rounded-lg shadow-sm outline-none cursor-pointer shrink-0" value={filterStatus} onChange={(e) => handleFilterChange(setFilterStatus, e.target.value)}>
                             <option value="ALL">Mọi trạng thái</option>
@@ -990,8 +996,10 @@ export default function KanbanBoard() {
                         </select>
                     )}
 
+                    {/* Search */}
                     <input type="text" placeholder="Tìm tên task..." className="bg-white border border-slate-200 text-xs font-medium px-3 py-1.5 rounded-lg shadow-sm outline-none focus:border-blue-500 min-w-[120px] flex-1 xl:flex-none" value={searchTerm} onChange={(e) => handleFilterChange(setSearchTerm, e.target.value)} />
                     
+                    {/* Date Picker */}
                     <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-2 py-1 shadow-sm shrink-0">
                         <span className="text-[9px] font-black text-slate-400 uppercase shrink-0">Từ</span>
                         <input type="date" className="bg-transparent text-xs font-bold text-slate-600 outline-none w-auto cursor-pointer" value={fromDate} onChange={(e) => handleFilterChange(setFromDate, e.target.value)} />
@@ -1003,7 +1011,7 @@ export default function KanbanBoard() {
             )}
         </div>
 
-        {/* 🚀 ĐÃ BỔ SUNG: Màn Chắn Loading Xoay Xoay Bọc Toàn Bộ Data */}
+        {/* 🚀 BỔ SUNG: Màn chắn Loading khi Lọc */}
         <div className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden pb-2 relative">
           
           {isFetchingData && (
