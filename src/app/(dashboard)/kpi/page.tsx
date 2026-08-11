@@ -13,13 +13,11 @@ import TaskLogManager from "./components/TaskLogManager";
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 
-// 🚀 ĐÃ SỬA: Hàm sinh Text Tuần chuẩn ISO
+// 🚀 HÀM SINH TEXT TUẦN CHUẨN ISO
 function getWeekData(year: number, month: number, weekNumber: number) {
     const firstDayOfMonth = new Date(year, month - 1, 1);
-    
     const dayOfWeek = firstDayOfMonth.getDay();
     const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-    
     const startOfFirstWeek = new Date(year, month - 1, 1 + diffToMonday);
 
     const thursdayOfFirstWeek = new Date(startOfFirstWeek);
@@ -44,7 +42,7 @@ function getWeekData(year: number, month: number, weekNumber: number) {
     return { start: startOfWeek, end: endOfWeek, label };
 }
 
-// 🚀 BỔ SUNG: Tính xem một tháng có bao nhiêu tuần hợp lệ (4 hay 5)
+// 🚀 TÍNH SỐ TUẦN HỢP LỆ TRONG THÁNG
 function getAvailableWeeks(year: number, month: number) {
     const weeks = [];
     const firstDayOfMonth = new Date(year, month - 1, 1);
@@ -62,24 +60,19 @@ function getAvailableWeeks(year: number, month: number) {
     for (let w = 1; w <= 5; w++) {
         const startOfWeek = new Date(startOfFirstWeek);
         startOfWeek.setDate(startOfFirstWeek.getDate() + (w - 1) * 7);
-        
         const thursday = new Date(startOfWeek);
         thursday.setDate(startOfWeek.getDate() + 3);
         
-        // Nếu ngày Thứ 5 của tuần này đã chạy sang tháng khác -> Dừng lại!
-        if (thursday.getMonth() !== month - 1) {
-            break;
-        }
+        if (thursday.getMonth() !== month - 1) break;
         weeks.push(w);
     }
     return weeks;
 }
 
-// 🚀 ĐÃ SỬA: Hàm lấy ngày hiện tại (Tự nhận diện tháng và tuần)
+// 🚀 LẤY NGÀY HIỆN TẠI
 function getCurrentWeekInfo() {
     const d = new Date();
     d.setHours(0,0,0,0);
-    
     const dayOfWeek = d.getDay();
     const diffToThursday = dayOfWeek === 0 ? -3 : 4 - dayOfWeek;
     const thursday = new Date(d);
@@ -137,10 +130,8 @@ export default function KpiDashboard() {
     const [isLoading, setIsLoading] = useState(true);
     const [isExporting, setIsExporting] = useState(false);
 
-    // 🚀 Lấy mảng Tuần động theo tháng đang chọn
     const availableWeeks = getAvailableWeeks(selectedYear, selectedMonth);
 
-    // Ép lại tuần nếu user đổi sang tháng có ít tuần hơn
     useEffect(() => {
         const maxWeek = availableWeeks[availableWeeks.length - 1];
         if (selectedWeek !== 0 && selectedWeek > maxWeek) {
@@ -243,10 +234,12 @@ export default function KpiDashboard() {
         }
     };
 
+    // ==========================================
+    // 🚀 XỬ LÝ XUẤT EXCEL CHUẨN XÁC
+    // ==========================================
     const handleExportExcelThang = async () => {
         setIsExporting(true);
         try {
-            // Lặp theo mảng Tuần động
             const weekPromises = availableWeeks.map(w => 
                 fetch(`/api/kpi?teamId=${queryTeamId}&year=${selectedYear}&month=${selectedMonth}&week=${w}`).then(res => res.json())
             );
@@ -255,7 +248,7 @@ export default function KpiDashboard() {
             const userMap = new Map();
             
             weeksData.forEach((weekRes, index) => {
-                const w = availableWeeks[index]; // Lấy đúng tuần
+                const w = availableWeeks[index];
                 const list = weekRes.kpiList || [];
                 
                 list.forEach((userKpi: any) => {
@@ -273,14 +266,20 @@ export default function KpiDashboard() {
                     const uData = userMap.get(userKpi.userId);
                     uData.weeks[w] = userKpi;
 
+                    // 🚀 THUẬT TOÁN GOM NHÓM CHỐNG LỖI ĐẺ DÒNG THỪA
                     if (userKpi.targetDetails && userKpi.targetDetails.length > 0) {
                         userKpi.targetDetails.forEach((td: any) => {
-                            const tKey = `${td.channelName}_${td.duration}_${td.isRework}`;
+                            // Ép chuẩn kiểu dữ liệu để so sánh, tránh lỗi "30" khác 30 hoặc null khác false
+                            const safeDuration = Number(td.duration) || 0;
+                            const safeRework = Boolean(td.isRework);
+                            const safeChannelName = td.channelName || "Khác";
+
+                            const tKey = `${safeChannelName}_${safeDuration}_${safeRework}`;
                             if (!uData.targets.has(tKey)) {
                                 uData.targets.set(tKey, {
-                                    channelName: td.channelName || "Khác",
-                                    duration: td.duration || 0,
-                                    isRework: td.isRework || false
+                                    channelName: safeChannelName,
+                                    duration: safeDuration,
+                                    isRework: safeRework
                                 });
                             }
                         });
@@ -407,11 +406,17 @@ export default function KpiDashboard() {
 
                         if (weekKpi) {
                             if (tIdx === 0) {
-                                percentStr = `${weekKpi.percent || 0},00%`;
+                                // 🚀 ĐÃ BỎ ĐUÔI ,00% CHO SỐ LIỆU SẠCH SẼ
+                                percentStr = `${weekKpi.percent || 0}%`;
                             }
 
                             if (weekKpi.targetDetails && weekKpi.targetDetails.length > 0) {
-                                const detail = weekKpi.targetDetails.find((d:any) => d.channelName === tg.channelName && d.duration === tg.duration && d.isRework === tg.isRework);
+                                // 🚀 TÌM KIẾM ĐỒNG BỘ: Ép kiểu toàn bộ tránh lỗi
+                                const detail = weekKpi.targetDetails.find((d:any) => 
+                                    (d.channelName || "Khác") === tg.channelName && 
+                                    Number(d.duration) === Number(tg.duration) && 
+                                    Boolean(d.isRework) === Boolean(tg.isRework)
+                                );
                                 if (detail) {
                                     tMins = detail.duration || "";
                                     giao = detail.targetCount || 0;
@@ -560,7 +565,6 @@ export default function KpiDashboard() {
                                 <span className="text-[10px] md:text-sm font-bold text-slate-500">Tuần:</span>
                                 <select className="bg-transparent text-xs md:text-sm font-black text-slate-800 outline-none cursor-pointer" value={selectedWeek} onChange={(e) => setSelectedWeek(Number(e.target.value))}>
                                     <option value={0}>Cả tháng</option>
-                                    {/* 🚀 ĐÃ SỬA: Lặp qua mảng tuần động của riêng tháng đó */}
                                     {availableWeeks.map(w => <option key={w} value={w}>Tuần {w}</option>)}
                                 </select>
                             </div>
