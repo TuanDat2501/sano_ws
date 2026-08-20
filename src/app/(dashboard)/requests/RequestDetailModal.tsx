@@ -140,12 +140,11 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
     const targetDate = getVal('targetDate') || getVal('date'); 
     const time = getVal('time'); 
     const leaveType = getVal('leaveType');
-    const timeSlot = getVal('timeSlot'); // 🚀 ĐÃ BỔ SUNG: Khung giờ nghỉ
+    const timeSlot = getVal('timeSlot'); 
     const itemName = getVal('itemName');
     const amount = getVal('amount');
     const reason = getVal('reason');
 
-    // 🚀 BỔ SUNG: Tính toán số ngày nghỉ chuẩn xác kể cả nửa ngày
     let numDays = 0;
     if (startDate && endDate) {
         const start = new Date(startDate);
@@ -229,11 +228,11 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
                                                 {numDays > 0 && <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-md text-[11px]">({numDays} ngày)</span>}
                                             </p>
                                             
-                                            {/* 🚀 HIỂN THỊ LOẠI NGHỈ PHÉP VÀ KHUNG GIỜ NGHỈ */}
                                             <div className="mt-1.5 flex flex-wrap gap-2">
-                                                {timeSlot && timeSlot !== "FULL_DAY" && (
+                                                {/* 🚀 ĐÃ SỬA: LUÔN HIỂN THỊ CẢ NGÀY CHO NGHỈ PHÉP */}
+                                                {timeSlot && (
                                                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border bg-purple-50 text-purple-700 border-purple-200">
-                                                        <Clock size={12} /> {timeSlot === 'MORNING' ? 'Nửa buổi sáng' : 'Nửa buổi chiều'}
+                                                        <Clock size={12} /> {timeSlot === 'FULL_DAY' ? 'Cả ngày' : timeSlot === 'MORNING' ? 'Nửa buổi sáng' : 'Nửa buổi chiều'}
                                                     </span>
                                                 )}
                                                 {leaveType && (
@@ -250,6 +249,12 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
                                             <p className="text-sm text-slate-900 font-black flex items-center gap-2">
                                                 {new Date(targetDate).toLocaleDateString('vi-VN')}
                                                 {time && <span className="text-red-600 bg-red-50 border border-red-100 px-2 py-0.5 rounded-md text-[11px]"><Clock size={12} className="inline mr-1 mb-0.5" />{time}</span>}
+                                                {/* 🚀 ĐÃ SỬA: LUÔN HIỂN THỊ CẢ NGÀY CHO LÀM REMOTE */}
+                                                {timeSlot && (
+                                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-bold border bg-purple-50 text-purple-700 border-purple-200">
+                                                        <Clock size={12} /> {timeSlot === 'FULL_DAY' ? 'Cả ngày' : timeSlot === 'MORNING' ? 'Nửa buổi sáng' : 'Nửa buổi chiều'}
+                                                    </span>
+                                                )}
                                             </p>
                                         </div>
                                     )}
@@ -292,7 +297,6 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
                                                         }`}>
                                                             {log.action === 'REJECTED' ? <XOctagon size={16} /> : <CheckCircle size={16} />}
                                                         </div>
-                                                        {/* Đường line nối các bước */}
                                                         {index < request.logs.length - 1 && <div className="absolute top-8 bottom-[-16px] left-4 w-px bg-slate-200"></div>}
                                                     </div>
                                                     <div className="pb-2 flex-1">
@@ -309,7 +313,6 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
                                                             {log.action === 'REJECTED' && "Đã từ chối"}
                                                         </p>
                                                         
-                                                        {/* HIỂN THỊ LỜI PHÊ */}
                                                         {log.comment && (
                                                             <div className="mt-2 bg-slate-50 p-3 rounded-xl border border-slate-100 text-sm text-slate-700 font-medium relative italic shadow-inner">
                                                                 <div className="absolute -top-1.5 left-4 w-3 h-3 bg-slate-50 border-t border-l border-slate-100 rotate-45"></div>

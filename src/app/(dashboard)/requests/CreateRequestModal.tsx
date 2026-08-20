@@ -85,14 +85,12 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
     const renderDynamicFields = () => {
         switch (selectedType) {
             case "NGHI_PHEP":
-                // 🚀 TÍNH TOÁN NGÀY NGHỈ (BAO GỒM NỬA NGÀY)
                 let numDays = 0;
                 if (contentData.startDate && contentData.endDate) {
                     const start = new Date(contentData.startDate);
                     const end = new Date(contentData.endDate);
                     if (end >= start) {
                         const dayDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 3600 * 24)) + 1;
-                        // Nửa ngày thì tính 0.5
                         if (contentData.timeSlot === "MORNING" || contentData.timeSlot === "AFTERNOON") {
                             numDays = dayDiff > 1 ? dayDiff - 0.5 : 0.5;
                         } else {
@@ -117,7 +115,6 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
                                 </select>
                             </div>
                             
-                            {/* 🚀 BỔ SUNG: KHUNG GIỜ NGHỈ */}
                             <div>
                                 <label className="block text-[11px] md:text-xs font-bold text-slate-500 mb-1">Khung giờ nghỉ <span className="text-red-500">*</span></label>
                                 <select
@@ -187,10 +184,25 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
             case "LAM_REMOTE":
                 return (
                     <div className="space-y-3 md:space-y-4 animate-fade-in">
-                        <div>
-                            <label className="block text-[11px] md:text-xs font-bold text-slate-500 mb-1">Ngày áp dụng <span className="text-red-500">*</span></label>
-                            <input type="date" className="w-full bg-white border border-slate-200 rounded-lg p-2 md:p-2.5 outline-none focus:border-red-500 text-sm font-medium"
-                                value={contentData.date || ""} onChange={(e) => handleChange("date", e.target.value)} />
+                        {/* 🚀 ĐÃ BỔ SUNG: KHUNG GIỜ LÀM REMOTE VÀ NGÀY ÁP DỤNG TRÊN CÙNG 1 HÀNG */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+                            <div>
+                                <label className="block text-[11px] md:text-xs font-bold text-slate-500 mb-1">Ngày áp dụng <span className="text-red-500">*</span></label>
+                                <input type="date" className="w-full bg-white border border-slate-200 rounded-lg p-2 md:p-2.5 outline-none focus:border-red-500 text-sm font-medium cursor-pointer"
+                                    value={contentData.date || ""} onChange={(e) => handleChange("date", e.target.value)} />
+                            </div>
+                            <div>
+                                <label className="block text-[11px] md:text-xs font-bold text-slate-500 mb-1">Khung giờ làm Remote <span className="text-red-500">*</span></label>
+                                <select
+                                    className="w-full bg-white border border-slate-200 rounded-lg p-2 md:p-2.5 outline-none focus:border-red-500 text-sm font-medium cursor-pointer"
+                                    value={contentData.timeSlot || "FULL_DAY"}
+                                    onChange={(e) => handleChange("timeSlot", e.target.value)}
+                                >
+                                    <option value="FULL_DAY">Cả ngày</option>
+                                    <option value="MORNING">Chỉ buổi sáng</option>
+                                    <option value="AFTERNOON">Chỉ buổi chiều</option>
+                                </select>
+                            </div>
                         </div>
                         <div>
                             <label className="block text-[11px] md:text-xs font-bold text-slate-500 mb-1">Lý do làm Remote <span className="text-red-500">*</span></label>
@@ -272,7 +284,6 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
     };
 
     const handleSubmit = async () => {
-        // Validation 
         if (selectedType === "NGHI_PHEP" && (!contentData.leaveType || !contentData.startDate || !contentData.endDate || !contentData.reason?.trim())) {
             showToast("error", "Sếp ơi, chọn loại nghỉ, nhập đủ ngày và Lý do nhé!"); return;
         }
@@ -295,7 +306,6 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
 
         setIsSubmitting(true);
         try {
-            // Mặc định set `timeSlot` = "FULL_DAY" nếu không chọn nửa ngày
             const finalContentData = {
                 ...contentData,
                 timeSlot: contentData.timeSlot || "FULL_DAY"

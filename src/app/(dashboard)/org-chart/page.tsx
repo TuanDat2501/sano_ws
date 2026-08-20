@@ -14,15 +14,13 @@ const nodeTypes = {
     custom: CustomNode,
 };
 
-// 🚀 THUẬT TOÁN TỰ ĐỘNG SẮP XẾP SƠ ĐỒ
 const getLayoutedElements = (nodes: any[], edges: any[], direction = 'TB') => {
     const dagreGraph = new dagre.graphlib.Graph();
     dagreGraph.setDefaultEdgeLabel(() => ({}));
     
-    const nodeWidth = 240; 
-    const nodeHeight = 140;
+    const nodeWidth = 260; 
+    const nodeHeight = 160;
 
-    // Khoảng cách giữa các node
     dagreGraph.setGraph({ rankdir: direction, nodesep: 40, ranksep: 60 });
 
     nodes.forEach((node) => { dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight }); });
@@ -77,7 +75,6 @@ export default function OrgChartPage() {
             const bgdTeamIds = bgdUsers.map((u: any) => u.teamId).filter(Boolean);
             const bgdDeptIds = bgdTeamIds.map((tid: string) => teamsData.find((t:any) => t.id === tid)?.departmentId).filter(Boolean);
 
-            // 1. GỐC BAN GIÁM ĐỐC
             const rootId = "root_bgd";
             initialNodes.push({
                 id: rootId, type: 'custom', position: { x: 0, y: 0 },
@@ -96,7 +93,6 @@ export default function OrgChartPage() {
                 initialEdges.push({ id: `e_${rootId}-${userNodeId}`, source: rootId, target: userNodeId, type: 'smoothstep', animated: true });
             });
 
-            // 2. PHÒNG BAN
             deptsData.filter((d: any) => !bgdDeptIds.includes(d.id)).forEach((dept: any) => {
                 const deptNodeId = `dept_${dept.id}`;
                 initialNodes.push({
@@ -106,7 +102,6 @@ export default function OrgChartPage() {
                 initialEdges.push({ id: `e_${rootId}-${deptNodeId}`, source: rootId, target: deptNodeId, type: 'smoothstep' });
             });
 
-            // 3. TEAM
             teamsData.filter((t: any) => !bgdTeamIds.includes(t.id)).forEach((team: any) => {
                 const teamNodeId = `team_${team.id}`;
                 const parentId = team.departmentId && !bgdDeptIds.includes(team.departmentId) ? `dept_${team.departmentId}` : rootId; 
@@ -117,7 +112,6 @@ export default function OrgChartPage() {
                 initialEdges.push({ id: `e_${parentId}-${teamNodeId}`, source: parentId, target: teamNodeId, type: 'smoothstep' });
             });
 
-            // 4. NHÁNH "CHƯA CÓ TEAM"
             const noTeamId = "no_team";
             initialNodes.push({
                 id: noTeamId, type: 'custom', position: { x: 0, y: 0 },
@@ -125,7 +119,6 @@ export default function OrgChartPage() {
             });
             initialEdges.push({ id: `e_${rootId}-${noTeamId}`, source: rootId, target: noTeamId, type: 'smoothstep', animated: true });
 
-            // 5. GOM NHÓM DỮ LIỆU
             const groupedUsers: Record<string, any[]> = {};
             const groupedChannels: Record<string, any[]> = {};
 
@@ -143,24 +136,22 @@ export default function OrgChartPage() {
 
             const allParentIds = new Set([...Object.keys(groupedUsers), ...Object.keys(groupedChannels)]);
 
-            // 6. XÂY DỰNG ĐƯỜNG TRUYỀN DỌC & BUNG NGANG KÊNH
             allParentIds.forEach(parentId => {
                 const users = groupedUsers[parentId] || [];
                 const channels = groupedChannels[parentId] || [];
 
-                // Lọc Leader ưu tiên lên đầu đường truyền
                 const leaders = users.filter(u => u.role === 'LEADER');
                 const members = users.filter(u => u.role !== 'LEADER');
 
                 let lastLeaderId = parentId;
 
-                // Nối dọc các LEADER
                 leaders.forEach(u => {
                     const uId = `user_${u.id}`;
                     initialNodes.push({
                         id: uId, type: 'custom', position: { x: 0, y: 0 },
                         data: { 
-                            label: u.fullName, role: u.role, actual: u.currentWeekStats?.actual || 0, target: u.currentWeekStats?.target || 0,
+                            label: u.fullName, role: u.role, actual: u.currentWeekStats?.actual || 0, target: u.currentWeekStats?.target || 0, 
+                            surplusDetails: u.surplusDetails || [], surplusTaskList: u.surplusTaskList || [], // 🚀 TRUYỀN LIST BÀI DƯ VÀO NODE
                             avatar: u.avatarUrl || null, borderColor: 'border-red-300', textColor: 'text-red-600', fullUserObj: u, targetPosition: 'top'
                         }
                     });
@@ -168,16 +159,28 @@ export default function OrgChartPage() {
                     lastLeaderId = uId;
                 });
 
-                // Nối KÊNH và chia đều Nhân Sự xuống dưới
                 if (channels.length > 0) {
                     const membersByChannel: Record<string, any[]> = {};
                     channels.forEach(c => membersByChannel[c.id] = []);
                     
                     const unassigned: any[] = [];
-                    members.forEach(u => unassigned.push(u));
-
-                    unassigned.forEach((u, idx) => {
-                        membersByChannel[channels[idx % channels.length].id].push(u);
+                    
+                    members.forEach(u => {
+                        const userChannels = u.channelMemberships || [];
+                        if (userChannels.length > 0) {
+                            let assignedToAtLeastOne = false;
+                            userChannels.forEach((uc: any) => {
+                                if (membersByChannel[uc.channelId]) {
+                                    membersByChannel[uc.channelId].push({ ...u, roleOnChannel: uc.roleOnChannel });
+                                    assignedToAtLeastOne = true;
+                                }
+                            });
+                            if (!assignedToAtLeastOne) {
+                                unassigned.push(u);
+                            }
+                        } else {
+                            unassigned.push(u);
+                        }
                     });
 
                     channels.forEach(c => {
@@ -193,11 +196,12 @@ export default function OrgChartPage() {
 
                         let lastNodeId = cId;
                         membersByChannel[c.id].forEach(u => {
-                            const uId = `user_${u.id}`;
+                            const uId = `user_${c.id}_${u.id}`; 
                             initialNodes.push({
                                 id: uId, type: 'custom', position: { x: 0, y: 0 },
                                 data: { 
-                                    label: u.fullName, role: u.role, actual: u.currentWeekStats?.actual || 0, target: u.currentWeekStats?.target || 0,
+                                    label: u.fullName, role: u.roleOnChannel || u.role, actual: u.currentWeekStats?.actual || 0, target: u.currentWeekStats?.target || 0, 
+                                    surplusDetails: u.surplusDetails || [], surplusTaskList: u.surplusTaskList || [], // 🚀 TRUYỀN LIST BÀI DƯ VÀO NODE
                                     avatar: u.avatarUrl || null, borderColor: 'border-slate-200', textColor: 'text-slate-500', fullUserObj: u, targetPosition: 'top'
                                 }
                             });
@@ -205,6 +209,22 @@ export default function OrgChartPage() {
                             lastNodeId = uId;
                         });
                     });
+
+                    let lastUnassignedId = lastLeaderId;
+                    unassigned.forEach(u => {
+                        const uId = `user_unassigned_${u.id}`;
+                        initialNodes.push({
+                            id: uId, type: 'custom', position: { x: 0, y: 0 },
+                            data: { 
+                                label: u.fullName, role: u.role, actual: u.currentWeekStats?.actual || 0, target: u.currentWeekStats?.target || 0, 
+                                surplusDetails: u.surplusDetails || [], surplusTaskList: u.surplusTaskList || [], // 🚀 TRUYỀN LIST BÀI DƯ VÀO NODE
+                                avatar: u.avatarUrl || null, borderColor: 'border-slate-200', textColor: 'text-slate-500', fullUserObj: u, targetPosition: 'top'
+                            }
+                        });
+                        initialEdges.push({ id: `e_${lastUnassignedId}-${uId}`, source: lastUnassignedId, target: uId, type: 'smoothstep' });
+                        lastUnassignedId = uId;
+                    });
+
                 } else {
                     let lastNodeId = lastLeaderId;
                     members.forEach(u => {
@@ -212,7 +232,8 @@ export default function OrgChartPage() {
                         initialNodes.push({
                             id: uId, type: 'custom', position: { x: 0, y: 0 },
                             data: { 
-                                label: u.fullName, role: u.role, actual: u.currentWeekStats?.actual || 0, target: u.currentWeekStats?.target || 0,
+                                label: u.fullName, role: u.role, actual: u.currentWeekStats?.actual || 0, target: u.currentWeekStats?.target || 0, 
+                                surplusDetails: u.surplusDetails || [], surplusTaskList: u.surplusTaskList || [], // 🚀 TRUYỀN LIST BÀI DƯ VÀO NODE
                                 avatar: u.avatarUrl || null, borderColor: 'border-slate-200', textColor: 'text-slate-500', fullUserObj: u, targetPosition: 'top'
                             }
                         });
@@ -237,11 +258,7 @@ export default function OrgChartPage() {
 
     return (
         <PermissionGuard moduleId="MENU_ORG_CHART">
-        
-        {/* 🚀 ĐÃ SỬA: Loại bỏ toàn bộ padding thừa thãi, thiết lập tràn viền */}
         <div className="h-full w-full flex flex-col animate-fade-in bg-white relative overflow-hidden">
-            
-            {/* 🚀 ĐÃ SỬA: Header biến thành thanh Toolbar phẳng, bám sát mí trên */}
             <div className="px-5 py-3 md:px-6 md:py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 shrink-0 bg-white border-b border-slate-200 z-10 shadow-sm">
                 <div>
                     <h1 className="text-lg md:text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
@@ -252,7 +269,6 @@ export default function OrgChartPage() {
                 </div>
             </div>
 
-            {/* 🚀 ĐÃ SỬA: Box chứa ReactFlow giờ chiếm trọn 100% không gian còn lại */}
             <div className="flex-1 w-full h-full bg-slate-50 relative z-0">
                 {loading ? (
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 font-medium gap-3 bg-white/50 backdrop-blur-sm z-20">
@@ -269,7 +285,7 @@ export default function OrgChartPage() {
                         onConnect={onConnect}
                         nodeTypes={nodeTypes}
                         fitView 
-                        fitViewOptions={{ padding: 0.15, minZoom: 0.1, maxZoom: 1.2 }} // 🚀 Chống Zoom quá mức
+                        fitViewOptions={{ padding: 0.15, minZoom: 0.1, maxZoom: 1.2 }} 
                         attributionPosition="bottom-right"
                         className="bg-transparent"
                         onNodeClick={onNodeClick}

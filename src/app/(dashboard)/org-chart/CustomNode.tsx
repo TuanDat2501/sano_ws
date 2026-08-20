@@ -1,9 +1,10 @@
 import { Handle, Position } from "reactflow";
-import { Tv } from "lucide-react"; // 🚀 Import Icon TV
+import { Tv } from "lucide-react"; 
 
 export default function CustomNode({ data }: { data: any }) {
     const actual = data.actual ?? 0;
     const target = data.target ?? 0;
+    const surplusDetails = data.surplusDetails || []; 
     
     const percent = target > 0 ? Math.round((actual / target) * 100) : 0;
     const barWidth = Math.min(percent, 100); 
@@ -15,50 +16,68 @@ export default function CustomNode({ data }: { data: any }) {
     const targetPos = data.targetPosition === 'left' ? Position.Left : Position.Top;
 
     return (
-        <div className={`relative p-2.5 md:p-3 rounded-xl md:rounded-2xl border bg-white shadow-sm hover:shadow-lg transition-all min-w-[200px] md:min-w-[220px] ${data.borderColor}`}>
+        <div className={`relative p-3 md:p-3.5 rounded-[18px] border bg-white shadow-sm hover:shadow-xl transition-all w-[240px] md:w-[260px] ${data.borderColor}`}>
+            <Handle type="target" position={targetPos} className="!w-2 !h-2 !bg-slate-300 !border-white" />
             
-            <Handle type="target" position={targetPos} className="!w-2.5 !h-2.5 !bg-slate-300 !border-white" />
-            
-            <div className={`flex items-center ${showAvatar ? 'gap-2.5 md:gap-3' : 'justify-center py-1 md:py-2'} mb-2.5 md:mb-3`}>
+            <div className={`flex items-center ${showAvatar ? 'gap-3' : 'justify-center py-2'} mb-3`}>
                 {showAvatar && (
                     data.avatar ? (
-                        <img src={data.avatar} alt="avatar" className="w-8 h-8 md:w-10 md:h-10 rounded-full object-cover border border-slate-100 shadow-sm shrink-0" />
+                        <img src={data.avatar} alt="avatar" className="w-10 h-10 rounded-full object-cover border-2 border-slate-100 shadow-sm shrink-0" />
                     ) : (
-                        <div className={`w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center font-black text-white shrink-0 shadow-sm text-xs md:text-sm ${data.role === 'EDITOR' ? 'bg-purple-500' : data.role === 'LEADER' ? 'bg-blue-500' : data.role === 'Kênh' ? 'bg-teal-500' : data.role === 'Team' ? 'bg-amber-500' : 'bg-slate-600'}`}>
+                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-white shrink-0 shadow-sm text-sm ${data.role === 'EDITOR' ? 'bg-purple-500' : data.role === 'LEADER' ? 'bg-blue-500' : data.role === 'Kênh' ? 'bg-teal-500' : data.role === 'Team' ? 'bg-amber-500' : 'bg-slate-600'}`}>
                             {data.role === 'Kênh' ? <Tv size={16} /> : initials}
                         </div>
                     )
                 )}
 
                 <div className={`${showAvatar ? 'text-left flex-1 min-w-0' : 'text-center'}`}>
-                    <p className={`text-[8px] md:text-[9px] uppercase font-black tracking-widest leading-none mb-1 md:mb-1.5 truncate ${data.textColor}`}>
+                    <p className={`text-[9px] uppercase font-black tracking-widest leading-none mb-1 ${data.textColor}`}>
                         {data.role}
                     </p>
-                    <p className="text-xs md:text-[13px] font-bold text-slate-900 truncate leading-none">
+                    <p className="text-[13px] md:text-sm font-bold text-slate-900 truncate leading-tight">
                         {data.label}
                     </p>
                 </div>
             </div>
             
             {data.target !== undefined && data.role !== 'Kênh' && (
-                <div className="bg-slate-50 p-1.5 md:p-2 rounded-lg md:rounded-xl border border-slate-100 mt-1">
-                    <div className="flex justify-between text-[9px] md:text-[10px] font-black mb-1 md:mb-1.5">
-                        <span className="text-slate-400 uppercase tracking-widest">Tiến độ</span>
-                        <span className={percent >= 100 ? 'text-emerald-600' : 'text-slate-700'}>
-                            {actual} / {target} <span className="opacity-50">({percent}%)</span>
-                        </span>
-                    </div>
+                <div className="flex flex-col gap-2">
                     
-                    <div className="h-1 md:h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
-                        <div 
-                            className={`h-full rounded-full transition-all duration-700 ease-out ${progressColor}`} 
-                            style={{ width: `${barWidth}%` }}
-                        ></div>
+                    <div className="bg-slate-50 p-2 md:p-2.5 rounded-xl border border-slate-100">
+                        <div className="flex justify-between items-center text-[10px] font-black mb-1.5">
+                            <span className="text-slate-400 uppercase tracking-widest">Tiến độ</span>
+                            <span className={percent >= 100 ? 'text-emerald-600' : 'text-slate-700'}>
+                                {actual} / {target} <span className="opacity-50">({percent}%)</span>
+                            </span>
+                        </div>
+                        
+                        <div className="h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
+                            <div 
+                                className={`h-full rounded-full transition-all duration-700 ease-out ${progressColor}`} 
+                                style={{ width: `${barWidth}%` }}
+                            ></div>
+                        </div>
                     </div>
+
+                    {/* 🚀 ĐÃ THIẾT KẾ LẠI: Hiển thị text xếp dọc gọn gàng theo chuẩn hình mẫu */}
+                    {surplusDetails.length > 0 && (
+                        <div className="flex justify-center mt-1">
+                            <div className="flex text-[11px] md:text-xs font-black text-rose-500 leading-tight">
+                                <span className="mr-1.5">Dư:</span>
+                                <div className="flex flex-col">
+                                    {surplusDetails.map((s: any, idx: number) => (
+                                        <span key={idx}>
+                                            {s.count} bài {s.duration ? s.duration + ' phút' : '? phút'}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
 
-            <Handle type="source" position={Position.Bottom} className="!w-2.5 !h-2.5 !bg-slate-300 !border-white" />
+            <Handle type="source" position={Position.Bottom} className="!w-2 !h-2 !bg-slate-300 !border-white" />
         </div>
     );
 }

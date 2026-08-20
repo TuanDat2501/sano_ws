@@ -24,16 +24,25 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
                 team: { select: { name: true } },
                 firstApprover: { select: { fullName: true } },
                 secondApprover: { select: { fullName: true } },
-                // 🚀 BỔ SUNG: Kéo thêm bảng logs để lấy lịch sử duyệt và lời phê
                 logs: {
                     include: { approver: { select: { fullName: true, role: true } } },
-                    orderBy: { createdAt: 'asc' } // Sắp xếp theo thời gian duyệt
+                    orderBy: { createdAt: 'asc' } 
                 }
             }
         });
 
         if (!requestDetail) {
             return NextResponse.json({ error: "Không tìm thấy đề xuất" }, { status: 404 });
+        }
+
+        // 🚀 BỔ SUNG LỚP BẢO VỆ ÉP KIỂU: 
+        // Đảm bảo contentData (chứa timeSlot) luôn là Object chuẩn chỉnh khi trả về Frontend
+        if (requestDetail.contentData && typeof requestDetail.contentData === 'string') {
+            try {
+                requestDetail.contentData = JSON.parse(requestDetail.contentData);
+            } catch (e) {
+                console.error("Lỗi parse contentData JSON:", e);
+            }
         }
 
         return NextResponse.json(requestDetail);

@@ -11,7 +11,6 @@ export async function GET(req: Request) {
         const session = await getServerSession(authOptions);
         if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-        // 1. TÌM XEM HÔM NAY LÀ TUẦN MẤY
         const now = new Date();
         const year = now.getFullYear();
         const month = now.getMonth() + 1;
@@ -27,7 +26,6 @@ export async function GET(req: Request) {
         
         const currentWeekNumber = Math.floor(diffDays / 7) + 1;
 
-        // 2. LẤY NGÀY ĐẦU VÀ CUỐI TUẦN
         const { start, end } = getContinuousWeekRange(year, month, currentWeekNumber);
         
         const startOfWeek = new Date(start);
@@ -36,18 +34,23 @@ export async function GET(req: Request) {
         const endOfWeek = new Date(end);
         endOfWeek.setHours(23, 59, 59, 999);
 
-        // 3. Query lấy User
         const users = await prisma.user.findMany({
             where: { isActive: true },
             select: {
                 id: true,
                 fullName: true,
-                username: true, // 🚀 BỔ SUNG LẤY TÀI KHOẢN
+                username: true,
                 role: true,
                 avatarUrl: true,
                 teamId: true,
-                team: { select: { name: true } }, // 🚀 BỔ SUNG LẤY TÊN TEAM
+                team: { select: { name: true } }, 
                 isActive: true,
+                channelMemberships: {
+                    select: {
+                        channelId: true,
+                        roleOnChannel: true
+                    }
+                },
                 weeklyKPIs: {
                     where: { year: year, month: month, weekNumber: currentWeekNumber },
                     take: 1
@@ -55,7 +58,6 @@ export async function GET(req: Request) {
             }
         });
 
-        // 4. Lấy Lịch sử làm việc (TaskLog)
         const taskLogs = await prisma.taskLog.findMany({
             where: {
                 createdAt: { gte: startOfWeek, lte: endOfWeek },
@@ -91,7 +93,64 @@ export async function GET(req: Request) {
             }
         });
 
-        // 5. Lắp ráp dữ liệu
+        const surplusTasks = await prisma.task.findMany({
+            where: {
+                isClosed: false,
+                OR: [{ publishLink: null }, { publishLink: "" }],
+                status: { not: "BACKLOG" }
+            },
+            select: {
+                id: true, title: true, 
+                contentId: true, editorId: true, animatorId: true, duration: true,
+                coContentUsers: { select: { id: true } },
+                coEditorUsers: { select: { id: true } },
+                coAnimatorUsers: { select: { id: true } },
+                scriptLink: true, animationLink: true, roughProjectLink: true, videoLink: true,
+                // 🚀 ĐÃ BỔ SUNG: Truy vấn thêm trường Avatar của kênh
+                channel: { select: { name: true, avatarUrl: true } } 
+            }
+        });
+
+        const userSurplusDetails: Record<string, Record<number, number>> = {};
+        const userSurplusList: Record<string, any[]> = {}; 
+        
+        surplusTasks.forEach(t => {
+            const hasScript = t.scriptLink && t.scriptLink.trim() !== "";
+            const hasAnim = t.animationLink && t.animationLink.trim() !== "";
+            const hasRough = t.roughProjectLink && t.roughProjectLink.trim() !== "";
+            const hasVideo = t.videoLink && t.videoLink.trim() !== "";
+            const duration = t.duration || 0;
+            
+            const involvedIds = new Set<string>();
+            
+            if (hasScript) {
+                if (t.contentId) involvedIds.add(t.contentId);
+                t.coContentUsers.forEach(u => involvedIds.add(u.id));
+            }
+            if (hasAnim) {
+                if (t.animatorId) involvedIds.add(t.animatorId);
+                t.coAnimatorUsers.forEach(u => involvedIds.add(u.id));
+            }
+            if (hasRough || hasVideo) {
+                if (t.editorId) involvedIds.add(t.editorId);
+                t.coEditorUsers.forEach(u => involvedIds.add(u.id));
+            }
+            
+            involvedIds.forEach(id => {
+                if (!userSurplusDetails[id]) userSurplusDetails[id] = {};
+                userSurplusDetails[id][duration] = (userSurplusDetails[id][duration] || 0) + 1;
+
+                if (!userSurplusList[id]) userSurplusList[id] = [];
+                userSurplusList[id].push({
+                    id: t.id,
+                    title: t.title,
+                    duration: duration,
+                    channelName: t.channel?.name || "Chưa phân kênh",
+                    channelAvatar: t.channel?.avatarUrl || null // 🚀 ĐẨY AVATAR KÊNH RA FE
+                });
+            });
+        });
+
         const formattedUsers = users.map(user => {
             const kpiRecord = user.weeklyKPIs.length > 0 ? user.weeklyKPIs[0] : null;
             const targetValue = kpiRecord?.targetValue || 0;
@@ -149,15 +208,23 @@ export async function GET(req: Request) {
                 actualCount = uniqueTasksCount;
             }
 
+            const sData = userSurplusDetails[user.id] || {};
+            const surplusDetails = Object.entries(sData)
+                .map(([dur, count]) => ({ duration: Number(dur), count: count as number }))
+                .sort((a, b) => b.duration - a.duration); 
+
             return {
                 id: user.id,
                 fullName: user.fullName,
-                username: user.username, // 🚀 ĐÃ BỔ SUNG
+                username: user.username,
                 role: user.role,
                 avatarUrl: user.avatarUrl,
                 teamId: user.teamId,
-                teamName: user.team?.name || null, // 🚀 ĐÃ BỔ SUNG
+                teamName: user.team?.name || null,
                 isActive: user.isActive,
+                channelMemberships: user.channelMemberships,
+                surplusDetails: surplusDetails, 
+                surplusTaskList: userSurplusList[user.id] || [],
                 currentWeekStats: {
                     target: targetValue,
                     actual: actualCount
@@ -165,7 +232,6 @@ export async function GET(req: Request) {
             };
         });
 
-        // 🚀 SẮP XẾP LEADER LÊN ĐẦU DANH SÁCH RỒI MỚI TRẢ VỀ
         formattedUsers.sort((a, b) => {
             if (a.role === 'LEADER' && b.role !== 'LEADER') return -1;
             if (a.role !== 'LEADER' && b.role === 'LEADER') return 1;

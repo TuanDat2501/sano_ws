@@ -1,4 +1,4 @@
-import { X, UserCircle2, Briefcase, Target, CheckCircle2, Tv } from "lucide-react";
+import { X, UserCircle2, Briefcase, Target, CheckCircle2, Tv, Layers, Clock } from "lucide-react";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
@@ -7,6 +7,9 @@ export default function OrgNodeDrawer({ isOpen, onClose, nodeData }: { isOpen: b
     useEffect(() => setMounted(true), []);
 
     if (!nodeData) return null;
+    
+    const surplusTaskList = nodeData.surplusTaskList || []; 
+    
     const drawerContent = (
         <>
             {isOpen && (
@@ -15,7 +18,6 @@ export default function OrgNodeDrawer({ isOpen, onClose, nodeData }: { isOpen: b
             
             <div className={`fixed top-0 right-0 h-full w-full sm:w-[400px] md:w-[420px] bg-white shadow-2xl z-[99999] transform transition-transform duration-300 ease-out flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}>
                 
-                {/* --- HEADER DRAWER --- */}
                 <div className="p-4 md:p-6 lg:p-8 border-b border-slate-100 flex justify-between items-start bg-slate-50/50 shrink-0">
                     <div className="flex gap-3 md:gap-4 items-center">
                         {!nodeData.isSystemNode && (
@@ -37,7 +39,6 @@ export default function OrgNodeDrawer({ isOpen, onClose, nodeData }: { isOpen: b
                     </button>
                 </div>
 
-                {/* --- BODY DRAWER --- */}
                 <div className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 bg-white custom-scrollbar">
                     {nodeData.fullUserObj ? (
                         <div className="space-y-4 md:space-y-6">
@@ -77,15 +78,52 @@ export default function OrgNodeDrawer({ isOpen, onClose, nodeData }: { isOpen: b
                                                 style={{ width: `${Math.min(nodeData.target > 0 ? (nodeData.actual / nodeData.target) * 100 : 0, 100)}%` }}
                                             ></div>
                                         </div>
-                                        {nodeData.actual >= nodeData.target && nodeData.target > 0 && (
-                                            <p className="text-[10px] md:text-xs font-bold text-emerald-600 mt-2 flex items-center gap-1"><CheckCircle2 size={12} className="md:w-3.5 md:h-3.5" /> Đã đạt KPI tuần!</p>
-                                        )}
+                                        
+                                        <div className="flex justify-between items-center mt-3">
+                                            {nodeData.actual >= nodeData.target && nodeData.target > 0 ? (
+                                                <p className="text-[10px] md:text-xs font-bold text-emerald-600 flex items-center gap-1"><CheckCircle2 size={14} className="md:w-4 md:h-4" /> Đã đạt KPI tuần!</p>
+                                            ) : <div></div>}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {surplusTaskList.length > 0 && (
+                                <div className="bg-orange-50/50 p-4 md:p-5 rounded-xl md:rounded-2xl border border-orange-100 space-y-3">
+                                    <h3 className="text-[9px] md:text-[10px] font-black text-orange-500 uppercase tracking-widest flex items-center justify-between border-b border-orange-200/50 pb-2 mb-2">
+                                        <span className="flex items-center gap-1.5"><Layers size={14} /> Danh sách Hàng Tồn</span>
+                                        <span className="bg-orange-200 text-orange-700 px-2 py-0.5 rounded text-[10px]">Tổng: {surplusTaskList.length} bài</span>
+                                    </h3>
+                                    
+                                    <div className="space-y-2.5 max-h-[250px] overflow-y-auto custom-scrollbar pr-1">
+                                        {surplusTaskList.map((task: any, idx: number) => (
+                                            <div key={idx} className="bg-white p-3 rounded-xl border border-orange-100 shadow-sm flex flex-col gap-1.5 hover:border-orange-300 transition-colors">
+                                                <p className="text-[11px] md:text-xs font-bold text-slate-800 line-clamp-2 leading-snug" title={task.title}>
+                                                    {task.title || "Video không tên"}
+                                                </p>
+                                                <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                                                    {/* 🚀 ĐÃ BỔ SUNG: Hiển thị ảnh Avatar Kênh thu gọn ngay cạnh tên kênh */}
+                                                    <span className="text-[9px] font-black uppercase text-teal-600 bg-teal-50 pr-1.5 pl-0.5 py-0.5 rounded-full border border-teal-100 flex items-center gap-1.5 shadow-sm w-fit">
+                                                        {task.channelAvatar ? (
+                                                            <img src={task.channelAvatar} alt={task.channelName} className="w-3.5 h-3.5 rounded-full object-cover border border-teal-200/50" />
+                                                        ) : (
+                                                            <div className="w-3.5 h-3.5 rounded-full bg-teal-200 flex items-center justify-center ml-1">
+                                                                <Tv size={8} className="text-teal-600" />
+                                                            </div>
+                                                        )}
+                                                        {task.channelName}
+                                                    </span>
+                                                    <span className="text-[9px] font-black uppercase text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100 flex items-center gap-1">
+                                                        <Clock size={10} /> {task.duration} Phút
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
                             )}
                         </div>
                     ) : nodeData.fullChannelObj ? (
-                        // 🚀 BỔ SUNG: Hiển thị chi tiết KÊNH
                         <div className="space-y-4 md:space-y-6">
                             <div className="bg-teal-50 p-4 rounded-xl md:rounded-2xl border border-teal-100 space-y-2 md:space-y-3">
                                 <h3 className="text-[9px] md:text-[10px] font-black text-teal-500 uppercase tracking-widest border-b border-teal-200 pb-2 mb-2 md:mb-3">Thông tin Kênh</h3>
