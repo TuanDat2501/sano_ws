@@ -151,7 +151,7 @@ export default function OrgChartPage() {
                         id: uId, type: 'custom', position: { x: 0, y: 0 },
                         data: { 
                             label: u.fullName, role: u.role, actual: u.currentWeekStats?.actual || 0, target: u.currentWeekStats?.target || 0, 
-                            surplusDetails: u.surplusDetails || [], surplusTaskList: u.surplusTaskList || [], // 🚀 TRUYỀN LIST BÀI DƯ VÀO NODE
+                            surplusDetails: u.surplusDetails || [], surplusTaskList: u.surplusTaskList || [], 
                             avatar: u.avatarUrl || null, borderColor: 'border-red-300', textColor: 'text-red-600', fullUserObj: u, targetPosition: 'top'
                         }
                     });
@@ -197,11 +197,25 @@ export default function OrgChartPage() {
                         let lastNodeId = cId;
                         membersByChannel[c.id].forEach(u => {
                             const uId = `user_${c.id}_${u.id}`; 
+                            
+                            // 🚀 ĐÃ SỬA: LỌC BÀI DƯ THEO ĐÚNG ID KÊNH (c.id) MÀ NODE NÀY ĐANG NẰM
+                            const channelSurplusList = (u.surplusTaskList || []).filter((task: any) => task.channelId === c.id);
+                            
+                            // Tính toán lại surplusDetails (Thống kê số lượng theo phút) dành riêng cho Kênh này
+                            const durCount: Record<number, number> = {};
+                            channelSurplusList.forEach((t: any) => {
+                                durCount[t.duration] = (durCount[t.duration] || 0) + 1;
+                            });
+                            const channelSurplusDetails = Object.entries(durCount)
+                                .map(([dur, count]) => ({ duration: Number(dur), count: count as number }))
+                                .sort((a, b) => b.duration - a.duration);
+
                             initialNodes.push({
                                 id: uId, type: 'custom', position: { x: 0, y: 0 },
                                 data: { 
                                     label: u.fullName, role: u.roleOnChannel || u.role, actual: u.currentWeekStats?.actual || 0, target: u.currentWeekStats?.target || 0, 
-                                    surplusDetails: u.surplusDetails || [], surplusTaskList: u.surplusTaskList || [], // 🚀 TRUYỀN LIST BÀI DƯ VÀO NODE
+                                    surplusDetails: channelSurplusDetails, // 🚀 TRUYỀN DATA ĐÃ LỌC
+                                    surplusTaskList: channelSurplusList,   // 🚀 TRUYỀN DATA ĐÃ LỌC
                                     avatar: u.avatarUrl || null, borderColor: 'border-slate-200', textColor: 'text-slate-500', fullUserObj: u, targetPosition: 'top'
                                 }
                             });
@@ -217,7 +231,7 @@ export default function OrgChartPage() {
                             id: uId, type: 'custom', position: { x: 0, y: 0 },
                             data: { 
                                 label: u.fullName, role: u.role, actual: u.currentWeekStats?.actual || 0, target: u.currentWeekStats?.target || 0, 
-                                surplusDetails: u.surplusDetails || [], surplusTaskList: u.surplusTaskList || [], // 🚀 TRUYỀN LIST BÀI DƯ VÀO NODE
+                                surplusDetails: u.surplusDetails || [], surplusTaskList: u.surplusTaskList || [], 
                                 avatar: u.avatarUrl || null, borderColor: 'border-slate-200', textColor: 'text-slate-500', fullUserObj: u, targetPosition: 'top'
                             }
                         });
@@ -233,7 +247,7 @@ export default function OrgChartPage() {
                             id: uId, type: 'custom', position: { x: 0, y: 0 },
                             data: { 
                                 label: u.fullName, role: u.role, actual: u.currentWeekStats?.actual || 0, target: u.currentWeekStats?.target || 0, 
-                                surplusDetails: u.surplusDetails || [], surplusTaskList: u.surplusTaskList || [], // 🚀 TRUYỀN LIST BÀI DƯ VÀO NODE
+                                surplusDetails: u.surplusDetails || [], surplusTaskList: u.surplusTaskList || [], 
                                 avatar: u.avatarUrl || null, borderColor: 'border-slate-200', textColor: 'text-slate-500', fullUserObj: u, targetPosition: 'top'
                             }
                         });

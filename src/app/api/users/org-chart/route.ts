@@ -101,12 +101,12 @@ export async function GET(req: Request) {
             },
             select: {
                 id: true, title: true, 
+                channelId: true, // 🚀 ĐÃ BỔ SUNG: Truy vấn thêm channelId ở gốc
                 contentId: true, editorId: true, animatorId: true, duration: true,
                 coContentUsers: { select: { id: true } },
                 coEditorUsers: { select: { id: true } },
                 coAnimatorUsers: { select: { id: true } },
                 scriptLink: true, animationLink: true, roughProjectLink: true, videoLink: true,
-                // 🚀 ĐÃ BỔ SUNG: Truy vấn thêm trường Avatar của kênh
                 channel: { select: { name: true, avatarUrl: true } } 
             }
         });
@@ -145,8 +145,9 @@ export async function GET(req: Request) {
                     id: t.id,
                     title: t.title,
                     duration: duration,
+                    channelId: t.channelId, // 🚀 ĐÃ BỔ SUNG: Nạp channelId vào List để Frontend lọc
                     channelName: t.channel?.name || "Chưa phân kênh",
-                    channelAvatar: t.channel?.avatarUrl || null // 🚀 ĐẨY AVATAR KÊNH RA FE
+                    channelAvatar: t.channel?.avatarUrl || null 
                 });
             });
         });
@@ -208,6 +209,7 @@ export async function GET(req: Request) {
                 actualCount = uniqueTasksCount;
             }
 
+            // Tính bài dư tổng hợp (cho Leader / Role nằm ngoài kênh)
             const sData = userSurplusDetails[user.id] || {};
             const surplusDetails = Object.entries(sData)
                 .map(([dur, count]) => ({ duration: Number(dur), count: count as number }))
@@ -223,8 +225,8 @@ export async function GET(req: Request) {
                 teamName: user.team?.name || null,
                 isActive: user.isActive,
                 channelMemberships: user.channelMemberships,
-                surplusDetails: surplusDetails, 
-                surplusTaskList: userSurplusList[user.id] || [],
+                surplusDetails: surplusDetails, // Dùng cho Leader / Nhân sự tự do
+                surplusTaskList: userSurplusList[user.id] || [], // Dùng để LỌC THEO KÊNH trên UI
                 currentWeekStats: {
                     target: targetValue,
                     actual: actualCount
