@@ -102,7 +102,7 @@ export async function GET(req: Request) {
             where: {
                 createdAt: { gte: startOfWeek, lte: endOfWeek },
                 action: { 
-                    in: ["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK", "DAILY_REPORT", "UPDATE_TASK", "UPDATE", "UPDATE_LINK"] 
+                    in: ["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK", "DAILY_REPORT", "UPDATE_LINK"] 
                 }
             },
             include: {
