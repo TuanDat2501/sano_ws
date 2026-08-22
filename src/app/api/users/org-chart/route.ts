@@ -2,37 +2,75 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { getContinuousWeekRange } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
+
+// 🚀 ĐỒNG BỘ 1: Lấy tuần hiện tại theo Chuẩn ISO-8601 (Khớp 100% với trang KPI)
+function getCurrentWeekInfo() {
+    const d = new Date();
+    d.setHours(0,0,0,0);
+    const dayOfWeek = d.getDay();
+    const diffToThursday = dayOfWeek === 0 ? -3 : 4 - dayOfWeek;
+    const thursday = new Date(d);
+    thursday.setDate(d.getDate() + diffToThursday);
+    
+    const targetYear = thursday.getFullYear();
+    const targetMonth = thursday.getMonth() + 1;
+    
+    const firstDayOfMonth = new Date(targetYear, targetMonth - 1, 1);
+    const firstDayOfWeek = firstDayOfMonth.getDay();
+    const diffToMonday = firstDayOfWeek === 0 ? -6 : 1 - firstDayOfWeek;
+    const startOfFirstWeek = new Date(targetYear, targetMonth - 1, 1 + diffToMonday);
+    
+    const thursdayOfFirstWeek = new Date(startOfFirstWeek);
+    thursdayOfFirstWeek.setDate(startOfFirstWeek.getDate() + 3);
+    if (thursdayOfFirstWeek.getMonth() !== targetMonth - 1) {
+        startOfFirstWeek.setDate(startOfFirstWeek.getDate() + 7);
+    }
+    
+    const diffTime = d.getTime() - startOfFirstWeek.getTime();
+    const weekNumber = Math.floor(diffTime / (7 * 24 * 60 * 60 * 1000)) + 1;
+    
+    return { year: targetYear, month: targetMonth, week: weekNumber > 0 ? weekNumber : 1 };
+}
+
+function getWeekDateRangeByMonth(year: number, month: number, weekNumber: number) {
+    const firstDayOfMonth = new Date(year, month - 1, 1);
+    const dayOfWeek = firstDayOfMonth.getDay(); 
+    const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const startOfFirstWeek = new Date(year, month - 1, 1 + diffToMonday);
+
+    const thursdayOfFirstWeek = new Date(startOfFirstWeek);
+    thursdayOfFirstWeek.setDate(startOfFirstWeek.getDate() + 3);
+    
+    if (thursdayOfFirstWeek.getMonth() !== month - 1) {
+        startOfFirstWeek.setDate(startOfFirstWeek.getDate() + 7);
+    }
+
+    const startOfWeek = new Date(startOfFirstWeek);
+    startOfWeek.setDate(startOfFirstWeek.getDate() + (weekNumber - 1) * 7);
+
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+
+    startOfWeek.setHours(0, 0, 0, 0);
+    endOfWeek.setHours(23, 59, 59, 999);
+
+    return { start: startOfWeek, end: endOfWeek };
+}
 
 export async function GET(req: Request) {
     try {
         const session = await getServerSession(authOptions);
         if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-        const now = new Date();
-        const year = now.getFullYear();
-        const month = now.getMonth() + 1;
+        // Sử dụng mốc thời gian chuẩn ISO
+        const currentInfo = getCurrentWeekInfo();
+        const year = currentInfo.year;
+        const month = currentInfo.month;
+        const currentWeekNumber = currentInfo.week;
 
-        const firstDayOfMonth = new Date(year, month - 1, 1);
-        const dayOfWeek = firstDayOfMonth.getDay();
-        const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-        const startOfFirstWeek = new Date(year, month - 1, 1 + diffToMonday);
-
-        const todayUTC = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
-        const startUTC = Date.UTC(startOfFirstWeek.getFullYear(), startOfFirstWeek.getMonth(), startOfFirstWeek.getDate());
-        const diffDays = Math.floor((todayUTC - startUTC) / (24 * 60 * 60 * 1000));
-        
-        const currentWeekNumber = Math.floor(diffDays / 7) + 1;
-
-        const { start, end } = getContinuousWeekRange(year, month, currentWeekNumber);
-        
-        const startOfWeek = new Date(start);
-        startOfWeek.setHours(0, 0, 0, 0);
-
-        const endOfWeek = new Date(end);
-        endOfWeek.setHours(23, 59, 59, 999);
+        const { start: startOfWeek, end: endOfWeek } = getWeekDateRangeByMonth(year, month, currentWeekNumber);
 
         const users = await prisma.user.findMany({
             where: { isActive: true },
@@ -51,6 +89,7 @@ export async function GET(req: Request) {
                         roleOnChannel: true
                     }
                 },
+                // Load Target theo đúng Năm-Tháng-Tuần của chuẩn ISO
                 weeklyKPIs: {
                     where: { year: year, month: month, weekNumber: currentWeekNumber },
                     take: 1
@@ -58,16 +97,18 @@ export async function GET(req: Request) {
             }
         });
 
+        // 🚀 ĐỒNG BỘ 2: Gom đầy đủ các Action được cho phép trong KPI
         const taskLogs = await prisma.taskLog.findMany({
             where: {
                 createdAt: { gte: startOfWeek, lte: endOfWeek },
                 action: { 
-                    in: ["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK", "DAILY_REPORT"] 
+                    in: ["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK", "DAILY_REPORT", "UPDATE_TASK", "UPDATE", "UPDATE_LINK"] 
                 }
             },
             include: {
                 task: {
                     select: {
+                        id: true,
                         duration: true,
                         isRework: true,
                         channelId: true
@@ -76,23 +117,7 @@ export async function GET(req: Request) {
             }
         });
 
-        const validTaskLogs: typeof taskLogs = [];
-        const dailyReportTracker = new Set<string>();
-
-        taskLogs.forEach(log => {
-            if (log.action === "DAILY_REPORT") {
-                const dateString = new Date(log.createdAt).toISOString().split('T')[0];
-                const uniqueKey = `${log.userId}_${log.taskId}_${dateString}`;
-                
-                if (!dailyReportTracker.has(uniqueKey)) {
-                    dailyReportTracker.add(uniqueKey);
-                    validTaskLogs.push(log);
-                }
-            } else {
-                validTaskLogs.push(log);
-            }
-        });
-
+        // Query Dữ liệu Bài Dư (Vẫn giữ nguyên logic xịn sò sếp mới yêu cầu)
         const surplusTasks = await prisma.task.findMany({
             where: {
                 isClosed: false,
@@ -101,7 +126,7 @@ export async function GET(req: Request) {
             },
             select: {
                 id: true, title: true, 
-                channelId: true, // 🚀 ĐÃ BỔ SUNG: Truy vấn thêm channelId ở gốc
+                channelId: true,
                 contentId: true, editorId: true, animatorId: true, duration: true,
                 coContentUsers: { select: { id: true } },
                 coEditorUsers: { select: { id: true } },
@@ -145,7 +170,7 @@ export async function GET(req: Request) {
                     id: t.id,
                     title: t.title,
                     duration: duration,
-                    channelId: t.channelId, // 🚀 ĐÃ BỔ SUNG: Nạp channelId vào List để Frontend lọc
+                    channelId: t.channelId, 
                     channelName: t.channel?.name || "Chưa phân kênh",
                     channelAvatar: t.channel?.avatarUrl || null 
                 });
@@ -155,61 +180,40 @@ export async function GET(req: Request) {
         const formattedUsers = users.map(user => {
             const kpiRecord = user.weeklyKPIs.length > 0 ? user.weeklyKPIs[0] : null;
             const targetValue = kpiRecord?.targetValue || 0;
-            const targetDetailsRaw = kpiRecord?.targetDetails;
-            let targetDetails: any[] = [];
             
-            try {
-                if (targetDetailsRaw) targetDetails = typeof targetDetailsRaw === 'string' ? JSON.parse(targetDetailsRaw) : targetDetailsRaw;
-            } catch(e) {}
+            const userLogs = taskLogs.filter(log => log.userId === user.id);
+            const uniqueTasks = new Map<string, any>();
 
-            const userLogs = validTaskLogs.filter(log => log.userId === user.id);
-            let actualCount = 0;
+            // 🚀 ĐỒNG BỘ 3: Áp dụng Lọc Kỷ Luật (Blacklist) y hệt bên Dashboard KPI
+            userLogs.forEach(log => {
+                if (!log.task) return;
 
-            if (targetDetails && targetDetails.length > 0) {
-                let totalEquivalentVideos = 0;
+                let isKpiQualifying = true; 
+                const actionStr = String(log.action || "").toUpperCase();
+                const combinedText = String(log.details || "").toLowerCase();
 
-                targetDetails.forEach(detail => {
-                    const logsOfChannel = userLogs.filter(log => {
-                        const isMatchChannel = log.task?.channelId === detail.channelId;
-                        if (!isMatchChannel) return false;
-                        return detail.isRework ? log.task?.isRework === true : log.task?.isRework !== true;
-                    });
-                    
-                    const uniqueTaskIds = new Set<string>();
-                    let actualMinutes = 0;
-                    logsOfChannel.forEach(log => {
-                        if (!uniqueTaskIds.has(log.taskId)) {
-                            uniqueTaskIds.add(log.taskId);
-                            actualMinutes += Number(log.task?.duration || 0);
+                if (["DAILY_REPORT", "UPDATE_TASK", "UPDATE", "UPDATE_LINK"].includes(actionStr)) {
+                    if (user.role === "EDITOR") {
+                        if (combinedText.includes("prj thô") || combinedText.includes("âm thanh") || combinedText.includes("audio")) {
+                            isKpiQualifying = false;
                         }
-                    });
-                    
-                    const equivalent = detail.duration > 0 ? actualMinutes / detail.duration : actualMinutes;
-                    const equivalentRounded = Math.round(equivalent * 10) / 10;
-                    
-                    totalEquivalentVideos += equivalentRounded;
-                });
+                    } else if (user.role === "CONTENT") {
+                        if (combinedText.includes("ý tưởng") && !combinedText.includes("kịch bản")) {
+                            isKpiQualifying = false;
+                        }
+                    }
+                }
 
-                const uniqueOutsideTaskIds = new Set<string>();
-                const logsOutside = userLogs.filter(log => {
-                    const isCovered = targetDetails.some(d => {
-                        const isMatchChannel = d.channelId === log.task?.channelId;
-                        const isMatchRework = d.isRework ? log.task?.isRework === true : log.task?.isRework !== true;
-                        return isMatchChannel && isMatchRework;
-                    });
-                    return !isCovered;
-                });
-                
-                logsOutside.forEach(log => uniqueOutsideTaskIds.add(log.taskId));
-                totalEquivalentVideos += uniqueOutsideTaskIds.size;
+                if (isKpiQualifying) {
+                    if (!uniqueTasks.has(log.taskId)) {
+                        uniqueTasks.set(log.taskId, log.task);
+                    }
+                }
+            });
 
-                actualCount = Math.round(totalEquivalentVideos * 10) / 10;
-            } else {
-                const uniqueTasksCount = new Set(userLogs.map(l => l.taskId)).size;
-                actualCount = uniqueTasksCount;
-            }
+            // 🚀 ĐỒNG BỘ 4: Tính tiến độ bằng cách đếm số Task nguyên (không tính thập phân)
+            const actualCount = uniqueTasks.size;
 
-            // Tính bài dư tổng hợp (cho Leader / Role nằm ngoài kênh)
             const sData = userSurplusDetails[user.id] || {};
             const surplusDetails = Object.entries(sData)
                 .map(([dur, count]) => ({ duration: Number(dur), count: count as number }))
@@ -225,8 +229,8 @@ export async function GET(req: Request) {
                 teamName: user.team?.name || null,
                 isActive: user.isActive,
                 channelMemberships: user.channelMemberships,
-                surplusDetails: surplusDetails, // Dùng cho Leader / Nhân sự tự do
-                surplusTaskList: userSurplusList[user.id] || [], // Dùng để LỌC THEO KÊNH trên UI
+                surplusDetails: surplusDetails, 
+                surplusTaskList: userSurplusList[user.id] || [],
                 currentWeekStats: {
                     target: targetValue,
                     actual: actualCount
