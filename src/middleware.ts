@@ -26,10 +26,10 @@ export default withAuth(
         const userPermissions = (token?.permissions as string[]) || [];
 
         // =======================================================
-        // 🛡️ BẢO VỆ TUYỆT ĐỐI TRANG QUẢN LÝ PHÂN QUYỀN
-        // Trang này không nằm trong từ điển động, nó ĐỘC QUYỀN cho ADMIN
+        // 🛡️ BẢO VỆ TUYỆT ĐỐI TRANG QUẢN LÝ PHÂN QUYỀN & CÀI ĐẶT
+        // Các trang này không nằm trong từ điển động, nó ĐỘC QUYỀN cho ADMIN
         // =======================================================
-        if (pathname.startsWith("/permissions")) {
+        if (pathname.startsWith("/permissions") || pathname.startsWith("/settings")) {
             if (token?.role !== "ADMIN") {
                 return NextResponse.redirect(new URL("/", req.url));
             }
@@ -39,8 +39,6 @@ export default withAuth(
         // 🛡️ THUẬT TOÁN QUÉT QUYỀN ĐỘNG THEO TỪ ĐIỂN
         // =======================================================
         
-        // Cố gắng tìm xem URL hiện tại (pathname) có khớp với route nào trong từ điển không
-        // Chú ý: Phải dùng exact match (===) cho route "/", còn các route khác dùng startsWith
         const matchedRoute = Object.keys(routePermissions).find(route => {
             if (route === "/") return pathname === "/";
             return pathname.startsWith(route);
@@ -50,12 +48,10 @@ export default withAuth(
             const requiredModuleId = routePermissions[matchedRoute];
             
             if (!userPermissions.includes(requiredModuleId)) {
-                // 🚀 NẾU MẤT QUYỀN VÀO DASHBOARD -> BẮT ĐĂNG XUẤT HOẶC ĐÁ VỀ LOGIN
                 if (pathname === "/") {
                      return NextResponse.redirect(new URL("/login", req.url));
                 }
                 
-                // 🚀 CÒN LẠI: NẾU VÀO TRANG CẤM -> ĐÁ VỀ TRANG 403 (UNAUTHORIZED)
                 return NextResponse.redirect(new URL("/unauthorized", req.url));
             }
         }
@@ -74,6 +70,5 @@ export default withAuth(
 );
 
 export const config = {
-    // Chặn tất cả, trừ file hệ thống và trang đăng nhập
     matcher: ["/((?!api|_next/static|_next/image|favicon.ico|images|login).*)"],
 };
