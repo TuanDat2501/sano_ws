@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock, CheckCircle, Tv, Target, LayoutList, RefreshCw } from "lucide-react";
+import { Clock, CheckCircle, Tv, Target, LayoutList, RefreshCw, XCircle } from "lucide-react";
 import { getProgressColor, InlineLoading } from "../utils";
 
 export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi: any, isLoading: boolean }) {
@@ -32,7 +32,7 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                                 {(activeKpi.totalTargetMinutes > 0 || activeKpi.totalActualMinutes > 0) && (
                                     <div className="inline-flex flex-col items-center mt-1">
                                         <p className="text-[11px] md:text-xs font-black text-blue-700 bg-blue-50 py-1.5 px-3 rounded-lg border border-blue-100">
-                                            Khối lượng (Phút): {activeKpi.totalActualMinutes || 0} / {activeKpi.totalTargetMinutes}
+                                            Khối lượng (Phút): {activeKpi.totalActualMinutes || 0} / {activeKpi.targetValue > 0 ? activeKpi.totalTargetMinutes : '---'}
                                         </p>
                                     </div>
                                 )}
@@ -105,9 +105,12 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                     {isLoading ? <InlineLoading className="h-full" /> : (
                         <div className="flex flex-col h-full min-h-0 w-full">
                             
-                            <div className="p-4 md:p-5 border-b border-slate-100 shrink-0 flex items-center gap-2 bg-white z-10 relative shadow-[0_2px_4px_rgba(0,0,0,0.02)]">
-                                <LayoutList className="text-emerald-500 w-5 h-5" />
-                                <h3 className="text-sm md:text-base font-black text-slate-800 uppercase tracking-wider">Sản phẩm thực tế đã nộp</h3>
+                            <div className="p-4 md:p-5 border-b border-slate-100 shrink-0 flex items-center justify-between gap-2 bg-white z-10 relative shadow-[0_2px_4px_rgba(0,0,0,0.02)]">
+                                <div className="flex items-center gap-2">
+                                    <LayoutList className="text-emerald-500 w-5 h-5" />
+                                    <h3 className="text-sm md:text-base font-black text-slate-800 uppercase tracking-wider">Sản phẩm thực tế đã nộp</h3>
+                                </div>
+                                <span className="text-[10px] font-bold text-slate-400 italic hidden md:inline-block">Dữ liệu được cập nhật dựa trên Log báo cáo</span>
                             </div>
 
                             {/* View cho Mobile */}
@@ -117,17 +120,17 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                                 ) : (
                                     activeKpi.logs.map((log: any) => (
                                         <div key={log.id} className="p-3.5 border border-slate-200 rounded-xl bg-white shadow-sm flex flex-col gap-2.5 relative overflow-hidden">
-                                            {/* 🚀 BỎ LOGIC PENDING Ở ĐÂY CHỈ HIỂN THỊ XANH */}
-                                            <div className="absolute left-0 top-0 bottom-0 w-1 bg-green-500"></div>
+                                            {/* 🚀 ĐÃ SỬA: ĐỔI MÀU BIÊN TRÁI NẾU KHÔNG TÍNH KPI */}
+                                            <div className={`absolute left-0 top-0 bottom-0 w-1 ${log.isCounted ? 'bg-green-500' : 'bg-rose-500'}`}></div>
                                             
                                             <div className="flex justify-between items-start pl-2">
                                                 <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 bg-slate-100 px-2 py-0.5 rounded">{log.typeStr}</span>
                                                 <span className="text-[10px] font-bold text-slate-400">{new Date(log.createdAt).toLocaleDateString('vi-VN')}</span>
                                             </div>
                                             
-                                            <p className="font-bold text-slate-800 text-sm pl-2 leading-snug">{log.task?.title || "Task không xác định"}</p>
+                                            <p className={`font-bold text-sm pl-2 leading-snug ${log.isCounted ? 'text-slate-800' : 'text-slate-400 line-through'}`}>{log.task?.title || "Task không xác định"}</p>
                                             
-                                            <div className="flex flex-wrap gap-2 pl-2">
+                                            <div className="flex flex-wrap gap-2 pl-2 opacity-80">
                                                 <span className="text-[10px] font-bold text-slate-600 bg-slate-50 border border-slate-200 px-2 py-1 rounded flex items-center gap-1">
                                                     <Tv size={10} /> {log.task?.channel?.name || "Chưa gắn kênh"}
                                                 </span>
@@ -145,7 +148,12 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
 
                                             <div className="flex justify-between items-center border-t border-slate-50 pt-2.5 mt-1 pl-2">
                                                 <div className="flex items-center gap-2">
-                                                    <span className="text-[10px] font-black text-green-700 bg-green-100 border border-green-200 px-2 py-1 rounded flex items-center gap-1"><CheckCircle size={10} /> Đã nộp</span>
+                                                    {/* 🚀 ĐÃ SỬA: HIỂN THỊ LOGIC TỪNG TRẠNG THÁI */}
+                                                    {log.isCounted ? (
+                                                        <span className="text-[10px] font-black text-green-700 bg-green-100 border border-green-200 px-2 py-1 rounded flex items-center gap-1"><CheckCircle size={10} /> Đã nộp</span>
+                                                    ) : (
+                                                        <span className="text-[10px] font-black text-rose-700 bg-rose-100 border border-rose-200 px-2 py-1 rounded flex items-center gap-1"><XCircle size={10} /> Không hợp lệ</span>
+                                                    )}
                                                 </div>
                                                 <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-1 rounded-md border border-blue-100">
                                                     {new Date(log.createdAt).toLocaleTimeString('vi-VN', {hour:'2-digit', minute:'2-digit'})}
@@ -182,12 +190,11 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                                                     </td>
                                                     
                                                     <td className="px-5 py-4">
-                                                        <p className="font-bold text-slate-800 text-sm truncate max-w-[220px]" title={log.task?.title}>{log.task?.title}</p>
-                                                        {/* 🚀 BẢM ĐẢM TYPESTR Ở ĐÂY ĐÚNG TỪ API (Không còn PENDING) */}
+                                                        <p className={`font-bold text-sm truncate max-w-[220px] ${log.isCounted ? 'text-slate-800' : 'text-slate-400 line-through'}`} title={log.task?.title}>{log.task?.title}</p>
                                                         <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mt-1 bg-blue-50 w-fit px-2 py-0.5 rounded">{log.typeStr}</p>
                                                     </td>
 
-                                                    <td className="px-5 py-4 font-bold text-slate-600 text-xs truncate max-w-[150px]">
+                                                    <td className="px-5 py-4 font-bold text-slate-600 text-xs truncate max-w-[150px] opacity-80">
                                                         <div className="flex flex-col gap-1.5 items-start">
                                                             {log.task?.channel?.name ? (
                                                                 <span className="flex items-center gap-1.5 bg-slate-100 px-2 py-1 rounded w-fit border border-slate-200">
@@ -203,7 +210,7 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                                                         </div>
                                                     </td>
                                                     
-                                                    <td className="px-5 py-4 text-center">
+                                                    <td className="px-5 py-4 text-center opacity-80">
                                                         {log.task?.duration ? (
                                                             <span className="text-[11px] font-bold text-slate-700 flex items-center justify-center gap-1">
                                                                 <Clock size={12} className="text-amber-500" /> {log.task.duration} Phút
@@ -212,10 +219,16 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                                                     </td>
 
                                                     <td className="px-5 py-4 text-center">
-                                                        {/* 🚀 CHỈ RENDER DUY NHẤT TRẠNG THÁI "ĐÃ NỘP" Ở ĐÂY */}
-                                                        <span className="text-[10px] font-black text-green-700 bg-green-100 px-2 py-1 rounded border border-green-200 inline-flex items-center justify-center gap-1 w-fit whitespace-nowrap">
-                                                            <CheckCircle size={12} /> Đã nộp
-                                                        </span>
+                                                        {/* 🚀 ĐÃ SỬA: HIỂN THỊ LOGIC TỪNG TRẠNG THÁI */}
+                                                        {log.isCounted ? (
+                                                            <span className="text-[10px] font-black text-green-700 bg-green-100 px-2 py-1 rounded border border-green-200 inline-flex items-center justify-center gap-1 w-fit whitespace-nowrap">
+                                                                <CheckCircle size={12} /> Đã nộp
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-[10px] font-black text-rose-700 bg-rose-100 px-2 py-1 rounded border border-rose-200 inline-flex items-center justify-center gap-1 w-fit whitespace-nowrap" title="Bị chặn bởi bộ lọc từ khóa báo cáo (VD: Nộp prj thô)">
+                                                                <XCircle size={12} /> Không tính
+                                                            </span>
+                                                        )}
                                                     </td>
                                                 </tr>
                                             ))

@@ -7,7 +7,6 @@ import { useToast } from "@/app/component/ToastProvider";
 import TaskManageDrawer from "./TaskManageDrawer";
 import TaskDetailDrawer from "@/app/component/TaskDetailDrawer";
 
-
 export default function TaskLogManager({ teams }: { teams: any[] }) {
     const { data: session } = useSession();
     const currentUser = session?.user as any;
@@ -30,7 +29,7 @@ export default function TaskLogManager({ teams }: { teams: any[] }) {
     const [isLoadingUsers, setIsLoadingUsers] = useState(false);
     const [isLoadingLogs, setIsLoadingLogs] = useState(false);
 
-    // 🚀 ĐIỀU KHIỂN DRAWER QUẢN LÝ (SỬA THÔNG SỐ / GÁN KPI)
+    // 🚀 ĐIỀU KHIỂN DRAWER QUẢN LÝ
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [drawerMode, setDrawerMode] = useState<'EDIT_TASK' | 'ASSIGN_KPI'>('EDIT_TASK');
     const [selectedTaskId, setSelectedTaskId] = useState<string | undefined>(undefined);
@@ -44,7 +43,6 @@ export default function TaskLogManager({ teams }: { teams: any[] }) {
     const [chatMessage, setChatMessage] = useState("");
 
     useEffect(() => {
-        // Lấy danh sách kênh cho bộ lọc
         fetch(`/api/kpi/manage-task?getChannels=true`)
             .then(res => res.json())
             .then(data => setChannels(Array.isArray(data) ? data : []));
@@ -85,8 +83,12 @@ export default function TaskLogManager({ teams }: { teams: any[] }) {
         if (!selectedUserId) { setLogs([]); return; }
         setIsLoadingLogs(true);
         try {
-            const res = await fetch(`/api/task-logs?userId=${selectedUserId}`);
-            if (res.ok) setLogs(await res.json());
+            // Cập nhật đường dẫn này gọi API kpi của user thay vì task-logs để lấy isCounted
+            const res = await fetch(`/api/kpi/${selectedUserId}?year=${new Date().getFullYear()}&month=${new Date().getMonth() + 1}&week=0`);
+            if (res.ok) {
+                const data = await res.json();
+                setLogs(data.logs || []);
+            }
         } catch (e) { showToast("error", "Lỗi tải log"); } 
         finally { setIsLoadingLogs(false); }
     };
@@ -109,7 +111,6 @@ export default function TaskLogManager({ teams }: { teams: any[] }) {
         } catch (e) { showToast("error", "Lỗi Server"); }
     };
 
-    // Mở Task Detail Drawer
     const handleOpenTaskDetail = async (taskId: string) => {
         if (!taskId) return;
         setIsDetailDrawerOpen(true);
@@ -188,7 +189,7 @@ export default function TaskLogManager({ teams }: { teams: any[] }) {
             if (res.ok) {
                 setSelectedTaskDetail({ ...selectedTaskDetail, isClosed: newStatus });
                 showToast("success", newStatus ? "Đã nghiệm thu Task!" : "Đã mở lại Task!");
-                fetchTasks(); // Reload list ngoài
+                fetchTasks();
             }
         } catch (e) { showToast("error", "Lỗi Server"); }
     };
@@ -414,7 +415,8 @@ export default function TaskLogManager({ teams }: { teams: any[] }) {
                                                 <p className="font-bold text-blue-600 truncate max-w-[150px] md:max-w-[200px] cursor-pointer hover:underline" onClick={() => handleOpenTaskDetail(log.taskId)} title={log.task?.title}>{log.task?.title || "Video đã bị xóa"}</p>
                                             </td>
                                             <td className="px-4 py-3 text-center">
-                                                {['DAILY_REPORT', 'SUBMIT_SCRIPT', 'SUBMIT_VIDEO', 'PUBLISH_VIDEO', 'COMPLETE_TASK'].includes(log.action) ? (
+                                                {/* 🚀 ĐÃ SỬA: SỬ DỤNG TRỰC TIẾP BIẾN isCounted TỪ API */}
+                                                {log.isCounted ? (
                                                     <span className="bg-emerald-100 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded text-[9px] md:text-[10px] font-black tracking-wide">CÓ TÍNH KPI</span>
                                                 ) : (
                                                     <span className="bg-slate-100 text-slate-500 border border-slate-200 px-2 py-0.5 rounded text-[9px] md:text-[10px] font-black tracking-wide">KHÔNG TÍNH</span>
@@ -438,7 +440,6 @@ export default function TaskLogManager({ teams }: { teams: any[] }) {
                 </div>
             )}
 
-            {/* NHÚNG DRAWER QUẢN LÝ TASK (SỬA/GÁN) */}
             <TaskManageDrawer 
                 isOpen={isDrawerOpen}
                 onClose={() => setIsDrawerOpen(false)}
@@ -451,7 +452,6 @@ export default function TaskLogManager({ teams }: { teams: any[] }) {
                 }}
             />
 
-            {/* NHÚNG DRAWER XEM CHI TIẾT TASK & CHAT */}
             <TaskDetailDrawer
                 isOpen={isDetailDrawerOpen}
                 isLoading={isLoadingDetail}
