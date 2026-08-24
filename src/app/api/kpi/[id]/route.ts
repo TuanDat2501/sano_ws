@@ -3,7 +3,6 @@ import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
 
-// 🚀 LOGIC CHUẨN ISO 8601
 function getWeekDateRangeByMonth(year: number, month: number, weekNumber: number) {
     const firstDayOfMonth = new Date(year, month - 1, 1);
     const dayOfWeek = firstDayOfMonth.getDay(); 
@@ -36,7 +35,6 @@ export async function GET(req: Request, context: any) {
         const session = await getServerSession(authOptions);
         if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-        // Chờ resolve context.params trong Next.js 15+
         const resolvedParams = await context.params;
         const requestedUserId = resolvedParams.id;
 
@@ -102,7 +100,6 @@ export async function GET(req: Request, context: any) {
             return { ...log, typeStr, isCounted: false }; 
         });
 
-        // 🚀 BỘ LỌC KỶ LUẬT THÔNG MINH (BLACKLIST)
         const uniqueTasks = new Map<string, any>();
         
         mappedLogs.forEach(log => {
@@ -114,11 +111,15 @@ export async function GET(req: Request, context: any) {
 
             if (["DAILY_REPORT", "UPDATE_TASK", "UPDATE", "UPDATE_LINK"].includes(actionStr)) {
                 if (user.role === "EDITOR") {
-                    if (combinedText.includes("prj thô") || combinedText.includes("âm thanh") || combinedText.includes("audio")) {
+                    if (combinedText.includes("kịch bản") || combinedText.includes("chuyển động") || combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) {
                         isKpiQualifying = false;
                     }
                 } else if (user.role === "CONTENT") {
-                    if (combinedText.includes("ý tưởng") && !combinedText.includes("kịch bản")) {
+                    if (combinedText.includes("video render") || combinedText.includes("prj thô") || combinedText.includes("audio") || combinedText.includes("âm thanh") || combinedText.includes("chuyển động") || combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) {
+                        isKpiQualifying = false;
+                    }
+                } else if (user.role === "PUBLISHER" || user.role === "CHANNEL_MANAGER") {
+                    if (combinedText.includes("kịch bản") || combinedText.includes("video render") || combinedText.includes("prj thô") || combinedText.includes("audio") || combinedText.includes("âm thanh") || combinedText.includes("chuyển động")) {
                         isKpiQualifying = false;
                     }
                 }
@@ -144,8 +145,6 @@ export async function GET(req: Request, context: any) {
         let percent = 0;
         let totalTargetMinutes = 0;
         let totalActualMinutes = 0;
-        
-        // 🚀 ACTUAL COUNT TỔNG: ĐẾM ĐÚNG SỐ BÀI (Không quy đổi)
         let actualCount = uniqueTasks.size;
 
         const bucketMins: Record<string, number> = {};
@@ -157,7 +156,6 @@ export async function GET(req: Request, context: any) {
             bucketTaskCount[key] = (bucketTaskCount[key] || 0) + 1; 
         });
 
-        // 🚀 THUẬT TOÁN PHÂN BỔ
         if (targetDetails && targetDetails.length > 0) {
             const specificTargets: Record<string, any[]> = {};
             const anyTargets: Record<string, any[]> = {};

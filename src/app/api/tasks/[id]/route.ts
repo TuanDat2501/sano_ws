@@ -147,7 +147,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 const newValue = body[fieldName];
                 const targetUserId = userId; 
 
-                const isKpiField = ['scriptLink', 'videoLink', 'animationLink', 'publishLink', 'thumbnailLink', 'roughProjectLink'].includes(fieldName);
+                // 🚀 ĐÃ BỔ SUNG: Bổ sung 'audioLink' vào nhóm được công nhận tính KPI
+                const isKpiField = ['scriptLink', 'videoLink', 'animationLink', 'publishLink', 'thumbnailLink', 'roughProjectLink', 'audioLink'].includes(fieldName);
                 let actionType = isKpiField ? "DAILY_REPORT" : "UPDATE_LINK";
 
                 if (isManager && !['publishLink', 'thumbnailLink'].includes(fieldName)) {
@@ -198,15 +199,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             logsToCreate.push({ action: "ASSIGN_USER", details: `Đã cập nhật phân công nhân sự`, taskId, userId });
         }
         
-        // =========================================================
-        // 🚀 ĐÃ SỬA: Đón bắt biến isRework do UI "Sửa Task" gửi lên
-        // =========================================================
         let reworkFlag = oldTask.isRework; 
         
         if (rawBody.isRework !== undefined) {
-            reworkFlag = Boolean(rawBody.isRework); // Nếu có tick ở Form sửa thì ghi đè
+            reworkFlag = Boolean(rawBody.isRework);
         } else if (body.status === "TODO" && oldTask.status !== "TODO") {
-            reworkFlag = true; // Trả task về làm lại thì mặc định xào lại
+            reworkFlag = true;
         }
 
         const updateTaskPromise = prisma.task.update({
@@ -235,7 +233,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 linkProject: body.linkProject !== undefined ? body.linkProject : undefined,
                 roughProjectLink: body.roughProjectLink !== undefined ? body.roughProjectLink : undefined,
                 
-                isRework: reworkFlag, // 🚀 FLAG ĐÃ ĐƯỢC CHỐT HẠ THÀNH CÔNG
+                isRework: reworkFlag,
                 
                 contentId: body.contentId !== undefined ? body.contentId : undefined,
                 editorId: body.editorId !== undefined ? body.editorId : undefined,
@@ -292,6 +290,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 }
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
+    // Code GET giữ nguyên
     try {
         const resolvedParams = await params;
         const task = await prisma.task.findUnique({
@@ -330,6 +329,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 }
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
+    // Code DELETE giữ nguyên
     try {
         const session = await getServerSession(authOptions);
         if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

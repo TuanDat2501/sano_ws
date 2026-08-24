@@ -3,9 +3,6 @@ import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 
-export const dynamic = "force-dynamic";
-
-// 🚀 ĐỒNG BỘ 1: Lấy tuần hiện tại theo Chuẩn ISO-8601 (Khớp 100% với trang KPI)
 function getCurrentWeekInfo() {
     const d = new Date();
     d.setHours(0,0,0,0);
@@ -59,12 +56,13 @@ function getWeekDateRangeByMonth(year: number, month: number, weekNumber: number
     return { start: startOfWeek, end: endOfWeek };
 }
 
+export const dynamic = "force-dynamic";
+
 export async function GET(req: Request) {
     try {
         const session = await getServerSession(authOptions);
         if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-        // Sử dụng mốc thời gian chuẩn ISO
         const currentInfo = getCurrentWeekInfo();
         const year = currentInfo.year;
         const month = currentInfo.month;
@@ -89,7 +87,6 @@ export async function GET(req: Request) {
                         roleOnChannel: true
                     }
                 },
-                // Load Target theo đúng Năm-Tháng-Tuần của chuẩn ISO
                 weeklyKPIs: {
                     where: { year: year, month: month, weekNumber: currentWeekNumber },
                     take: 1
@@ -97,7 +94,6 @@ export async function GET(req: Request) {
             }
         });
 
-        // 🚀 ĐỒNG BỘ 2: Gom đầy đủ các Action được cho phép trong KPI
         const taskLogs = await prisma.taskLog.findMany({
             where: {
                 createdAt: { gte: startOfWeek, lte: endOfWeek },
@@ -117,7 +113,6 @@ export async function GET(req: Request) {
             }
         });
 
-        // Query Dữ liệu Bài Dư (Vẫn giữ nguyên logic xịn sò sếp mới yêu cầu)
         const surplusTasks = await prisma.task.findMany({
             where: {
                 isClosed: false,
@@ -184,7 +179,6 @@ export async function GET(req: Request) {
             const userLogs = taskLogs.filter(log => log.userId === user.id);
             const uniqueTasks = new Map<string, any>();
 
-            // 🚀 ĐỒNG BỘ 3: Áp dụng Lọc Kỷ Luật (Blacklist) y hệt bên Dashboard KPI
             userLogs.forEach(log => {
                 if (!log.task) return;
 
@@ -194,11 +188,15 @@ export async function GET(req: Request) {
 
                 if (["DAILY_REPORT", "UPDATE_TASK", "UPDATE", "UPDATE_LINK"].includes(actionStr)) {
                     if (user.role === "EDITOR") {
-                        if (combinedText.includes("prj thô") || combinedText.includes("âm thanh") || combinedText.includes("audio")) {
+                        if (combinedText.includes("kịch bản") || combinedText.includes("chuyển động") || combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) {
                             isKpiQualifying = false;
                         }
                     } else if (user.role === "CONTENT") {
-                        if (combinedText.includes("ý tưởng") && !combinedText.includes("kịch bản")) {
+                        if (combinedText.includes("video render") || combinedText.includes("prj thô") || combinedText.includes("audio") || combinedText.includes("âm thanh") || combinedText.includes("chuyển động") || combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) {
+                            isKpiQualifying = false;
+                        }
+                    } else if (user.role === "PUBLISHER" || user.role === "CHANNEL_MANAGER") {
+                        if (combinedText.includes("kịch bản") || combinedText.includes("video render") || combinedText.includes("prj thô") || combinedText.includes("audio") || combinedText.includes("âm thanh") || combinedText.includes("chuyển động")) {
                             isKpiQualifying = false;
                         }
                     }
@@ -211,7 +209,6 @@ export async function GET(req: Request) {
                 }
             });
 
-            // 🚀 ĐỒNG BỘ 4: Tính tiến độ bằng cách đếm số Task nguyên (không tính thập phân)
             const actualCount = uniqueTasks.size;
 
             const sData = userSurplusDetails[user.id] || {};
@@ -230,7 +227,7 @@ export async function GET(req: Request) {
                 isActive: user.isActive,
                 channelMemberships: user.channelMemberships,
                 surplusDetails: surplusDetails, 
-                surplusTaskList: userSurplusList[user.id] || [],
+                surplusTaskList: userSurplusList[user.id] || [], 
                 currentWeekStats: {
                     target: targetValue,
                     actual: actualCount

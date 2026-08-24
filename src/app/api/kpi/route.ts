@@ -3,7 +3,6 @@ import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
 
-// 🚀 LOGIC CHUẨN ISO 8601
 function getWeekDateRangeByMonth(year: number, month: number, weekNumber: number) {
     const firstDayOfMonth = new Date(year, month - 1, 1);
     const dayOfWeek = firstDayOfMonth.getDay(); 
@@ -84,7 +83,6 @@ export async function GET(req: Request) {
                     userId: { in: userIds },
                     createdAt: { gte: start, lte: end }
                 },
-                // 🚀 ĐÃ SỬA CHUẨN: Chỉ lấy trường "details" vì TaskLog không có trường "note"
                 select: {
                     id: true,
                     action: true,
@@ -108,10 +106,9 @@ export async function GET(req: Request) {
             const validUserLogs: typeof rawUserLogs = [];
             const dailyReportTracker = new Set<string>();
 
-            // Lọc log an toàn trên RAM
             rawUserLogs.forEach(log => {
                 const actionStr = String(log.action || "").toUpperCase();
-                if (!["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK", "DAILY_REPORT", "UPDATE_TASK", "UPDATE"].includes(actionStr)) {
+                if (!["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK", "DAILY_REPORT", "UPDATE_TASK", "UPDATE", "UPDATE_LINK"].includes(actionStr)) {
                     return; 
                 }
 
@@ -135,31 +132,30 @@ export async function GET(req: Request) {
                 else if (act === "PUBLISH_VIDEO") typeStr = "Publish";
                 else if (act === "COMPLETE_TASK") typeStr = "Nghiệm thu";
                 else if (act === "DAILY_REPORT") typeStr = "Báo cáo";
-                else if (act === "UPDATE_TASK" || act === "UPDATE") typeStr = "Cập nhật";
+                else if (act === "UPDATE_TASK" || act === "UPDATE" || act === "UPDATE_LINK") typeStr = "Cập nhật";
                 return { ...log, typeStr, isCounted: false }; 
             });
 
-            // BỘ LỌC KỶ LUẬT THÔNG MINH (BLACKLIST - Mặc định cho qua)
             const uniqueTasks = new Map<string, any>();
             
             mappedLogs.forEach(log => {
                 if (!log.task) return;
 
                 let isKpiQualifying = true; 
-                
                 const actionStr = String(log.action || "").toUpperCase();
-                
-                // 🚀 ĐÃ SỬA: Chỉ kiểm tra theo nội dung trường "details"
                 const combinedText = String(log.details || "").toLowerCase();
 
-                // Quét cờ Blacklist để trừ các báo cáo nháp không liên quan đến vai trò
-                if (actionStr === "DAILY_REPORT" || actionStr === "UPDATE_TASK" || actionStr === "UPDATE") {
+                if (["DAILY_REPORT", "UPDATE_TASK", "UPDATE", "UPDATE_LINK"].includes(actionStr)) {
                     if (user.role === "EDITOR") {
-                        if (combinedText.includes("prj thô") || combinedText.includes("âm thanh") || combinedText.includes("audio")) {
+                        if (combinedText.includes("kịch bản") || combinedText.includes("chuyển động") || combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) {
                             isKpiQualifying = false;
                         }
                     } else if (user.role === "CONTENT") {
-                        if (combinedText.includes("ý tưởng") && !combinedText.includes("kịch bản")) {
+                        if (combinedText.includes("video render") || combinedText.includes("prj thô") || combinedText.includes("audio") || combinedText.includes("âm thanh") || combinedText.includes("chuyển động") || combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) {
+                            isKpiQualifying = false;
+                        }
+                    } else if (user.role === "PUBLISHER" || user.role === "CHANNEL_MANAGER") {
+                        if (combinedText.includes("kịch bản") || combinedText.includes("video render") || combinedText.includes("prj thô") || combinedText.includes("audio") || combinedText.includes("âm thanh") || combinedText.includes("chuyển động")) {
                             isKpiQualifying = false;
                         }
                     }
@@ -186,7 +182,6 @@ export async function GET(req: Request) {
             let totalTargetMinutes = 0;
             let totalActualMinutes = 0;
             
-            // ACTUAL COUNT TỔNG: LUÔN LÀ SỐ BÀI THỰC TẾ
             let actualCount = uniqueTasks.size;
 
             const bucketMins: Record<string, number> = {};
@@ -198,14 +193,13 @@ export async function GET(req: Request) {
                 bucketTaskCount[key] = (bucketTaskCount[key] || 0) + 1; 
             });
 
-            // THUẬT TOÁN PHÂN BỔ KPI CHÍNH XÁC (SỐ NGUYÊN)
             if (targetDetails && targetDetails.length > 0) {
                 const specificTargets: Record<string, any[]> = {};
                 const anyTargets: Record<string, any[]> = {};
 
                 targetDetails.forEach(t => {
                     t.actualMinutes = 0;
-                    t.actualCount = 0; // Reset
+                    t.actualCount = 0; 
 
                     if (t.channelId) {
                         const key = `${t.channelId}_${t.isRework ? 'rework' : 'new'}`;
@@ -228,7 +222,6 @@ export async function GET(req: Request) {
                         let assignedTasks = 0;
 
                         if (index === targets.length - 1) {
-                            // Target cuối ôm trọn phần dư thừa của bucket
                             assignedMins = minsLeft;
                             assignedTasks = tasksLeft;
                         } else {
@@ -246,7 +239,6 @@ export async function GET(req: Request) {
                     return { minsLeft, tasksLeft, assignedMinsTotal };
                 };
 
-                // 1. Phân bổ cho Target có ĐÚNG KÊNH
                 Object.keys(specificTargets).forEach(key => {
                     const targets = specificTargets[key];
                     const res = distributeToTargets(targets, bucketMins[key] || 0, bucketTaskCount[key] || 0);
@@ -256,7 +248,6 @@ export async function GET(req: Request) {
                     bucketTaskCount[key] = res.tasksLeft;
                 });
 
-                // 2. Phân bổ phần còn dư cho Target "DÙNG CHUNG KÊNH" (Nguồn hở)
                 Object.keys(anyTargets).forEach(reworkKey => {
                     const targets = anyTargets[reworkKey];
                     let remainingMins = 0;
