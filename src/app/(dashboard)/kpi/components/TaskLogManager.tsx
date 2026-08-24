@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import { Loader2, Trash2, Search, Database, Users, Edit, Target, Tv, Clock, RefreshCw, ChevronRight, CheckCircle } from "lucide-react";
+import { Loader2, Trash2, Search, Database, Users, Edit, Target, Tv, Clock, RefreshCw, ChevronRight, Activity } from "lucide-react";
 import { useToast } from "@/app/component/ToastProvider";
 import TaskManageDrawer from "./TaskManageDrawer";
 import TaskDetailDrawer from "@/app/component/TaskDetailDrawer";
@@ -83,11 +83,11 @@ export default function TaskLogManager({ teams }: { teams: any[] }) {
         if (!selectedUserId) { setLogs([]); return; }
         setIsLoadingLogs(true);
         try {
-            // Cập nhật đường dẫn này gọi API kpi của user thay vì task-logs để lấy isCounted
-            const res = await fetch(`/api/kpi/${selectedUserId}?year=${new Date().getFullYear()}&month=${new Date().getMonth() + 1}&week=0`);
+            // 🚀 ĐÃ SỬA: Gọi về API lấy Full Log gốc để xem toàn bộ Nhật ký hoạt động
+            const res = await fetch(`/api/task-logs?userId=${selectedUserId}`);
             if (res.ok) {
                 const data = await res.json();
-                setLogs(data.logs || []);
+                setLogs(Array.isArray(data) ? data : []);
             }
         } catch (e) { showToast("error", "Lỗi tải log"); } 
         finally { setIsLoadingLogs(false); }
@@ -211,6 +211,30 @@ export default function TaskLogManager({ teams }: { teams: any[] }) {
         } catch (e) { showToast("error", "Lỗi Server"); }
     };
 
+    // 🚀 HÀM RENDER NHÃN ACTION ĐẸP MẮT CHO NHẬT KÝ HOẠT ĐỘNG
+    const renderActionBadge = (action: string) => {
+        switch (action) {
+            case "CREATE_TASK": return <span className="bg-purple-100 text-purple-700 border border-purple-200 px-2 py-0.5 rounded text-[10px] font-black tracking-wide">TẠO TASK</span>;
+            case "UPDATE_STATUS": return <span className="bg-blue-100 text-blue-700 border border-blue-200 px-2 py-0.5 rounded text-[10px] font-black tracking-wide">ĐỔI TRẠNG THÁI</span>;
+            case "ASSIGN_USER": return <span className="bg-amber-100 text-amber-700 border border-amber-200 px-2 py-0.5 rounded text-[10px] font-black tracking-wide">PHÂN CÔNG</span>;
+            case "DAILY_REPORT":
+            case "SUBMIT_SCRIPT":
+            case "SUBMIT_VIDEO":
+            case "PUBLISH_VIDEO":
+                 return <span className="bg-emerald-100 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded text-[10px] font-black tracking-wide">BÁO CÁO (NỘP BÀI)</span>;
+            case "COMPLETE_TASK": return <span className="bg-green-100 text-green-700 border border-green-200 px-2 py-0.5 rounded text-[10px] font-black tracking-wide">NGHIỆM THU</span>;
+            case "REJECT_TASK":
+            case "REJECT_CONTENT":
+            case "REJECT_EDIT":
+            case "REJECT_ANIMATION":
+                 return <span className="bg-red-100 text-red-700 border border-red-200 px-2 py-0.5 rounded text-[10px] font-black tracking-wide">TỪ CHỐI / LÀM LẠI</span>;
+            case "UPDATE_LINK":
+            case "UPDATE":
+                 return <span className="bg-slate-200 text-slate-700 border border-slate-300 px-2 py-0.5 rounded text-[10px] font-black tracking-wide">CẬP NHẬT</span>;
+            default: return <span className="bg-slate-100 text-slate-600 border border-slate-200 px-2 py-0.5 rounded text-[10px] font-black tracking-wide">{action}</span>;
+        }
+    };
+
     return (
         <div className="flex flex-col h-full bg-white rounded-xl md:rounded-[24px] border border-slate-200 shadow-sm overflow-hidden animate-fade-in relative">
             <div className="p-4 md:p-5 border-b border-slate-100 bg-slate-50/50 flex flex-col gap-4 shrink-0">
@@ -237,9 +261,9 @@ export default function TaskLogManager({ teams }: { teams: any[] }) {
                     </button>
                     <button 
                         onClick={() => setActiveTab('LOGS')}
-                        className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'LOGS' ? 'bg-slate-800 text-white shadow-md' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                        className={`px-4 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${activeTab === 'LOGS' ? 'bg-slate-800 text-white shadow-md' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}
                     >
-                        Xóa Log rác (Cá nhân)
+                        <Activity size={14} /> Nhật ký hoạt động (Log)
                     </button>
                 </div>
 
@@ -393,34 +417,29 @@ export default function TaskLogManager({ teams }: { teams: any[] }) {
                             <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] md:text-[11px] sticky top-0 shadow-[0_1px_2px_rgba(0,0,0,0.05)] z-10">
                                 <tr>
                                     <th className="px-4 py-3 w-32 md:w-40 rounded-tl-xl border-b border-slate-200">Thời gian tạo</th>
+                                    <th className="px-4 py-3 w-36 md:w-44 text-center border-b border-slate-200">Phân loại</th>
                                     <th className="px-4 py-3 border-b border-slate-200">Chi tiết Ghi nhận</th>
                                     <th className="px-4 py-3 w-48 md:w-56 border-b border-slate-200">Thuộc Video (Task)</th>
-                                    <th className="px-4 py-3 w-28 md:w-32 text-center border-b border-slate-200">Trạng thái KPI</th>
-                                    <th className="px-4 py-3 w-20 text-center rounded-tr-xl border-b border-slate-200">Xóa</th>
+                                    <th className="px-4 py-3 w-16 text-center rounded-tr-xl border-b border-slate-200">Xóa</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
                                 {logs.length === 0 ? (
-                                    <tr><td colSpan={5} className="text-center py-10 text-slate-400 font-medium">Không tìm thấy dữ liệu.</td></tr>
+                                    <tr><td colSpan={5} className="text-center py-10 text-slate-400 font-medium">Không tìm thấy dữ liệu hoạt động.</td></tr>
                                 ) : (
                                     logs.map((log) => (
                                         <tr key={log.id} className="hover:bg-rose-50/30 transition-colors">
                                             <td className="px-4 py-3 font-bold text-slate-700 text-[11px] md:text-xs">
                                                 {new Date(log.createdAt).toLocaleString("vi-VN", {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'})}
                                             </td>
+                                            <td className="px-4 py-3 text-center">
+                                                {renderActionBadge(log.action)}
+                                            </td>
                                             <td className="px-4 py-3 font-medium text-slate-800 text-[11px] md:text-xs">
                                                 {log.details}
                                             </td>
                                             <td className="px-4 py-3 text-[11px] md:text-xs">
                                                 <p className="font-bold text-blue-600 truncate max-w-[150px] md:max-w-[200px] cursor-pointer hover:underline" onClick={() => handleOpenTaskDetail(log.taskId)} title={log.task?.title}>{log.task?.title || "Video đã bị xóa"}</p>
-                                            </td>
-                                            <td className="px-4 py-3 text-center">
-                                                {/* 🚀 ĐÃ SỬA: SỬ DỤNG TRỰC TIẾP BIẾN isCounted TỪ API */}
-                                                {log.isCounted ? (
-                                                    <span className="bg-emerald-100 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded text-[9px] md:text-[10px] font-black tracking-wide">CÓ TÍNH KPI</span>
-                                                ) : (
-                                                    <span className="bg-slate-100 text-slate-500 border border-slate-200 px-2 py-0.5 rounded text-[9px] md:text-[10px] font-black tracking-wide">KHÔNG TÍNH</span>
-                                                )}
                                             </td>
                                             <td className="px-4 py-3 text-center">
                                                 <button 
