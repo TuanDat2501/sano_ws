@@ -49,14 +49,15 @@ export async function GET(req: Request) {
             return chartTemplate;
         };
 
-        // 🚀 BỔ SUNG HÀM TÍNH KPI CHUẨN (SAO CHÉP TỪ API KPI) ĐỂ TÁI SỬ DỤNG CHO CẢ LEADER & NHÂN VIÊN
+        // 🚀 ĐÃ ĐỒNG BỘ: Bộ lọc KPI chuẩn 100% từ luồng API KPI sang Dashboard
         const calculateKpiForUser = (userLogs: any[], targetValue: number, targetDetailsRaw: any, userRole: string) => {
             const dailyReportTracker = new Set<string>();
             const validUserLogs: any[] = [];
             
             userLogs.forEach(log => {
                 const actionStr = String(log.action || "").toUpperCase();
-                if (!["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK", "DAILY_REPORT", "UPDATE_TASK", "UPDATE"].includes(actionStr)) return; 
+                // Bổ sung UPDATE_LINK
+                if (!["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK", "DAILY_REPORT", "UPDATE_TASK", "UPDATE", "UPDATE_LINK"].includes(actionStr)) return; 
                 
                 if (actionStr === "DAILY_REPORT") {
                     const dateString = log.createdAt ? new Date(log.createdAt).toISOString().split('T')[0] : "";
@@ -77,11 +78,24 @@ export async function GET(req: Request) {
                 const actionStr = String(log.action || "").toUpperCase();
                 const combinedText = String(log.details || "").toLowerCase();
 
-                if (actionStr === "DAILY_REPORT" || actionStr === "UPDATE_TASK" || actionStr === "UPDATE") {
+                // 🚀 ĐÃ SỬA: Blacklist chặn chuẩn xác (Không chặn Editor khi nộp PRJ Thô/Audio)
+                if (["DAILY_REPORT", "UPDATE_TASK", "UPDATE", "UPDATE_LINK"].includes(actionStr)) {
                     if (userRole === "EDITOR") {
-                        if (combinedText.includes("prj thô") || combinedText.includes("âm thanh") || combinedText.includes("audio")) isKpiQualifying = false;
+                        if (combinedText.includes("kịch bản") || combinedText.includes("chuyển động") || combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) {
+                            isKpiQualifying = false;
+                        }
                     } else if (userRole === "CONTENT") {
-                        if (combinedText.includes("ý tưởng") && !combinedText.includes("kịch bản")) isKpiQualifying = false;
+                        if (combinedText.includes("video render") || combinedText.includes("prj thô") || combinedText.includes("audio") || combinedText.includes("âm thanh") || combinedText.includes("chuyển động") || combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) {
+                            isKpiQualifying = false;
+                        }
+                    } else if (userRole === "ANIMATOR") {
+                        if (combinedText.includes("kịch bản") || combinedText.includes("video render") || combinedText.includes("prj thô") || combinedText.includes("audio") || combinedText.includes("âm thanh") || combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) {
+                            isKpiQualifying = false;
+                        }
+                    } else if (userRole === "PUBLISHER" || userRole === "CHANNEL_MANAGER") {
+                        if (combinedText.includes("kịch bản") || combinedText.includes("video render") || combinedText.includes("prj thô") || combinedText.includes("audio") || combinedText.includes("âm thanh") || combinedText.includes("chuyển động")) {
+                            isKpiQualifying = false;
+                        }
                     }
                 }
                 if (isKpiQualifying) {
@@ -186,15 +200,6 @@ export async function GET(req: Request) {
             const taskFilter = isTopManagement ? {} : {
                 teamId: teamId 
             };
-            /* const taskFilter = isTopManagement ? {} : {
-                OR: [
-                    { contentId: { in: teamUserIds } },
-                    { editorId: { in: teamUserIds } },
-                    { animatorId: { in: teamUserIds } },
-                    { publisherId: { in: teamUserIds } },
-                    { teamId: teamId } 
-                ]
-            }; */
 
             const userCondition = isTopManagement ? {} : { userId: { in: teamUserIds } };
 
@@ -239,7 +244,8 @@ export async function GET(req: Request) {
             const dailyReportTracker7Days = new Set<string>();
             managerLogs7DaysRaw.forEach((log: any) => {
                 const actionStr = String(log.action || "").toUpperCase();
-                if (!["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK", "DAILY_REPORT", "UPDATE_TASK", "UPDATE"].includes(actionStr)) return;
+                // Bổ sung UPDATE_LINK
+                if (!["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK", "DAILY_REPORT", "UPDATE_TASK", "UPDATE", "UPDATE_LINK"].includes(actionStr)) return;
                 
                 if (actionStr === "DAILY_REPORT") {
                     const dateStr = new Date(log.createdAt).toISOString().split('T')[0];
@@ -270,7 +276,6 @@ export async function GET(req: Request) {
 
             const avgKpiPercent = validKpiUsers > 0 ? Math.round(sumPercent / validKpiUsers) : 0;
 
-            // 🚀 ĐÃ TRẢ LẠI: Lấy MỌI log hợp lệ (validLogs7Days) để đếm số lượng cho biểu đồ năng suất
             const chartDataArray = generateEmpty7DaysChart();
             validLogs7Days.forEach(log => {
                 const dateStr = new Date(log.createdAt).toLocaleDateString('vi-VN', {
@@ -290,6 +295,7 @@ export async function GET(req: Request) {
                 else if (log.action === "PUBLISH_VIDEO") typeStr = "Publish";
                 else if (log.action === "COMPLETE_TASK") typeStr = "Nghiệm thu";
                 else if (log.action === "DAILY_REPORT") typeStr = "Báo cáo ngày";
+                else if (log.action === "UPDATE_TASK" || log.action === "UPDATE" || log.action === "UPDATE_LINK") typeStr = "Cập nhật";
                 return { ...log, typeStr };
             });
 
@@ -361,7 +367,8 @@ export async function GET(req: Request) {
             const dailyReportTracker7Days = new Set<string>();
             myLogs7DaysRaw.forEach(log => {
                 const actionStr = String(log.action || "").toUpperCase();
-                if (!["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK", "DAILY_REPORT", "UPDATE_TASK", "UPDATE"].includes(actionStr)) return;
+                // Bổ sung UPDATE_LINK
+                if (!["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK", "DAILY_REPORT", "UPDATE_TASK", "UPDATE", "UPDATE_LINK"].includes(actionStr)) return;
                 
                 if (actionStr === "DAILY_REPORT") {
                     const dateStr = new Date(log.createdAt).toISOString().split('T')[0];
@@ -387,7 +394,6 @@ export async function GET(req: Request) {
                 }
             });
 
-            // 🚀 ĐÃ TRẢ LẠI: Lấy MỌI log hợp lệ (validLogs7Days) để đếm số lượng cho biểu đồ năng suất
             const chartDataArray = generateEmpty7DaysChart();
             validLogs7Days.forEach(log => {
                  const dateStr = new Date(log.createdAt).toLocaleDateString('vi-VN', {
@@ -408,7 +414,7 @@ export async function GET(req: Request) {
                 else if (act === "PUBLISH_VIDEO") typeStr = "Publish";
                 else if (act === "COMPLETE_TASK") typeStr = "Nghiệm thu";
                 else if (act === "DAILY_REPORT") typeStr = "Báo cáo ngày";
-                else if (act === "UPDATE_TASK" || act === "UPDATE") typeStr = "Cập nhật";
+                else if (act === "UPDATE_TASK" || act === "UPDATE" || act === "UPDATE_LINK") typeStr = "Cập nhật";
                 return { ...log, typeStr };
             });
 
