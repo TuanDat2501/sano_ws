@@ -109,8 +109,14 @@ export async function GET(req: Request, context: any) {
             const actionStr = String(log.action || "").toUpperCase();
             const combinedText = String(log.details || "").toLowerCase();
 
-            if (["DAILY_REPORT", "UPDATE_TASK", "UPDATE", "UPDATE_LINK"].includes(actionStr)) {
-                if (user.role === "EDITOR") {
+            // 🚀 BỘ LỌC KỶ LUẬT THÔNG MINH MỚI NHẤT ĐÃ CẬP NHẬT LEADER
+            if (["DAILY_REPORT", "UPDATE_TASK", "UPDATE", "UPDATE_LINK", "COMPLETE_TASK"].includes(actionStr)) {
+                if (user.role === "LEADER") {
+                    // LEADER: Cấm UPDATE_LINK và chỉ ăn KPI khi nộp Video Render
+                    if (actionStr === "UPDATE_LINK" || !combinedText.includes("video render")) {
+                        isKpiQualifying = false;
+                    }
+                } else if (user.role === "EDITOR") {
                     if (combinedText.includes("kịch bản") || combinedText.includes("chuyển động") || combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) {
                         isKpiQualifying = false;
                     }

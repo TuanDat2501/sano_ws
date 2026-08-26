@@ -49,14 +49,12 @@ export async function GET(req: Request) {
             return chartTemplate;
         };
 
-        // 🚀 ĐÃ ĐỒNG BỘ: Bộ lọc KPI chuẩn 100% từ luồng API KPI sang Dashboard
         const calculateKpiForUser = (userLogs: any[], targetValue: number, targetDetailsRaw: any, userRole: string) => {
             const dailyReportTracker = new Set<string>();
             const validUserLogs: any[] = [];
             
             userLogs.forEach(log => {
                 const actionStr = String(log.action || "").toUpperCase();
-                // Bổ sung UPDATE_LINK
                 if (!["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK", "DAILY_REPORT", "UPDATE_TASK", "UPDATE", "UPDATE_LINK"].includes(actionStr)) return; 
                 
                 if (actionStr === "DAILY_REPORT") {
@@ -78,18 +76,19 @@ export async function GET(req: Request) {
                 const actionStr = String(log.action || "").toUpperCase();
                 const combinedText = String(log.details || "").toLowerCase();
 
-                // 🚀 ĐÃ SỬA: Blacklist chặn chuẩn xác (Không chặn Editor khi nộp PRJ Thô/Audio)
-                if (["DAILY_REPORT", "UPDATE_TASK", "UPDATE", "UPDATE_LINK"].includes(actionStr)) {
-                    if (userRole === "EDITOR") {
+                // 🚀 BỘ LỌC KỶ LUẬT THÔNG MINH MỚI NHẤT ĐÃ CẬP NHẬT LEADER
+                if (["DAILY_REPORT", "UPDATE_TASK", "UPDATE", "UPDATE_LINK", "COMPLETE_TASK"].includes(actionStr)) {
+                    if (userRole === "LEADER") {
+                        // LEADER: Cấm UPDATE_LINK và chỉ ăn KPI khi nộp Video Render
+                        if (actionStr === "UPDATE_LINK" || !combinedText.includes("video render")) {
+                            isKpiQualifying = false;
+                        }
+                    } else if (userRole === "EDITOR") {
                         if (combinedText.includes("kịch bản") || combinedText.includes("chuyển động") || combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) {
                             isKpiQualifying = false;
                         }
                     } else if (userRole === "CONTENT") {
                         if (combinedText.includes("video render") || combinedText.includes("prj thô") || combinedText.includes("audio") || combinedText.includes("âm thanh") || combinedText.includes("chuyển động") || combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) {
-                            isKpiQualifying = false;
-                        }
-                    } else if (userRole === "ANIMATOR") {
-                        if (combinedText.includes("kịch bản") || combinedText.includes("video render") || combinedText.includes("prj thô") || combinedText.includes("audio") || combinedText.includes("âm thanh") || combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) {
                             isKpiQualifying = false;
                         }
                     } else if (userRole === "PUBLISHER" || userRole === "CHANNEL_MANAGER") {
@@ -244,7 +243,6 @@ export async function GET(req: Request) {
             const dailyReportTracker7Days = new Set<string>();
             managerLogs7DaysRaw.forEach((log: any) => {
                 const actionStr = String(log.action || "").toUpperCase();
-                // Bổ sung UPDATE_LINK
                 if (!["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK", "DAILY_REPORT", "UPDATE_TASK", "UPDATE", "UPDATE_LINK"].includes(actionStr)) return;
                 
                 if (actionStr === "DAILY_REPORT") {
@@ -367,7 +365,6 @@ export async function GET(req: Request) {
             const dailyReportTracker7Days = new Set<string>();
             myLogs7DaysRaw.forEach(log => {
                 const actionStr = String(log.action || "").toUpperCase();
-                // Bổ sung UPDATE_LINK
                 if (!["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK", "DAILY_REPORT", "UPDATE_TASK", "UPDATE", "UPDATE_LINK"].includes(actionStr)) return;
                 
                 if (actionStr === "DAILY_REPORT") {
