@@ -49,22 +49,21 @@ export async function GET(req: Request) {
             return chartTemplate;
         };
 
+        // 🚀 ĐÃ SỬA: Lọc tinh gọn duy nhất DAILY_REPORT
         const calculateKpiForUser = (userLogs: any[], targetValue: number, targetDetailsRaw: any, userRole: string) => {
             const dailyReportTracker = new Set<string>();
             const validUserLogs: any[] = [];
             
             userLogs.forEach(log => {
                 const actionStr = String(log.action || "").toUpperCase();
-                if (!["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK", "DAILY_REPORT", "UPDATE_TASK", "UPDATE", "UPDATE_LINK"].includes(actionStr)) return; 
                 
-                if (actionStr === "DAILY_REPORT") {
-                    const dateString = log.createdAt ? new Date(log.createdAt).toISOString().split('T')[0] : "";
-                    const uniqueKey = `${log.taskId}_${dateString}`;
-                    if (!dailyReportTracker.has(uniqueKey)) {
-                        dailyReportTracker.add(uniqueKey);
-                        validUserLogs.push(log);
-                    }
-                } else {
+                // Chỉ xét log Báo Cáo
+                if (actionStr !== "DAILY_REPORT") return; 
+                
+                const dateString = log.createdAt ? new Date(log.createdAt).toISOString().split('T')[0] : "";
+                const uniqueKey = `${log.taskId}_${dateString}`;
+                if (!dailyReportTracker.has(uniqueKey)) {
+                    dailyReportTracker.add(uniqueKey);
                     validUserLogs.push(log);
                 }
             });
@@ -73,30 +72,25 @@ export async function GET(req: Request) {
             validUserLogs.forEach(log => {
                 if (!log.task) return;
                 let isKpiQualifying = true; 
-                const actionStr = String(log.action || "").toUpperCase();
                 const combinedText = String(log.details || "").toLowerCase();
 
-                // 🚀 BỘ LỌC KỶ LUẬT THÔNG MINH MỚI NHẤT ĐÃ CẬP NHẬT LEADER
-                if (["DAILY_REPORT", "UPDATE_TASK", "UPDATE", "UPDATE_LINK", "COMPLETE_TASK"].includes(actionStr)) {
-                    if (userRole === "LEADER") {
-                        // LEADER: Cấm UPDATE_LINK và chỉ ăn KPI khi nộp Video Render
-                        if (actionStr === "UPDATE_LINK" || !combinedText.includes("video render")) {
-                            isKpiQualifying = false;
-                        }
-                    } else if (userRole === "EDITOR") {
-                        if (combinedText.includes("kịch bản") || combinedText.includes("chuyển động") || combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) {
-                            isKpiQualifying = false;
-                        }
-                    } else if (userRole === "CONTENT") {
-                        if (combinedText.includes("video render") || combinedText.includes("prj thô") || combinedText.includes("audio") || combinedText.includes("âm thanh") || combinedText.includes("chuyển động") || combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) {
-                            isKpiQualifying = false;
-                        }
-                    } else if (userRole === "PUBLISHER" || userRole === "CHANNEL_MANAGER") {
-                        if (combinedText.includes("kịch bản") || combinedText.includes("video render") || combinedText.includes("prj thô") || combinedText.includes("audio") || combinedText.includes("âm thanh") || combinedText.includes("chuyển động")) {
-                            isKpiQualifying = false;
-                        }
+                // 🚀 ĐÃ SỬA: Blacklist kỷ luật thông minh (Vì 100% là báo cáo nên k cần check actionStr)
+                if (userRole === "LEADER") {
+                    if (!combinedText.includes("video render")) isKpiQualifying = false;
+                } else if (userRole === "EDITOR") {
+                    if (combinedText.includes("kịch bản") || combinedText.includes("chuyển động") || combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) {
+                        isKpiQualifying = false;
+                    }
+                } else if (userRole === "CONTENT") {
+                    if (combinedText.includes("video render") || combinedText.includes("prj thô") || combinedText.includes("audio") || combinedText.includes("âm thanh") || combinedText.includes("chuyển động") || combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) {
+                        isKpiQualifying = false;
+                    }
+                } else if (userRole === "PUBLISHER" || userRole === "CHANNEL_MANAGER") {
+                    if (combinedText.includes("kịch bản") || combinedText.includes("video render") || combinedText.includes("prj thô") || combinedText.includes("audio") || combinedText.includes("âm thanh") || combinedText.includes("chuyển động")) {
+                        isKpiQualifying = false;
                     }
                 }
+                
                 if (isKpiQualifying) {
                     if (!uniqueTasks.has(log.taskId)) uniqueTasks.set(log.taskId, log.task);
                 }
@@ -243,16 +237,14 @@ export async function GET(req: Request) {
             const dailyReportTracker7Days = new Set<string>();
             managerLogs7DaysRaw.forEach((log: any) => {
                 const actionStr = String(log.action || "").toUpperCase();
-                if (!["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK", "DAILY_REPORT", "UPDATE_TASK", "UPDATE", "UPDATE_LINK"].includes(actionStr)) return;
                 
-                if (actionStr === "DAILY_REPORT") {
-                    const dateStr = new Date(log.createdAt).toISOString().split('T')[0];
-                    const uniqueKey = `${log.userId}_${log.taskId}_${dateStr}`;
-                    if (!dailyReportTracker7Days.has(uniqueKey)) {
-                        dailyReportTracker7Days.add(uniqueKey);
-                        validLogs7Days.push(log);
-                    }
-                } else {
+                // 🚀 Lọc duy nhất báo cáo
+                if (actionStr !== "DAILY_REPORT") return;
+                
+                const dateStr = new Date(log.createdAt).toISOString().split('T')[0];
+                const uniqueKey = `${log.userId}_${log.taskId}_${dateStr}`;
+                if (!dailyReportTracker7Days.has(uniqueKey)) {
+                    dailyReportTracker7Days.add(uniqueKey);
                     validLogs7Days.push(log);
                 }
             });
@@ -287,14 +279,7 @@ export async function GET(req: Request) {
             });
 
             const mappedLogsThisWeek = logsThisWeek.map((log: any) => {
-                let typeStr = "Khác";
-                if (log.action === "SUBMIT_SCRIPT") typeStr = "Script";
-                else if (log.action === "SUBMIT_VIDEO") typeStr = "Edit";
-                else if (log.action === "PUBLISH_VIDEO") typeStr = "Publish";
-                else if (log.action === "COMPLETE_TASK") typeStr = "Nghiệm thu";
-                else if (log.action === "DAILY_REPORT") typeStr = "Báo cáo ngày";
-                else if (log.action === "UPDATE_TASK" || log.action === "UPDATE" || log.action === "UPDATE_LINK") typeStr = "Cập nhật";
-                return { ...log, typeStr };
+                return { ...log, typeStr: "Báo cáo ngày" };
             });
 
             return NextResponse.json({
@@ -365,16 +350,14 @@ export async function GET(req: Request) {
             const dailyReportTracker7Days = new Set<string>();
             myLogs7DaysRaw.forEach(log => {
                 const actionStr = String(log.action || "").toUpperCase();
-                if (!["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK", "DAILY_REPORT", "UPDATE_TASK", "UPDATE", "UPDATE_LINK"].includes(actionStr)) return;
                 
-                if (actionStr === "DAILY_REPORT") {
-                    const dateStr = new Date(log.createdAt).toISOString().split('T')[0];
-                    const uniqueKey = `${log.taskId}_${dateStr}`;
-                    if (!dailyReportTracker7Days.has(uniqueKey)) {
-                        dailyReportTracker7Days.add(uniqueKey);
-                        validLogs7Days.push(log);
-                    }
-                } else {
+                // 🚀 Lọc duy nhất báo cáo
+                if (actionStr !== "DAILY_REPORT") return;
+                
+                const dateStr = new Date(log.createdAt).toISOString().split('T')[0];
+                const uniqueKey = `${log.taskId}_${dateStr}`;
+                if (!dailyReportTracker7Days.has(uniqueKey)) {
+                    dailyReportTracker7Days.add(uniqueKey);
                     validLogs7Days.push(log);
                 }
             });
@@ -386,7 +369,7 @@ export async function GET(req: Request) {
             const uniqueTasksAllTime = new Set();
             myLogsAllTimeRaw.forEach((log: any) => {
                 const actionStr = String(log.action || "").toUpperCase();
-                if (["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK"].includes(actionStr)) {
+                if (actionStr === "DAILY_REPORT") {
                     uniqueTasksAllTime.add(log.taskId);
                 }
             });
@@ -404,15 +387,7 @@ export async function GET(req: Request) {
             });
 
             const mappedRecentLogs = validLogs7Days.map((log: any) => {
-                let typeStr = "Khác";
-                const act = String(log.action || "").toUpperCase();
-                if (act === "SUBMIT_SCRIPT") typeStr = "Script";
-                else if (act === "SUBMIT_VIDEO") typeStr = "Edit";
-                else if (act === "PUBLISH_VIDEO") typeStr = "Publish";
-                else if (act === "COMPLETE_TASK") typeStr = "Nghiệm thu";
-                else if (act === "DAILY_REPORT") typeStr = "Báo cáo ngày";
-                else if (act === "UPDATE_TASK" || act === "UPDATE" || act === "UPDATE_LINK") typeStr = "Cập nhật";
-                return { ...log, typeStr };
+                return { ...log, typeStr: "Báo cáo ngày" };
             });
 
             return NextResponse.json({

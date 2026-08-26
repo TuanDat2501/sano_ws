@@ -79,55 +79,50 @@ export async function GET(req: Request, context: any) {
         ]);
 
         const validUserLogs: typeof allLogs = [];
+        const dailyReportTracker = new Set<string>();
         
+        // 🚀 1. LỌC: CHỈ LẤY DUY NHẤT ACTION "DAILY_REPORT" VÀ ĐẢM BẢO 1 BÀI/NGÀY
         allLogs.forEach(log => {
             const actionStr = String(log.action || "").toUpperCase();
-            if (!["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK", "DAILY_REPORT", "UPDATE_TASK", "UPDATE", "UPDATE_LINK"].includes(actionStr)) {
-                return; 
+            
+            if (actionStr !== "DAILY_REPORT") return; 
+
+            const dateString = log.createdAt ? new Date(log.createdAt).toISOString().split('T')[0] : "";
+            const uniqueKey = `${log.taskId}_${dateString}`;
+            
+            if (!dailyReportTracker.has(uniqueKey)) {
+                dailyReportTracker.add(uniqueKey);
+                validUserLogs.push(log);
             }
-            validUserLogs.push(log);
         });
 
+        // Đã lọc sạch rác, chỉ còn Báo Cáo nên gán cứng typeStr luôn
         const mappedLogs = validUserLogs.map(log => {
-            let typeStr = "Khác";
-            const act = String(log.action || "").toUpperCase();
-            if (act === "SUBMIT_SCRIPT") typeStr = "Script";
-            else if (act === "SUBMIT_VIDEO") typeStr = "Edit";
-            else if (act === "PUBLISH_VIDEO") typeStr = "Publish";
-            else if (act === "COMPLETE_TASK") typeStr = "Nghiệm thu";
-            else if (act === "DAILY_REPORT") typeStr = "Báo cáo";
-            else if (act === "UPDATE_TASK" || act === "UPDATE" || act === "UPDATE_LINK") typeStr = "Cập nhật";
-            return { ...log, typeStr, isCounted: false }; 
+            return { ...log, typeStr: "Báo cáo", isCounted: false }; 
         });
 
         const uniqueTasks = new Map<string, any>();
         
+        // 🚀 2. BỘ LỌC KỶ LUẬT (Không cần check actionStr nữa vì 100% là DAILY_REPORT)
         mappedLogs.forEach(log => {
             if (!log.task) return;
 
             let isKpiQualifying = true; 
-            const actionStr = String(log.action || "").toUpperCase();
             const combinedText = String(log.details || "").toLowerCase();
 
-            // 🚀 BỘ LỌC KỶ LUẬT THÔNG MINH MỚI NHẤT ĐÃ CẬP NHẬT LEADER
-            if (["DAILY_REPORT", "UPDATE_TASK", "UPDATE", "UPDATE_LINK", "COMPLETE_TASK"].includes(actionStr)) {
-                if (user.role === "LEADER") {
-                    // LEADER: Cấm UPDATE_LINK và chỉ ăn KPI khi nộp Video Render
-                    if (actionStr === "UPDATE_LINK" || !combinedText.includes("video render")) {
-                        isKpiQualifying = false;
-                    }
-                } else if (user.role === "EDITOR") {
-                    if (combinedText.includes("kịch bản") || combinedText.includes("chuyển động") || combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) {
-                        isKpiQualifying = false;
-                    }
-                } else if (user.role === "CONTENT") {
-                    if (combinedText.includes("video render") || combinedText.includes("prj thô") || combinedText.includes("audio") || combinedText.includes("âm thanh") || combinedText.includes("chuyển động") || combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) {
-                        isKpiQualifying = false;
-                    }
-                } else if (user.role === "PUBLISHER" || user.role === "CHANNEL_MANAGER") {
-                    if (combinedText.includes("kịch bản") || combinedText.includes("video render") || combinedText.includes("prj thô") || combinedText.includes("audio") || combinedText.includes("âm thanh") || combinedText.includes("chuyển động")) {
-                        isKpiQualifying = false;
-                    }
+            if (user.role === "LEADER") {
+                if (!combinedText.includes("video render")) isKpiQualifying = false;
+            } else if (user.role === "EDITOR") {
+                if (combinedText.includes("kịch bản") || combinedText.includes("chuyển động") || combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) {
+                    isKpiQualifying = false;
+                }
+            } else if (user.role === "CONTENT") {
+                if (combinedText.includes("video render") || combinedText.includes("prj thô") || combinedText.includes("audio") || combinedText.includes("âm thanh") || combinedText.includes("chuyển động") || combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) {
+                    isKpiQualifying = false;
+                }
+            } else if (user.role === "PUBLISHER" || user.role === "CHANNEL_MANAGER") {
+                if (combinedText.includes("kịch bản") || combinedText.includes("video render") || combinedText.includes("prj thô") || combinedText.includes("audio") || combinedText.includes("âm thanh") || combinedText.includes("chuyển động")) {
+                    isKpiQualifying = false;
                 }
             }
 
