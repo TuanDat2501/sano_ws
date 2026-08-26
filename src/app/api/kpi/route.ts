@@ -134,19 +134,21 @@ export async function GET(req: Request) {
                 let isKpiQualifying = true; 
                 const combinedText = String(log.details || "").toLowerCase();
 
-                if (user.role === "LEADER") {
-                    if (!combinedText.includes("video render")) isKpiQualifying = false;
-                } else if (user.role === "EDITOR") {
-                    if (combinedText.includes("kịch bản") || combinedText.includes("chuyển động") || combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) {
-                        isKpiQualifying = false;
-                    }
-                } else if (user.role === "CONTENT") {
-                    if (combinedText.includes("video render") || combinedText.includes("prj thô") || combinedText.includes("audio") || combinedText.includes("âm thanh") || combinedText.includes("chuyển động") || combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) {
-                        isKpiQualifying = false;
-                    }
-                } else if (user.role === "PUBLISHER" || user.role === "CHANNEL_MANAGER") {
-                    if (combinedText.includes("kịch bản") || combinedText.includes("video render") || combinedText.includes("prj thô") || combinedText.includes("audio") || combinedText.includes("âm thanh") || combinedText.includes("chuyển động")) {
-                        isKpiQualifying = false;
+                if (!combinedText.includes("gán thủ công")) {
+                    if (user.role === "LEADER") {
+                        if (!combinedText.includes("video render")) isKpiQualifying = false;
+                    } else if (user.role === "EDITOR") {
+                        if (combinedText.includes("kịch bản") || combinedText.includes("chuyển động") || combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) {
+                            isKpiQualifying = false;
+                        }
+                    } else if (user.role === "CONTENT") {
+                        if (combinedText.includes("video render") || combinedText.includes("prj thô") || combinedText.includes("audio") || combinedText.includes("âm thanh") || combinedText.includes("chuyển động") || combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) {
+                            isKpiQualifying = false;
+                        }
+                    } else if (user.role === "PUBLISHER" || user.role === "CHANNEL_MANAGER") {
+                        if (combinedText.includes("kịch bản") || combinedText.includes("video render") || combinedText.includes("prj thô") || combinedText.includes("audio") || combinedText.includes("âm thanh") || combinedText.includes("chuyển động")) {
+                            isKpiQualifying = false;
+                        }
                     }
                 }
 
