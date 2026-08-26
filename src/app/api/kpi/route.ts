@@ -135,8 +135,11 @@ export async function GET(req: Request) {
                 const combinedText = String(log.details || "").toLowerCase();
 
                 if (!combinedText.includes("gán thủ công")) {
-                    if (user.role === "LEADER") {
-                        if (!combinedText.includes("video render")) isKpiQualifying = false;
+                    if (user.role === "LEADER") { // Lưu ý: Ở file dashboard/route.ts thì biến này tên là userRole === "LEADER"
+                        // 🚀 ĐÃ SỬA: Chấp nhận cả Video Render (Dựng xong) HOẶC Video Đã Đăng (Publish)
+                        if (!combinedText.includes("video render") && !combinedText.includes("video đã đăng")) {
+                            isKpiQualifying = false;
+                        }
                     } else if (user.role === "EDITOR") {
                         if (combinedText.includes("kịch bản") || combinedText.includes("chuyển động") || combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) {
                             isKpiQualifying = false;

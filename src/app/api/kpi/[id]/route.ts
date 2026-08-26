@@ -5,13 +5,13 @@ import { authOptions } from "@/lib/auth";
 
 function getWeekDateRangeByMonth(year: number, month: number, weekNumber: number) {
     const firstDayOfMonth = new Date(year, month - 1, 1);
-    const dayOfWeek = firstDayOfMonth.getDay(); 
+    const dayOfWeek = firstDayOfMonth.getDay();
     const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
     const startOfFirstWeek = new Date(year, month - 1, 1 + diffToMonday);
 
     const thursdayOfFirstWeek = new Date(startOfFirstWeek);
     thursdayOfFirstWeek.setDate(startOfFirstWeek.getDate() + 3);
-    
+
     if (thursdayOfFirstWeek.getMonth() !== month - 1) {
         startOfFirstWeek.setDate(startOfFirstWeek.getDate() + 7);
     }
@@ -68,28 +68,28 @@ export async function GET(req: Request, context: any) {
                     createdAt: true,
                     taskId: true,
                     userId: true,
-                    task: { 
-                        select: { 
+                    task: {
+                        select: {
                             id: true, title: true, status: true, duration: true, isRework: true,
                             channel: { select: { id: true, name: true } }
-                        } 
-                    } 
+                        }
+                    }
                 }
             })
         ]);
 
         const validUserLogs: typeof allLogs = [];
         const dailyReportTracker = new Set<string>();
-        
+
         // 🚀 1. LỌC: CHỈ LẤY DUY NHẤT ACTION "DAILY_REPORT" VÀ ĐẢM BẢO 1 BÀI/NGÀY
         allLogs.forEach(log => {
             const actionStr = String(log.action || "").toUpperCase();
-            
-            if (actionStr !== "DAILY_REPORT") return; 
+
+            if (actionStr !== "DAILY_REPORT") return;
 
             const dateString = log.createdAt ? new Date(log.createdAt).toISOString().split('T')[0] : "";
             const uniqueKey = `${log.taskId}_${dateString}`;
-            
+
             if (!dailyReportTracker.has(uniqueKey)) {
                 dailyReportTracker.add(uniqueKey);
                 validUserLogs.push(log);
@@ -98,52 +98,55 @@ export async function GET(req: Request, context: any) {
 
         // Đã lọc sạch rác, chỉ còn Báo Cáo nên gán cứng typeStr luôn
         const mappedLogs = validUserLogs.map(log => {
-            return { ...log, typeStr: "Báo cáo", isCounted: false }; 
+            return { ...log, typeStr: "Báo cáo", isCounted: false };
         });
 
         const uniqueTasks = new Map<string, any>();
-        
+
         // 🚀 2. BỘ LỌC KỶ LUẬT (Không cần check actionStr nữa vì 100% là DAILY_REPORT)
         mappedLogs.forEach(log => {
             if (!log.task) return;
 
-            let isKpiQualifying = true; 
+            let isKpiQualifying = true;
             const combinedText = String(log.details || "").toLowerCase();
 
             if (!combinedText.includes("gán thủ công")) {
-                    if (user.role === "LEADER") {
-                        if (!combinedText.includes("video render")) isKpiQualifying = false;
-                    } else if (user.role === "EDITOR") {
-                        if (combinedText.includes("kịch bản") || combinedText.includes("chuyển động") || combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) {
-                            isKpiQualifying = false;
-                        }
-                    } else if (user.role === "CONTENT") {
-                        if (combinedText.includes("video render") || combinedText.includes("prj thô") || combinedText.includes("audio") || combinedText.includes("âm thanh") || combinedText.includes("chuyển động") || combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) {
-                            isKpiQualifying = false;
-                        }
-                    } else if (user.role === "PUBLISHER" || user.role === "CHANNEL_MANAGER") {
-                        if (combinedText.includes("kịch bản") || combinedText.includes("video render") || combinedText.includes("prj thô") || combinedText.includes("audio") || combinedText.includes("âm thanh") || combinedText.includes("chuyển động")) {
-                            isKpiQualifying = false;
-                        }
+                if (user.role === "LEADER") { // Lưu ý: Ở file dashboard/route.ts thì biến này tên là userRole === "LEADER"
+                    // 🚀 ĐÃ SỬA: Chấp nhận cả Video Render (Dựng xong) HOẶC Video Đã Đăng (Publish)
+                    if (!combinedText.includes("video render") && !combinedText.includes("video đã đăng")) {
+                        isKpiQualifying = false;
+                    }
+                } else if (user.role === "EDITOR") {
+                    if (combinedText.includes("kịch bản") || combinedText.includes("chuyển động") || combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) {
+                        isKpiQualifying = false;
+                    }
+                } else if (user.role === "CONTENT") {
+                    if (combinedText.includes("video render") || combinedText.includes("prj thô") || combinedText.includes("audio") || combinedText.includes("âm thanh") || combinedText.includes("chuyển động") || combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) {
+                        isKpiQualifying = false;
+                    }
+                } else if (user.role === "PUBLISHER" || user.role === "CHANNEL_MANAGER") {
+                    if (combinedText.includes("kịch bản") || combinedText.includes("video render") || combinedText.includes("prj thô") || combinedText.includes("audio") || combinedText.includes("âm thanh") || combinedText.includes("chuyển động")) {
+                        isKpiQualifying = false;
                     }
                 }
+            }
 
             if (isKpiQualifying) {
                 if (!uniqueTasks.has(log.taskId)) {
                     uniqueTasks.set(log.taskId, log.task);
-                    log.isCounted = true; 
+                    log.isCounted = true;
                 }
             }
         });
 
         const allUserLogs = [...mappedLogs].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        
+
         const targetValue = kpiRecord?.targetValue || 0;
         const targetDetailsRaw = kpiRecord?.targetDetails;
         let targetDetails: any[] = [];
         try {
             if (targetDetailsRaw) targetDetails = typeof targetDetailsRaw === 'string' ? JSON.parse(targetDetailsRaw) : targetDetailsRaw;
-        } catch(e) {}
+        } catch (e) { }
 
         let percent = 0;
         let totalTargetMinutes = 0;
@@ -156,7 +159,7 @@ export async function GET(req: Request, context: any) {
         uniqueTasks.forEach(task => {
             const key = `${task.channel?.id || 'no_channel'}_${task.isRework ? 'rework' : 'new'}`;
             bucketMins[key] = (bucketMins[key] || 0) + Number(task.duration || 0);
-            bucketTaskCount[key] = (bucketTaskCount[key] || 0) + 1; 
+            bucketTaskCount[key] = (bucketTaskCount[key] || 0) + 1;
         });
 
         if (targetDetails && targetDetails.length > 0) {
@@ -200,7 +203,7 @@ export async function GET(req: Request, context: any) {
                     assignedMinsTotal += assignedMins;
 
                     t.actualMinutes = (t.actualMinutes || 0) + assignedMins;
-                    t.actualCount = (t.actualCount || 0) + assignedTasks; 
+                    t.actualCount = (t.actualCount || 0) + assignedTasks;
                 });
                 return { minsLeft, tasksLeft, assignedMinsTotal };
             };
@@ -219,7 +222,7 @@ export async function GET(req: Request, context: any) {
                     if (bKey.endsWith(`_${reworkKey}`)) {
                         remainingMins += bucketMins[bKey];
                         remainingTasks += bucketTaskCount[bKey];
-                        bucketMins[bKey] = 0; 
+                        bucketMins[bKey] = 0;
                         bucketTaskCount[bKey] = 0;
                     }
                 });
@@ -234,11 +237,11 @@ export async function GET(req: Request, context: any) {
         }
 
         return NextResponse.json({
-            userId: user.id, 
-            fullName: user.fullName, 
+            userId: user.id,
+            fullName: user.fullName,
             role: user.role,
-            teamName: user.team?.name || "Chưa có team", 
-            targetValue, actualValue: actualCount, percent, logs: allUserLogs, 
+            teamName: user.team?.name || "Chưa có team",
+            targetValue, actualValue: actualCount, percent, logs: allUserLogs,
             targetDetails, totalTargetMinutes, totalActualMinutes,
             avatarUrl: user.avatarUrl || null
         });

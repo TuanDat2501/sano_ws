@@ -49,7 +49,6 @@ export async function GET(req: Request) {
             return chartTemplate;
         };
 
-        // 🚀 ĐÃ SỬA: Lọc tinh gọn duy nhất DAILY_REPORT
         const calculateKpiForUser = (userLogs: any[], targetValue: number, targetDetailsRaw: any, userRole: string) => {
             const dailyReportTracker = new Set<string>();
             const validUserLogs: any[] = [];
@@ -57,7 +56,6 @@ export async function GET(req: Request) {
             userLogs.forEach(log => {
                 const actionStr = String(log.action || "").toUpperCase();
                 
-                // Chỉ xét log Báo Cáo
                 if (actionStr !== "DAILY_REPORT") return; 
                 
                 const dateString = log.createdAt ? new Date(log.createdAt).toISOString().split('T')[0] : "";
@@ -69,30 +67,47 @@ export async function GET(req: Request) {
             });
 
             const uniqueTasks = new Map<string, any>();
+            
             validUserLogs.forEach(log => {
                 if (!log.task) return;
-                let isKpiQualifying = true; 
-                const combinedText = String(log.details || "").toLowerCase();
+                
+                let isKpiQualifying = false; // Mặc định khóa cửa
+                const text = String(log.details || "").toLowerCase();
 
-                // 🚀 ĐÃ SỬA: Blacklist kỷ luật thông minh (Vì 100% là báo cáo nên k cần check actionStr)
-                if (userRole === "LEADER") {
-                    if (!combinedText.includes("video render")) isKpiQualifying = false;
-                } else if (userRole === "EDITOR") {
-                    if (combinedText.includes("kịch bản") || combinedText.includes("chuyển động") || combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) {
-                        isKpiQualifying = false;
-                    }
-                } else if (userRole === "CONTENT") {
-                    if (combinedText.includes("video render") || combinedText.includes("prj thô") || combinedText.includes("audio") || combinedText.includes("âm thanh") || combinedText.includes("chuyển động") || combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) {
-                        isKpiQualifying = false;
-                    }
-                } else if (userRole === "PUBLISHER" || userRole === "CHANNEL_MANAGER") {
-                    if (combinedText.includes("kịch bản") || combinedText.includes("video render") || combinedText.includes("prj thô") || combinedText.includes("audio") || combinedText.includes("âm thanh") || combinedText.includes("chuyển động")) {
-                        isKpiQualifying = false;
+                // 🚀 BỘ LỌC TỐI ƯU (WHITELIST): Chỉ cho phép các từ khóa đúng chuyên môn
+                if (text.includes("gán thủ công")) {
+                    isKpiQualifying = true; // Luôn cho qua nếu Admin ấn gán tay
+                } else {
+                    switch (userRole) {
+                        case "LEADER":
+                            // Leader được tính KPI khi nộp Video Render (Dựng) HOẶC Đã đăng (Publish)
+                            if (text.includes("video render") || text.includes("video đã đăng")) isKpiQualifying = true;
+                            break;
+                        case "EDITOR":
+                            if (text.includes("video render") || text.includes("prj thô") || text.includes("audio") || text.includes("âm thanh")) isKpiQualifying = true;
+                            break;
+                        case "CONTENT":
+                            if (text.includes("kịch bản")) isKpiQualifying = true;
+                            break;
+                        case "PUBLISHER":
+                        case "CHANNEL_MANAGER":
+                            if (text.includes("đã đăng") || text.includes("thumbnail")) isKpiQualifying = true;
+                            break;
+                        case "ANIMATOR":
+                            if (text.includes("chuyển động")) isKpiQualifying = true;
+                            break;
+                        default:
+                            isKpiQualifying = true; // Khác thì mặc định thả
                     }
                 }
                 
+                log.isCounted = false; // Reset cờ UI
+
                 if (isKpiQualifying) {
-                    if (!uniqueTasks.has(log.taskId)) uniqueTasks.set(log.taskId, log.task);
+                    if (!uniqueTasks.has(log.taskId)) {
+                        uniqueTasks.set(log.taskId, log.task);
+                        log.isCounted = true; // Bật cờ xanh cho Giao diện hiển thị
+                    }
                 }
             });
 
@@ -238,7 +253,6 @@ export async function GET(req: Request) {
             managerLogs7DaysRaw.forEach((log: any) => {
                 const actionStr = String(log.action || "").toUpperCase();
                 
-                // 🚀 Lọc duy nhất báo cáo
                 if (actionStr !== "DAILY_REPORT") return;
                 
                 const dateStr = new Date(log.createdAt).toISOString().split('T')[0];
@@ -279,7 +293,7 @@ export async function GET(req: Request) {
             });
 
             const mappedLogsThisWeek = logsThisWeek.map((log: any) => {
-                return { ...log, typeStr: "Báo cáo ngày" };
+                return { ...log, typeStr: "Báo cáo ngày", isCounted: !!log.isCounted };
             });
 
             return NextResponse.json({
@@ -351,7 +365,6 @@ export async function GET(req: Request) {
             myLogs7DaysRaw.forEach(log => {
                 const actionStr = String(log.action || "").toUpperCase();
                 
-                // 🚀 Lọc duy nhất báo cáo
                 if (actionStr !== "DAILY_REPORT") return;
                 
                 const dateStr = new Date(log.createdAt).toISOString().split('T')[0];
@@ -387,7 +400,7 @@ export async function GET(req: Request) {
             });
 
             const mappedRecentLogs = validLogs7Days.map((log: any) => {
-                return { ...log, typeStr: "Báo cáo ngày" };
+                return { ...log, typeStr: "Báo cáo ngày", isCounted: !!log.isCounted };
             });
 
             return NextResponse.json({
