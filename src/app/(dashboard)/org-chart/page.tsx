@@ -66,7 +66,11 @@ export default function OrgChartPage() {
                 const data = await res.json();
                 return data.filter((u: any) => u.isActive === true);
             }),
-            fetch("/api/channels").then(res => res.ok ? res.json() : [])
+            fetch("/api/channels").then(async res => {
+                if (!res.ok) return [];
+                const data = await res.json();
+                return data.filter((c: any) => c.status !== "DUNG_HOAT_DONG");
+            })
         ]).then(([teamsData, deptsData, usersData, channelsData]) => {
             const initialNodes: any[] = [];
             const initialEdges: any[] = [];

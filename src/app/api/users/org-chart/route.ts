@@ -82,6 +82,14 @@ export async function GET(req: Request) {
                 team: { select: { name: true } }, 
                 isActive: true,
                 channelMemberships: {
+                    // 🚀 ĐÃ SỬA: Lọc bỏ các kênh đã "Dừng hoạt động"
+                    where: {
+                        channel: {
+                            status: {
+                                not: "DUNG_HOAT_DONG"
+                            }
+                        }
+                    },
                     select: {
                         channelId: true,
                         roleOnChannel: true
@@ -192,7 +200,8 @@ export async function GET(req: Request) {
                             isKpiQualifying = false;
                         }
                     } else if (user.role === "CONTENT") {
-                        if (combinedText.includes("video render") || combinedText.includes("prj thô") || combinedText.includes("audio") || combinedText.includes("âm thanh") || combinedText.includes("chuyển động") || combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) {
+                        // 🚀 ĐÃ ĐỒNG BỘ: Cho phép Content ôm luôn mảng chuyển động để tính KPI
+                        if (combinedText.includes("video render") || combinedText.includes("prj thô") || combinedText.includes("audio") || combinedText.includes("âm thanh") || combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) {
                             isKpiQualifying = false;
                         }
                     } else if (user.role === "PUBLISHER" || user.role === "CHANNEL_MANAGER") {

@@ -13,14 +13,17 @@ export async function GET(req: Request) {
 
         const { searchParams } = new URL(req.url);
 
+        // 🚀 BẮT YÊU CẦU LẤY CHANNEL MEMBERSHIPS TỪ FRONTEND
+        const includeMemberships = searchParams.get("includeMemberships") === "true";
+
         const page = Number(searchParams.get("page")) || 1;
-        const limit = Number(searchParams.get("limit")) || 10;
+        // 🚀 TỐI ƯU: Nếu lấy cho Dropdown, mở rộng limit lên 1000 để không bị sót nhân sự trong Team đông
+        const limit = Number(searchParams.get("limit")) || (includeMemberships ? 1000 : 10);
         const skip = (page - 1) * limit;
 
         const searchKeyword = searchParams.get("search") || "";
         const teamFilter = searchParams.get("teamId") || "ALL";
         
-        // 🚀 NHẬN THÊM PARAM BỘ LỌC TỪ FRONTEND
         const roleFilter = searchParams.get("role") || "ALL";
         const statusFilter = searchParams.get("status") || "ALL";
 
@@ -33,24 +36,24 @@ export async function GET(req: Request) {
             whereClause.teamId = teamFilter;
         }
 
-        // 🚀 LỌC THEO VỊ TRÍ (ROLE)
+        // Lọc theo Vị trí
         if (roleFilter !== "ALL") {
             whereClause.role = roleFilter;
         }
 
-        // 🚀 LỌC THEO TRẠNG THÁI HOẠT ĐỘNG
+        // Lọc theo trạng thái
         if (statusFilter === "ACTIVE") {
             whereClause.isActive = true;
         } else if (statusFilter === "INACTIVE") {
             whereClause.isActive = false;
         }
 
-        // Lọc theo từ khóa tìm kiếm (Tên, Username, hoặc Mã nhân viên)
+        // Lọc theo từ khóa
         if (searchKeyword.trim() !== "") {
             whereClause.OR = [
                 { fullName: { contains: searchKeyword.trim() } },
                 { username: { contains: searchKeyword.trim() } },
-                { employeeCode: { contains: searchKeyword.trim() } } // Hỗ trợ HR tìm theo mã NV luôn
+                { employeeCode: { contains: searchKeyword.trim() } } 
             ];
         }
 
@@ -58,7 +61,13 @@ export async function GET(req: Request) {
             prisma.user.findMany({
                 where: whereClause,
                 include: {
-                    team: { select: { name: true } }
+                    team: { select: { name: true } },
+                    // 🚀 TRẢ VỀ DỮ LIỆU VAI TRÒ THEO KÊNH NẾU ĐƯỢC YÊU CẦU
+                    ...(includeMemberships && {
+                        channelMemberships: {
+                            select: { channelId: true, roleOnChannel: true }
+                        }
+                    })
                 },
                 orderBy: { createdAt: 'desc' },
                 take: limit,

@@ -63,7 +63,10 @@ export async function GET(req: Request) {
                 fullName: true, 
                 role: true, 
                 avatarUrl: true,
-                team: { select: { name: true } }
+                team: { select: { name: true } },
+                channelMemberships: {
+                    select: { channelId: true, roleOnChannel: true }
+                }
             }
         });
 
@@ -92,7 +95,7 @@ export async function GET(req: Request) {
                     userId: true,
                     task: { 
                         select: { 
-                            id: true, title: true, status: true, duration: true, isRework: true,
+                            id: true, title: true, status: true, duration: true, isRework: true, channelId: true,
                             channel: { select: { id: true, name: true } }
                         } 
                     } 
@@ -104,54 +107,62 @@ export async function GET(req: Request) {
             const kpiRecord = allKpis.find(k => k.userId === user.id);
             const rawUserLogs = allLogs.filter(l => l.userId === user.id);
             const validUserLogs: typeof rawUserLogs = [];
-            const dailyReportTracker = new Set<string>();
-
-            // 🚀 1. LỌC: CHỈ LẤY DUY NHẤT ACTION "DAILY_REPORT"
+            
+            // 🚀 ĐÃ SỬA: Loại bỏ dailyReportTracker. Lấy toàn bộ log DAILY_REPORT.
             rawUserLogs.forEach(log => {
                 const actionStr = String(log.action || "").toUpperCase();
-                
-                if (actionStr !== "DAILY_REPORT") return; 
-
-                const dateString = log.createdAt ? new Date(log.createdAt).toISOString().split('T')[0] : "";
-                const uniqueKey = `${log.taskId}_${dateString}`;
-                if (!dailyReportTracker.has(uniqueKey)) {
-                    dailyReportTracker.add(uniqueKey);
+                if (actionStr === "DAILY_REPORT") {
                     validUserLogs.push(log);
                 }
             });
 
-            // Gán luôn nhãn UI là Báo Cáo
             const mappedLogs = validUserLogs.map(log => {
                 return { ...log, typeStr: "Báo cáo", isCounted: false }; 
             });
 
             const uniqueTasks = new Map<string, any>();
             
-            // 🚀 2. BỘ LỌC KỶ LUẬT (Do 100% là DAILY_REPORT rồi nên không cần check action nữa)
             mappedLogs.forEach(log => {
                 if (!log.task) return;
 
-                let isKpiQualifying = true; 
+                let isKpiQualifying = false; 
                 const combinedText = String(log.details || "").toLowerCase();
 
-                if (!combinedText.includes("gán thủ công")) {
-                    if (user.role === "LEADER") { // Lưu ý: Ở file dashboard/route.ts thì biến này tên là userRole === "LEADER"
-                        // 🚀 ĐÃ SỬA: Chấp nhận cả Video Render (Dựng xong) HOẶC Video Đã Đăng (Publish)
-                        if (!combinedText.includes("video render") && !combinedText.includes("video đã đăng")) {
-                            isKpiQualifying = false;
-                        }
-                    } else if (user.role === "EDITOR") {
-                        if (combinedText.includes("kịch bản") || combinedText.includes("chuyển động") || combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) {
-                            isKpiQualifying = false;
-                        }
-                    } else if (user.role === "CONTENT") {
-                        if (combinedText.includes("video render") || combinedText.includes("prj thô") || combinedText.includes("audio") || combinedText.includes("âm thanh") || combinedText.includes("chuyển động") || combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) {
-                            isKpiQualifying = false;
-                        }
-                    } else if (user.role === "PUBLISHER" || user.role === "CHANNEL_MANAGER") {
-                        if (combinedText.includes("kịch bản") || combinedText.includes("video render") || combinedText.includes("prj thô") || combinedText.includes("audio") || combinedText.includes("âm thanh") || combinedText.includes("chuyển động")) {
-                            isKpiQualifying = false;
-                        }
+                let effectiveRole = user.role;
+                if (log.task.channelId && user.channelMemberships) {
+                    const channelRoleObj = user.channelMemberships.find((cm: any) => cm.channelId === log.task.channelId);
+                    if (channelRoleObj) {
+                        effectiveRole = channelRoleObj.roleOnChannel;
+                    }
+                }
+
+                if (combinedText.includes("gán thủ công")) {
+                    isKpiQualifying = true;
+                } else {
+                    switch (effectiveRole) {
+                        case "LEADER":
+                        case "PUBLISHER":
+                        case "CHANNEL_MANAGER":
+                            if (combinedText.includes("video render") || combinedText.includes("video đã đăng") || combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) isKpiQualifying = true;
+                            break;
+                        case "EDITOR":
+                            if (combinedText.includes("video render") || combinedText.includes("prj thô") || combinedText.includes("audio") || combinedText.includes("âm thanh")) isKpiQualifying = true;
+                            break;
+                        case "CONTENT":
+                            if (combinedText.includes("kịch bản") || combinedText.includes("chuyển động")) isKpiQualifying = true;
+                            break;
+                        case "ANIMATOR":
+                        case "ANIMATION":
+                            if (combinedText.includes("chuyển động")) isKpiQualifying = true;
+                            break;
+                        case "SEO":
+                            if (combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) isKpiQualifying = true;
+                            break;
+                        case "VOICE":
+                            if (combinedText.includes("audio") || combinedText.includes("âm thanh")) isKpiQualifying = true;
+                            break;
+                        default:
+                            isKpiQualifying = true;
                     }
                 }
 

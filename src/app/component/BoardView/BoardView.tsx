@@ -11,11 +11,13 @@ interface BoardViewProps {
   onOpenTaskDetail: (task: any) => void;
   userRole: string;
   currentUserId: string;
+  channelMemberships?: any[]; // 🚀 THÊM PROP NÀY ĐỂ NHẬN DATA TỪ TRANG CHA
 }
 
-export default function BoardView({ tasks, columns, getTeamColor, onDragEnd, onOpenTaskDetail, userRole, currentUserId }: BoardViewProps) {
+export default function BoardView({ tasks, columns, getTeamColor, onDragEnd, onOpenTaskDetail, userRole, currentUserId, channelMemberships = [] }: BoardViewProps) {
 
-  const isManager = ["ADMIN", "BAN_GIAM_DOC", "LEADER", "PUBLISHER"].includes(userRole);
+  // Kiểm tra quyền quản lý cấp cao (Global Manager) - có quyền kéo thả mọi task
+  const isGlobalManager = ["ADMIN", "BAN_GIAM_DOC"].includes(userRole);
 
   const renderStackedAvatars = (roleTitle: string, mainUser: any, coUsers: any[], colorClass: string, bgClass: string) => {
     const allUsers = [...(mainUser ? [mainUser] : []), ...(coUsers || [])];
@@ -82,12 +84,26 @@ export default function BoardView({ tasks, columns, getTeamColor, onDragEnd, onO
                   className={`flex-1 overflow-y-auto min-h-0 p-3 md:p-4 space-y-3 md:space-y-4 custom-scrollbar transition-colors ${snapshot.isDraggingOver ? "bg-black/5" : ""}`}
                 >
                   {tasks[column.id]?.map((task: any, index: number) => {
+                    // Xác định nhân sự được gán vào Task
                     const isMyContent = task.contentId === currentUserId || task.creatorId === currentUserId || task.coContentUsers?.some((u:any) => u.id === currentUserId);
                     const isMyAnimation = task.animatorId === currentUserId || task.coAnimatorUsers?.some((u:any) => u.id === currentUserId);
                     const isMyEdit = task.editorId === currentUserId || task.coEditorUsers?.some((u:any) => u.id === currentUserId);
                     
+                    // 🚀 LOGIC QUYỀN KÉO THẢ LINH HOẠT THEO KÊNH
+                    let effectiveRole = userRole;
+                    if (task.channelId && channelMemberships.length > 0) {
+                        const channelRoleObj = channelMemberships.find((cm: any) => cm.channelId === task.channelId);
+                        if (channelRoleObj) {
+                            effectiveRole = channelRoleObj.roleOnChannel;
+                        }
+                    }
+
+                    // Nếu bạn là Quản lý kênh đó, hoặc là Leader/Admin toàn cục
+                    const hasManagerRights = isGlobalManager || ["LEADER", "PUBLISHER", "CHANNEL_MANAGER"].includes(effectiveRole);
+
+                    // 🚀 CẬP NHẬT: Cho phép kéo thẻ nếu là Manager (Toàn cục hoặc Kênh), HOẶC là người thực thi đúng trạm
                     const isDragDisabled =
-                      !isManager &&
+                      !hasManagerRights &&
                       !(isMyContent && task.status === "TODO") &&
                       !(isMyAnimation && task.status === "ANIMATION_DOING") &&
                       !(isMyEdit && task.status === "EDIT_DOING");
@@ -153,7 +169,6 @@ export default function BoardView({ tasks, columns, getTeamColor, onDragEnd, onO
                                 {renderStackedAvatars("Content", task.contentUser, task.coContentUsers, "text-orange-600", "bg-orange-100")}
                                 {renderStackedAvatars("Editor", task.editorUser, task.coEditorUsers, "text-blue-600", "bg-blue-100")}
                                 {renderStackedAvatars("Animator", task.animatorUser, task.coAnimatorUsers, "text-purple-600", "bg-purple-100")}
-                                {/* 🚀 ĐÃ SỬA: Sửa tham số truyền vào thành mảng rỗng [] và chỉnh màu */}
                                 {renderStackedAvatars("Publisher", task.publisherUser, [], "text-rose-600", "bg-rose-100")}
                               </div>
                             </div>

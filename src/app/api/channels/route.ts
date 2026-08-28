@@ -37,7 +37,7 @@ export async function GET(req: Request) {
                 whereClause.teamId = userTeamId;
             }
         }
-
+        
         const channels = await prisma.channel.findMany({
             where: whereClause,
             include: {

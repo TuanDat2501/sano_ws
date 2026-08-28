@@ -49,19 +49,14 @@ export async function GET(req: Request) {
             return chartTemplate;
         };
 
-        const calculateKpiForUser = (userLogs: any[], targetValue: number, targetDetailsRaw: any, userRole: string) => {
+        // 🚀 ĐÃ NÂNG CẤP: Nhận thêm biến channelMemberships để map Role theo từng Kênh
+        const calculateKpiForUser = (userLogs: any[], targetValue: number, targetDetailsRaw: any, userRole: string, channelMemberships: any[] = []) => {
             const dailyReportTracker = new Set<string>();
             const validUserLogs: any[] = [];
             
             userLogs.forEach(log => {
                 const actionStr = String(log.action || "").toUpperCase();
-                
-                if (actionStr !== "DAILY_REPORT") return; 
-                
-                const dateString = log.createdAt ? new Date(log.createdAt).toISOString().split('T')[0] : "";
-                const uniqueKey = `${log.taskId}_${dateString}`;
-                if (!dailyReportTracker.has(uniqueKey)) {
-                    dailyReportTracker.add(uniqueKey);
+                if (actionStr === "DAILY_REPORT") {
                     validUserLogs.push(log);
                 }
             });
@@ -71,42 +66,55 @@ export async function GET(req: Request) {
             validUserLogs.forEach(log => {
                 if (!log.task) return;
                 
-                let isKpiQualifying = false; // Mặc định khóa cửa
+                let isKpiQualifying = false; 
                 const text = String(log.details || "").toLowerCase();
 
-                // 🚀 BỘ LỌC TỐI ƯU (WHITELIST): Chỉ cho phép các từ khóa đúng chuyên môn
+                // 🚀 XÁC ĐỊNH ROLE THỰC TẾ (EFFECTIVE ROLE) CHO TASK NÀY
+                let effectiveRole = userRole; 
+                if (log.task.channelId && channelMemberships.length > 0) {
+                    const channelRoleObj = channelMemberships.find((cm: any) => cm.channelId === log.task.channelId);
+                    if (channelRoleObj) {
+                        effectiveRole = channelRoleObj.roleOnChannel; 
+                    }
+                }
+
                 if (text.includes("gán thủ công")) {
-                    isKpiQualifying = true; // Luôn cho qua nếu Admin ấn gán tay
+                    isKpiQualifying = true; 
                 } else {
-                    switch (userRole) {
+                    // 🚀 CHẤM KPI THEO ROLE THỰC TẾ TRÊN KÊNH
+                    switch (effectiveRole) {
                         case "LEADER":
-                            // Leader được tính KPI khi nộp Video Render (Dựng) HOẶC Đã đăng (Publish)
-                            if (text.includes("video render") || text.includes("video đã đăng")) isKpiQualifying = true;
+                        case "PUBLISHER":
+                        case "CHANNEL_MANAGER":
+                            if (text.includes("video render") || text.includes("video đã đăng") || text.includes("đã đăng") || text.includes("thumbnail")) isKpiQualifying = true;
                             break;
                         case "EDITOR":
                             if (text.includes("video render") || text.includes("prj thô") || text.includes("audio") || text.includes("âm thanh")) isKpiQualifying = true;
                             break;
                         case "CONTENT":
-                            if (text.includes("kịch bản")) isKpiQualifying = true;
-                            break;
-                        case "PUBLISHER":
-                        case "CHANNEL_MANAGER":
-                            if (text.includes("đã đăng") || text.includes("thumbnail")) isKpiQualifying = true;
+                            if (text.includes("kịch bản") || text.includes("chuyển động")) isKpiQualifying = true;
                             break;
                         case "ANIMATOR":
+                        case "ANIMATION":
                             if (text.includes("chuyển động")) isKpiQualifying = true;
                             break;
+                        case "SEO":
+                            if (text.includes("đã đăng") || text.includes("thumbnail")) isKpiQualifying = true;
+                            break;
+                        case "VOICE":
+                            if (text.includes("audio") || text.includes("âm thanh")) isKpiQualifying = true;
+                            break;
                         default:
-                            isKpiQualifying = true; // Khác thì mặc định thả
+                            isKpiQualifying = true; 
                     }
                 }
                 
-                log.isCounted = false; // Reset cờ UI
+                log.isCounted = false; 
 
                 if (isKpiQualifying) {
                     if (!uniqueTasks.has(log.taskId)) {
                         uniqueTasks.set(log.taskId, log.task);
-                        log.isCounted = true; // Bật cờ xanh cho Giao diện hiển thị
+                        log.isCounted = true; 
                     }
                 }
             });
@@ -237,6 +245,7 @@ export async function GET(req: Request) {
                         task: { select: { id: true, title: true, duration: true, channelId: true, isRework: true, channel: { select: { id: true } } } }
                     }
                 }),
+                // 🚀 BƠM DATA: Gọi lấy channelMemberships từ bảng User để nạp đạn cho logic KPI
                 prisma.weeklyKPI.findMany({
                     where: {
                         year: today.getFullYear(),
@@ -244,21 +253,25 @@ export async function GET(req: Request) {
                         weekNumber: currentWeekNum,
                         ...userCondition
                     },
-                    include: { user: { select: { fullName: true, role: true } } }
+                    include: { 
+                        user: { 
+                            select: { 
+                                fullName: true, 
+                                role: true,
+                                channelMemberships: {
+                                    select: { channelId: true, roleOnChannel: true }
+                                }
+                            } 
+                        } 
+                    }
                 })
             ]);
             
             const validLogs7Days: any[] = [];
             const dailyReportTracker7Days = new Set<string>();
-            managerLogs7DaysRaw.forEach((log: any) => {
+            managerLogs7DaysRaw.forEach((log: any) => { // (Nếu ở khối else thì là myLogs7DaysRaw)
                 const actionStr = String(log.action || "").toUpperCase();
-                
-                if (actionStr !== "DAILY_REPORT") return;
-                
-                const dateStr = new Date(log.createdAt).toISOString().split('T')[0];
-                const uniqueKey = `${log.userId}_${log.taskId}_${dateStr}`;
-                if (!dailyReportTracker7Days.has(uniqueKey)) {
-                    dailyReportTracker7Days.add(uniqueKey);
+                if (actionStr === "DAILY_REPORT") {
                     validLogs7Days.push(log);
                 }
             });
@@ -270,7 +283,9 @@ export async function GET(req: Request) {
 
             kpiRecords.forEach((k: any) => {
                 const userLogs = logsThisWeek.filter(log => log.userId === k.userId);
-                const kpiRes = calculateKpiForUser(userLogs, k.targetValue || 0, k.targetDetails, k.user?.role || "CONTENT");
+                // 🚀 ĐẨY CHANNEL MEMBERSHIPS VÀO HÀM TÍNH TOÁN
+                const channelMemberships = k.user?.channelMemberships || [];
+                const kpiRes = calculateKpiForUser(userLogs, k.targetValue || 0, k.targetDetails, k.user?.role || "CONTENT", channelMemberships);
                 
                 if (k.targetValue > 0 || (kpiRes.targetDetails && kpiRes.targetDetails.length > 0)) {
                     sumPercent += kpiRes.percent;
@@ -319,7 +334,8 @@ export async function GET(req: Request) {
                 myActiveTasks,
                 myLogsAllTimeRaw,
                 myLogs7DaysRaw,
-                myKpiThisWeek
+                myKpiThisWeek,
+                myChannelMemberships // 🚀 BƠM DATA: Gọi thêm data Membership cho User nhân viên
             ] = await Promise.all([
                 prisma.task.findMany({
                     where: {
@@ -357,6 +373,10 @@ export async function GET(req: Request) {
                         month: today.getMonth() + 1,
                         weekNumber: currentWeekNum
                     }
+                }),
+                prisma.channelMember.findMany({
+                    where: { userId: userId },
+                    select: { channelId: true, roleOnChannel: true }
                 })
             ]);
 
@@ -377,7 +397,8 @@ export async function GET(req: Request) {
 
             const logsThisWeek = validLogs7Days.filter(log => new Date(log.createdAt) >= startOfWeek);
 
-            const kpiRes = calculateKpiForUser(logsThisWeek, myKpiThisWeek?.targetValue || 0, myKpiThisWeek?.targetDetails, role);
+            // 🚀 ĐẨY CHANNEL MEMBERSHIPS VÀO HÀM TÍNH TOÁN
+            const kpiRes = calculateKpiForUser(logsThisWeek, myKpiThisWeek?.targetValue || 0, myKpiThisWeek?.targetDetails, role, myChannelMemberships);
 
             const uniqueTasksAllTime = new Set();
             myLogsAllTimeRaw.forEach((log: any) => {
