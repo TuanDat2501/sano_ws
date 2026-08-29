@@ -128,7 +128,7 @@ export async function GET(req: Request) {
                 let isKpiQualifying = false; 
                 const combinedText = String(log.details || "").toLowerCase();
 
-                let effectiveRole = user.role;
+                let effectiveRole:string = user.role;
                 if (log.task.channelId && user.channelMemberships) {
                     const channelRoleObj = user.channelMemberships.find((cm: any) => cm.channelId === log.task.channelId);
                     if (channelRoleObj) {

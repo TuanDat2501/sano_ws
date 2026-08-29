@@ -43,7 +43,6 @@ export async function GET(req: Request, context: any) {
         const month = parseInt(searchParams.get("month") || String(new Date().getMonth() + 1));
         const weekIndex = parseInt(searchParams.get("week") || "1");
 
-        // 🚀 BƠM DATA: Gọi thêm channelMemberships
         const user = await prisma.user.findUnique({
             where: { id: requestedUserId },
             select: { 
@@ -89,9 +88,7 @@ export async function GET(req: Request, context: any) {
         ]);
 
         const validUserLogs: typeof allLogs = [];
-        // const dailyReportTracker = new Set<string>();
 
-        // 🚀 1. LỌC: CHỈ LẤY DUY NHẤT ACTION "DAILY_REPORT" VÀ ĐẢM BẢO 1 BÀI/NGÀY
         allLogs.forEach(log => {
             const actionStr = String(log.action || "").toUpperCase();
             if (actionStr === "DAILY_REPORT") {
@@ -99,22 +96,20 @@ export async function GET(req: Request, context: any) {
             }
         });
 
-        // Đã lọc sạch rác, chỉ còn Báo Cáo nên gán cứng typeStr luôn
         const mappedLogs = validUserLogs.map(log => {
             return { ...log, typeStr: "Báo cáo", isCounted: false };
         });
 
         const uniqueTasks = new Map<string, any>();
 
-        // 🚀 2. BỘ LỌC KỶ LUẬT THEO ROLE LINH HOẠT TỪNG KÊNH
         mappedLogs.forEach(log => {
             if (!log.task) return;
 
-            let isKpiQualifying = false; // Mặc định khóa
+            let isKpiQualifying = false; 
             const combinedText = String(log.details || "").toLowerCase();
 
-            // 🚀 TÌM ROLE THỰC TẾ (EFFECTIVE ROLE)
-            let effectiveRole = user.role;
+            // 🚀 ĐÃ ÉP KIỂU STRING ĐỂ FIX LỖI TYPESCRIPT
+            let effectiveRole: string = user.role;
             if (log.task.channelId && user.channelMemberships) {
                 const channelRoleObj = user.channelMemberships.find((cm: any) => cm.channelId === log.task.channelId);
                 if (channelRoleObj) {
@@ -125,7 +120,6 @@ export async function GET(req: Request, context: any) {
             if (combinedText.includes("gán thủ công")) {
                 isKpiQualifying = true;
             } else {
-                // 🚀 CHẤM KPI THEO ROLE THỰC TẾ TRÊN KÊNH
                 switch (effectiveRole) {
                     case "LEADER":
                     case "PUBLISHER":
