@@ -199,13 +199,25 @@ export default function OrgChartPage() {
                         initialEdges.push({ id: `e_${lastLeaderId}-${cId}`, source: lastLeaderId, target: cId, type: 'smoothstep' });
 
                         let lastNodeId = cId;
-                        membersByChannel[c.id].forEach(u => {
+                        
+                        // 🚀 ĐÃ SỬA: Sắp xếp danh sách nhân sự trên Kênh (Ưu tiên Up kênh lên đầu tiên)
+                        const sortedMembers = [...membersByChannel[c.id]].sort((a, b) => {
+                            const getRank = (roleObj: any) => {
+                                const r = String(roleObj).toUpperCase();
+                                if (r === 'PUBLISHER' || r === 'CHANNEL_MANAGER') return 1;
+                                if (r === 'CONTENT') return 2;
+                                if (r === 'EDITOR') return 3;
+                                if (r === 'ANIMATOR' || r === 'ANIMATION') return 4;
+                                return 5;
+                            };
+                            return getRank(a.roleOnChannel || a.role) - getRank(b.roleOnChannel || b.role);
+                        });
+
+                        sortedMembers.forEach(u => {
                             const uId = `user_${c.id}_${u.id}`; 
                             
-                            // 🚀 ĐÃ SỬA: LỌC BÀI DƯ THEO ĐÚNG ID KÊNH (c.id) MÀ NODE NÀY ĐANG NẰM
                             const channelSurplusList = (u.surplusTaskList || []).filter((task: any) => task.channelId === c.id);
                             
-                            // Tính toán lại surplusDetails (Thống kê số lượng theo phút) dành riêng cho Kênh này
                             const durCount: Record<number, number> = {};
                             channelSurplusList.forEach((t: any) => {
                                 durCount[t.duration] = (durCount[t.duration] || 0) + 1;
@@ -218,8 +230,8 @@ export default function OrgChartPage() {
                                 id: uId, type: 'custom', position: { x: 0, y: 0 },
                                 data: { 
                                     label: u.fullName, role: u.roleOnChannel || u.role, actual: u.currentWeekStats?.actual || 0, target: u.currentWeekStats?.target || 0, 
-                                    surplusDetails: channelSurplusDetails, // 🚀 TRUYỀN DATA ĐÃ LỌC
-                                    surplusTaskList: channelSurplusList,   // 🚀 TRUYỀN DATA ĐÃ LỌC
+                                    surplusDetails: channelSurplusDetails, 
+                                    surplusTaskList: channelSurplusList,   
                                     avatar: u.avatarUrl || null, borderColor: 'border-slate-200', textColor: 'text-slate-500', fullUserObj: u, targetPosition: 'top'
                                 }
                             });

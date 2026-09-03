@@ -1,6 +1,24 @@
 import { Handle, Position } from "reactflow";
 import { Tv } from "lucide-react"; 
 
+// 🚀 ĐÃ SỬA: Bộ từ điển dịch vai trò sang Tiếng Việt
+const translateRole = (role: string) => {
+    if (!role) return "";
+    const r = String(role).toUpperCase();
+    switch (r) {
+        case 'LEADER': return 'Trưởng Nhóm';
+        // case 'CHANNEL_MANAGER': return 'Quản Lý Kênh';
+        case 'PUBLISHER': return 'Quản Lý Kênh';
+        case 'CONTENT': return 'CONTENT';
+        case 'EDITOR': return 'EDITOR';
+        case 'ANIMATOR':
+        case 'ANIMATION': return 'Chuyển Động';
+        // case 'VOICE': return 'Thu Âm';
+        // case 'SEO': return 'SEO';
+        default: return role;
+    }
+};
+
 export default function CustomNode({ data }: { data: any }) {
     const actual = data.actual ?? 0;
     const target = data.target ?? 0;
@@ -31,8 +49,9 @@ export default function CustomNode({ data }: { data: any }) {
                 )}
 
                 <div className={`${showAvatar ? 'text-left flex-1 min-w-0' : 'text-center'}`}>
+                    {/* 🚀 ĐÃ SỬA: Hiển thị tên Vai trò bằng Tiếng Việt */}
                     <p className={`text-[9px] uppercase font-black tracking-widest leading-none mb-1 ${data.textColor}`}>
-                        {data.role}
+                        {translateRole(data.role)}
                     </p>
                     <p className="text-[13px] md:text-sm font-bold text-slate-900 truncate leading-tight">
                         {data.label}
@@ -59,7 +78,6 @@ export default function CustomNode({ data }: { data: any }) {
                         </div>
                     </div>
 
-                    {/* 🚀 ĐÃ THIẾT KẾ LẠI: Hiển thị text xếp dọc gọn gàng theo chuẩn hình mẫu */}
                     {surplusDetails.length > 0 && (
                         <div className="flex justify-center mt-1">
                             <div className="flex text-[11px] md:text-xs font-black text-rose-500 leading-tight">

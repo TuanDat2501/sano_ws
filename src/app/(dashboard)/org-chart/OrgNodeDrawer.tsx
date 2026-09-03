@@ -2,6 +2,24 @@ import { X, UserCircle2, Briefcase, Target, CheckCircle2, Tv, Layers, Clock } fr
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
+// 🚀 ĐÃ SỬA: Đồng bộ bộ dịch thuật
+const translateRole = (role: string) => {
+    if (!role) return "";
+    const r = String(role).toUpperCase();
+    switch (r) {
+        case 'LEADER': return 'Trưởng Nhóm';
+        case 'CHANNEL_MANAGER': return 'Quản Lý Kênh';
+        case 'PUBLISHER': return 'Up Kênh';
+        case 'CONTENT': return 'Nội Dung';
+        case 'EDITOR': return 'Dựng Video';
+        case 'ANIMATOR':
+        case 'ANIMATION': return 'Chuyển Động';
+        case 'VOICE': return 'Thu Âm';
+        case 'SEO': return 'SEO';
+        default: return role;
+    }
+};
+
 export default function OrgNodeDrawer({ isOpen, onClose, nodeData }: { isOpen: boolean, onClose: () => void, nodeData: any }) {
     const [mounted, setMounted] = useState(false);
     useEffect(() => setMounted(true), []);
@@ -31,7 +49,8 @@ export default function OrgNodeDrawer({ isOpen, onClose, nodeData }: { isOpen: b
                         )}
                         <div>
                             <h2 className="text-xl md:text-2xl font-black text-slate-900 leading-tight">{nodeData.label}</h2>
-                            <p className={`text-[10px] md:text-xs font-black uppercase tracking-widest mt-1 ${nodeData.textColor}`}>{nodeData.role}</p>
+                            {/* 🚀 ĐÃ SỬA: Hiển thị tên tiếng Việt */}
+                            <p className={`text-[10px] md:text-xs font-black uppercase tracking-widest mt-1 ${nodeData.textColor}`}>{translateRole(nodeData.role)}</p>
                         </div>
                     </div>
                     <button onClick={onClose} className="p-2 md:p-2.5 bg-white rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50 shadow-sm border border-slate-100 transition-all active:scale-95 shrink-0">
@@ -102,7 +121,6 @@ export default function OrgNodeDrawer({ isOpen, onClose, nodeData }: { isOpen: b
                                                     {task.title || "Video không tên"}
                                                 </p>
                                                 <div className="flex flex-wrap items-center gap-2 mt-0.5">
-                                                    {/* 🚀 ĐÃ BỔ SUNG: Hiển thị ảnh Avatar Kênh thu gọn ngay cạnh tên kênh */}
                                                     <span className="text-[9px] font-black uppercase text-teal-600 bg-teal-50 pr-1.5 pl-0.5 py-0.5 rounded-full border border-teal-100 flex items-center gap-1.5 shadow-sm w-fit">
                                                         {task.channelAvatar ? (
                                                             <img src={task.channelAvatar} alt={task.channelName} className="w-3.5 h-3.5 rounded-full object-cover border border-teal-200/50" />

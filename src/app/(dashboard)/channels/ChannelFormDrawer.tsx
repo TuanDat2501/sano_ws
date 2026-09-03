@@ -377,7 +377,7 @@ export default function ChannelFormDrawer({
                                                                         <option value="ANIMATION">Chuyển động (AI)</option>
                                                                     )}
                                                                     <option value="EDITOR">Editor / Dựng</option>
-                                                                    <option value="SEO">SEO / Up Kênh</option>
+                                                                    {/* <option value="SEO">SEO / Up Kênh</option> */}
                                                                     <option value="VOICE">Voice / Thu âm</option>
                                                                     <option value="PUBLISHER">Quản lý Kênh</option>
                                                                 </select>
