@@ -194,7 +194,7 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
                                 <label className="block text-[11px] md:text-xs font-bold text-slate-500 mb-1">Khung giờ nghỉ <span className="text-red-500">*</span></label>
                                 <select
                                     className="w-full bg-white border border-slate-200 rounded-lg p-2 md:p-2.5 outline-none focus:border-red-500 text-sm font-medium cursor-pointer"
-                                    value={contentData.timeSlot || "FULL_DAY"}
+                                    value={contentData.timeSlot}
                                     onChange={(e) => handleChange("timeSlot", e.target.value)}
                                 >
                                     <option value="FULL_DAY">Cả ngày</option>
