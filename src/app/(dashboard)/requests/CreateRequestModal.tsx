@@ -26,8 +26,8 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
     const [secondApproverId, setSecondApproverId] = useState("");
     const [selectedTeamId, setSelectedTeamId] = useState("");
     
-    const [approversLv1, setApproversLv1] = useState<any[]>([]);
-    const [approversLv2, setApproversLv2] = useState<any[]>([]);
+    const [rawLevel2, setRawLevel2] = useState<any[]>([]);
+    const [rawTeamLeaders, setRawTeamLeaders] = useState<any[]>([]);
     const [isLoadingApprovers, setIsLoadingApprovers] = useState(false);
 
     const { data: session } = useSession();
@@ -45,12 +45,16 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
         return u.role;
     };
 
-    useEffect(() => { setContentData({}); }, [selectedType]);
+    useEffect(() => { 
+        setContentData({}); 
+        setFirstApproverId("");
+        setSecondApproverId("");
+    }, [selectedType, selectedTeamId]);
 
     useEffect(() => {
         if (!selectedTeamId && !isTopLevel) {
-            setApproversLv1([]);
-            setApproversLv2([]);
+            setRawTeamLeaders([]);
+            setRawLevel2([]);
             return;
         }
         
@@ -65,53 +69,93 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
         Promise.all(fetchPromises)
         .then((results) => {
             const dataLv2All = results[0];
-            const allLevel2Users = dataLv2All.level2Approvers?.map((a: any) => a.user || a) || [];
+            setRawLevel2(dataLv2All.level2Approvers?.map((a: any) => a.user || a) || []);
 
-            // Chẻ danh sách làm 2 nhóm
-            const bgdApprovers = allLevel2Users.filter((u: any) => u.role === "BAN_GIAM_DOC" || u.role === "ADMIN");
-            const nonBgdApprovers = allLevel2Users.filter((u: any) => u.role !== "BAN_GIAM_DOC" && u.role !== "ADMIN");
-
-            if (isTopLevel) {
-                // 🚀 ĐÃ SỬA: HR và Kế toán được lấy toàn bộ danh sách (gồm BGD và Nguyễn Thị Liên)
-                if (currentUser?.role === "HR" || currentUser?.role === "KE_TOAN") {
-                    setApproversLv2(allLevel2Users); 
-                } else {
-                    setApproversLv2(bgdApprovers);
+            if (results[1]) {
+                const dataLv1 = results[1];
+                let mappedLv1 = [];
+                if (Array.isArray(dataLv1)) {
+                    mappedLv1 = dataLv1;
+                } else if (dataLv1.level1Approvers) {
+                    mappedLv1 = dataLv1.level1Approvers.map((a: any) => a.user || a);
+                } else if (dataLv1.level2Approvers) {
+                    mappedLv1 = dataLv1.level2Approvers.map((a: any) => a.user || a);
                 }
-            } else if (isLeader) {
-                // Leader: Cấp 1 qua HR/Hành chính, Cấp 2 lên BGD
-                setApproversLv1(nonBgdApprovers);
-                setApproversLv2(bgdApprovers);
+                setRawTeamLeaders(mappedLv1);
             } else {
-                // Nhân sự bình thường
-                setApproversLv2(nonBgdApprovers);
-
-                if (results[1]) {
-                    const dataLv1 = results[1];
-                    let mappedLv1 = [];
-                    if (Array.isArray(dataLv1)) {
-                        mappedLv1 = dataLv1;
-                    } else if (dataLv1.level1Approvers) {
-                        mappedLv1 = dataLv1.level1Approvers.map((a: any) => a.user || a);
-                    } else if (dataLv1.level2Approvers) {
-                        mappedLv1 = dataLv1.level2Approvers.map((a: any) => a.user || a);
-                    }
-                    
-                    mappedLv1 = mappedLv1.filter((u: any) => u.role !== "BAN_GIAM_DOC" && u.role !== "ADMIN");
-                    setApproversLv1(mappedLv1);
-                }
+                setRawTeamLeaders([]);
             }
         })
         .catch(err => console.error("Lỗi fetch approvers:", err))
         .finally(() => setIsLoadingApprovers(false));
 
-    }, [selectedTeamId, isLeader, isTopLevel, currentUser?.role]);
+    }, [selectedTeamId, isTopLevel]);
     
     if (!isOpen) return null;
 
     const handleChange = (field: string, value: any) => {
         setContentData((prev: any) => ({ ...prev, [field]: value }));
     };
+
+    // ==========================================
+    // BỘ ĐIỀU HƯỚNG LUỒNG DUYỆT ĐỘNG
+    // ==========================================
+    const bgdApprovers = rawLevel2.filter((u: any) => u.role === "BAN_GIAM_DOC" || u.role === "ADMIN");
+    const nonBgdApprovers = rawLevel2.filter((u: any) => u.role !== "BAN_GIAM_DOC" && u.role !== "ADMIN");
+    const teamLeaders = rawTeamLeaders.filter((u: any) => u.role !== "BAN_GIAM_DOC" && u.role !== "ADMIN");
+
+    let showC1 = true;
+    let showC2 = true;
+    let c1Options: any[] = [];
+    let c2Options: any[] = [];
+    let c1Label = "Cấp 1 (Quản lý trực tiếp)";
+    let c2Label = "Cấp 2 (Ban giám đốc)";
+
+    const isRemoteOrLate = selectedType === "LAM_REMOTE" || selectedType === "DI_MUON_VE_SOM";
+
+    if (isTopLevel) {
+        showC1 = false;
+        showC2 = true;
+        if (currentUser?.role === "HR" || currentUser?.role === "KE_TOAN") {
+            c2Options = rawLevel2; 
+        } else {
+            c2Options = bgdApprovers;
+        }
+        c2Label = "Người phê duyệt";
+        
+        if (isRemoteOrLate) {
+            c2Options = nonBgdApprovers;
+            c2Label = "Người phê duyệt (Hành chính / HR)";
+        }
+    } else if (isRemoteOrLate) {
+        if (isLeader) {
+            showC1 = false;
+            showC2 = true; // Gán 1 bước duy nhất vào Cấp 2 để vượt qua vòng validate Backend
+            c2Options = nonBgdApprovers;
+            c2Label = "Người phê duyệt (Hành chính / HR)";
+        } else {
+            showC1 = true;
+            showC2 = true;
+            c1Options = teamLeaders;
+            c1Label = "Cấp 1 (Quản lý trực tiếp)";
+            c2Options = nonBgdApprovers;
+            c2Label = "Cấp 2 (Hành chính / HR)";
+        }
+    } else {
+        showC1 = true;
+        showC2 = true;
+        if (isLeader) {
+            c1Options = nonBgdApprovers;
+            c1Label = "Cấp 1 (Hành chính / HR)";
+            c2Options = bgdApprovers;
+            c2Label = "Cấp 2 (Ban giám đốc)";
+        } else {
+            c1Options = teamLeaders;
+            c1Label = "Cấp 1 (Quản lý trực tiếp)";
+            c2Options = bgdApprovers;
+            c2Label = "Cấp 2 (Ban giám đốc)";
+        }
+    }
 
     const renderDynamicFields = () => {
         switch (selectedType) {
@@ -340,13 +384,16 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
                 timeSlot: contentData.timeSlot || "FULL_DAY"
             };
 
+            const is1Step = !showC1 && showC2;
+
+            // 🚀 ĐÃ SỬA: Map luồng 1 cấp vào thẳng secondApproverId để Bypass Backend Validation
             const payload = {
                 type: selectedType, 
                 teamId: selectedTeamId || null, 
                 contentData: finalContentData,
-                firstApproverId: isTopLevel ? currentUser?.id : firstApproverId,
-                secondApproverId: secondApproverId || null,
-                status: isTopLevel ? "PENDING_2" : "PENDING_1" 
+                firstApproverId: is1Step ? currentUser?.id : firstApproverId,
+                secondApproverId: secondApproverId, 
+                status: is1Step ? "PENDING_2" : "PENDING_1" 
             };
 
             const res = await fetch('/api/requests', {
@@ -357,7 +404,7 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
             if (res.ok) {
                 showToast("success", "Đã gửi đề xuất thành công.");
                 
-                const targetApproverId = isTopLevel ? secondApproverId : firstApproverId;
+                const targetApproverId = is1Step ? secondApproverId : firstApproverId;
                 if (targetApproverId) {
                     window.dispatchEvent(new CustomEvent("local_system_noti", {
                         detail: {
@@ -382,7 +429,10 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
         }
     };
 
-    const isSubmitDisabled = isSubmitting || (!isTopLevel && !selectedTeamId) || (!isTopLevel && !firstApproverId) || !secondApproverId;
+    const isSubmitDisabled = isSubmitting 
+        || (!isTopLevel && !selectedTeamId) 
+        || (showC1 && !firstApproverId) 
+        || (showC2 && !secondApproverId);
 
     const modalContent = (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[99999] flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200">
@@ -446,50 +496,35 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
                         </label>
                         {!selectedTeamId && !isTopLevel && <p className="text-[10px] md:text-xs text-red-500 mb-2 italic">Vui lòng chọn Team ở bước 3 để hiển thị danh sách người duyệt.</p>}
                         
-                        {isTopLevel ? (
-                            <div className="bg-white border border-slate-200 p-3 md:p-4 rounded-xl">
-                                <span className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 md:mb-2 block">
-                                    Người phê duyệt (Cấp 2) <span className="text-red-500">*</span>
-                                </span>
-                                <select 
-                                    className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-xs md:text-sm rounded-lg p-2 outline-none" 
-                                    value={secondApproverId} 
-                                    onChange={(e) => setSecondApproverId(e.target.value)}
-                                >
-                                    <option value="">{isLoadingApprovers ? "Đang tải..." : "-- Chọn Người phê duyệt --"}</option>
-                                    {approversLv2.map((u: any) => (
-                                        <option key={u.id} value={u.id}>
-                                            {u.fullName} ({getRoleLabel(u)})
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                        ) : (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
+                        <div className={`grid grid-cols-1 ${showC1 && showC2 ? 'sm:grid-cols-2' : ''} gap-3 md:gap-4`}>
+                            {showC1 && (
                                 <div className="bg-white border border-slate-200 p-3 md:p-4 rounded-xl">
-                                    <span className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 md:mb-2 block">Cấp 1 (Người duyệt) <span className="text-red-500">*</span></span>
+                                    <span className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 md:mb-2 block">{c1Label} <span className="text-red-500">*</span></span>
                                     <select className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-xs md:text-sm rounded-lg p-2 outline-none" value={firstApproverId} onChange={(e) => setFirstApproverId(e.target.value)}>
-                                        <option value="">{isLoadingApprovers ? "Đang tải..." : "-- Chọn Quản lý Cấp 1 --"}</option>
-                                        {approversLv1.map(u => (
+                                        <option value="">{isLoadingApprovers ? "Đang tải..." : "-- Chọn Người duyệt --"}</option>
+                                        {c1Options.map(u => (
                                             <option key={u.id} value={u.id}>
                                                 {u.fullName} ({getRoleLabel(u)})
                                             </option>
                                         ))}
                                     </select>
                                 </div>
+                            )}
+                            
+                            {showC2 && (
                                 <div className="bg-white border border-slate-200 p-3 md:p-4 rounded-xl">
-                                    <span className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 md:mb-2 block">Cấp 2 (Cấp cao hơn) <span className="text-red-500">*</span></span>
+                                    <span className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 md:mb-2 block">{c2Label} <span className="text-red-500">*</span></span>
                                     <select className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-xs md:text-sm rounded-lg p-2 outline-none" value={secondApproverId} onChange={(e) => setSecondApproverId(e.target.value)}>
-                                        <option value="">{isLoadingApprovers ? "Đang tải..." : "-- Chọn Quản lý Cấp 2 --"}</option>
-                                        {approversLv2.map((u: any) => (
+                                        <option value="">{isLoadingApprovers ? "Đang tải..." : "-- Chọn Người duyệt --"}</option>
+                                        {c2Options.map((u: any) => (
                                             <option key={u.id} value={u.id}>
                                                 {u.fullName} ({getRoleLabel(u)})
                                             </option>
                                         ))}
                                     </select>
                                 </div>
-                            </div>
-                        )}
+                            )}
+                        </div>
                     </div>
                 </div>
 
