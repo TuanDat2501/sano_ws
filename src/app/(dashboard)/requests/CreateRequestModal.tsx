@@ -381,7 +381,7 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
         try {
             const finalContentData = {
                 ...contentData,
-                timeSlot: contentData.timeSlot || "FULL_DAY"
+                timeSlot: contentData.timeSlot
             };
 
             const is1Step = !showC1 && showC2;
