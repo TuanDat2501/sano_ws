@@ -104,6 +104,9 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
     const nonBgdApprovers = rawLevel2.filter((u: any) => u.role !== "BAN_GIAM_DOC" && u.role !== "ADMIN");
     const teamLeaders = rawTeamLeaders.filter((u: any) => u.role !== "BAN_GIAM_DOC" && u.role !== "ADMIN");
 
+    const selectedTeamName = teams.find((t: any) => t.id === selectedTeamId)?.name || "";
+    const isTeamNhanSu = selectedTeamName.toLowerCase().includes("nhân sự") || selectedTeamName.toLowerCase().includes("hr");
+
     let showC1 = true;
     let showC2 = true;
     let c1Options: any[] = [];
@@ -113,55 +116,44 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
 
     const isRemoteOrLate = selectedType === "LAM_REMOTE" || selectedType === "DI_MUON_VE_SOM";
     const isNghiPhep = selectedType === "NGHI_PHEP";
+    const isHRorKeToan = currentUser?.role === "HR" || currentUser?.role === "KE_TOAN";
+    const isBGDorAdmin = currentUser?.role === "BAN_GIAM_DOC" || currentUser?.role === "ADMIN";
 
-    if (isTopLevel) {
+    if (isBGDorAdmin) {
+        // BGD / Admin tạo đơn
         showC1 = false;
         showC2 = true;
+        c2Options = bgdApprovers;
         c2Label = "Người phê duyệt";
-        if (currentUser?.role === "HR" || currentUser?.role === "KE_TOAN") {
-            c2Options = rawLevel2; 
-        } else {
-            c2Options = bgdApprovers;
-        }
-        
-        if (isRemoteOrLate) {
-            c2Options = nonBgdApprovers;
-            c2Label = "Người phê duyệt (Hành chính / HR)";
-        }
-    } else if (isRemoteOrLate) {
-        // TẤT CẢ mọi người (Leader hay Normal) khi xin Remote/Đi muộn đều chỉ qua 1 cửa là HR (Nguyễn Thị Liên)
+    } 
+    else if (isRemoteOrLate || isTeamNhanSu || isHRorKeToan) {
+        // 🚀 LUỒNG 1 CẤP ĐẶC BIỆT: Ép cứng chỉ lấy người KHÔNG phải BGD (Nguyễn Thị Liên)
         showC1 = false;
-        showC2 = true; 
-        c2Options = nonBgdApprovers;
-        c2Label = "Người phê duyệt (Hành chính / HR)";
-    } else if (isNghiPhep) {
-        // XIN NGHỈ PHÉP (Nắn luồng riêng cho Cấp 2 là HR)
+        showC2 = true;
+        c2Options = nonBgdApprovers; 
+        c2Label = "Người phê duyệt";
+    } 
+    else if (isLeader) {
+        // LEADER xin Nghỉ phép / Mua sắm (và ko thuộc Team Nhân sự vì đã bị bắt ở trên)
         showC1 = true;
         showC2 = true;
-        if (isLeader) {
-            c1Options = nonBgdApprovers;
-            c1Label = "Cấp 1 (Hành chính / HR)";
-            c2Options = bgdApprovers;
-            c2Label = "Cấp 2 (Ban giám đốc)";
-        } else {
-            c1Options = teamLeaders;
-            c1Label = "Cấp 1 (Quản lý trực tiếp)";
-            c2Options = nonBgdApprovers; // Cấp 2 là Nguyễn Thị Liên
+        c1Options = nonBgdApprovers; // HR (Liên)
+        c1Label = "Cấp 1 (Hành chính / HR)";
+        c2Options = bgdApprovers;    // BGD (Tâm)
+        c2Label = "Cấp 2 (Ban giám đốc)";
+    } 
+    else {
+        // NHÂN SỰ BÌNH THƯỜNG
+        showC1 = true;
+        showC2 = true;
+        c1Options = teamLeaders;
+        c1Label = "Cấp 1 (Quản lý trực tiếp)";
+        
+        if (isNghiPhep) {
+            c2Options = nonBgdApprovers; // Cấp 2 là Nguyễn Thị Liên (HR)
             c2Label = "Cấp 2 (Hành chính / HR)";
-        }
-    } else {
-        // CÁC ĐƠN KHÁC NHƯ MUA SẮM / TẠM ỨNG (Trả lại luồng Cấp 2 là BGD)
-        showC1 = true;
-        showC2 = true;
-        if (isLeader) {
-            c1Options = nonBgdApprovers;
-            c1Label = "Cấp 1 (Hành chính / HR)";
-            c2Options = bgdApprovers;
-            c2Label = "Cấp 2 (Ban giám đốc)";
         } else {
-            c1Options = teamLeaders;
-            c1Label = "Cấp 1 (Quản lý trực tiếp)";
-            c2Options = bgdApprovers; // Trả lại Ban Giám Đốc cho Nhân sự bình thường
+            c2Options = bgdApprovers; // Cấp 2 là BGD
             c2Label = "Cấp 2 (Ban giám đốc)";
         }
     }
