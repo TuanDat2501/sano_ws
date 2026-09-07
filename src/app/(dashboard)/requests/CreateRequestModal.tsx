@@ -98,7 +98,7 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
     };
 
     // ==========================================
-    // BỘ ĐIỀU HƯỚNG LUỒNG DUYỆT ĐỘNG
+    // BỘ ĐIỀU HƯỚNG LUỒNG DUYỆT ĐỘNG HOÀN CHỈNH
     // ==========================================
     const bgdApprovers = rawLevel2.filter((u: any) => u.role === "BAN_GIAM_DOC" || u.role === "ADMIN");
     const nonBgdApprovers = rawLevel2.filter((u: any) => u.role !== "BAN_GIAM_DOC" && u.role !== "ADMIN");
@@ -112,36 +112,30 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
     let c2Label = "Cấp 2 (Ban giám đốc)";
 
     const isRemoteOrLate = selectedType === "LAM_REMOTE" || selectedType === "DI_MUON_VE_SOM";
+    const isNghiPhep = selectedType === "NGHI_PHEP";
 
     if (isTopLevel) {
         showC1 = false;
         showC2 = true;
+        c2Label = "Người phê duyệt";
         if (currentUser?.role === "HR" || currentUser?.role === "KE_TOAN") {
             c2Options = rawLevel2; 
         } else {
             c2Options = bgdApprovers;
         }
-        c2Label = "Người phê duyệt";
         
         if (isRemoteOrLate) {
             c2Options = nonBgdApprovers;
             c2Label = "Người phê duyệt (Hành chính / HR)";
         }
     } else if (isRemoteOrLate) {
-        if (isLeader) {
-            showC1 = false;
-            showC2 = true; // Gán 1 bước duy nhất vào Cấp 2 để vượt qua vòng validate Backend
-            c2Options = nonBgdApprovers;
-            c2Label = "Người phê duyệt (Hành chính / HR)";
-        } else {
-            showC1 = true;
-            showC2 = true;
-            c1Options = teamLeaders;
-            c1Label = "Cấp 1 (Quản lý trực tiếp)";
-            c2Options = nonBgdApprovers;
-            c2Label = "Cấp 2 (Hành chính / HR)";
-        }
-    } else {
+        // TẤT CẢ mọi người (Leader hay Normal) khi xin Remote/Đi muộn đều chỉ qua 1 cửa là HR (Nguyễn Thị Liên)
+        showC1 = false;
+        showC2 = true; 
+        c2Options = nonBgdApprovers;
+        c2Label = "Người phê duyệt (Hành chính / HR)";
+    } else if (isNghiPhep) {
+        // XIN NGHỈ PHÉP (Nắn luồng riêng cho Cấp 2 là HR)
         showC1 = true;
         showC2 = true;
         if (isLeader) {
@@ -152,7 +146,22 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
         } else {
             c1Options = teamLeaders;
             c1Label = "Cấp 1 (Quản lý trực tiếp)";
+            c2Options = nonBgdApprovers; // Cấp 2 là Nguyễn Thị Liên
+            c2Label = "Cấp 2 (Hành chính / HR)";
+        }
+    } else {
+        // CÁC ĐƠN KHÁC NHƯ MUA SẮM / TẠM ỨNG (Trả lại luồng Cấp 2 là BGD)
+        showC1 = true;
+        showC2 = true;
+        if (isLeader) {
+            c1Options = nonBgdApprovers;
+            c1Label = "Cấp 1 (Hành chính / HR)";
             c2Options = bgdApprovers;
+            c2Label = "Cấp 2 (Ban giám đốc)";
+        } else {
+            c1Options = teamLeaders;
+            c1Label = "Cấp 1 (Quản lý trực tiếp)";
+            c2Options = bgdApprovers; // Trả lại Ban Giám Đốc cho Nhân sự bình thường
             c2Label = "Cấp 2 (Ban giám đốc)";
         }
     }
@@ -194,7 +203,7 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
                                 <label className="block text-[11px] md:text-xs font-bold text-slate-500 mb-1">Khung giờ nghỉ <span className="text-red-500">*</span></label>
                                 <select
                                     className="w-full bg-white border border-slate-200 rounded-lg p-2 md:p-2.5 outline-none focus:border-red-500 text-sm font-medium cursor-pointer"
-                                    value={contentData.timeSlot}
+                                    value={contentData.timeSlot || "FULL_DAY"}
                                     onChange={(e) => handleChange("timeSlot", e.target.value)}
                                 >
                                     <option value="FULL_DAY">Cả ngày</option>
@@ -381,12 +390,11 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
         try {
             const finalContentData = {
                 ...contentData,
-                timeSlot: contentData.timeSlot
+                timeSlot: contentData.timeSlot || "FULL_DAY"
             };
 
             const is1Step = !showC1 && showC2;
 
-            // 🚀 ĐÃ SỬA: Map luồng 1 cấp vào thẳng secondApproverId để Bypass Backend Validation
             const payload = {
                 type: selectedType, 
                 teamId: selectedTeamId || null, 
