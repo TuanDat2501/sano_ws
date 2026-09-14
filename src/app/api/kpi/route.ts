@@ -146,7 +146,7 @@ export async function GET(req: Request) {
                             if (combinedText.includes("video render") || combinedText.includes("video đã đăng") || combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) isKpiQualifying = true;
                             break;
                         case "EDITOR":
-                            if (combinedText.includes("video render") || combinedText.includes("prj thô") || combinedText.includes("audio") || combinedText.includes("âm thanh")) isKpiQualifying = true;
+                            if (combinedText.includes("video render") || combinedText.includes("prj thô") || combinedText.includes("audio") || combinedText.includes("âm thanh") || combinedText.includes("Link Project")) isKpiQualifying = true;
                             break;
                         case "CONTENT":
                             if (combinedText.includes("kịch bản") || combinedText.includes("chuyển động")) isKpiQualifying = true;
