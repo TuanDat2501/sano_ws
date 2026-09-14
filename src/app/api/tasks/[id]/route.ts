@@ -251,13 +251,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 }
             });
 
-            if (logsToCreate.length > 0) {
-                await tx.taskLog.createMany({ data: logsToCreate });
-            }
             if (logsToDelete.length > 0) {
                 for (const condition of logsToDelete) {
                     await tx.taskLog.deleteMany({ where: condition });
                 }
+            }
+
+            if (logsToCreate.length > 0) {
+                await tx.taskLog.createMany({ data: logsToCreate });
             }
 
             return { updatedTask, oldTask };
