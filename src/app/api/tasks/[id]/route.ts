@@ -147,7 +147,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 const newValue = body[fieldName];
                 const targetUserId = userId; 
 
-                const isKpiField = ['scriptLink', 'videoLink', 'animationLink', 'publishLink', 'thumbnailLink', 'roughProjectLink'].includes(fieldName);
+                const isKpiField = ['scriptLink', 'videoLink', 'animationLink', 'publishLink', 'thumbnailLink', 'roughProjectLink','linkProject'].includes(fieldName);
                 let actionType = isKpiField ? "DAILY_REPORT" : "UPDATE_LINK";
 
                 // 🚀 ĐÃ SỬA CHỖ NÀY: Thêm 'videoLink' để Leader cũng được tính DAILY_REPORT khi dán Video Render
