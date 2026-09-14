@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getContinuousWeekRange } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -43,20 +44,11 @@ export async function GET(req: Request) {
         let kpiStartDate = new Date(kpiYear, kpiMonth - 1, 1);
         let kpiEndDate = new Date(kpiYear, kpiMonth, 0, 23, 59, 59);
 
+        // 🚀 THAY THẾ KHỐI IF NÀY
         if (kpiWeek > 0) {
-            const firstDayOfMonth = new Date(kpiYear, kpiMonth - 1, 1);
-            const dayOfWeek = firstDayOfMonth.getDay(); 
-            const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-            const startOfFirstWeek = new Date(kpiYear, kpiMonth - 1, 1 + diffToMonday);
-
-            const startOfWeek = new Date(startOfFirstWeek);
-            startOfWeek.setDate(startOfFirstWeek.getDate() + (kpiWeek - 1) * 7);
-
-            const endOfWeek = new Date(startOfWeek);
-            endOfWeek.setDate(startOfWeek.getDate() + 6);
-
-            kpiStartDate = startOfWeek;
-            kpiEndDate = new Date(endOfWeek.getFullYear(), endOfWeek.getMonth(), endOfWeek.getDate(), 23, 59, 59);
+            const { start, end } = getContinuousWeekRange(kpiYear, kpiMonth, kpiWeek);
+            kpiStartDate = start;
+            kpiEndDate = end;
         }
 
         const teamFilter = teamId !== "ALL" ? { teamId } : {};
