@@ -12,14 +12,14 @@ import { createPortal } from "react-dom";
 const APPROVAL_CONFIG = {
     // 1. Phân nhóm các Role đặc thù
     ROLE_GROUPS: {
-        TOP_LEVEL: ["HR", "KE_TOAN", "ADMIN", "BAN_GIAM_DOC"], 
-        BGD_ADMIN: ["BAN_GIAM_DOC", "ADMIN"],                  
-        HR_KETOAN: ["HR", "KE_TOAN"]                           
+        TOP_LEVEL: ["HR", "KE_TOAN", "ADMIN", "BAN_GIAM_DOC"],
+        BGD_ADMIN: ["BAN_GIAM_DOC", "ADMIN"],
+        HR_KETOAN: ["HR", "KE_TOAN"]
     },
     // 2. Phân loại luồng duyệt theo Mã Đơn (type)
     REQUEST_FLOWS: {
-        ONE_STEP_HR: [], 
-        TWO_STEP_HR: ["NGHI_PHEP","LAM_REMOTE", "DI_MUON_VE_SOM"]                     
+        ONE_STEP_HR: [],
+        TWO_STEP_HR: ["NGHI_PHEP", "LAM_REMOTE", "DI_MUON_VE_SOM"]
     },
     // 3. Tên Team đặc thù (Nhân sự team này nộp đơn sẽ nhảy thẳng qua luồng 1 bước)
     SPECIAL_TEAMS: ["nhân sự", "hr"]
@@ -36,22 +36,22 @@ interface CreateRequestModalProps {
 export default function CreateRequestModal({ isOpen, onClose, allowedTypes, teams, onRefresh }: CreateRequestModalProps) {
     const [mounted, setMounted] = useState(false);
     useEffect(() => setMounted(true), []);
-    
+
     const { showToast } = useToast();
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [selectedType, setSelectedType] = useState(allowedTypes[0]?.id || "");
-    const [contentData, setContentData] = useState<any>({}); 
+    const [contentData, setContentData] = useState<any>({});
     const [firstApproverId, setFirstApproverId] = useState("");
     const [secondApproverId, setSecondApproverId] = useState("");
     const [selectedTeamId, setSelectedTeamId] = useState("");
-    
+
     const [rawLevel2, setRawLevel2] = useState<any[]>([]);
     const [rawTeamLeaders, setRawTeamLeaders] = useState<any[]>([]);
     const [isLoadingApprovers, setIsLoadingApprovers] = useState(false);
 
     const { data: session } = useSession();
     const currentUser = session?.user as any;
-    
+
     const isTopLevel = APPROVAL_CONFIG.ROLE_GROUPS.TOP_LEVEL.includes(currentUser?.role);
     const isBGDOrAdmin = APPROVAL_CONFIG.ROLE_GROUPS.BGD_ADMIN.includes(currentUser?.role);
     const isHRorKeToan = APPROVAL_CONFIG.ROLE_GROUPS.HR_KETOAN.includes(currentUser?.role);
@@ -67,10 +67,10 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
     };
 
     // 🚀 ĐÃ SỬA: Phân tách logic reset để không mất data khi chọn Team
-    
+
     // 1. Khi đổi Loại đơn -> Form thay đổi -> Reset toàn bộ
-    useEffect(() => { 
-        setContentData({}); 
+    useEffect(() => {
+        setContentData({});
         setFirstApproverId("");
         setSecondApproverId("");
     }, [selectedType]);
@@ -87,9 +87,9 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
             setRawLevel2([]);
             return;
         }
-        
+
         setIsLoadingApprovers(true);
-        
+
         const fetchPromises = [fetch(`/api/approvers/level2`).then(res => res.json())];
 
         if (!isTopLevel && selectedTeamId) {
@@ -97,30 +97,30 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
         }
 
         Promise.all(fetchPromises)
-        .then((results) => {
-            const dataLv2All = results[0];
-            setRawLevel2(dataLv2All.level2Approvers?.map((a: any) => a.user || a) || []);
+            .then((results) => {
+                const dataLv2All = results[0];
+                setRawLevel2(dataLv2All.level2Approvers?.map((a: any) => a.user || a) || []);
 
-            if (results[1]) {
-                const dataLv1 = results[1];
-                let mappedLv1 = [];
-                if (Array.isArray(dataLv1)) {
-                    mappedLv1 = dataLv1;
-                } else if (dataLv1.level1Approvers) {
-                    mappedLv1 = dataLv1.level1Approvers.map((a: any) => a.user || a);
-                } else if (dataLv1.level2Approvers) {
-                    mappedLv1 = dataLv1.level2Approvers.map((a: any) => a.user || a);
+                if (results[1]) {
+                    const dataLv1 = results[1];
+                    let mappedLv1 = [];
+                    if (Array.isArray(dataLv1)) {
+                        mappedLv1 = dataLv1;
+                    } else if (dataLv1.level1Approvers) {
+                        mappedLv1 = dataLv1.level1Approvers.map((a: any) => a.user || a);
+                    } else if (dataLv1.level2Approvers) {
+                        mappedLv1 = dataLv1.level2Approvers.map((a: any) => a.user || a);
+                    }
+                    setRawTeamLeaders(mappedLv1);
+                } else {
+                    setRawTeamLeaders([]);
                 }
-                setRawTeamLeaders(mappedLv1);
-            } else {
-                setRawTeamLeaders([]);
-            }
-        })
-        .catch(err => console.error("Lỗi fetch approvers:", err))
-        .finally(() => setIsLoadingApprovers(false));
+            })
+            .catch(err => console.error("Lỗi fetch approvers:", err))
+            .finally(() => setIsLoadingApprovers(false));
 
     }, [selectedTeamId, isTopLevel]);
-    
+
     if (!isOpen) return null;
 
     const handleChange = (field: string, value: any) => {
@@ -145,28 +145,36 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
         showC1 = false;
         c2Options = bgdApprovers;
         c2Label = "Người phê duyệt";
-    } 
+    }
     else if (isHRorKeToan) {
         showC1 = false;
-        c2Options = isOneStepHR ? hrApprovers : rawLevel2; 
+        c2Options = isOneStepHR ? hrApprovers : rawLevel2;
         c2Label = isOneStepHR ? "Người phê duyệt (Hành chính / HR)" : "Người phê duyệt";
-    } 
+    }
     else if (isOneStepHR || isTeamNhanSu) {
         showC1 = false;
         c2Options = hrApprovers;
         c2Label = "Người phê duyệt (Hành chính / HR)";
-    } 
+    }
     else if (isLeader) {
-        c1Options = hrApprovers;
-        c1Label = "Cấp 1 (Hành chính / HR)";
-        c2Options = bgdApprovers;
-        c2Label = "Cấp 2 (Ban giám đốc)";
-    } 
+        if (selectedType === "DI_MUON_VE_SOM") {
+            showC1 = false;
+            c2Options = hrApprovers;
+            c2Label = "Người phê duyệt (Hành chính / HR)";
+        }else{
+            c1Options = hrApprovers;
+            c1Label = "Cấp 1 (Hành chính / HR)";
+            c2Options = bgdApprovers;
+            c2Label = "Cấp 2 (Ban giám đốc)";
+        }
+    }
     else {
-        c1Options = teamLeaders;
-        c1Label = "Cấp 1 (Quản lý trực tiếp)";
-        c2Options = isTwoStepHR ? hrApprovers : bgdApprovers;
-        c2Label = isTwoStepHR ? "Cấp 2 (Hành chính / HR)" : "Cấp 2 (Ban giám đốc)";
+        
+            c1Options = teamLeaders;
+            c1Label = "Cấp 1 (Quản lý trực tiếp)";
+            c2Options = isTwoStepHR ? hrApprovers : bgdApprovers;
+            c2Label = isTwoStepHR ? "Cấp 2 (Hành chính / HR)" : "Cấp 2 (Ban giám đốc)";
+        
     }
 
     const renderDynamicFields = () => {
@@ -201,7 +209,7 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
                                     <option value="UNPAID">Nghỉ không lương</option>
                                 </select>
                             </div>
-                            
+
                             <div>
                                 <label className="block text-[11px] md:text-xs font-bold text-slate-500 mb-1">Khung giờ nghỉ <span className="text-red-500">*</span></label>
                                 <select
@@ -242,7 +250,7 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
                         </div>
                     </div>
                 );
-              
+
             case "DI_MUON_VE_SOM":
                 return (
                     <div className="space-y-3 md:space-y-4 animate-fade-in">
@@ -399,12 +407,12 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
             const is1Step = !showC1 && showC2;
 
             const payload = {
-                type: selectedType, 
-                teamId: selectedTeamId || null, 
+                type: selectedType,
+                teamId: selectedTeamId || null,
                 contentData: finalContentData,
                 firstApproverId: is1Step ? currentUser?.id : firstApproverId,
-                secondApproverId: secondApproverId, 
-                status: is1Step ? "PENDING_2" : "PENDING_1" 
+                secondApproverId: secondApproverId,
+                status: is1Step ? "PENDING_2" : "PENDING_1"
             };
 
             const res = await fetch('/api/requests', {
@@ -414,19 +422,19 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
 
             if (res.ok) {
                 showToast("success", "Đã gửi đề xuất thành công.");
-                
+
                 const targetApproverId = is1Step ? secondApproverId : firstApproverId;
                 if (targetApproverId) {
                     window.dispatchEvent(new CustomEvent("local_system_noti", {
                         detail: {
-                            targetId: targetApproverId, 
+                            targetId: targetApproverId,
                             title: "Đơn từ mới cần duyệt",
-                            message: `Bạn vừa nhận được một đề xuất mới cần phê duyệt.`, 
+                            message: `Bạn vừa nhận được một đề xuất mới cần phê duyệt.`,
                             type: "info"
                         }
                     }));
                 }
-                
+
                 onRefresh?.();
                 onClose();
             } else {
@@ -440,9 +448,9 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
         }
     };
 
-    const isSubmitDisabled = isSubmitting 
-        || (!isTopLevel && !selectedTeamId) 
-        || (showC1 && !firstApproverId) 
+    const isSubmitDisabled = isSubmitting
+        || (!isTopLevel && !selectedTeamId)
+        || (showC1 && !firstApproverId)
         || (showC2 && !secondApproverId);
 
     const modalContent = (
@@ -486,7 +494,7 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
                     </div>
 
                     <hr className="border-slate-100" />
-                    
+
                     <div>
                         <label className="block text-xs md:text-sm font-bold text-slate-700 mb-1.5 md:mb-2">3. Phòng ban / Team <span className="text-red-500">*</span></label>
                         <select
@@ -506,7 +514,7 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
                             {isTopLevel ? "3" : "4"}. Luồng phê duyệt <span className="text-red-500">*</span>
                         </label>
                         {!selectedTeamId && !isTopLevel && <p className="text-[10px] md:text-xs text-red-500 mb-2 italic">Vui lòng chọn Team ở bước 3 để hiển thị danh sách người duyệt.</p>}
-                        
+
                         <div className={`grid grid-cols-1 ${showC1 && showC2 ? 'sm:grid-cols-2' : ''} gap-3 md:gap-4`}>
                             {showC1 && (
                                 <div className="bg-white border border-slate-200 p-3 md:p-4 rounded-xl">
@@ -521,7 +529,7 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
                                     </select>
                                 </div>
                             )}
-                            
+
                             {showC2 && (
                                 <div className="bg-white border border-slate-200 p-3 md:p-4 rounded-xl">
                                     <span className="text-[10px] md:text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 md:mb-2 block">{c2Label} <span className="text-red-500">*</span></span>
@@ -541,9 +549,9 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
 
                 <div className="px-4 md:px-6 py-3 md:py-4 border-t border-slate-100 flex flex-col-reverse sm:flex-row justify-end gap-2.5 md:gap-3 bg-slate-50/50 shrink-0">
                     <button onClick={onClose} disabled={isSubmitting} className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-slate-600 font-bold hover:bg-slate-200 transition-colors text-sm md:text-base">Hủy</button>
-                    <button 
-                        onClick={handleSubmit} 
-                        disabled={isSubmitDisabled} 
+                    <button
+                        onClick={handleSubmit}
+                        disabled={isSubmitDisabled}
                         className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-red-600 text-white font-bold hover:bg-red-700 transition-all shadow-md shadow-red-600/20 disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2 text-sm md:text-base"
                     >
                         {isSubmitting && <Loader2 size={16} className="animate-spin" />}
@@ -553,7 +561,7 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
             </div>
         </div>
     );
-    
+
     if (!mounted) return null;
     return createPortal(modalContent, document.body);
 }
