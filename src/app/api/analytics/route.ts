@@ -136,7 +136,7 @@ export async function GET(req: Request) {
             totalRevenue += r.amount;
             totalViews += r.views;
 
-            const dayKey = `\({new Date(r.date).getDate().toString().padStart(2, '0')}/\){(new Date(r.date).getMonth() + 1).toString().padStart(2, '0')}`;
+            const dayKey = `${new Date(r.date).getDate().toString().padStart(2, '0')}/${(new Date(r.date).getMonth() + 1).toString().padStart(2, '0')}`;
 
             const teamName = r.channel?.team?.name || "Khác";
             activeTeams.add(teamName);
@@ -169,7 +169,8 @@ export async function GET(req: Request) {
         loopDate.setHours(0, 0, 0, 0);
 
         while (loopDate <= endDate) {
-            const dayKey = `\({loopDate.getDate().toString().padStart(2, '0')}/\){(loopDate.getMonth() + 1).toString().padStart(2, '0')}`;
+            const dayKey = `${loopDate.getDate().toString().padStart(2, '0')}/${(loopDate.getMonth() + 1).toString().padStart(2, '0')}`;
+            
             const dayDataTeam: any = { date: dayKey };
             // 🚀 Thêm : any vào team
             activeTeamNames.forEach((team: any) => { dayDataTeam[team] = teamRevByDay[dayKey]?.[team] || 0; });
