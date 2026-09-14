@@ -2,7 +2,32 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { getContinuousWeekRange } from "@/lib/utils";
+
+// 🚀 ĐƯA HÀM TÍNH TUẦN CHUẨN ISO TỪ BÊN KPI SANG
+function getWeekDateRangeByMonth(year: number, month: number, weekNumber: number) {
+    const firstDayOfMonth = new Date(year, month - 1, 1);
+    const dayOfWeek = firstDayOfMonth.getDay(); 
+    const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const startOfFirstWeek = new Date(year, month - 1, 1 + diffToMonday);
+
+    const thursdayOfFirstWeek = new Date(startOfFirstWeek);
+    thursdayOfFirstWeek.setDate(startOfFirstWeek.getDate() + 3);
+    
+    if (thursdayOfFirstWeek.getMonth() !== month - 1) {
+        startOfFirstWeek.setDate(startOfFirstWeek.getDate() + 7);
+    }
+
+    const startOfWeek = new Date(startOfFirstWeek);
+    startOfWeek.setDate(startOfFirstWeek.getDate() + (weekNumber - 1) * 7);
+
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+
+    startOfWeek.setHours(0, 0, 0, 0);
+    endOfWeek.setHours(23, 59, 59, 999);
+
+    return { start: startOfWeek, end: endOfWeek };
+}
 
 export const dynamic = "force-dynamic";
 
@@ -44,9 +69,9 @@ export async function GET(req: Request) {
         let kpiStartDate = new Date(kpiYear, kpiMonth - 1, 1);
         let kpiEndDate = new Date(kpiYear, kpiMonth, 0, 23, 59, 59);
 
-        // 🚀 THAY THẾ KHỐI IF NÀY
+        // 🚀 GỌI HÀM getWeekDateRangeByMonth ĐỂ ĐỒNG BỘ 100% TIMELINE VỚI MÀN KPI
         if (kpiWeek > 0) {
-            const { start, end } = getContinuousWeekRange(kpiYear, kpiMonth, kpiWeek);
+            const { start, end } = getWeekDateRangeByMonth(kpiYear, kpiMonth, kpiWeek);
             kpiStartDate = start;
             kpiEndDate = end;
         }
@@ -66,7 +91,7 @@ export async function GET(req: Request) {
                 where: { ...teamFilter, role: { notIn: ["ADMIN", "BAN_GIAM_DOC", "HR","KE_TOAN"] } },
                 select: { 
                     id: true, fullName: true, role: true, isActive: true, createdAt: true, teamId: true,
-                    channelMemberships: { select: { channelId: true, roleOnChannel: true } } // Thêm để xét Role giống KPI
+                    channelMemberships: { select: { channelId: true, roleOnChannel: true } }
                 }
             }),
             prisma.channel.findMany({ where: teamFilter, include: { team: { select: { name: true } } } }),
@@ -81,7 +106,6 @@ export async function GET(req: Request) {
                     createdAt: { gte: kpiStartDate, lte: kpiEndDate }, 
                     user: { ...teamFilter, role: { notIn: ["ADMIN", "BAN_GIAM_DOC", "HR", "KE_TOAN"] } } 
                 },
-                // Lấy rộng ra để bao gồm cả DAILY_REPORT và thông tin task.channelId
                 include: { 
                     user: { select: { role: true } },
                     task: { select: { channelId: true } }
