@@ -63,7 +63,7 @@ export async function GET(req: Request) {
         const kpiWhere: any = { month: kpiMonth, year: kpiYear, user: { ...teamFilter } };
         if (kpiWeek > 0) kpiWhere.weekNumber = kpiWeek;
 
-        // BẮN MULTI-QUERY VỚI 2 LUỒNG NGÀY ĐỘC LẬP (ĐÃ GỠ LỎNG LEAD TIME TASKS)
+        // BẮN MULTI-QUERY VỚI 2 LUỒNG NGÀY ĐỘC LẬP
         const [
             teams, users, allChannels,
             revenuesPeriod, 
@@ -72,7 +72,10 @@ export async function GET(req: Request) {
             prisma.team.findMany({ select: { id: true, name: true } }),
             prisma.user.findMany({
                 where: { ...teamFilter, role: { notIn: ["ADMIN", "BAN_GIAM_DOC", "HR","KE_TOAN"] } },
-                select: { id: true, fullName: true, role: true, isActive: true, createdAt: true, teamId: true }
+                select: { 
+                    id: true, fullName: true, role: true, isActive: true, createdAt: true, teamId: true,
+                    channelMemberships: { select: { channelId: true, roleOnChannel: true } } // Thêm để xét Role giống KPI
+                }
             }),
             prisma.channel.findMany({ where: teamFilter, include: { team: { select: { name: true } } } }),
             
@@ -84,10 +87,13 @@ export async function GET(req: Request) {
             prisma.taskLog.findMany({
                 where: { 
                     createdAt: { gte: kpiStartDate, lte: kpiEndDate }, 
-                    user: { ...teamFilter, role: { notIn: ["ADMIN", "BAN_GIAM_DOC", "HR", "KE_TOAN"] } }, 
-                    action: { in: ["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK", "UPDATE_STATUS"] } 
+                    user: { ...teamFilter, role: { notIn: ["ADMIN", "BAN_GIAM_DOC", "HR", "KE_TOAN"] } } 
                 },
-                include: { user: { select: { role: true } } }
+                // Lấy rộng ra để bao gồm cả DAILY_REPORT và thông tin task.channelId
+                include: { 
+                    user: { select: { role: true } },
+                    task: { select: { channelId: true } }
+                }
             }),
             prisma.weeklyKPI.findMany({ where: kpiWhere }),
             prisma.evaluation.findMany({ 
@@ -104,19 +110,19 @@ export async function GET(req: Request) {
         // KHỐI 1: XỬ LÝ DOANH THU & KÊNH
         let totalRevenue = 0;
         let totalViews = 0;
-        const channelViewsMap: Record<string, number> = {};
-        const teamRevByDay: Record<string, Record<string, number>> = {};
-        const activeTeams = new Set<string>();
-        const channelRevByDay: Record<string, Record<string, number>> = {};
-        const channelViewsByDay: Record<string, Record<string, number>> = {};
-        const activeChannels = new Set<string>();
-        const dailyOverallTrend: Record<string, { revenue: number, views: number }> = {};
+        const channelViewsMap: Record = {};
+        const teamRevByDay: Record> = {};
+        const activeTeams = new Set();
+        const channelRevByDay: Record> = {};
+        const channelViewsByDay: Record> = {};
+        const activeChannels = new Set();
+        const dailyOverallTrend: Record = {};
         
         revenuesPeriod.forEach((r: any) => {
             totalRevenue += r.amount;
             totalViews += r.views;
             
-            const dayKey = `${new Date(r.date).getDate().toString().padStart(2, '0')}/${(new Date(r.date).getMonth() + 1).toString().padStart(2, '0')}`;
+            const dayKey = `\({new Date(r.date).getDate().toString().padStart(2, '0')}/\){(new Date(r.date).getMonth() + 1).toString().padStart(2, '0')}`;
             
             const teamName = r.channel?.team?.name || "Khác";
             activeTeams.add(teamName);
@@ -149,7 +155,7 @@ export async function GET(req: Request) {
         loopDate.setHours(0, 0, 0, 0);
 
         while (loopDate <= endDate) {
-            const dayKey = `${loopDate.getDate().toString().padStart(2, '0')}/${(loopDate.getMonth() + 1).toString().padStart(2, '0')}`;
+            const dayKey = `\({loopDate.getDate().toString().padStart(2, '0')}/\){(loopDate.getMonth() + 1).toString().padStart(2, '0')}`;
             
             const dayDataTeam: any = { date: dayKey };
             activeTeamNames.forEach(team => { dayDataTeam[team] = teamRevByDay[dayKey]?.[team] || 0; });
@@ -171,7 +177,7 @@ export async function GET(req: Request) {
         const topChannelsByViews = Object.entries(channelViewsMap).map(([name, views]) => ({ name, views })).sort((a, b) => b.views - a.views).slice(0, 5);
 
         const monetMap: any = { DA_BAT: "Đã bật ($)", DA_DU_DIEU_KIEN: "Đủ ĐK", CHO_DUYET: "Chờ duyệt", CHUA_DAT: "Chưa đạt", TAT_KIEM_TIEN: "Tắt kiếm tiền" };
-        const monetStatusMap: Record<string, any> = {
+        const monetStatusMap: Record = {
             DA_BAT: { name: "Đã bật ($)", fill: "#10b981", value: 0 }, DA_DU_DIEU_KIEN: { name: "Đủ ĐK", fill: "#3b82f6", value: 0 },
             CHO_DUYET: { name: "Chờ duyệt", fill: "#f59e0b", value: 0 }, CHUA_DAT: { name: "Chưa đạt", fill: "#94a3b8", value: 0 }, TAT_KIEM_TIEN: { name: "Tắt kiếm tiền", fill: "#ef4444", value: 0 },
         };
@@ -189,7 +195,7 @@ export async function GET(req: Request) {
 
         // KHỐI 2: XỬ LÝ VẬN HÀNH & KPI
         let totalScoreSum = 0;
-        const userScoreMap: Record<string, { total: number, count: number }> = {};
+        const userScoreMap: Record = {};
         evaluationsPeriod.forEach((e: any) => {
             totalScoreSum += e.score;
             const cid = e.task?.contentId; const eid = e.task?.editorId;
@@ -203,18 +209,94 @@ export async function GET(req: Request) {
             return { id: p.id, name: p.name, supervisor: p.supervisor?.fullName || "Chưa gán", status: p.status, progress: total > 0 ? Math.round((done / total) * 100) : 0, totalTasks: total, doneTasks: done };
         }).sort((a,b) => b.progress - a.progress);
 
+        // ĐỊNH NGHĨA LẠI isDoneLog để tính Output Toàn Hệ Thống (Mục Thống Kê Tổng)
         const isDoneLog = (l: any) => ["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK"].includes(l.action) || (l.action === "UPDATE_STATUS" && l.details?.includes("sang [DONE]"));
         let totalOutput = new Set(taskLogsPeriod.filter(isDoneLog).map((l:any) => l.taskId)).size;
-
-        const userKpiMap: Record<string, { target: number, actualTasks: Set<string> }> = {};
-        kpisPeriod.forEach((kpi:any) => { if (!userKpiMap[kpi.userId]) userKpiMap[kpi.userId] = { target: 0, actualTasks: new Set() }; userKpiMap[kpi.userId].target += kpi.targetValue; });
-        taskLogsPeriod.forEach((log:any) => { if (isDoneLog(log) && userKpiMap[log.userId]) userKpiMap[log.userId].actualTasks.add(log.taskId); });
 
         const statusMapVi: any = { BACKLOG: "Kho Ý Tưởng", TODO: "Cần Làm", DOING: "Đang Làm", REVIEW: "Chờ Duyệt", DONE: "Hoàn Thành" };
         const funnelOrder = ["BACKLOG", "TODO", "DOING", "REVIEW", "DONE"];
         const rawFunnel: any = { BACKLOG: 0, TODO: 0, DOING: 0, REVIEW: 0, DONE: 0 };
         taskStatusCounts.forEach((t: any) => { if (rawFunnel[t.status] !== undefined) rawFunnel[t.status] = t._count.id; });
         const taskFunnel = funnelOrder.map(status => ({ name: statusMapVi[status], value: rawFunnel[status] }));
+
+        // 🚀 ĐỒNG BỘ LOGIC TÍNH KPI TỪ BẢNG THỐNG KÊ (DAILY_REPORT + TỪ KHÓA)
+        const hrGrid = users.map(u => {
+            const target = kpisPeriod.filter(k => k.userId === u.id).reduce((sum, k) => sum + k.targetValue, 0);
+            
+            const rawUserLogs = taskLogsPeriod.filter((l: any) => l.userId === u.id);
+            
+            const validUserLogs: any[] = [];
+            rawUserLogs.forEach((log: any) => {
+                const actionStr = String(log.action || "").toUpperCase();
+                if (actionStr === "DAILY_REPORT") {
+                    validUserLogs.push(log);
+                }
+            });
+
+            const uniqueTasks = new Set();
+
+            validUserLogs.forEach((log: any) => {
+                if (!log.taskId) return;
+
+                let isKpiQualifying = false; 
+                const combinedText = String(log.details || "").toLowerCase();
+
+                let effectiveRole: string = u.role;
+                if (log.task?.channelId && u.channelMemberships) {
+                    const channelRoleObj = u.channelMemberships.find((cm: any) => cm.channelId === log.task.channelId);
+                    if (channelRoleObj) {
+                        effectiveRole = channelRoleObj.roleOnChannel;
+                    }
+                }
+
+                if (combinedText.includes("gán thủ công")) {
+                    isKpiQualifying = true;
+                } else {
+                    switch (effectiveRole) {
+                        case "LEADER":
+                        case "PUBLISHER":
+                        case "CHANNEL_MANAGER":
+                            if (combinedText.includes("video render") || combinedText.includes("video đã đăng") || combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) isKpiQualifying = true;
+                            break;
+                        case "EDITOR":
+                            if (combinedText.includes("video render") || combinedText.includes("prj thô") || combinedText.includes("audio") || combinedText.includes("âm thanh") || combinedText.includes("link project")) isKpiQualifying = true;
+                            break;
+                        case "CONTENT":
+                            if (combinedText.includes("kịch bản") || combinedText.includes("chuyển động")) isKpiQualifying = true;
+                            break;
+                        case "ANIMATOR":
+                        case "ANIMATION":
+                            if (combinedText.includes("chuyển động")) isKpiQualifying = true;
+                            break;
+                        case "SEO":
+                            if (combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) isKpiQualifying = true;
+                            break;
+                        case "VOICE":
+                            if (combinedText.includes("audio") || combinedText.includes("âm thanh")) isKpiQualifying = true;
+                            break;
+                        default:
+                            isKpiQualifying = true;
+                    }
+                }
+
+                if (isKpiQualifying) {
+                    uniqueTasks.add(log.taskId);
+                }
+            });
+
+            const output = uniqueTasks.size;
+            
+            return {
+                id: u.id, 
+                name: u.fullName, 
+                role: u.role,
+                target: target,
+                output: output,
+                kpi: target > 0 ? Math.round((output / target) * 100) : 0,
+                avgScore: userScoreMap[u.id] ? (userScoreMap[u.id].total / userScoreMap[u.id].count).toFixed(1) : "-",
+                status: u.isActive ? "Active" : "Nghỉ việc"
+            };
+        }).sort((a, b) => b.output - a.output);
 
         return NextResponse.json({
             teams,
@@ -228,21 +310,7 @@ export async function GET(req: Request) {
             },
             overallTrend, topChannelsByViews, revenueTrend, activeTeamNames, channelRevenueTrend, channelViewsTrend, activeChannelNames, channelGrid, projectHealth, taskFunnel, 
             monetizationStatus: Object.values(monetStatusMap).filter(m => m.value > 0),
-            hrGrid: users.map(u => {
-                const target = kpisPeriod.filter(k => k.userId === u.id).reduce((sum, k) => sum + k.targetValue, 0);
-                const output = new Set(taskLogsPeriod.filter(l => l.userId === u.id && isDoneLog(l)).map(l => l.taskId)).size;
-                
-                return {
-                    id: u.id, 
-                    name: u.fullName, 
-                    role: u.role,
-                    target: target,
-                    output: output,
-                    kpi: target > 0 ? Math.round((output / target) * 100) : 0,
-                    avgScore: userScoreMap[u.id] ? (userScoreMap[u.id].total / userScoreMap[u.id].count).toFixed(1) : "-",
-                    status: u.isActive ? "Active" : "Nghỉ việc"
-                };
-            }).sort((a, b) => b.output - a.output)
+            hrGrid
         });
 
     } catch (error) {
