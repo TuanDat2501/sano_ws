@@ -170,7 +170,6 @@ export async function GET(req: Request) {
 
         while (loopDate <= endDate) {
             const dayKey = `\({loopDate.getDate().toString().padStart(2, '0')}/\){(loopDate.getMonth() + 1).toString().padStart(2, '0')}`;
-            
             const dayDataTeam: any = { date: dayKey };
             // 🚀 Thêm : any vào team
             activeTeamNames.forEach((team: any) => { dayDataTeam[team] = teamRevByDay[dayKey]?.[team] || 0; });
