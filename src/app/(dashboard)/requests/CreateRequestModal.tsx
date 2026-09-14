@@ -18,8 +18,8 @@ const APPROVAL_CONFIG = {
     },
     // 2. Phân loại luồng duyệt theo Mã Đơn (type)
     REQUEST_FLOWS: {
-        ONE_STEP_HR: ["LAM_REMOTE", "DI_MUON_VE_SOM"], 
-        TWO_STEP_HR: ["NGHI_PHEP"]                     
+        ONE_STEP_HR: [], 
+        TWO_STEP_HR: ["NGHI_PHEP","LAM_REMOTE", "DI_MUON_VE_SOM"]                     
     },
     // 3. Tên Team đặc thù (Nhân sự team này nộp đơn sẽ nhảy thẳng qua luồng 1 bước)
     SPECIAL_TEAMS: ["nhân sự", "hr"]

@@ -16,7 +16,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       where: { roomId },
       orderBy: { createdAt: 'asc' }, // Sắp xếp cũ trên - mới dưới
       include: {
-        sender: { select: { id: true, fullName: true } },
+        sender: { select: { id: true, fullName: true, avatarUrl: true } },
         attachments: true
       }
     });
@@ -26,7 +26,9 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
        id: msg.id,
        sender: msg.sender.fullName,
        senderId: msg.sender.id,
+       avatarUrl: msg.sender.avatarUrl,
        text: msg.content,
+       createdAt: msg.createdAt,
        time: new Date(msg.createdAt).toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'}),
        isMe: msg.sender.id === (session.user as any).id,
        attachments: msg.attachments || []
@@ -59,7 +61,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         createdAt: new Date(),
       },
       include: { 
-        sender: { select: { id: true, fullName: true } } 
+        sender: { select: { id: true, fullName: true, avatarUrl: true } }
       }
     });
     // 2. Cập nhật thời gian của phòng chat để nó nhảy lên đầu danh sách (Như Zalo)

@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+
 export const dynamic = "force-dynamic";
+
 export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions);
@@ -22,20 +24,23 @@ export async function POST(req: Request) {
 
     console.log("=== ĐANG TẠO PHÒNG CHAT ===");
     console.log("Người tạo (myId):", myId);
-    console.log("Mục tiêu (targetUsername):", targetUsername);
+    console.log("Mục tiêu (targetUsername/TeamID):", targetUsername);
     console.log("Loại phòng:", type);
-    const targetUser = await prisma.user.findUnique({
-            where: { username: targetUsername },
-            select: { id: true } // Backend lấy ID một cách an toàn và bí mật
-        });
 
-        if (!targetUser) return NextResponse.json({ error: "Không tìm thấy người dùng" }, { status: 404 });
-
-        const targetId = targetUser.id;
-   // ==========================================
+    // ==========================================
     // TRƯỜNG HỢP 1: TẠO CHAT 1-1 (DIRECT)
     // ==========================================
     if (type === 'DIRECT') {
+      // Chỉ tìm User khi loại phòng là DIRECT
+      const targetUser = await prisma.user.findUnique({
+        where: { username: targetUsername },
+        select: { id: true }
+      });
+
+      if (!targetUser) return NextResponse.json({ error: "Không tìm thấy người dùng" }, { status: 404 });
+      
+      const targetId = targetUser.id;
+
       const existingRooms = await prisma.chatRoom.findMany({
         where: {
           type: 'DIRECT',
@@ -45,11 +50,11 @@ export async function POST(req: Request) {
           ]
         },
         include: {
-          members: true // 🚀 Bổ sung lấy mảng members ra để đếm
+          members: true
         }
       });
 
-      // 🚀 CHỐT CHẶN: Chỉ lấy phòng nào có ĐÚNG 2 người (lọc bỏ các phòng bị dính người thứ 3)
+      // Lọc bỏ phòng có người thứ 3
       const validRoom = existingRooms.find(room => room.members.length === 2);
 
       if (validRoom) {
@@ -74,6 +79,17 @@ export async function POST(req: Request) {
     // TRƯỜNG HỢP 2: VÀO CHAT NHÓM (TEAM)
     // ==========================================
     if (type === 'TEAM') {
+      // Khi là Team, targetUsername chính là Team ID do Frontend đẩy lên
+      const targetId = targetUsername; 
+
+      // Kiểm tra xem Team có tồn tại không
+      const targetTeam = await prisma.team.findUnique({
+        where: { id: targetId },
+        select: { id: true, name: true }
+      });
+
+      if (!targetTeam) return NextResponse.json({ error: "Không tìm thấy Nhóm này" }, { status: 404 });
+
       const existingRoom = await prisma.chatRoom.findFirst({
         where: { type: 'TEAM', teamId: targetId }
       });
@@ -82,25 +98,28 @@ export async function POST(req: Request) {
          const isMember = await prisma.roomMember.findUnique({
            where: { roomId_userId: { roomId: existingRoom.id, userId: myId } }
          });
+         // Nếu phòng đã tồn tại nhưng người này chưa join thì cho join
          if (!isMember) {
             await prisma.roomMember.create({ data: { roomId: existingRoom.id, userId: myId }});
          }
          return NextResponse.json(existingRoom);
       }
 
+      // Nếu phòng chưa tồn tại, tạo phòng mới và add toàn bộ thành viên team vào
       const teamUsers = await prisma.user.findMany({ where: { teamId: targetId } });
       
       const newRoom = await prisma.chatRoom.create({
         data: {
           type: 'TEAM',
           teamId: targetId,
-          name: "Chat Nhóm", 
+          name: targetTeam.name, // Lấy tên thật của Team thay vì "Chat Nhóm"
           members: {
             create: teamUsers.map(u => ({ userId: u.id }))
           }
         }
       });
       
+      // Đề phòng người tạo (Admin/BGD) không thuộc team này nhưng vẫn muốn join để xem
       const meInTeam = teamUsers.find(u => u.id === myId);
       if(!meInTeam) {
         await prisma.roomMember.create({ data: { roomId: newRoom.id, userId: myId }});
@@ -112,10 +131,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Loại phòng không hợp lệ" }, { status: 400 });
 
   } catch (error: any) {
-    // IN LỖI RA TERMINAL MÀU ĐỎ ĐỂ DỄ NHÌN
     console.error("❌ LỖI KHI TẠO PHÒNG CHAT:", error);
     
-    // GỬI CHI TIẾT LỖI VỀ CHO FRONTEND
     return NextResponse.json({ 
       error: error.message || "Lỗi Database (Xem chi tiết trong Terminal VSCode)",
       details: error

@@ -121,3 +121,18 @@ export function getCurrentWeekInfo(date: Date = new Date()) {
         week: getCurrentWeekNumber(date)
     };
 }
+
+export const formatMessageDate = (dateString: any) => {
+    if (!dateString) return "";
+    const date = new Date(dateString);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    if (date.toDateString() === today.toDateString()) return "Hôm nay";
+    if (date.toDateString() === yesterday.toDateString()) return "Hôm qua";
+
+    return date.toLocaleDateString('vi-VN', {
+        weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric'
+    });
+};

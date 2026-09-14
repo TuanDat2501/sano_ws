@@ -9,7 +9,7 @@ export async function GET(req: Request) {
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    
+
     const userId = (session.user as any).id;
 
     // 1. Quét Database
@@ -20,12 +20,12 @@ export async function GET(req: Request) {
       include: {
         team: true,
         members: {
-          include: { user: { select: { id: true, fullName: true } } }
+          include: { user: { select: { id: true, fullName: true, avatarUrl: true } } }
         },
         messages: {
           orderBy: { createdAt: 'desc' },
           take: 1, // Lấy 1 tin mới nhất làm preview
-          include: { sender: { select: { fullName: true } } }
+          include: { sender: { select: { fullName: true, avatarUrl: true } } }
         }
       }
     });
@@ -36,35 +36,38 @@ export async function GET(req: Request) {
     if (!rooms || !Array.isArray(rooms)) {
       console.error("❌ Prisma không trả về Array! Giá trị thực tế là:", rooms);
       // Trả về mảng rỗng để giao diện không bị sập (trắng trang)
-      return NextResponse.json([]); 
+      return NextResponse.json([]);
     }
 
     // 2. Chế biến Data
     const formattedRooms = rooms.map(room => {
-       let roomName = room.name || "Phòng Chat";
-       let targetId = null;
-       if (room.type === "DIRECT") {
-          const otherMember = room.members.find(m => m.userId !== userId);
-          roomName = otherMember?.user?.fullName || "Người dùng ẩn";
-          targetId = otherMember?.userId || null;
-       } else if (room.type === "TEAM" && room.team) {
-          roomName = room.team.name;
-       }
+      let roomName = room.name || "Phòng Chat";
+      let targetId = null;
+      let avatarUrl = null; // 🚀 Tạo biến lưu avatar
 
-       // Đảm bảo messages là mảng trước khi lấy phần tử [0]
-       const validMessages = Array.isArray(room.messages) ? room.messages : [];
-       const lastMsg = validMessages[0];
+      if (room.type === "DIRECT") {
+        const otherMember = room.members.find(m => m.userId !== userId);
+        roomName = otherMember?.user?.fullName || "Người dùng ẩn";
+        targetId = otherMember?.userId || null;
+        avatarUrl = otherMember?.user?.avatarUrl || null; // 🚀 Lấy avatar của người kia
+      } else if (room.type === "TEAM" && room.team) {
+        roomName = room.team.name;
+      }
 
-       return {
-         id: room.id,
-         name: roomName,
-         targetId: targetId,
-         type: room.type,
-         lastMessage: lastMsg ? `${lastMsg.senderId === userId ? "Bạn: " : ""}${lastMsg.content || 'Đã gửi file đính kèm'}` : "Chưa có tin nhắn...",
-         time: lastMsg ? new Date(lastMsg.createdAt).toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'}) : "",
-         rawTime: lastMsg ? lastMsg.createdAt : room.createdAt,
-         unread: 0
-       };
+      const validMessages = Array.isArray(room.messages) ? room.messages : [];
+      const lastMsg = validMessages[0];
+
+      return {
+        id: room.id,
+        name: roomName,
+        targetId: targetId,
+        type: room.type,
+        avatarUrl: avatarUrl, // 🚀 Bơm avatar ra API
+        lastMessage: lastMsg ? `${lastMsg.senderId === userId ? "Bạn: " : ""}${lastMsg.content || 'Đã gửi file đính kèm'}` : "Chưa có tin nhắn...",
+        time: lastMsg ? new Date(lastMsg.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : "",
+        rawTime: lastMsg ? lastMsg.createdAt : room.createdAt,
+        unread: 0
+      };
     });
 
     // 3. Sort từ mới tới cũ
@@ -75,6 +78,6 @@ export async function GET(req: Request) {
   } catch (error) {
     console.error("❌ Lỗi bắt được tại catch (fetch rooms):", error);
     // Vẫn trả về mảng rỗng để UI không chết `map`
-    return NextResponse.json([]); 
+    return NextResponse.json([]);
   }
 }
