@@ -42,10 +42,10 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
 
     if (!isOpen || !mounted) return null;
 
-    const isMyTurnToApprove = request && 
+    const isMyTurnToApprove = request &&
         ((request.status === "PENDING_1" && request.firstApproverId === currentUserId) ||
-        (request.status === "PENDING_2" && request.secondApproverId === currentUserId));
-        
+            (request.status === "PENDING_2" && request.secondApproverId === currentUserId));
+
     const isRequester = request?.requesterId === currentUserId;
     const canCancel = isRequester && ["PENDING_1", "PENDING_2"].includes(request?.status);
 
@@ -137,10 +137,10 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
 
     const startDate = getVal('startDate');
     const endDate = getVal('endDate');
-    const targetDate = getVal('targetDate') || getVal('date'); 
-    const time = getVal('time'); 
+    const targetDate = getVal('targetDate') || getVal('date');
+    const time = getVal('time');
     const leaveType = getVal('leaveType');
-    const timeSlot = getVal('timeSlot'); 
+    const timeSlot = getVal('timeSlot');
     const itemName = getVal('itemName');
     const amount = getVal('amount');
     const reason = getVal('reason');
@@ -163,7 +163,7 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
         <>
             <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100000] animate-in fade-in duration-200" onClick={onClose} />
             <div className="fixed inset-y-0 right-0 z-[100001] w-full max-w-lg md:max-w-xl bg-slate-50 flex flex-col shadow-2xl animate-in slide-in-from-right duration-300">
-                
+
                 <div className="px-5 py-4 md:py-5 border-b border-slate-200 bg-white flex justify-between items-center shrink-0 shadow-sm z-10">
                     <h2 className="text-base md:text-lg font-black text-slate-800 uppercase tracking-wide">Chi tiết Đề xuất</h2>
                     <button onClick={onClose} className="p-2 bg-slate-50 hover:bg-red-50 text-slate-400 hover:text-red-600 rounded-full transition-colors active:scale-95">
@@ -186,7 +186,7 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
                                         <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-widest mb-2">Người đề xuất</p>
                                         <p className="text-sm font-bold text-slate-900">{request.requester?.fullName}</p>
                                         <p className="text-xs text-slate-500 mt-1 font-medium">Team: {request.team?.name || "Không rõ"}</p>
-                                        
+
                                         <div className="mt-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-50 border border-blue-100 text-blue-700">
                                             <FileText size={14} />
                                             <span className="text-[11px] font-black uppercase tracking-wider">{renderRequestType(request.type)}</span>
@@ -198,12 +198,12 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
                                         </p>
                                         <div className="space-y-2 text-sm font-medium">
                                             <p className="text-slate-700 flex justify-between gap-2">
-                                                <span className="text-slate-500 shrink-0 text-xs">Cấp 1:</span> 
+                                                <span className="text-slate-500 shrink-0 text-xs">Cấp 1:</span>
                                                 <strong className="text-slate-900 text-right">{request.firstApprover?.fullName || "---"}</strong>
                                             </p>
                                             {request.secondApprover && (
                                                 <p className="text-slate-700 flex justify-between gap-2 border-t border-blue-100/50 pt-2">
-                                                    <span className="text-slate-500 shrink-0 text-xs">Cấp 2:</span> 
+                                                    <span className="text-slate-500 shrink-0 text-xs">Cấp 2:</span>
                                                     <strong className="text-slate-900 text-right">{request.secondApprover?.fullName}</strong>
                                                 </p>
                                             )}
@@ -211,7 +211,7 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
                                     </div>
                                 </div>
                                 <div className="bg-slate-50 border-t border-slate-200 p-3 md:p-4 flex items-center justify-between gap-4">
-                                    <span className="text-xs md:text-sm font-bold text-slate-600">Trạng thái:</span> 
+                                    <span className="text-xs md:text-sm font-bold text-slate-600">Trạng thái:</span>
                                     {renderStatusBadge(request.status)}
                                 </div>
                             </div>
@@ -227,12 +227,18 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
                                                 Từ <span className="text-blue-600">{new Date(startDate).toLocaleDateString('vi-VN')}</span> đến <span className="text-blue-600">{new Date(endDate).toLocaleDateString('vi-VN')}</span>
                                                 {numDays > 0 && <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-md text-[11px]">({numDays} ngày)</span>}
                                             </p>
-                                            
+
                                             <div className="mt-1.5 flex flex-wrap gap-2">
-                                                {/* 🚀 ĐÃ SỬA: LUÔN HIỂN THỊ CẢ NGÀY CHO NGHỈ PHÉP */}
-                                                {timeSlot && (
+                                                {/* 🚀 ĐÃ SỬA: KHÔNG HIỂN THỊ CẢ NGÀY CHO ĐI MUỘN VỀ SỚM */}
+                                                {timeSlot && request?.type !== "DI_MUON_VE_SOM" && (
                                                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border bg-purple-50 text-purple-700 border-purple-200">
                                                         <Clock size={12} /> {timeSlot === 'FULL_DAY' ? 'Cả ngày' : timeSlot === 'MORNING' ? 'Nửa buổi sáng' : 'Nửa buổi chiều'}
+                                                    </span>
+                                                )}
+                                                {/* 🚀 BỔ SUNG: Hiển thị buổi cho ĐI MUỘN VỀ SỚM nhưng không có Cả ngày */}
+                                                {timeSlot && request?.type === "DI_MUON_VE_SOM" && timeSlot !== 'FULL_DAY' && (
+                                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border bg-purple-50 text-purple-700 border-purple-200">
+                                                        <Clock size={12} /> {timeSlot === 'MORNING' ? 'Nửa buổi sáng' : 'Nửa buổi chiều'}
                                                     </span>
                                                 )}
                                                 {leaveType && (
@@ -249,10 +255,18 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
                                             <p className="text-sm text-slate-900 font-black flex items-center gap-2">
                                                 {new Date(targetDate).toLocaleDateString('vi-VN')}
                                                 {time && <span className="text-red-600 bg-red-50 border border-red-100 px-2 py-0.5 rounded-md text-[11px]"><Clock size={12} className="inline mr-1 mb-0.5" />{time}</span>}
-                                                {/* 🚀 ĐÃ SỬA: LUÔN HIỂN THỊ CẢ NGÀY CHO LÀM REMOTE */}
-                                                {timeSlot && (
-                                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-bold border bg-purple-50 text-purple-700 border-purple-200">
+                                                {/* 🚀 ĐÃ SỬA: KHÔNG HIỂN THỊ CẢ NGÀY CHO LÀM REMOTE VÀ ĐI MUỘN VỀ SỚM */}
+                                                {/* 🚀 LOGIC HIỂN THỊ CHUNG (Làm Remote, Nghỉ phép...): Cho phép hiện "Cả ngày" */}
+                                                {timeSlot && request?.type !== "DI_MUON_VE_SOM" && (
+                                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border bg-purple-50 text-purple-700 border-purple-200">
                                                         <Clock size={12} /> {timeSlot === 'FULL_DAY' ? 'Cả ngày' : timeSlot === 'MORNING' ? 'Nửa buổi sáng' : 'Nửa buổi chiều'}
+                                                    </span>
+                                                )}
+
+                                                {/* 🚀 LOGIC RIÊNG CHO ĐI MUỘN / VỀ SỚM: Bỏ hiển thị "Cả ngày" */}
+                                                {timeSlot && request?.type === "DI_MUON_VE_SOM" && timeSlot !== 'FULL_DAY' && (
+                                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border bg-purple-50 text-purple-700 border-purple-200">
+                                                        <Clock size={12} /> {timeSlot === 'MORNING' ? 'Nửa buổi sáng' : 'Nửa buổi chiều'}
                                                     </span>
                                                 )}
                                             </p>
@@ -292,27 +306,26 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
                                             {request.logs.map((log: any, index: number) => (
                                                 <div key={log.id} className="flex gap-3 relative">
                                                     <div className="flex flex-col items-center">
-                                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm z-10 ${
-                                                            log.action === 'REJECTED' ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
-                                                        }`}>
+                                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm z-10 ${log.action === 'REJECTED' ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                                                            }`}>
                                                             {log.action === 'REJECTED' ? <XOctagon size={16} /> : <CheckCircle size={16} />}
                                                         </div>
                                                         {index < request.logs.length - 1 && <div className="absolute top-8 bottom-[-16px] left-4 w-px bg-slate-200"></div>}
                                                     </div>
                                                     <div className="pb-2 flex-1">
                                                         <p className="text-sm font-bold text-slate-900 flex items-center flex-wrap gap-2">
-                                                            {log.approver?.fullName} 
+                                                            {log.approver?.fullName}
                                                             <span className="text-[10px] text-slate-400 font-medium bg-slate-100 px-2 py-0.5 rounded-full">
-                                                                {new Date(log.createdAt).toLocaleString('vi-VN', { hour: '2-digit', minute:'2-digit', day:'2-digit', month:'2-digit', year:'numeric' })}
+                                                                {new Date(log.createdAt).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' })}
                                                             </span>
                                                         </p>
-                                                        <p className="text-[11px] font-black mt-1 uppercase tracking-wide opacity-80" 
-                                                           style={{ color: log.action === 'REJECTED' ? '#dc2626' : '#059669' }}>
+                                                        <p className="text-[11px] font-black mt-1 uppercase tracking-wide opacity-80"
+                                                            style={{ color: log.action === 'REJECTED' ? '#dc2626' : '#059669' }}>
                                                             {log.action === 'APPROVED_LEVEL_1' && "Đã duyệt (Cấp 1)"}
                                                             {log.action === 'APPROVED_LEVEL_2' && "Đã chốt duyệt (Cấp 2)"}
                                                             {log.action === 'REJECTED' && "Đã từ chối"}
                                                         </p>
-                                                        
+
                                                         {log.comment && (
                                                             <div className="mt-2 bg-slate-50 p-3 rounded-xl border border-slate-100 text-sm text-slate-700 font-medium relative italic shadow-inner">
                                                                 <div className="absolute -top-1.5 left-4 w-3 h-3 bg-slate-50 border-t border-l border-slate-100 rotate-45"></div>
@@ -340,25 +353,25 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
                         {isMyTurnToApprove && (
                             <>
                                 <label className="block text-xs font-bold text-slate-700 mb-2">Lời phê / Phản hồi (Bắt buộc nếu từ chối) <span className="text-red-500">*</span></label>
-                                <textarea 
-                                    rows={2} 
+                                <textarea
+                                    rows={2}
                                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm outline-none focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 mb-4 resize-none transition-all"
                                     placeholder="Nhập ý kiến chỉ đạo vào đây..."
                                     value={comment}
                                     onChange={(e) => setComment(e.target.value)}
                                 />
                                 <div className="flex gap-3">
-                                    <button 
+                                    <button
                                         onClick={() => handleAction('REJECT')} disabled={isSubmitting}
                                         className="flex-1 flex justify-center items-center gap-2 bg-white border border-red-200 text-red-600 py-3 rounded-xl text-sm font-black hover:bg-red-50 transition-colors active:scale-95"
                                     >
                                         <XOctagon size={18} /> Từ chối
                                     </button>
-                                    <button 
+                                    <button
                                         onClick={() => handleAction('APPROVE')} disabled={isSubmitting}
                                         className="flex-[1.5] flex justify-center items-center gap-2 bg-emerald-600 text-white py-3 rounded-xl text-sm font-black hover:bg-emerald-700 shadow-xl shadow-emerald-600/20 transition-all active:scale-95"
                                     >
-                                        {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle size={18} />} 
+                                        {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle size={18} />}
                                         Phê duyệt
                                     </button>
                                 </div>
@@ -366,11 +379,11 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
                         )}
 
                         {canCancel && !isMyTurnToApprove && (
-                            <button 
+                            <button
                                 onClick={handleCancelRequest} disabled={isSubmitting}
                                 className="w-full flex justify-center items-center gap-2 bg-white border border-slate-200 text-slate-700 py-3 rounded-xl text-sm font-black hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors active:scale-95"
                             >
-                                {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={18} />} 
+                                {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={18} />}
                                 Hủy đề xuất này
                             </button>
                         )}
