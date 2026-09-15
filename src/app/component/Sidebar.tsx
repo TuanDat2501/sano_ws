@@ -15,7 +15,8 @@ import {
     ShieldCheck,
     FolderKanban,
     DollarSign,
-    TvMinimalPlay
+    TvMinimalPlay,
+    Settings
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -52,6 +53,7 @@ export default function Sidebar({ isSidebarOpen, setSidebarOpen }: SidebarProps)
         { name: "Báo cáo chiến lược", icon: <PieChart size={20} />, path: "/analytics", show: hasPermission("MENU_ANALYTICS") },
         // Riêng menu Phân quyền, fix cứng chỉ Admin cao nhất mới thấy để tránh rủi ro
         { name: "Phân quyền", icon: <ShieldCheck size={20} />, path: "/permissions", show: userRole === "ADMIN" || userRole === "BAN_GIAM_DOC" },
+         { name: "Cài đặt", icon: <Settings  size={20} />, path: "/settings", show: userRole === "ADMIN" || userRole === "BAN_GIAM_DOC" },
     ];
 
     return (
