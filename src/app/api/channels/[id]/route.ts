@@ -41,7 +41,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
         const session = await getServerSession(authOptions);
         if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-        // 🚀 BỔ SUNG: Kiểm tra quyền động từ mảng permissions
+        // Kiểm tra quyền động từ mảng permissions
         const currentUser = session.user as any;
         const hasPermission = currentUser.permissions?.includes("MENU_CHANNELS") || currentUser.role === "ADMIN";
 
@@ -55,6 +55,30 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
         
         const { name, link, topic, teamId, avatarUrl, status, monetization, category, members } = body;
 
+        // Xử lý dữ liệu members từ client (client gửi roleOnChannel là mảng)
+        // Ta cần bóc tách (flatten) mảng này ra thành nhiều object để insert vào db
+        const flatMembersToCreate: { userId: string; roleOnChannel: string }[] = [];
+        
+        if (Array.isArray(members)) {
+            members.forEach((m: any) => {
+                if (Array.isArray(m.roleOnChannel)) {
+                    // Nếu user có nhiều role, tạo nhiều dòng (mỗi dòng 1 role)
+                    m.roleOnChannel.forEach((role: string) => {
+                        flatMembersToCreate.push({
+                            userId: m.userId,
+                            roleOnChannel: role
+                        });
+                    });
+                } else if (typeof m.roleOnChannel === 'string') {
+                    // Xử lý dự phòng nếu client vẫn gửi string
+                    flatMembersToCreate.push({
+                        userId: m.userId,
+                        roleOnChannel: m.roleOnChannel
+                    });
+                }
+            });
+        }
+
         const updatedChannel = await prisma.channel.update({
             where: { id: channelId },
             data: {
@@ -67,11 +91,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
                 monetization,
                 category,
                 members: {
-                    deleteMany: {}, 
-                    create: members?.map((m: any) => ({
-                        userId: m.userId,
-                        roleOnChannel: m.roleOnChannel
-                    })) || [] 
+                    deleteMany: {}, // Xóa hết member cũ của kênh này[cite: 2]
+                    create: flatMembersToCreate // Insert các member mới (với nhiều role)
                 }
             }
         });

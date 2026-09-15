@@ -125,55 +125,70 @@ export async function GET(req: Request) {
             mappedLogs.forEach(log => {
                 if (!log.task) return;
 
-                let isKpiQualifying = false; 
                 const combinedText = String(log.details || "").toLowerCase();
-
-                let effectiveRole:string = user.role;
+                let effectiveRoles: string[] = [user.role];
+                
                 if (log.task.channelId && user.channelMemberships) {
-                    const channelRoleObj = user.channelMemberships.find((cm: any) => cm.channelId === log.task.channelId);
-                    if (channelRoleObj) {
-                        effectiveRole = channelRoleObj.roleOnChannel;
+                    const matchingMemberships = user.channelMemberships.filter((cm: any) => cm.channelId === log.task.channelId);
+                    if (matchingMemberships.length > 0) {
+                        effectiveRoles = matchingMemberships.map((cm: any) => cm.roleOnChannel);
                     }
                 }
 
-                if (combinedText.includes("gán thủ công")) {
+                // 1. 🚀 NHẬN DIỆN LOẠI CÔNG VIỆC DỰA TRÊN LOG
+                let jobCategory = "";
+                if (combinedText.includes("gán thủ công")) jobCategory = "MANUAL";
+                else if (combinedText.includes("kịch bản")) jobCategory = "CONTENT";
+                else if (combinedText.includes("prj thô") || combinedText.includes("link project") || combinedText.includes("audio") || combinedText.includes("âm thanh")) jobCategory = "EDIT";
+                else if (combinedText.includes("chuyển động")) jobCategory = "ANIMATION";
+                else if (combinedText.includes("video đã đăng") || combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) jobCategory = "PUBLISH";
+                else if (combinedText.includes("video render")) jobCategory = "RENDER";
+
+                // 2. 🚀 KIỂM TRA ROLE CÓ ĐƯỢC PHÉP NHẬN KPI CHO LOẠI VIỆC NÀY KHÔNG
+                let isKpiQualifying = false;
+                
+                if (jobCategory === "MANUAL") {
                     isKpiQualifying = true;
-                } else {
-                    switch (effectiveRole) {
-                        case "LEADER":
-                        case "PUBLISHER":
-                        case "CHANNEL_MANAGER":
-                            if (combinedText.includes("video render") || combinedText.includes("video đã đăng") || combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) isKpiQualifying = true;
-                            break;
-                        case "EDITOR":
-                            if (combinedText.includes("video render") || combinedText.includes("prj thô") || combinedText.includes("audio") || combinedText.includes("âm thanh") || combinedText.includes("link project")) isKpiQualifying = true;
-                            break;
-                        case "CONTENT":
-                            if (combinedText.includes("kịch bản") || combinedText.includes("chuyển động")) isKpiQualifying = true;
-                            break;
-                        case "ANIMATOR":
-                        case "ANIMATION":
-                            if (combinedText.includes("chuyển động")) isKpiQualifying = true;
-                            break;
-                        case "SEO":
-                            if (combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) isKpiQualifying = true;
-                            break;
-                        case "VOICE":
-                            if (combinedText.includes("audio") || combinedText.includes("âm thanh")) isKpiQualifying = true;
-                            break;
-                        default:
-                            isKpiQualifying = true;
+                } else if (jobCategory !== "") {
+                    for (const role of effectiveRoles) {
+                        if (isKpiQualifying) break;
+                        switch (role) {
+                            case "LEADER":
+                            case "CHANNEL_MANAGER":
+                                isKpiQualifying = true; // Quản lý được ăn KPI mọi khâu
+                                break;
+                            case "CONTENT":
+                                if (["CONTENT", "ANIMATION"].includes(jobCategory)) isKpiQualifying = true;
+                                break;
+                            case "EDITOR":
+                                if (["EDIT", "RENDER"].includes(jobCategory)) isKpiQualifying = true;
+                                break;
+                            case "ANIMATOR":
+                            case "ANIMATION":
+                                if (jobCategory === "ANIMATION") isKpiQualifying = true;
+                                break;
+                            case "PUBLISHER":
+                            case "SEO":
+                                if (["PUBLISH", "RENDER"].includes(jobCategory)) isKpiQualifying = true;
+                                break;
+                            case "VOICE":
+                                if (jobCategory === "EDIT") isKpiQualifying = true; 
+                                break;
+                        }
                     }
                 }
 
+                // 3. 🚀 ĐIỂM MẤU CHỐT: GHI NHẬN KPI BẰNG [ID TASK + LOẠI CÔNG VIỆC]
                 if (isKpiQualifying) {
-                    if (!uniqueTasks.has(log.taskId)) {
-                        uniqueTasks.set(log.taskId, log.task);
-                        log.isCounted = true; 
+                    // Ví dụ uniqueKey: "12345_CONTENT" và "12345_PUBLISH" (Tính 2 lần cho 1 task)
+                    const uniqueKey = `${log.taskId}_${jobCategory}`; 
+                    
+                    if (!uniqueTasks.has(uniqueKey)) {
+                        uniqueTasks.set(uniqueKey, log.task);
+                        log.isCounted = true;
                     }
                 }
             });
-
             const allUserLogs = [...mappedLogs].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
             
             const targetValue = kpiRecord?.targetValue || 0;

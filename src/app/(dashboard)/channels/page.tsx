@@ -79,13 +79,34 @@ export default function ChannelsPage() {
     const openDrawer = (channel: any = null) => {
         if (channel) {
             setEditingId(channel.id);
+
+            // 🚀 BỔ SUNG LOGIC GROUP ROLE: 
+            // Gom các dòng member trùng userId từ DB lại thành 1 object chứa mảng các role
+            const groupedMembers = (channel.members || []).reduce((acc: any[], curr: any) => {
+                const existing = acc.find(m => m.userId === curr.userId);
+                if (existing) {
+                    if (!existing.roleOnChannel.includes(curr.roleOnChannel)) {
+                        existing.roleOnChannel.push(curr.roleOnChannel);
+                    }
+                } else {
+                    acc.push({
+                        userId: curr.userId,
+                        roleOnChannel: [curr.roleOnChannel] // Khởi tạo thành mảng
+                    });
+                }
+                return acc;
+            }, []);
+
             setFormData({
-                name: channel.name, link: channel.link || "", topic: channel.topic || "", 
-                teamId: channel.teamId, avatarUrl: channel.avatarUrl || "",
-                status: channel.status, monetization: channel.monetization,
+                name: channel.name, 
+                link: channel.link || "", 
+                topic: channel.topic || "", 
+                teamId: channel.teamId, 
+                avatarUrl: channel.avatarUrl || "",
+                status: channel.status, 
+                monetization: channel.monetization,
                 category: channel.category || "TONG_HOP",
-                members: channel.members || [],
-                // 🚀 ĐÃ BỔ SUNG TRƯỜNG NÀY ĐỂ TRUYỀN DỮ LIỆU XUỐNG DRAWER
+                members: groupedMembers, // 🚀 Sử dụng data đã group
                 projects: channel.projects || [] 
             });
         } else {
@@ -95,7 +116,6 @@ export default function ChannelsPage() {
                 avatarUrl: "", status: "XAY_DUNG", monetization: "CHUA_DAT",
                 category: "TONG_HOP",
                 members: [],
-                // 🚀 TẠO MỚI THÌ CHO NÓ LÀ MẢNG RỖNG
                 projects: [] 
             });
         }

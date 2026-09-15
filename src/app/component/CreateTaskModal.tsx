@@ -157,21 +157,26 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
         } finally { setIsLoadingChannels(false); }
     };
 
-    // 🚀 LẤY USER VÀ KÈM CHANNEL MEMBERSHIPS
+    // 🚀 ĐÃ SỬA LẠI THEO YÊU CẦU: HIỂN THỊ TOÀN BỘ USER TRONG TEAM MẶC ĐỊNH
     const fetchUsers = async () => {
         setIsLoadingUsers(true);
         try {
-            // Cần API backend trả về cả mảng channelMemberships cho từng User
             const res = await fetch(`/api/users?teamId=${newTask.teamId}&includeMemberships=true`);
             const data = await res.json();
             const listUsers = Array.isArray(data.users) ? data.users : [];
             setRawTeamUsers(listUsers);
 
-            // Mặc định nạp dữ liệu theo Role gốc (Nếu chưa chọn Kênh)
-            setTeamContents(listUsers.filter((u: any) => ['CONTENT', 'LEADER'].includes(u.role)));
-            setTeamEditors(listUsers.filter((u: any) => ['EDITOR', 'LEADER'].includes(u.role)));
-            setTeamAnimators(listUsers.filter((u: any) => ['EDITOR', 'CONTENT', 'LEADER'].includes(u.role)));
-            setTeamPublishers(listUsers.filter((u: any) => ['PUBLISHER', 'LEADER'].includes(u.role)));
+            // Mặc định nạp dữ liệu toàn bộ Team (hoặc bạn có thể giữ nguyên bộ lọc Role cơ bản)
+            // Nếu bạn muốn dropdown HẾT LUÔN thì bỏ phần filter đi:
+            
+            // Cách 1: Vẫn chia Role nhưng lấy gốc (Như cũ)
+            // setTeamContents(listUsers.filter((u: any) => ['CONTENT', 'LEADER'].includes(u.role)));
+            
+            // Cách 2: SẾP YÊU CẦU HIỂN THỊ HẾT -> Lấy toàn bộ mảng User đưa vào Dropdown
+            setTeamContents(listUsers);
+            setTeamEditors(listUsers);
+            setTeamAnimators(listUsers);
+            setTeamPublishers(listUsers);
             
         } finally { setIsLoadingUsers(false); }
     };
@@ -182,7 +187,7 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
   }, [newTask.teamId, isOpen]);
 
   // 🚀 LOGIC ĐỘNG: LỌC LẠI DROPDOWN KHI CHỌN KÊNH
-  useEffect(() => {
+  /* useEffect(() => {
     if (!newTask.channelId || rawTeamUsers.length === 0) {
         // Nếu không có Kênh, đổ lại dữ liệu Role gốc
         setTeamContents(rawTeamUsers.filter((u: any) => ['CONTENT', 'LEADER'].includes(u.role)));
@@ -223,7 +228,7 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
     }, 150);
 
     return () => clearTimeout(timer);
-  }, [newTask.channelId, rawTeamUsers]);
+  }, [newTask.channelId, rawTeamUsers]); */
 
 
   useEffect(() => {

@@ -62,8 +62,6 @@ export async function POST(req: Request) {
         if (!session || !session.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
         const currentUser = session.user as any;
-        
-        // 🚀 ĐÃ SỬA: Đọc quyền động từ biến permissions thay vì fix cứng Role
         const hasPermission = currentUser.permissions?.includes("MENU_CHANNELS") || currentUser.role === "ADMIN";
 
         if (!hasPermission) {
@@ -71,25 +69,42 @@ export async function POST(req: Request) {
         }
 
         const body = await req.json();
-        
-        // Giải nén trường category ra từ JSON body
         const { name, link, topic, teamId, avatarUrl, status, monetization, category, members } = body;
+
+        // 🚀 BỔ SUNG: Làm phẳng dữ liệu member y hệt như hàm PUT để Prisma lưu được
+        const flatMembersToCreate: { userId: string; roleOnChannel: string }[] = [];
+        
+        if (Array.isArray(members)) {
+            members.forEach((m: any) => {
+                if (Array.isArray(m.roleOnChannel)) {
+                    m.roleOnChannel.forEach((role: string) => {
+                        flatMembersToCreate.push({
+                            userId: m.userId,
+                            roleOnChannel: role
+                        });
+                    });
+                } else if (typeof m.roleOnChannel === 'string') {
+                    flatMembersToCreate.push({
+                        userId: m.userId,
+                        roleOnChannel: m.roleOnChannel
+                    });
+                }
+            });
+        }
 
         const newChannel = await prisma.channel.create({
             data: {
                 name, link, topic, teamId, avatarUrl, status, monetization,
-                category: category || "TONG_HOP", // Thêm category vào bản ghi khi tạo (Fallback là TONG_HOP)
+                category: category || "TONG_HOP", 
                 members: {
-                    create: members?.map((m: any) => ({
-                        userId: m.userId,
-                        roleOnChannel: m.roleOnChannel
-                    })) || []
+                    create: flatMembersToCreate // 🚀 Dùng mảng đã làm phẳng để insert nhiều dòng
                 }
             }
         });
 
         return NextResponse.json({ success: true, channel: newChannel });
     } catch (error: any) {
+        console.error("LỖI CREATE CHANNEL:", error);
         if (error.code === 'P2002') return NextResponse.json({ error: "Tên kênh đã tồn tại!" }, { status: 400 });
         return NextResponse.json({ error: "Lỗi Server" }, { status: 500 });
     }

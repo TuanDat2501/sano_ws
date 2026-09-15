@@ -89,20 +89,36 @@ export default function ChannelFormDrawer({
         return allUsers.filter((u: any) => u.teamId === formData.teamId);
     }, [formData.teamId, allUsers]);
 
+    // HÀM MỚI: Toggle user vào danh sách
     const toggleMember = (userId: string) => {
         const currentMembers = [...(formData.members || [])];
         const index = currentMembers.findIndex(m => m.userId === userId);
 
-        if (index > -1) currentMembers.splice(index, 1);
-        else currentMembers.push({ userId, roleOnChannel: "EDITOR" });
+        if (index > -1) {
+            currentMembers.splice(index, 1);
+        } else {
+            currentMembers.push({ userId, roleOnChannel: ["EDITOR"] }); // Dùng mảng mặc định
+        }
         
         setFormData({ ...formData, members: currentMembers });
     };
 
-    const updateMemberRole = (userId: string, role: string) => {
-        const currentMembers = (formData.members || []).map((m: any) => 
-            m.userId === userId ? { ...m, roleOnChannel: role } : m
-        );
+    // HÀM MỚI: Toggle nhiều role cho một user
+    const toggleRole = (userId: string, role: string) => {
+        const currentMembers = (formData.members || []).map((m: any) => {
+            if (m.userId === userId) {
+                const currentRoles = Array.isArray(m.roleOnChannel) 
+                    ? m.roleOnChannel 
+                    : (m.roleOnChannel ? [m.roleOnChannel] : []);
+                
+                const newRoles = currentRoles.includes(role) 
+                    ? currentRoles.filter((r: string) => r !== role) 
+                    : [...currentRoles, role];
+                    
+                return { ...m, roleOnChannel: newRoles };
+            }
+            return m;
+        });
         setFormData({ ...formData, members: currentMembers });
     };
 
@@ -154,7 +170,6 @@ export default function ChannelFormDrawer({
                             </div>
                         </div>
 
-                        {/* 🚀 ĐÃ CẬP NHẬT: Lấy trực tiếp số lượng dự án từ mảng formData.projects */}
                         <div className="flex px-6 md:px-8 border-b border-slate-200 bg-white shrink-0 overflow-x-auto hide-scrollbar">
                             <button onClick={() => setActiveTab("tong-quan")} className={`px-5 py-4 text-sm font-bold border-b-2 transition-all whitespace-nowrap ${activeTab === "tong-quan" ? "border-red-600 text-red-600" : "border-transparent text-slate-500 hover:text-slate-700"}`}>Tổng quan</button>
                             <button onClick={() => setActiveTab("du-an")} className={`px-5 py-4 text-sm font-bold border-b-2 transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === "du-an" ? "border-red-600 text-red-600" : "border-transparent text-slate-500 hover:text-slate-700"}`}>Dự án (Series) <span className="bg-slate-100 text-slate-600 py-0.5 px-2 rounded-full text-[10px]">{formData.projects?.length || 0}</span></button>
@@ -188,7 +203,6 @@ export default function ChannelFormDrawer({
                                 </div>
                             )}
 
-                            {/* 🚀 ĐÃ CẬP NHẬT: Render trực tiếp mảng formData.projects */}
                             {activeTab === "du-an" && (
                                 <div className="animate-fade-in space-y-4">
                                     {(!formData.projects || formData.projects.length === 0) ? (
@@ -233,7 +247,14 @@ export default function ChannelFormDrawer({
                                                         {user?.avatarUrl ? <img src={user.avatarUrl} className="w-10 h-10 rounded-full object-cover" alt="" /> : <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-400">{user?.fullName?.charAt(0) || "?"}</div>}
                                                         <div>
                                                             <p className="font-bold text-slate-800">{user?.fullName || "Người dùng ẩn"}</p>
-                                                            <p className="text-[10px] text-red-600 bg-red-50 px-2 py-0.5 rounded w-max uppercase font-black tracking-widest mt-1">{m.roleOnChannel}</p>
+                                                            {/* HIỂN THỊ MẢNG ROLE */}
+                                                            <div className="flex flex-wrap gap-1.5 mt-1.5">
+                                                                {(Array.isArray(m.roleOnChannel) ? m.roleOnChannel : (m.roleOnChannel ? [m.roleOnChannel] : [])).map((role: string, idx: number) => (
+                                                                    <span key={idx} className="text-[10px] text-red-600 bg-red-50 px-2 py-0.5 rounded uppercase font-black tracking-widest">
+                                                                        {role}
+                                                                    </span>
+                                                                ))}
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -355,32 +376,57 @@ export default function ChannelFormDrawer({
                                                     const memberData = (formData.members || []).find((m: any) => m.userId === user.id);
 
                                                     return (
-                                                        <div key={user.id} className={`flex items-center justify-between p-3 rounded-xl border transition-all bg-white ${isSelected ? 'border-red-200 shadow-sm' : 'border-slate-100 opacity-70 hover:opacity-100 cursor-pointer'}`}  >
-                                                            <div className="flex items-center gap-3" style={{ cursor: 'pointer' }}>
-                                                                <button type="button" onClick={() => toggleMember(user.id)}  className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isSelected ? 'bg-red-600 text-white shadow-md shadow-red-600/20' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}>
-                                                                    {isSelected ? <UserCheck size={18}/> : <UserPlus size={18}/>}
-                                                                </button>
-                                                                <div>
-                                                                    <p className={`text-sm font-bold ${isSelected ? 'text-slate-900' : 'text-slate-600'}`}>{user.fullName}</p>
-                                                                    <p className="text-[10px] text-slate-400">{user.username}</p>
+                                                        <div key={user.id} className={`flex flex-col p-3 rounded-xl border transition-all bg-white ${isSelected ? 'border-red-200 shadow-sm' : 'border-slate-100 opacity-70 hover:opacity-100'}`}  >
+                                                            
+                                                            {/* VÙNG CLICK ĐỂ CHỌN NHÂN SỰ */}
+                                                            <div className="flex items-center justify-between cursor-pointer" onClick={() => toggleMember(user.id)}>
+                                                                <div className="flex items-center gap-3">
+                                                                    <button type="button" className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isSelected ? 'bg-red-600 text-white shadow-md shadow-red-600/20' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}>
+                                                                        {isSelected ? <UserCheck size={18}/> : <UserPlus size={18}/>}
+                                                                    </button>
+                                                                    <div>
+                                                                        <p className={`text-sm font-bold ${isSelected ? 'text-slate-900' : 'text-slate-600'}`}>{user.fullName}</p>
+                                                                        <p className="text-[10px] text-slate-400">{user.username}</p>
+                                                                    </div>
                                                                 </div>
                                                             </div>
 
+                                                            {/* GIAO DIỆN CHỌN NHIỀU ROLE */}
                                                             {isSelected && (
-                                                                <select 
-                                                                    value={memberData?.roleOnChannel} 
-                                                                    onChange={(e) => updateMemberRole(user.id, e.target.value)}
-                                                                    className="text-[10px] font-black uppercase bg-red-50 border-transparent text-red-600 px-3 py-2 rounded-lg outline-none focus:ring-2 focus:ring-red-100 transition-all cursor-pointer"
-                                                                >
-                                                                    <option value="CONTENT">Content / Kịch bản</option>
-                                                                    {formData.category === 'AI' && (
-                                                                        <option value="ANIMATION">Chuyển động (AI)</option>
-                                                                    )}
-                                                                    <option value="EDITOR">Editor / Dựng</option>
-                                                                    {/* <option value="SEO">SEO / Up Kênh</option> */}
-                                                                    <option value="VOICE">Voice / Thu âm</option>
-                                                                    <option value="PUBLISHER">Quản lý Kênh</option>
-                                                                </select>
+                                                                <div className="mt-3 pt-3 border-t border-slate-100 ml-[52px]">
+                                                                    <div className="flex flex-wrap gap-2">
+                                                                        {[
+                                                                            { id: "CONTENT", label: "Content" },
+                                                                            ...(formData.category === 'AI' ? [{ id: "ANIMATION", label: "Chuyển Động" }] : []),
+                                                                            { id: "EDITOR", label: "Editor" },
+                                                                            // { id: "VOICE", label: "Voice" },
+                                                                            { id: "PUBLISHER", label: "Quản lý" }
+                                                                        ].map(role => {
+                                                                            const userRoles = Array.isArray(memberData?.roleOnChannel) 
+                                                                                ? memberData.roleOnChannel 
+                                                                                : (memberData?.roleOnChannel ? [memberData.roleOnChannel] : []);
+                                                                            const isSelectedRole = userRoles.includes(role.id);
+                                                                            
+                                                                            return (
+                                                                                <button
+                                                                                    key={role.id}
+                                                                                    type="button"
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation(); 
+                                                                                        toggleRole(user.id, role.id);
+                                                                                    }}
+                                                                                    className={`text-[10px] font-black uppercase px-2.5 py-1.5 rounded-lg border transition-all ${
+                                                                                        isSelectedRole 
+                                                                                        ? 'bg-red-50 border-red-200 text-red-600 shadow-sm' 
+                                                                                        : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100'
+                                                                                    }`}
+                                                                                >
+                                                                                    {role.label}
+                                                                                </button>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                </div>
                                                             )}
                                                         </div>
                                                     );

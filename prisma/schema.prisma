@@ -552,6 +552,7 @@ model DailyRevenue {
 }
 
 model ChannelMember {
+  id              String   @id @default(uuid())
   channelId       String
   channel         Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
   
@@ -562,7 +563,7 @@ model ChannelMember {
 
   assignedAt      DateTime @default(now())
 
-  @@id([channelId, userId]) 
+  @@unique([channelId, userId, roleOnChannel])
 }
 
 model SystemSetting {
