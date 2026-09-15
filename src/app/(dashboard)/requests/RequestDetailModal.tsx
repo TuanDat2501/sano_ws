@@ -255,7 +255,7 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
                                             <p className="text-sm text-slate-900 font-black flex items-center gap-2">
                                                 {new Date(targetDate).toLocaleDateString('vi-VN')}
                                                 {time && <span className="text-red-600 bg-red-50 border border-red-100 px-2 py-0.5 rounded-md text-[11px]"><Clock size={12} className="inline mr-1 mb-0.5" />{time}</span>}
-                                                {/* 🚀 ĐÃ SỬA: KHÔNG HIỂN THỊ CẢ NGÀY CHO LÀM REMOTE VÀ ĐI MUỘN VỀ SỚM */}
+                                
                                                 {/* 🚀 LOGIC HIỂN THỊ CHUNG (Làm Remote, Nghỉ phép...): Cho phép hiện "Cả ngày" */}
                                                 {timeSlot && request?.type !== "DI_MUON_VE_SOM" && (
                                                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border bg-purple-50 text-purple-700 border-purple-200">
