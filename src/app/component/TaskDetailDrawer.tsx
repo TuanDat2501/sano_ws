@@ -558,7 +558,7 @@ export default function TaskDetailDrawer({
 
                     <div className="space-y-1.5 col-span-1 md:col-span-2 pt-2 border-t border-slate-200">
                       <div className="flex flex-col md:flex-row gap-4">
-                        <div className="flex-[2] space-y-1.5">
+                        <div className="flex-[2] space-y-1.5 min-w-0">
                             <label className="text-[10px] font-bold text-red-500 uppercase tracking-widest flex items-center justify-between">
                               <span className="flex items-center gap-1.5">
                                 Link Video Đã Đăng (YT)
