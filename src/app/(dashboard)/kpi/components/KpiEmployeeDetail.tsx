@@ -5,8 +5,41 @@ import { getProgressColor, InlineLoading } from "../utils";
 
 export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi: any, isLoading: boolean }) {
     
-    // 🚀 ĐÃ THÊM: Chỉ lọc ra những log được tính KPI (isCounted = true) để hiển thị lên UI
     const displayLogs = activeKpi?.logs?.filter((log: any) => log.isCounted) || [];
+
+    // 🚀 HÀM PHỤ TRỢ: Lấy tên nhãn Báo Cáo chi tiết
+    const getReportBadge = (log: any) => {
+        let badgeText = "BÁO CÁO";
+        let badgeColor = "bg-blue-50 text-blue-600 border-blue-200";
+
+        // Lấy từ jobCategory trước (dữ liệu mới)
+        if (log.jobCategory) {
+            switch (log.jobCategory) {
+                case 'CONTENT': badgeText = "BÁO CÁO: KỊCH BẢN"; badgeColor = "bg-orange-50 text-orange-600 border-orange-200"; break;
+                case 'EDIT': badgeText = "BÁO CÁO: DỰNG VIDEO"; badgeColor = "bg-blue-50 text-blue-600 border-blue-200"; break;
+                case 'ANIMATION': badgeText = "BÁO CÁO: CHUYỂN ĐỘNG"; badgeColor = "bg-purple-50 text-purple-600 border-purple-200"; break;
+                case 'PUBLISH': badgeText = "BÁO CÁO: UPLOAD (YT)"; badgeColor = "bg-rose-50 text-rose-600 border-rose-200"; break;
+                case 'MANUAL': badgeText = "BÁO CÁO: GÁN THỦ CÔNG"; badgeColor = "bg-emerald-50 text-emerald-600 border-emerald-200"; break;
+            }
+        } 
+        // Fallback xử lý chuỗi details (dữ liệu cũ)
+        else if (log.details) {
+            const detailText = String(log.details).toLowerCase();
+            if (detailText.includes("kịch bản") || detailText.includes("bố cục")) {
+                badgeText = "BÁO CÁO: KỊCH BẢN"; badgeColor = "bg-orange-50 text-orange-600 border-orange-200";
+            } else if (detailText.includes("prj thô") || detailText.includes("link project") || detailText.includes("audio") || detailText.includes("video render")) {
+                badgeText = "BÁO CÁO: DỰNG VIDEO"; badgeColor = "bg-blue-50 text-blue-600 border-blue-200";
+            } else if (detailText.includes("chuyển động")) {
+                badgeText = "BÁO CÁO: CHUYỂN ĐỘNG"; badgeColor = "bg-purple-50 text-purple-600 border-purple-200";
+            } else if (detailText.includes("đã đăng") || detailText.includes("thumbnail")) {
+                badgeText = "BÁO CÁO: UPLOAD (YT)"; badgeColor = "bg-rose-50 text-rose-600 border-rose-200";
+            } else if (detailText.includes("gán thủ công")) {
+                badgeText = "BÁO CÁO: GÁN THỦ CÔNG"; badgeColor = "bg-emerald-50 text-emerald-600 border-emerald-200";
+            }
+        }
+        
+        return { text: badgeText, color: badgeColor };
+    };
 
     return (
         <div className="flex flex-col lg:flex-row gap-4 md:gap-6 lg:gap-8 h-full min-h-0">
@@ -122,12 +155,14 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                                 {displayLogs.length === 0 ? (
                                     <p className="text-center text-slate-400 py-10 text-sm font-medium">Chưa có công việc hợp lệ.</p>
                                 ) : (
-                                    displayLogs.map((log: any) => (
+                                    displayLogs.map((log: any) => {
+                                        const badge = getReportBadge(log);
+                                        return (
                                         <div key={log.id} className="p-3.5 border border-slate-200 rounded-xl bg-white shadow-sm flex flex-col gap-2.5 relative overflow-hidden">
                                             <div className="absolute left-0 top-0 bottom-0 w-1 bg-green-500"></div>
                                             
                                             <div className="flex justify-between items-start pl-2">
-                                                <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 bg-slate-100 px-2 py-0.5 rounded">{log.typeStr}</span>
+                                                <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded border ${badge.color}`}>{badge.text}</span>
                                                 <span className="text-[10px] font-bold text-slate-400">{new Date(log.createdAt).toLocaleDateString('vi-VN')}</span>
                                             </div>
                                             
@@ -158,7 +193,7 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                                                 </span>
                                             </div>
                                         </div>
-                                    ))
+                                    )})
                                 )}
                             </div>
 
@@ -178,7 +213,9 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                                         {displayLogs.length === 0 ? (
                                             <tr><td colSpan={5} className="text-center py-12 text-slate-400 font-medium">Chưa có dữ liệu công việc hợp lệ.</td></tr>
                                         ) : (
-                                            displayLogs.map((log: any) => (
+                                            displayLogs.map((log: any) => {
+                                                const badge = getReportBadge(log);
+                                                return (
                                                 <tr key={log.id} className="hover:bg-slate-50 transition-colors">
                                                     <td className="px-5 py-4 text-center">
                                                         <div className="flex flex-col items-center justify-center">
@@ -189,7 +226,7 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                                                     
                                                     <td className="px-5 py-4">
                                                         <p className="font-bold text-sm truncate max-w-[220px] text-slate-800" title={log.task?.title}>{log.task?.title}</p>
-                                                        <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mt-1 bg-blue-50 w-fit px-2 py-0.5 rounded">{log.typeStr}</p>
+                                                        <p className={`text-[9px] font-black uppercase tracking-widest mt-1.5 px-2.5 py-0.5 rounded border w-fit shadow-sm ${badge.color}`}>{badge.text}</p>
                                                     </td>
 
                                                     <td className="px-5 py-4 font-bold text-slate-600 text-xs truncate max-w-[150px] opacity-80">
@@ -222,7 +259,7 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                                                         </span>
                                                     </td>
                                                 </tr>
-                                            ))
+                                            )})
                                         )}
                                     </tbody>
                                 </table>

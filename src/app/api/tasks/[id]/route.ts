@@ -146,7 +146,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             const logsToDelete: any[] = [];
 
             if (body.status && body.status !== oldTask.status) {
-                logsToCreate.push({ action: "UPDATE_STATUS", details: `Từ [${oldTask.status}] sang [${body.status}]`, taskId, userId });
+                logsToCreate.push({ action: "UPDATE_STATUS", details: "`Từ [${oldTask.status}] sang [${body.status}]`", taskId, userId });
             }
 
             // 🚀 BƯỚC 2: CHECK PHÂN CÔNG THỰC TẾ CỦA CHÍNH NGƯỜI ĐANG THAO TÁC

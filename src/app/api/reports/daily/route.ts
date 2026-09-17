@@ -67,7 +67,8 @@ export async function GET(request: Request) {
                         publishLink: true,
                         linkProject: true, 
                         roughProjectLink: true,
-                        animationLink: true
+                        animationLink: true,
+                        channel: { select: { name: true } }
                     }
                 }
             },
@@ -79,12 +80,12 @@ export async function GET(request: Request) {
         // 3. Xử lý và phân cụm dữ liệu theo Từng User -> Từng Ngày
         const reportData = productionUsers.map(user => {
             const userLogs = dailyLogs.filter(log => log.userId === user.id);
-            const dailyReports: Record<string, { hasReported: boolean, links: { name: string, url: string }[] }> = {};
+            // 🚀 BỔ SUNG: Khai báo thêm taskId trong object lưu trữ
+            const dailyReports: Record<string, { hasReported: boolean, links: { name: string, url: string, channelName: string, taskId: string }[] }> = {};
             
             userLogs.forEach(log => {
                 const detail = log.details || "";
                 
-                // 🚀 CHẶN BÁO CÁO ẢO: Bỏ qua các log "Đã gỡ/xóa" link
                 if (detail.includes("gỡ/xóa")) return;
 
                 const offset = log.createdAt.getTimezoneOffset() * 60000;
@@ -98,7 +99,8 @@ export async function GET(request: Request) {
                 const t = log.task;
                 if (!t) return;
 
-                // 🚀 TỐI ƯU HIỂN THỊ LINK & CÓ BẢO HIỂM TRỞ VỀ TASK NẾU LINK RỖNG
+                const channelName = t.channel?.name || "Chưa chọn kênh";
+
                 if (log.action === 'DAILY_REPORT' || log.action === 'UPDATE_LINK') {
                     let linkName = "";
                     let linkUrl:any = "";
@@ -115,14 +117,14 @@ export async function GET(request: Request) {
                     else if (detail.includes("Đã Đăng")) { linkName = `[Đã đăng] ${t.title}`; linkUrl = t.publishLink; }
                     else if (detail.includes("trạng thái") || detail.includes("ghi chú")) { linkName = `[Ghi chú] ${t.title}`; linkUrl = `/tasks?taskId=${t.id}`; }
                     else if (detail.includes("Nguồn")) { linkName = `[Nguồn] ${t.title}`; linkUrl = t.linkContent; }
-                    else { linkName = `[Cập nhật] ${t.title}`; linkUrl = `/tasks?taskId=${t.id}`; } // Gom các trường hợp ngoại lệ
+                    else { linkName = `[Cập nhật] ${t.title}`; linkUrl = `/tasks?taskId=${t.id}`; } 
 
-                    // Lớp bảo hiểm: Nếu không tìm thấy URL thực tế, gán url về chi tiết task
                     if (!linkUrl || linkUrl.trim() === "") {
                         linkUrl = `/tasks?taskId=${t.id}`;
                     }
 
-                    dailyReports[dateKey].links.push({ name: linkName, url: linkUrl });
+                    // 🚀 LƯU THÊM ID CỦA TASK
+                    dailyReports[dateKey].links.push({ name: linkName, url: linkUrl, channelName, taskId: t.id });
                 } else {
                     let linkName = "";
                     let linkUrl:any = "";
@@ -133,12 +135,12 @@ export async function GET(request: Request) {
 
                     if (linkName) {
                         if (!linkUrl || linkUrl.trim() === "") linkUrl = `/tasks?taskId=${t.id}`;
-                        dailyReports[dateKey].links.push({ name: linkName, url: linkUrl });
+                        // 🚀 LƯU THÊM ID CỦA TASK
+                        dailyReports[dateKey].links.push({ name: linkName, url: linkUrl, channelName, taskId: t.id });
                     }
                 }
             });
 
-            // Lọc trùng lặp Link trong từng ngày
             Object.keys(dailyReports).forEach(dateKey => {
                 const uniqueLinks = Array.from(new Set(dailyReports[dateKey].links.map(l => JSON.stringify(l)))).map(l => JSON.parse(l));
                 dailyReports[dateKey].links = uniqueLinks;

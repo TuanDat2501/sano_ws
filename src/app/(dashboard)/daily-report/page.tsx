@@ -2,13 +2,13 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useSession } from "next-auth/react";
-import { AlertCircle, Check, Loader2, Calendar, FileBarChart, ExternalLink, Users, Search, Filter, ChevronLeft, ChevronRight, X, Download } from "lucide-react";
+import { CheckCircle2, Loader2, Calendar, FileBarChart, ExternalLink, Search, Filter, ChevronLeft, ChevronRight, X, Download, Tv } from "lucide-react";
 import PermissionGuard from "@/app/component/PermissionGuard";
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 import { useToast } from "@/app/component/ToastProvider";
+import { createPortal } from "react-dom";
 
-// Hàm helper lấy danh sách ngày trong tháng
 const getDaysOfMonth = (currentDate: Date) => {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
@@ -18,13 +18,19 @@ const getDaysOfMonth = (currentDate: Date) => {
 
 const getBadgeColor = (type: string) => {
     const t = type.toLowerCase();
-    if (t.includes('kịch bản') || t.includes('eng')) return 'bg-orange-100 text-orange-700 border-orange-200';
-    if (t.includes('video')) return 'bg-purple-100 text-purple-700 border-purple-200';
-    if (t.includes('audio')) return 'bg-cyan-100 text-cyan-700 border-cyan-200';
-    if (t.includes('bố cục') || t.includes('thumb')) return 'bg-blue-100 text-blue-700 border-blue-200';
-    if (t.includes('đã đăng')) return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-    if (t.includes('ghi chú')) return 'bg-slate-100 text-slate-700 border-slate-200';
-    return 'bg-violet-100 text-purple-700 border-violet-200'; // Default
+    if (t.includes('kịch bản') || t.includes('bố cục')) return 'bg-orange-50 text-orange-600 border-orange-200';
+    if (t.includes('video') || t.includes('prj') || t.includes('audio') || t.includes('eng')) return 'bg-blue-50 text-blue-600 border-blue-200';
+    if (t.includes('chuyển động')) return 'bg-purple-50 text-purple-600 border-purple-200';
+    if (t.includes('đã đăng') || t.includes('thumb')) return 'bg-rose-50 text-rose-600 border-rose-200';
+    if (t.includes('thủ công')) return 'bg-emerald-50 text-emerald-600 border-emerald-200';
+    return 'bg-slate-50 text-slate-600 border-slate-200'; 
+};
+
+const getValidUrl = (url: string) => {
+    if (!url) return "#";
+    if (url.startsWith("/")) return url;
+    if (!/^https?:\/\//i.test(url)) return `https://${url}`;
+    return url;
 };
 
 export default function DailyReportPage() {
@@ -32,24 +38,26 @@ export default function DailyReportPage() {
     const { showToast } = useToast();
     const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-    // ================= STATES: THỜI GIAN =================
+    const [isMounted, setIsMounted] = useState(false);
+
     const [currentMonthDate, setCurrentMonthDate] = useState(new Date());
     const tableDays = useMemo(() => getDaysOfMonth(currentMonthDate), [currentMonthDate]);
     const tableStartDateStr = tableDays[0].toISOString().split('T')[0];
     const tableEndDateStr = tableDays[tableDays.length - 1].toISOString().split('T')[0];
 
-    // ================= STATES: DATA & BỘ LỌC =================
     const [usersData, setUsersData] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isExporting, setIsExporting] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
     const [filterTeam, setFilterTeam] = useState("ALL");
     
-    // ================= STATES: UI TƯƠNG TÁC =================
     const [focusedCol, setFocusedCol] = useState<number | null>(null);
     const [selectedCell, setSelectedCell] = useState<{ user: any, date: Date, links: any[] } | null>(null);
 
-    // Tự động cuộn đến ngày hôm nay khi load
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
+
     useEffect(() => {
         const todayObj = new Date();
         todayObj.setHours(12, 0, 0, 0);
@@ -64,7 +72,6 @@ export default function DailyReportPage() {
         }
     }, [tableDays]);
 
-    // Gọi API lấy dữ liệu cả tháng
     useEffect(() => {
         if (status === "loading") return;
 
@@ -89,13 +96,11 @@ export default function DailyReportPage() {
         setCurrentMonthDate(newDate);
     };
 
-    // Lọc danh sách Team
     const uniqueTeams = useMemo(() => {
         const teams = new Set(usersData.map(r => r.teamName || r.team?.name));
         return Array.from(teams).filter(Boolean).sort() as string[];
     }, [usersData]);
 
-    // Xử lý Lọc Nhân sự & Nhóm theo Team
     const filteredUsers = useMemo(() => {
         let result = [...usersData];
 
@@ -114,7 +119,6 @@ export default function DailyReportPage() {
         });
     }, [usersData, searchTerm, filterTeam]);
 
-    // Tính tổng số đã nộp / thiếu theo từng ngày
     const dailyStats = useMemo(() => {
         const stats: Record<string, { reported: number, missing: number }> = {};
         tableDays.forEach(day => {
@@ -141,7 +145,6 @@ export default function DailyReportPage() {
     let currentTeamForRender = "";
     const weekDays = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
 
-    // Xuất Excel theo format Grid hiện tại
     const handleExportExcel = async () => {
         if (filteredUsers.length === 0) {
             showToast("error", "Không có dữ liệu để xuất!");
@@ -153,7 +156,6 @@ export default function DailyReportPage() {
             const workbook = new ExcelJS.Workbook();
             const worksheet = workbook.addWorksheet('Báo Cáo Bảng Lưới');
 
-            // Cấu hình cột
             const cols = [
                 { header: 'Team', key: 'team', width: 15 },
                 { header: 'STT', key: 'stt', width: 5 },
@@ -166,7 +168,6 @@ export default function DailyReportPage() {
             });
             worksheet.columns = cols;
 
-            // Đổ màu Header
             worksheet.getRow(1).eachCell(cell => {
                 cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
                 cell.font = { bold: true };
@@ -190,13 +191,16 @@ export default function DailyReportPage() {
                 tableDays.forEach(day => {
                     const dateKey = day.toISOString().split('T')[0];
                     const dayData = user.dailyReports?.[dateKey];
-                    // 🚀 SỬA TRONG EXCEL: Xuất số lượng bài thay vì ✓ ✗
-                    rowData[`d_${dateKey}`] = dayData?.hasReported ? (dayData.links?.length || 1) : '-';
+                    
+                    // 🚀 CẬP NHẬT EXCEL: Đếm số lượng TASK duy nhất
+                    const uniqueTaskCount = dayData?.links ? new Set(dayData.links.map((l: any) => l.taskId)).size : 0;
+                    const countToExport = uniqueTaskCount > 0 ? uniqueTaskCount : (dayData?.hasReported ? 1 : 0);
+                    
+                    rowData[`d_${dateKey}`] = dayData?.hasReported ? countToExport : '-';
                 });
 
                 worksheet.addRow(rowData);
 
-                // Gộp cột Team
                 if (idx === 0) {
                     currentTeamStr = tName;
                     startRowMerge = currentRow;
@@ -215,7 +219,6 @@ export default function DailyReportPage() {
                 }
             });
 
-            // Format body rows (Border + Color)
             worksheet.eachRow((row, rowNumber) => {
                 if (rowNumber > 1) {
                     row.eachCell((cell, colNumber) => {
@@ -223,14 +226,13 @@ export default function DailyReportPage() {
                         cell.alignment = { vertical: 'middle', horizontal: colNumber > 3 ? 'center' : 'left' };
                         
                         if (colNumber > 3) {
-                            if (cell.value !== '-' && Number(cell.value) > 0) cell.font = { color: { argb: 'FF10B981' }, bold: true }; // Xanh
-                            else cell.font = { color: { argb: 'FF94A3B8' }, bold: true }; // Xám
+                            if (cell.value !== '-' && Number(cell.value) > 0) cell.font = { color: { argb: 'FF10B981' }, bold: true }; 
+                            else cell.font = { color: { argb: 'FF94A3B8' }, bold: true }; 
                         }
                     });
                 }
             });
 
-            // Bổ sung các hàng Footer tính tổng
             const reportedRow: any = { team: 'TỔNG ĐÃ NỘP', stt: '', name: '' };
             const missingRow: any = { team: 'TỔNG THIẾU', stt: '', name: '' };
 
@@ -249,7 +251,7 @@ export default function DailyReportPage() {
             [rRow, mRow].forEach((row, idx) => {
                 row.eachCell((cell, colNum) => {
                     cell.font = { bold: true, color: colNum > 3 ? (idx === 0 ? { argb: 'FF10B981' } : { argb: 'FFEF4444' }) : { argb: 'FFFFFFFF' } };
-                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } }; // Nền tối
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } }; 
                     cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
                     if (colNum <= 3) cell.alignment = { horizontal: 'center', vertical: 'middle' };
                 });
@@ -272,7 +274,6 @@ export default function DailyReportPage() {
         <PermissionGuard moduleId="MENU_DAILY_REPORT">
             <div className="h-full max-h-[calc(100vh-60px)] flex flex-col p-2 md:p-4 bg-slate-50 overflow-hidden animate-fade-in gap-3 md:gap-4 relative">
                 
-                {/* ================= HEADER & TOOLBAR ================= */}
                 <div className="shrink-0 flex flex-col lg:flex-row justify-between items-start lg:items-center bg-white p-2.5 md:p-3 rounded-xl border border-slate-200 gap-3 shadow-sm z-10">
                     <div>
                         <h1 className="text-base md:text-lg font-black text-slate-900 flex items-center gap-1.5">
@@ -326,7 +327,6 @@ export default function DailyReportPage() {
                     </div>
                 </div>
 
-                {/* ================= BẢNG DỮ LIỆU (GRID) ================= */}
                 <div ref={scrollContainerRef} className="flex-1 overflow-auto custom-scrollbar relative bg-white border border-slate-200 rounded-xl shadow-sm">
                     {isLoading && (
                         <div className="absolute inset-0 bg-white/60 z-[100] flex flex-col items-center justify-center backdrop-blur-[1px]">
@@ -406,8 +406,10 @@ export default function DailyReportPage() {
                                                 const dateKey = day.toISOString().split('T')[0];
                                                 const dayData = user.dailyReports?.[dateKey]; 
                                                 const hasReported = dayData?.hasReported;
-                                                // Đếm tổng số bài đã nộp (hoặc mặc định là 1 nếu báo cáo nhưng ko đính link)
-                                                const count = dayData?.links?.length || (hasReported ? 1 : 0);
+                                                
+                                                // 🚀 LOGIC MỚI: Đếm số lượng TASK duy nhất thay vì đếm mảng link
+                                                const uniqueTaskCount = dayData?.links ? new Set(dayData.links.map((l: any) => l.taskId)).size : 0;
+                                                const countToDisplay = uniqueTaskCount > 0 ? uniqueTaskCount : (hasReported ? 1 : 0);
 
                                                 return (
                                                     <td 
@@ -416,14 +418,13 @@ export default function DailyReportPage() {
                                                         onMouseEnter={() => setFocusedCol(idx)}
                                                         onMouseLeave={() => setFocusedCol(null)}
                                                     >
-                                                        {/* 🚀 HIỂN THỊ SỐ LƯỢNG BÀI ĐÃ NỘP */}
                                                         {hasReported ? (
                                                             <button 
                                                                 onClick={() => setSelectedCell({ user, date: day, links: dayData.links || [] })}
                                                                 className="w-5 h-5 md:w-6 md:h-6 mx-auto bg-violet-100 rounded flex items-center justify-center cursor-pointer hover:bg-violet-200 hover:scale-110 transition-all shadow-sm border border-violet-200 group/btn relative"
                                                                 title="Xem chi tiết báo cáo"
                                                             >
-                                                                <span className="text-violet-700 font-black text-[10px] md:text-xs leading-none mt-px">{count}</span>
+                                                                <span className="text-violet-700 font-black text-[10px] md:text-xs leading-none mt-px">{countToDisplay}</span>
                                                             </button>
                                                         ) : (
                                                             <div className="w-5 h-5 md:w-6 md:h-6 mx-auto bg-slate-50 rounded flex items-center justify-center border border-slate-100 opacity-50">
@@ -467,33 +468,46 @@ export default function DailyReportPage() {
                     </table>
                 </div>
 
-                {/* ================= MODAL HIỂN THỊ CHI TIẾT LINK BÁO CÁO CỦA NGÀY ================= */}
-                {selectedCell && (
-                    <div className="fixed inset-0 z-[999] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-fade-in">
-                        <div className="bg-white rounded-[24px] shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden flex flex-col animate-scale-up">
-                            
-                            {/* 🚀 ĐÃ SỬA: HEADER CỦA BOX HIỂN THỊ */}
-                            <div className="p-5 border-b border-slate-100 flex justify-between items-start bg-slate-50/50 relative">
+                {isMounted && selectedCell && createPortal(
+                    <div 
+                        className="fixed inset-0 z-[999999] flex items-center justify-center bg-slate-900/60 backdrop-blur-[2px] p-4 animate-fade-in"
+                        onClick={() => setSelectedCell(null)}
+                    >
+                        <div 
+                            className="bg-white rounded-[24px] shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden flex flex-col animate-scale-in"
+                            onClick={(e) => e.stopPropagation()} 
+                        >
+                            {/* HEADER */}
+                            <div className="p-5 md:p-6 border-b border-slate-100 flex justify-between items-start bg-white relative">
                                 <div>
                                     <h2 className="text-lg md:text-xl font-black text-slate-800 flex items-center gap-2">
-                                        <Check className="text-emerald-500 w-5 h-5 md:w-6 md:h-6" strokeWidth={3} /> Chi Tiết Báo Cáo
+                                        <CheckCircle2 className="text-emerald-500 w-6 h-6" strokeWidth={2.5} /> Chi Tiết Báo Cáo
                                     </h2>
-                                    <p className="text-xs md:text-sm font-medium text-slate-500 mt-1">
-                                        Nhân sự: <strong className="text-blue-600">{selectedCell.user.fullName}</strong> <span className="mx-1">•</span> Ngày: <strong className="text-slate-700">{selectedCell.date.toLocaleDateString('vi-VN')}</strong>
-                                    </p>
+                                    <div className="flex items-center gap-2 mt-2 flex-wrap">
+                                        <span className="text-[11px] md:text-xs font-bold text-blue-700 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-100 flex items-center gap-1">
+                                            {selectedCell.user.fullName}
+                                        </span>
+                                        <span className="text-[11px] md:text-xs font-bold text-slate-600 bg-slate-50 px-2.5 py-1 rounded-md border border-slate-200 flex items-center gap-1.5">
+                                            <Calendar size={12} /> {selectedCell.date.toLocaleDateString('vi-VN')}
+                                        </span>
+                                    </div>
                                 </div>
-                                <button onClick={() => setSelectedCell(null)} className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-xl transition-colors shadow-sm">
-                                    <X size={18} />
+                                <button 
+                                    onClick={() => setSelectedCell(null)} 
+                                    className="p-2 bg-slate-50 hover:bg-slate-200 text-slate-500 rounded-xl transition-all shadow-sm active:scale-95"
+                                >
+                                    <X size={18} strokeWidth={2.5} />
                                 </button>
                             </div>
 
-                            <div className="p-5 max-h-[60vh] overflow-y-auto custom-scrollbar bg-white">
+                            {/* BODY LƯỚI DANH SÁCH */}
+                            <div className="p-5 md:p-6 max-h-[65vh] overflow-y-auto custom-scrollbar bg-slate-50/50">
                                 {selectedCell.links.length === 0 ? (
-                                    <div className="text-center p-6 text-slate-400 italic text-sm border-2 border-dashed border-slate-100 rounded-2xl">
-                                        Có đánh dấu báo cáo nhưng không đính kèm Link công việc nào.
+                                    <div className="text-center p-8 bg-white border border-slate-200 rounded-2xl shadow-sm">
+                                        <p className="text-slate-400 italic text-sm font-medium">Có đánh dấu báo cáo nhưng không đính kèm Link công việc nào.</p>
                                     </div>
                                 ) : (
-                                    <div className="flex flex-col gap-3">
+                                    <div className="flex flex-col gap-3.5">
                                         {selectedCell.links.map((link: any, idx: number) => {
                                             const match = link.name.match(/^\[(.*?)\]\s*(.*)$/);
                                             const type = match ? match[1] : 'Link';
@@ -503,21 +517,31 @@ export default function DailyReportPage() {
                                             return (
                                                 <a 
                                                     key={idx} 
-                                                    href={link.url} 
+                                                    href={getValidUrl(link.url)} 
                                                     target="_blank" 
                                                     rel="noreferrer"
-                                                    // 🚀 ĐÃ SỬA: DESIGN TỪNG DÒNG GIỐNG VỚI MẪU CỦA SẾP
-                                                    className="flex items-center gap-3 bg-white border border-slate-200 rounded-xl p-2 md:p-3 shadow-sm hover:shadow-md hover:border-violet-300 transition-all group overflow-hidden"
+                                                    className="flex flex-col sm:flex-row sm:items-center gap-3 md:gap-4 bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 shadow-sm hover:shadow-md hover:border-blue-400 hover:ring-2 hover:ring-blue-500/10 transition-all group relative overflow-hidden"
                                                     title={link.url}
                                                 >
-                                                    <span className={`px-2 md:px-3 py-1.5 md:py-2 text-[10px] md:text-xs font-black uppercase tracking-wider rounded-lg shrink-0 ${badgeStyle}`}>
-                                                        {type}
-                                                    </span>
-                                                    <span className="text-xs md:text-sm font-bold text-slate-700 group-hover:text-violet-700 truncate flex-1 leading-snug">
-                                                        {idx + 1}. {title}
-                                                    </span>
-                                                    <div className="px-2 opacity-30 group-hover:opacity-100 transition-opacity">
-                                                        <ExternalLink size={16} className="text-blue-500" />
+                                                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                                    
+                                                    <div className="flex items-start sm:items-center gap-3 sm:gap-4 flex-1 min-w-0">
+                                                        <span className={`px-2.5 py-1 text-[10px] md:text-[11px] font-black uppercase tracking-widest rounded-lg shrink-0 w-24 text-center shadow-sm ${badgeStyle}`}>
+                                                            {type}
+                                                        </span>
+                                                        
+                                                        <div className="flex flex-col gap-1 min-w-0 flex-1">
+                                                            <span className="text-sm font-bold text-slate-800 group-hover:text-blue-600 truncate leading-snug">
+                                                                {idx + 1}. {title}
+                                                            </span>
+                                                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5 opacity-80">
+                                                                <Tv size={12} className="text-slate-400" /> {link.channelName || "Chưa gắn kênh"}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <div className="px-2 opacity-30 group-hover:opacity-100 transition-opacity shrink-0 hidden sm:block">
+                                                        <ExternalLink size={18} className="text-blue-500" />
                                                     </div>
                                                 </a>
                                             );
@@ -526,7 +550,8 @@ export default function DailyReportPage() {
                                 )}
                             </div>
                         </div>
-                    </div>
+                    </div>,
+                    document.body
                 )}
             </div>
         </PermissionGuard>
