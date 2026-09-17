@@ -19,7 +19,6 @@ export async function GET(request: Request) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
         
-        // 🚀 ĐÃ SỬA: Hứng tham số startDate và endDate từ Frontend gửi lên
         const { searchParams } = new URL(request.url);
         const startDateParam = searchParams.get("startDate");
         const endDateParam = searchParams.get("endDate");
@@ -45,7 +44,7 @@ export async function GET(request: Request) {
             }
         });
 
-        // 2. Lấy toàn bộ Log báo cáo trong dải thời gian (cả tháng)
+        // 2. Lấy toàn bộ Log báo cáo trong dải thời gian
         const dailyLogs = await prisma.taskLog.findMany({
             where: {
                 createdAt: { gte: startDate, lte: endDate },
@@ -79,19 +78,14 @@ export async function GET(request: Request) {
 
         // 3. Xử lý và phân cụm dữ liệu theo Từng User -> Từng Ngày
         const reportData = productionUsers.map(user => {
-            // Lọc log của riêng User này
             const userLogs = dailyLogs.filter(log => log.userId === user.id);
-            
-            // Object lưu trữ báo cáo theo từng ngày "YYYY-MM-DD"
             const dailyReports: Record<string, { hasReported: boolean, links: { name: string, url: string }[] }> = {};
             
             userLogs.forEach(log => {
-                // Xác định ngày của Log (Đồng bộ theo Local Timezone để tránh lệch ngày)
                 const offset = log.createdAt.getTimezoneOffset() * 60000;
                 const localISOTime = new Date(log.createdAt.getTime() - offset).toISOString().split('T')[0];
                 const dateKey = localISOTime;
 
-                // Nếu ngày này chưa có data thì khởi tạo
                 if (!dailyReports[dateKey]) {
                     dailyReports[dateKey] = { hasReported: true, links: [] };
                 }
@@ -99,8 +93,8 @@ export async function GET(request: Request) {
                 const t = log.task;
                 if (!t) return;
 
-                // Phân tích nội dung Link đưa vào mảng của ngày tương ứng
-                if (log.action === 'DAILY_REPORT') {
+                // 🚀 TỐI ƯU GỘP ACTION VÀ ĐỒNG BỘ TEXT MATCHING TỪ API UPDATE TASK
+                if (log.action === 'DAILY_REPORT' || log.action === 'UPDATE_LINK') {
                     const detail = log.details || "";
                     if (detail.includes("Kịch Bản") && t.scriptLink) dailyReports[dateKey].links.push({ name: `[Kịch bản] ${t.title}`, url: t.scriptLink });
                     else if (detail.includes("Text ENG") && t.englishScriptLink) dailyReports[dateKey].links.push({ name: `[Text ENG] ${t.title}`, url: t.englishScriptLink });
@@ -108,15 +102,14 @@ export async function GET(request: Request) {
                     else if (detail.includes("Bố Cục") && t.storyboardLink) dailyReports[dateKey].links.push({ name: `[Bố cục] ${t.title}`, url: t.storyboardLink });
                     else if (detail.includes("Thumbnail") && t.thumbnailLink) dailyReports[dateKey].links.push({ name: `[Thumb] ${t.title}`, url: t.thumbnailLink });
                     else if (detail.includes("Video Render") && t.videoLink) dailyReports[dateKey].links.push({ name: `[Video] ${t.title}`, url: t.videoLink });
-                    else if (detail.includes("Dựng Chính") && t.linkProject) dailyReports[dateKey].links.push({ name: `[PRJ Chính] ${t.title}`, url: t.linkProject });
+                    else if ((detail.includes("Dựng Chính") || detail.includes("Project")) && t.linkProject) dailyReports[dateKey].links.push({ name: `[PRJ Chính] ${t.title}`, url: t.linkProject });
                     else if (detail.includes("PRJ Thô") && t.roughProjectLink) dailyReports[dateKey].links.push({ name: `[PRJ Thô] ${t.title}`, url: t.roughProjectLink });
                     else if (detail.includes("Chuyển Động") && t.animationLink) dailyReports[dateKey].links.push({ name: `[Chuyển động] ${t.title}`, url: t.animationLink });
                     else if (detail.includes("Đã Đăng") && t.publishLink) dailyReports[dateKey].links.push({ name: `[Đã đăng] ${t.title}`, url: t.publishLink });
-                    else if (detail.includes("trạng thái")) {
-                        dailyReports[dateKey].links.push({ name: `[Ghi chú] ${t.title}`, url: `/tasks?taskId=${t.id}` });
-                    }
+                    else if (detail.includes("trạng thái")) dailyReports[dateKey].links.push({ name: `[Ghi chú] ${t.title}`, url: `/tasks?taskId=${t.id}` });
+                    else if (detail.includes("Nguồn") && t.linkContent) dailyReports[dateKey].links.push({ name: `[Nguồn] ${t.title}`, url: t.linkContent });
                 } else {
-                    if (log.action === 'UPDATE_LINK' && t.linkContent) dailyReports[dateKey].links.push({ name: `[Nguồn] ${t.title}`, url: t.linkContent });
+                    // Fallback tương thích với các log sinh ra từ mã nguồn quá khứ
                     if (log.action === 'SUBMIT_SCRIPT' && t.scriptLink) dailyReports[dateKey].links.push({ name: `[Kịch bản] ${t.title}`, url: t.scriptLink });
                     if (log.action === 'SUBMIT_VIDEO' && t.videoLink) dailyReports[dateKey].links.push({ name: `[Video] ${t.title}`, url: t.videoLink });
                     if (log.action === 'PUBLISH_VIDEO' && t.publishLink) dailyReports[dateKey].links.push({ name: `[Đã đăng] ${t.title}`, url: t.publishLink });
@@ -135,7 +128,7 @@ export async function GET(request: Request) {
                 role: user.role,
                 teamName: user.team?.name || "N/A",
                 avatarUrl: user.avatarUrl,
-                dailyReports: dailyReports // 🚀 Bổ sung object chứa tiến độ báo cáo hằng ngày
+                dailyReports: dailyReports
             };
         });
 

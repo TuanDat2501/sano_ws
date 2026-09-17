@@ -90,6 +90,7 @@ export async function GET(req: Request) {
                     id: true,
                     action: true,
                     details: true,
+                    jobCategory: true, // 🚀 BỔ SUNG: Gọi nhãn nghiệp vụ từ Database
                     createdAt: true,
                     taskId: true,
                     userId: true,
@@ -108,7 +109,6 @@ export async function GET(req: Request) {
             const rawUserLogs = allLogs.filter(l => l.userId === user.id);
             const validUserLogs: typeof rawUserLogs = [];
             
-            // 🚀 ĐÃ SỬA: Loại bỏ dailyReportTracker. Lấy toàn bộ log DAILY_REPORT.
             rawUserLogs.forEach(log => {
                 const actionStr = String(log.action || "").toUpperCase();
                 if (actionStr === "DAILY_REPORT") {
@@ -125,62 +125,23 @@ export async function GET(req: Request) {
             mappedLogs.forEach(log => {
                 if (!log.task) return;
 
-                const combinedText = String(log.details || "").toLowerCase();
-                let effectiveRoles: string[] = [user.role];
-                
-                if (log.task.channelId && user.channelMemberships) {
-                    const matchingMemberships = user.channelMemberships.filter((cm: any) => cm.channelId === log.task.channelId);
-                    if (matchingMemberships.length > 0) {
-                        effectiveRoles = matchingMemberships.map((cm: any) => cm.roleOnChannel);
-                    }
+                // 🚀 LẤY TRỰC TIẾP TỪ DATABASE HOẶC FALLBACK DỮ LIỆU CŨ NẾU SÓT
+                let jobCategory = (log as any).jobCategory;
+
+                if (!jobCategory) {
+                    const combinedText = String(log.details || "").toLowerCase();
+                    if (combinedText.includes("gán thủ công")) jobCategory = "MANUAL";
+                    else if (combinedText.includes("kịch bản") || combinedText.includes("bố cục")) jobCategory = "CONTENT";
+                    else if (combinedText.includes("prj thô") || combinedText.includes("link project") || combinedText.includes("audio") || combinedText.includes("âm thanh") || combinedText.includes("video render")) jobCategory = "EDIT";
+                    else if (combinedText.includes("chuyển động")) jobCategory = "ANIMATION";
+                    else if (combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) jobCategory = "PUBLISH";
+                    else jobCategory = "GENERAL";
                 }
 
-                // 1. 🚀 NHẬN DIỆN LOẠI CÔNG VIỆC DỰA TRÊN LOG
-                let jobCategory = "";
-                if (combinedText.includes("gán thủ công")) jobCategory = "MANUAL";
-                else if (combinedText.includes("kịch bản")) jobCategory = "CONTENT";
-                else if (combinedText.includes("prj thô") || combinedText.includes("link project") || combinedText.includes("audio") || combinedText.includes("âm thanh")) jobCategory = "EDIT";
-                else if (combinedText.includes("chuyển động")) jobCategory = "ANIMATION";
-                else if (combinedText.includes("video đã đăng") || combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) jobCategory = "PUBLISH";
-                else if (combinedText.includes("video render")) jobCategory = "RENDER";
-
-                // 2. 🚀 KIỂM TRA ROLE CÓ ĐƯỢC PHÉP NHẬN KPI CHO LOẠI VIỆC NÀY KHÔNG
-                let isKpiQualifying = false;
-                
-                if (jobCategory === "MANUAL") {
-                    isKpiQualifying = true;
-                } else if (jobCategory !== "") {
-                    for (const role of effectiveRoles) {
-                        if (isKpiQualifying) break;
-                        switch (role) {
-                            case "LEADER":
-                            case "CHANNEL_MANAGER":
-                                isKpiQualifying = true; // Quản lý được ăn KPI mọi khâu
-                                break;
-                            case "CONTENT":
-                                if (["CONTENT", "ANIMATION"].includes(jobCategory)) isKpiQualifying = true;
-                                break;
-                            case "EDITOR":
-                                if (["EDIT", "RENDER"].includes(jobCategory)) isKpiQualifying = true;
-                                break;
-                            case "ANIMATOR":
-                            case "ANIMATION":
-                                if (jobCategory === "ANIMATION") isKpiQualifying = true;
-                                break;
-                            case "PUBLISHER":
-                            case "SEO":
-                                if (["PUBLISH", "RENDER"].includes(jobCategory)) isKpiQualifying = true;
-                                break;
-                            case "VOICE":
-                                if (jobCategory === "EDIT") isKpiQualifying = true; 
-                                break;
-                        }
-                    }
-                }
-
-                // 3. 🚀 ĐIỂM MẤU CHỐT: GHI NHẬN KPI BẰNG [ID TASK + LOẠI CÔNG VIỆC]
-                if (isKpiQualifying) {
-                    // Ví dụ uniqueKey: "12345_CONTENT" và "12345_PUBLISH" (Tính 2 lần cho 1 task)
+                // 🚀 LOGIC ĐẾM KPI CHỐT HẠ BẰNG RỔ NHIỆM VỤ
+                if (log.action === "DAILY_REPORT" && jobCategory && jobCategory !== 'GENERAL') {
+                    // 1 người làm Editor, up 3 link thuộc rổ EDIT thì uniqueKey vẫn chỉ là "taskId_EDIT" -> Tính 1 KPI.
+                    // Nhưng nếu họ up thêm link thuộc rổ PUBLISH -> Ra "taskId_PUBLISH" -> Cộng thành 2.
                     const uniqueKey = `${log.taskId}_${jobCategory}`; 
                     
                     if (!uniqueTasks.has(uniqueKey)) {

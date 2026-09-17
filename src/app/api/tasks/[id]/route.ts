@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { Prisma } from "@prisma/client";
+
 const getBaseUrl = (rawUrl: string) => {
     if (!rawUrl || rawUrl.trim() === "") return "";
     try {
@@ -32,8 +33,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         const rawBody = await req.json();
 
         const transactionResult = await prisma.$transaction(async (tx) => {
-
-            const oldTask = await tx.task.findUnique({ where: { id: taskId } });
+            // 🚀 BƯỚC 1: Lấy thông tin Task cũ kèm theo danh sách Co-Users để đối chiếu
+            const oldTask = await tx.task.findUnique({ 
+                where: { id: taskId },
+                include: {
+                    coContentUsers: { select: { id: true } },
+                    coEditorUsers: { select: { id: true } },
+                    coAnimatorUsers: { select: { id: true } }
+                }
+            });
             if (!oldTask) throw new Error("Task không tồn tại");
 
             const body: any = {};
@@ -43,7 +51,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 throw new Error("Task đã nghiệm thu, không thể chỉnh sửa!");
             }
 
-            // ... (Phần gán rawBody vào body giữ nguyên như cũ) ...
             if (rawBody.status !== undefined) body.status = rawBody.status;
             if (rawBody.scriptLink !== undefined) body.scriptLink = rawBody.scriptLink;
             if (rawBody.englishScriptLink !== undefined) body.englishScriptLink = rawBody.englishScriptLink;
@@ -76,7 +83,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 if (rawBody.duration !== undefined) body.duration = rawBody.duration;
                 if (rawBody.channelId !== undefined) body.channelId = rawBody.channelId || null;
                 if (rawBody.priority !== undefined) body.priority = rawBody.priority;
-
                 if (rawBody.publisherId !== undefined) body.publisherId = rawBody.publisherId || null;
 
                 if (rawBody.contentIds !== undefined) {
@@ -99,15 +105,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 } else if (rawBody.animatorId !== undefined) {
                     body.animatorId = rawBody.animatorId || null;
                 }
-            }
-
-            // 🚀 BƯỚC 1: Lấy danh sách MẢNG ROLES của user đang thao tác trên kênh này
-            let userChannelRoles: string[] = [];
-            if (oldTask.channelId) {
-                const memberships = await tx.channelMember.findMany({
-                    where: { channelId: oldTask.channelId, userId: userId }
-                });
-                userChannelRoles = memberships.map((m: any) => m.roleOnChannel);
             }
 
             const linksToCheck = [
@@ -150,44 +147,64 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             const logsToDelete: any[] = [];
 
             if (body.status && body.status !== oldTask.status) {
-                logsToCreate.push({ action: "UPDATE_STATUS", details: `Từ [\({oldTask.status}] sang [\){body.status}]`, taskId, userId });
+                logsToCreate.push({ action: "UPDATE_STATUS", details: `Từ [${oldTask.status}] sang [${body.status}]`, taskId, userId });
             }
+
+            // 🚀 BƯỚC 2: CHECK PHÂN CÔNG THỰC TẾ
+            const checkAssignment = (roleType: 'CONTENT' | 'EDITOR' | 'ANIMATOR' | 'PUBLISHER') => {
+                switch (roleType) {
+                    case 'CONTENT':
+                        return (body.contentId ?? oldTask.contentId) === userId || 
+                               (rawBody.contentIds || []).includes(userId) || 
+                               oldTask.coContentUsers?.some((u: any) => u.id === userId);
+                    case 'EDITOR':
+                        return (body.editorId ?? oldTask.editorId) === userId || 
+                               (rawBody.editorIds || []).includes(userId) || 
+                               oldTask.coEditorUsers?.some((u: any) => u.id === userId);
+                    case 'ANIMATOR':
+                        return (body.animatorId ?? oldTask.animatorId) === userId || 
+                               (rawBody.animatorIds || []).includes(userId) || 
+                               oldTask.coAnimatorUsers?.some((u: any) => u.id === userId);
+                    case 'PUBLISHER':
+                        return (body.publisherId ?? oldTask.publisherId) === userId;
+                    default:
+                        return false;
+                }
+            };
+
+            const isContentAssigned = checkAssignment('CONTENT');
+            const isEditorAssigned = checkAssignment('EDITOR');
+            const isAnimatorAssigned = checkAssignment('ANIMATOR');
+            const isPublisherAssigned = checkAssignment('PUBLISHER');
 
             const addLinkLog = (fieldName: string, label: string) => {
                 if (body[fieldName] !== undefined && body[fieldName] !== (oldTask as any)[fieldName]) {
                     const newValue = body[fieldName];
-                    const targetUserId = userId;
+                    
+                    let actionType: any = "UPDATE_LINK";
+                    let logCategory: 'CONTENT' | 'EDIT' | 'ANIMATION' | 'PUBLISH' | 'GENERAL' = 'GENERAL';
 
-                    const isKpiField = ['scriptLink', 'videoLink', 'animationLink', 'publishLink', 'thumbnailLink', 'roughProjectLink', 'linkProject'].includes(fieldName);
-                    let actionType = isKpiField ? "DAILY_REPORT" : "UPDATE_LINK";
-
-                    // 🚀 BƯỚC 2: LOGIC CHECK KPI THÔNG MINH CHO QUẢN LÝ
-                    if (isManager) {
-                        let isAllowedForKpi = false;
-                        
-                        // Quản lý mặc định được KPI đăng bài/up video
-                        if (['publishLink', 'thumbnailLink', 'videoLink'].includes(fieldName)) {
-                            isAllowedForKpi = true;
+                    // 🚀 BƯỚC 3: GHI NHẬN LOG DỰA TRÊN QUYỀN HẠN VÀ GẮN RỔ TƯƠNG ỨNG
+                    if (newValue && newValue.trim() !== "") {
+                        if (['scriptLink', 'storyboardLink'].includes(fieldName) && isContentAssigned) {
+                            actionType = "DAILY_REPORT";
+                            logCategory = 'CONTENT';
                         }
-                        
-                        // Nếu sếp có kiêm role CONTENT trên kênh -> Tính KPI cho kịch bản
-                        if (['scriptLink', 'storyboardLink'].includes(fieldName) && userChannelRoles.includes("CONTENT")) {
-                            isAllowedForKpi = true;
+                        if (['audioLink', 'roughProjectLink', 'linkProject'].includes(fieldName) && isEditorAssigned) {
+                            actionType = "DAILY_REPORT";
+                            logCategory = 'EDIT';
                         }
-
-                        // Nếu sếp có kiêm role EDITOR trên kênh -> Tính KPI cho mảng dựng/audio
-                        if (['audioLink', 'roughProjectLink', 'linkProject'].includes(fieldName) && userChannelRoles.includes("EDITOR")) {
-                            isAllowedForKpi = true;
+                        if (['videoLink', 'thumbnailLink'].includes(fieldName) && (isEditorAssigned || isPublisherAssigned)) {
+                            actionType = "DAILY_REPORT";
+                            logCategory = isEditorAssigned ? 'EDIT' : 'PUBLISH'; 
                         }
-
-                        // Nếu sếp có kiêm role ANIMATION
-                        if (['animationLink'].includes(fieldName) && (userChannelRoles.includes("ANIMATION") || userChannelRoles.includes("ANIMATOR"))) {
-                            isAllowedForKpi = true;
+                        if (['animationLink'].includes(fieldName) && isAnimatorAssigned) {
+                            actionType = "DAILY_REPORT";
+                            logCategory = 'ANIMATION';
                         }
-
-                        // Nếu không thỏa mãn kiêm nhiệm nào, giáng cấp xuống thành UPDATE_LINK (Không tính KPI)
-                        if (!isAllowedForKpi) {
-                            actionType = "UPDATE_LINK";
+                        if (['publishLink'].includes(fieldName) && isPublisherAssigned) {
+                            actionType = "DAILY_REPORT";
+                            logCategory = 'PUBLISH';
                         }
                     }
 
@@ -201,15 +218,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                         logsToCreate.push({
                             action: actionType,
                             details: `Báo cáo tiến độ: Đã cập nhật ${label}`,
+                            jobCategory: logCategory,
                             taskId,
-                            userId: targetUserId
+                            userId 
                         });
                     } else {
                         logsToCreate.push({
                             action: "UPDATE_LINK",
                             details: `Báo cáo tiến độ: Đã gỡ/xóa ${label}`,
+                            jobCategory: 'GENERAL',
                             taskId,
-                            userId: targetUserId
+                            userId
                         });
                     }
                 }
@@ -225,7 +244,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             addLinkLog('linkProject', 'Link Project (Dựng Chính)');
             addLinkLog('publishLink', 'Link Video Đã Đăng (YT)');
 
-            // ... (Phần còn lại của hàm PATCH giữ nguyên, cập nhật log và db) ...
             if (body.note !== undefined && body.note !== oldTask.note) {
                 logsToCreate.push({ action: "UPDATE_LINK", details: `Báo cáo trạng thái: ${body.note}`, taskId, userId });
             }
@@ -295,8 +313,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         let createdNotifications: any[] = [];
         let userIdsToNotify: string[] = [];
 
-        // ... (Phần bắn Notification giữ nguyên) ...
-
         return NextResponse.json({
             task: updatedTask,
             updatedTask: updatedTask,
@@ -305,7 +321,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         });
 
     } catch (error: any) {
-        // ... (Phần xử lý lỗi Catch giữ nguyên) ...
         console.error(">>> LỖI CẬP NHẬT TASK:", error);
         if (error.message.includes("Task đã nghiệm thu")) return NextResponse.json({ error: error.message }, { status: 403 });
         if (error.message.includes("Task không tồn tại")) return NextResponse.json({ error: error.message }, { status: 404 });
@@ -342,9 +357,8 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
             }
         });
 
-        if (!task) {
-            return NextResponse.json({ error: "Không tìm thấy task" }, { status: 404 });
-        }
+        if (!task) return NextResponse.json({ error: "Không tìm thấy task" }, { status: 404 });
+        
         const formattedTask = {
             ...task!,
             evaluation: task!.evaluations && task!.evaluations.length > 0 ? task!.evaluations[0] : null,

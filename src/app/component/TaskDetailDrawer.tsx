@@ -545,9 +545,9 @@ export default function TaskDetailDrawer({
                               autoFocus={editingFields[field.key]}
                             />
                           ) : (
-                            <div className="w-full border border-slate-200 bg-slate-50 rounded-xl p-3 flex items-center gap-2 hover:bg-slate-100 transition-colors group">
+                            <div className="w-full border border-slate-200 bg-slate-50 rounded-xl p-3 flex items-center gap-2 hover:bg-slate-100 transition-colors group overflow-hidden">
                               <LinkIcon size={14} className="text-slate-400 shrink-0 group-hover:text-blue-500 transition-colors" />
-                              <a href={currentLink} target="_blank" rel="noreferrer" className="text-[13px] font-medium text-blue-600 hover:text-blue-700 hover:underline truncate block w-full">
+                              <a href={currentLink} target="_blank" rel="noreferrer" className="text-[13px] font-medium text-blue-600 hover:text-blue-700 hover:underline truncate flex-1 min-w-0">
                                 {currentLink}
                               </a>
                             </div>
@@ -558,7 +558,7 @@ export default function TaskDetailDrawer({
 
                     <div className="space-y-1.5 col-span-1 md:col-span-2 pt-2 border-t border-slate-200">
                       <div className="flex flex-col md:flex-row gap-4">
-                        <div className="flex-[2] space-y-1.5">
+                        <div className="flex-[2] space-y-1.5 min-w-0">
                             <label className="text-[10px] font-bold text-red-500 uppercase tracking-widest flex items-center justify-between">
                               <span className="flex items-center gap-1.5">
                                 Link Video Đã Đăng (YT)
@@ -590,9 +590,9 @@ export default function TaskDetailDrawer({
                                 autoFocus={editingFields['publishLink']}
                               />
                             ) : (
-                              <div className="w-full border border-slate-200 bg-slate-50 rounded-xl p-3 flex items-center gap-2 hover:bg-slate-100 transition-colors group">
+                              <div className="w-full border border-slate-200 bg-slate-50 rounded-xl p-3 flex items-center gap-2 hover:bg-slate-100 transition-colors group overflow-hidden">
                                 <LinkIcon size={14} className="text-slate-400 shrink-0 group-hover:text-red-500 transition-colors" />
-                                <a href={taskLinks.publishLink} target="_blank" rel="noreferrer" className="text-[13px] font-medium text-red-600 hover:text-red-700 hover:underline truncate block w-full">
+                                <a href={taskLinks.publishLink} target="_blank" rel="noreferrer" className="text-[13px] font-medium text-red-600 hover:text-red-700 hover:underline truncate flex-1 min-w-0">
                                   {taskLinks.publishLink}
                                 </a>
                               </div>

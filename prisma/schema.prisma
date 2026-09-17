@@ -19,7 +19,7 @@ enum Role {
   PUBLISHER
 }
 
-// 🚀 ĐÃ SỬA: Chẻ nhỏ trạng thái Task theo từng trạm
+
 enum TaskStatus {
   TODO
   CONTENT_DOING
@@ -66,7 +66,7 @@ enum RoomType {
   COMPANY
 }
 
-// 🚀 ĐÃ SỬA: Thêm các action duyệt/từ chối từng khâu
+// 🚀 Thêm các action duyệt/từ chối từng khâu
 enum TaskLogAction {
   CREATE_TASK
   UPDATE_STATUS
@@ -87,7 +87,17 @@ enum TaskLogAction {
   REJECT_EDIT
 }
 
-// 🚀 ĐÃ THÊM: Phân loại Kênh (AI hoặc Tổng hợp)
+// 🚀 ĐÃ THÊM: Phân loại nhóm việc để tính KPI chuẩn xác nhất
+enum JobCategory {
+  CONTENT
+  EDIT
+  ANIMATION
+  PUBLISH
+  MANUAL
+  GENERAL // Những thao tác phụ không cộng điểm KPI
+}
+
+// 🚀 Phân loại Kênh (AI hoặc Tổng hợp)
 enum ChannelCategory {
   AI
   TONG_HOP
@@ -450,15 +460,18 @@ model Notification {
 }
 
 model TaskLog {
-  id        String        @id @default(uuid())
-  action    TaskLogAction 
-  details   String 
-  createdAt DateTime      @default(now())
+  id          String        @id @default(uuid())
+  action      TaskLogAction 
+  details     String 
+  createdAt   DateTime      @default(now())
 
-  taskId String
-  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // 🚀 ĐÃ BỔ SUNG: Cột JobCategory để lưu nhãn khâu công việc phục vụ tính KPI
+  jobCategory JobCategory?  
+
+  taskId      String
+  task        Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Attachment {

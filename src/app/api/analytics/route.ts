@@ -170,18 +170,16 @@ export async function GET(req: Request) {
 
         while (loopDate <= endDate) {
             const dayKey = `${loopDate.getDate().toString().padStart(2, '0')}/${(loopDate.getMonth() + 1).toString().padStart(2, '0')}`;
-            
+
             const dayDataTeam: any = { date: dayKey };
-            // 🚀 Thêm : any vào team
             activeTeamNames.forEach((team: any) => { dayDataTeam[team] = teamRevByDay[dayKey]?.[team] || 0; });
             revenueTrend.push(dayDataTeam);
 
             const dayDataChannelRev: any = { date: dayKey };
             const dayDataChannelView: any = { date: dayKey };
-            // 🚀 Thêm : any vào channel
-            activeChannelNames.forEach((channel: any) => { 
-                dayDataChannelRev[channel] = channelRevByDay[dayKey]?.[channel] || 0; 
-                dayDataChannelView[channel] = channelViewsByDay[dayKey]?.[channel] || 0; 
+            activeChannelNames.forEach((channel: any) => {
+                dayDataChannelRev[channel] = channelRevByDay[dayKey]?.[channel] || 0;
+                dayDataChannelView[channel] = channelViewsByDay[dayKey]?.[channel] || 0;
             });
             channelRevenueTrend.push(dayDataChannelRev);
             channelViewsTrend.push(dayDataChannelView);
@@ -235,84 +233,59 @@ export async function GET(req: Request) {
         taskStatusCounts.forEach((t: any) => { if (rawFunnel[t.status] !== undefined) rawFunnel[t.status] = t._count.id; });
         const taskFunnel = funnelOrder.map(status => ({ name: statusMapVi[status], value: rawFunnel[status] }));
 
-        // 🚀 ĐỒNG BỘ LOGIC TÍNH KPI TỪ BẢNG THỐNG KÊ (DAILY_REPORT + TỪ KHÓA)
-        const hrGrid = users.map(u => {
-            const target = kpisPeriod.filter(k => k.userId === u.id).reduce((sum, k) => sum + k.targetValue, 0);
+        // 🚀 KHỐI LOGIC MỚI CHO BẢNG THỐNG KÊ NHÂN SỰ
+        const hrGrid = users
+            .filter(u => u.isActive)
+            .map(u => {
+                const target = kpisPeriod.filter(k => k.userId === u.id).reduce((sum, k) => sum + k.targetValue, 0);
 
-            const rawUserLogs = taskLogsPeriod.filter((l: any) => l.userId === u.id);
+                const rawUserLogs = taskLogsPeriod.filter((l: any) => l.userId === u.id);
 
-            const validUserLogs: any[] = [];
-            rawUserLogs.forEach((log: any) => {
-                const actionStr = String(log.action || "").toUpperCase();
-                if (actionStr === "DAILY_REPORT") {
-                    validUserLogs.push(log);
-                }
-            });
-
-            const uniqueTasks = new Set();
-
-            validUserLogs.forEach((log: any) => {
-                if (!log.taskId) return;
-
-                let isKpiQualifying = false;
-                const combinedText = String(log.details || "").toLowerCase();
-
-                let effectiveRole: string = u.role;
-                if (log.task?.channelId && u.channelMemberships) {
-                    const channelRoleObj = u.channelMemberships.find((cm: any) => cm.channelId === log.task.channelId);
-                    if (channelRoleObj) {
-                        effectiveRole = channelRoleObj.roleOnChannel;
+                const validUserLogs: any[] = [];
+                rawUserLogs.forEach((log: any) => {
+                    const actionStr = String(log.action || "").toUpperCase();
+                    if (actionStr === "DAILY_REPORT") {
+                        validUserLogs.push(log);
                     }
-                }
+                });
 
-                if (combinedText.includes("gán thủ công")) {
-                    isKpiQualifying = true;
-                } else {
-                    switch (effectiveRole) {
-                        case "LEADER":
-                        case "PUBLISHER":
-                        case "CHANNEL_MANAGER":
-                            if (combinedText.includes("video render") || combinedText.includes("video đã đăng") || combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) isKpiQualifying = true;
-                            break;
-                        case "EDITOR":
-                            if (combinedText.includes("video render") || combinedText.includes("prj thô") || combinedText.includes("audio") || combinedText.includes("âm thanh") || combinedText.includes("link project")) isKpiQualifying = true;
-                            break;
-                        case "CONTENT":
-                            if (combinedText.includes("kịch bản") || combinedText.includes("chuyển động")) isKpiQualifying = true;
-                            break;
-                        case "ANIMATOR":
-                        case "ANIMATION":
-                            if (combinedText.includes("chuyển động")) isKpiQualifying = true;
-                            break;
-                        case "SEO":
-                            if (combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) isKpiQualifying = true;
-                            break;
-                        case "VOICE":
-                            if (combinedText.includes("audio") || combinedText.includes("âm thanh")) isKpiQualifying = true;
-                            break;
-                        default:
-                            isKpiQualifying = true;
+                const uniqueTasks = new Set();
+
+                validUserLogs.forEach((log: any) => {
+                    if (!log.taskId) return;
+
+                    // 🚀 BẮT TRỰC TIẾP NHÃN CATEGORY, CỰC KỲ GỌN NHẸ
+                    let jobCategory = log.jobCategory;
+
+                    if (!jobCategory) {
+                        const combinedText = String(log.details || "").toLowerCase();
+                        if (combinedText.includes("gán thủ công")) jobCategory = "MANUAL";
+                        else if (combinedText.includes("kịch bản") || combinedText.includes("bố cục")) jobCategory = "CONTENT";
+                        else if (combinedText.includes("prj thô") || combinedText.includes("link project") || combinedText.includes("audio") || combinedText.includes("âm thanh") || combinedText.includes("video render")) jobCategory = "EDIT";
+                        else if (combinedText.includes("chuyển động")) jobCategory = "ANIMATION";
+                        else if (combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) jobCategory = "PUBLISH";
+                        else jobCategory = "GENERAL";
                     }
-                }
 
-                if (isKpiQualifying) {
-                    uniqueTasks.add(log.taskId);
-                }
-            });
+                    if (jobCategory && jobCategory !== 'GENERAL') {
+                        // ID TASK + RỔ NHIỆM VỤ ĐỂ GHI NHẬN KIÊM NHIỆM
+                        uniqueTasks.add(`${log.taskId}_${jobCategory}`);
+                    }
+                });
 
-            const output = uniqueTasks.size;
+                const output = uniqueTasks.size;
 
-            return {
-                id: u.id,
-                name: u.fullName,
-                role: u.role,
-                target: target,
-                output: output,
-                kpi: target > 0 ? Math.round((output / target) * 100) : 0,
-                avgScore: userScoreMap[u.id] ? (userScoreMap[u.id].total / userScoreMap[u.id].count).toFixed(1) : "-",
-                status: u.isActive ? "Active" : "Nghỉ việc"
-            };
-        }).sort((a, b) => b.output - a.output);
+                return {
+                    id: u.id,
+                    name: u.fullName,
+                    role: u.role,
+                    target: target,
+                    output: output,
+                    kpi: target > 0 ? Math.round((output / target) * 100) : 0,
+                    avgScore: userScoreMap[u.id] ? (userScoreMap[u.id].total / userScoreMap[u.id].count).toFixed(1) : "-",
+                    status: u.isActive ? "Active" : "Nghỉ việc"
+                };
+            }).sort((a, b) => b.output - a.output);
 
         return NextResponse.json({
             teams,
@@ -325,7 +298,7 @@ export async function GET(req: Request) {
                 currentHeadcount: users.filter(u => u.isActive).length
             },
             overallTrend, topChannelsByViews, revenueTrend, activeTeamNames, channelRevenueTrend, channelViewsTrend, activeChannelNames, channelGrid, projectHealth, taskFunnel,
-            monetizationStatus: Object.values(monetStatusMap).filter((m:any) => m.value > 0),
+            monetizationStatus: Object.values(monetStatusMap).filter((m: any) => m.value > 0),
             hrGrid
         });
 

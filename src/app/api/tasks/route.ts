@@ -1,4 +1,3 @@
-// File: src/app/api/tasks/route.ts
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
@@ -6,9 +5,6 @@ import { authOptions } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
-// ==========================================
-// 1. API LẤY DANH SÁCH TASK (GET) - Giữ nguyên bản chuẩn đếm trang
-// ==========================================
 export async function GET(req: Request) {
   try {
     const session = await getServerSession(authOptions);
@@ -155,9 +151,6 @@ const getBaseUrl = (rawUrl: string) => {
   }
 };
 
-// ==========================================
-// 2. API TẠO TASK (POST)
-// ==========================================
 export async function POST(req: Request) {
   try {
     const session = await getServerSession(authOptions);
@@ -172,7 +165,6 @@ export async function POST(req: Request) {
 
     const body = await req.json();
     
-    // 🚀 ĐÃ SỬA: Đón toàn bộ các trường Link và cờ isRework
     const { 
         title, linkContent, teamId, projectId, channelId, duration, note, keywords, publishDate, priority,
         scriptLink, englishScriptLink, storyboardLink, audioLink, thumbnailLink, videoLink, publishLink, linkProject, roughProjectLink, animationLink,
@@ -182,6 +174,46 @@ export async function POST(req: Request) {
     
     const creatorId = currentUser.id;
     const rawLink = linkContent;
+
+    // 🚀 CHẶN TRÙNG LẶP (ĐÃ LOẠI BỎ CHẶN linkContent THEO YÊU CẦU)
+    const linksToCheck = [
+        { key: 'scriptLink', value: scriptLink },
+        { key: 'audioLink', value: audioLink },
+        { key: 'storyboardLink', value: storyboardLink },
+        { key: 'animationLink', value: animationLink },
+        { key: 'roughProjectLink', value: roughProjectLink },
+        { key: 'thumbnailLink', value: thumbnailLink },
+        { key: 'videoLink', value: videoLink },
+        { key: 'linkProject', value: linkProject },
+        { key: 'publishLink', value: publishLink },
+    ].filter(l => l.value && l.value.trim() !== "");
+
+    if (linksToCheck.length > 0) {
+        const orConditions = linksToCheck.map(l => ({
+            [l.key]: { contains: getBaseUrl(l.value).replace(/^https?:\/\//, '') }
+        }));
+
+        const potentialDuplicateTasks = await prisma.task.findMany({
+            where: { OR: orConditions }
+        });
+
+        let duplicateField = "";
+        const isDuplicate = potentialDuplicateTasks.some(task => {
+            return linksToCheck.some(l => {
+                const dbValue = (task as any)[l.key];
+                const isMatch = dbValue && getBaseUrl(dbValue) === getBaseUrl(l.value);
+                if (isMatch) duplicateField = l.key;
+                return isMatch;
+            });
+        });
+
+        if (isDuplicate) {
+            return NextResponse.json(
+                { error: `Link này đã tồn tại ở một Task khác trên hệ thống! Trường: ${duplicateField}` }, 
+                { status: 400 }
+            );
+        }
+    }
 
     let nextEpisodeNumber = null;
     if (projectId) {
@@ -201,7 +233,6 @@ export async function POST(req: Request) {
     const coEditorConnect = editorIds.length > 1 ? editorIds.slice(1).map((id: string) => ({ id })) : [];
     const coAnimatorConnect = animatorIds.length > 1 ? animatorIds.slice(1).map((id: string) => ({ id })) : [];
 
-    // 🚀 ĐÃ SỬA: Bổ sung đẩy Link cũ và isRework vào Database
     const newTask = await prisma.task.create({
       data: {
         title,

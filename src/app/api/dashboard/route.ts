@@ -49,9 +49,8 @@ export async function GET(req: Request) {
             return chartTemplate;
         };
 
-        // 🚀 ĐÃ NÂNG CẤP: Nhận thêm biến channelMemberships để map Role theo từng Kênh
-        const calculateKpiForUser = (userLogs: any[], targetValue: number, targetDetailsRaw: any, userRole: string, channelMemberships: any[] = []) => {
-            const dailyReportTracker = new Set<string>();
+        // 🚀 ĐÃ NÂNG CẤP: Dùng jobCategory để tính KPI, không cần truyền Role hay ChannelMemberships nữa
+        const calculateKpiForUser = (userLogs: any[], targetValue: number, targetDetailsRaw: any) => {
             const validUserLogs: any[] = [];
             
             userLogs.forEach(log => {
@@ -65,55 +64,27 @@ export async function GET(req: Request) {
             
             validUserLogs.forEach(log => {
                 if (!log.task) return;
-                
-                let isKpiQualifying = false; 
-                const text = String(log.details || "").toLowerCase();
 
-                // 🚀 XÁC ĐỊNH ROLE THỰC TẾ (EFFECTIVE ROLE) CHO TASK NÀY
-                let effectiveRole = userRole; 
-                if (log.task.channelId && channelMemberships.length > 0) {
-                    const channelRoleObj = channelMemberships.find((cm: any) => cm.channelId === log.task.channelId);
-                    if (channelRoleObj) {
-                        effectiveRole = channelRoleObj.roleOnChannel; 
-                    }
-                }
+                // 🚀 LẤY TRỰC TIẾP NHÃN TỪ DATABASE HOẶC FALLBACK DỮ LIỆU CŨ
+                let jobCategory = log.jobCategory;
 
-                if (text.includes("gán thủ công")) {
-                    isKpiQualifying = true; 
-                } else {
-                    // 🚀 CHẤM KPI THEO ROLE THỰC TẾ TRÊN KÊNH
-                    switch (effectiveRole) {
-                        case "LEADER":
-                        case "PUBLISHER":
-                        case "CHANNEL_MANAGER":
-                            if (text.includes("video render") || text.includes("video đã đăng") || text.includes("đã đăng") || text.includes("thumbnail")) isKpiQualifying = true;
-                            break;
-                        case "EDITOR":
-                            if (text.includes("video render") || text.includes("prj thô") || text.includes("audio") || text.includes("âm thanh")) isKpiQualifying = true;
-                            break;
-                        case "CONTENT":
-                            if (text.includes("kịch bản") || text.includes("chuyển động")) isKpiQualifying = true;
-                            break;
-                        case "ANIMATOR":
-                        case "ANIMATION":
-                            if (text.includes("chuyển động")) isKpiQualifying = true;
-                            break;
-                        case "SEO":
-                            if (text.includes("đã đăng") || text.includes("thumbnail")) isKpiQualifying = true;
-                            break;
-                        case "VOICE":
-                            if (text.includes("audio") || text.includes("âm thanh")) isKpiQualifying = true;
-                            break;
-                        default:
-                            isKpiQualifying = true; 
-                    }
+                if (!jobCategory) {
+                    const combinedText = String(log.details || "").toLowerCase();
+                    if (combinedText.includes("gán thủ công")) jobCategory = "MANUAL";
+                    else if (combinedText.includes("kịch bản") || combinedText.includes("bố cục")) jobCategory = "CONTENT";
+                    else if (combinedText.includes("prj thô") || combinedText.includes("link project") || combinedText.includes("audio") || combinedText.includes("âm thanh") || combinedText.includes("video render")) jobCategory = "EDIT";
+                    else if (combinedText.includes("chuyển động")) jobCategory = "ANIMATION";
+                    else if (combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) jobCategory = "PUBLISH";
+                    else jobCategory = "GENERAL";
                 }
                 
                 log.isCounted = false; 
 
-                if (isKpiQualifying) {
-                    if (!uniqueTasks.has(log.taskId)) {
-                        uniqueTasks.set(log.taskId, log.task);
+                // 🚀 GHI NHẬN KPI BẰNG [ID TASK + RỔ NHIỆM VỤ]
+                if (jobCategory && jobCategory !== 'GENERAL') {
+                    const uniqueKey = `${log.taskId}_${jobCategory}`; 
+                    if (!uniqueTasks.has(uniqueKey)) {
+                        uniqueTasks.set(uniqueKey, log.task);
                         log.isCounted = true; 
                     }
                 }
@@ -240,12 +211,11 @@ export async function GET(req: Request) {
                     },
                     orderBy: { createdAt: 'desc' },
                     select: {
-                        id: true, action: true, details: true, createdAt: true, taskId: true, userId: true,
+                        id: true, action: true, details: true, jobCategory: true, createdAt: true, taskId: true, userId: true,
                         user: { select: { fullName: true } },
                         task: { select: { id: true, title: true, duration: true, channelId: true, isRework: true, channel: { select: { id: true } } } }
                     }
                 }),
-                // 🚀 BƠM DATA: Gọi lấy channelMemberships từ bảng User để nạp đạn cho logic KPI
                 prisma.weeklyKPI.findMany({
                     where: {
                         year: today.getFullYear(),
@@ -257,10 +227,7 @@ export async function GET(req: Request) {
                         user: { 
                             select: { 
                                 fullName: true, 
-                                role: true,
-                                channelMemberships: {
-                                    select: { channelId: true, roleOnChannel: true }
-                                }
+                                role: true
                             } 
                         } 
                     }
@@ -268,8 +235,7 @@ export async function GET(req: Request) {
             ]);
             
             const validLogs7Days: any[] = [];
-            const dailyReportTracker7Days = new Set<string>();
-            managerLogs7DaysRaw.forEach((log: any) => { // (Nếu ở khối else thì là myLogs7DaysRaw)
+            managerLogs7DaysRaw.forEach((log: any) => { 
                 const actionStr = String(log.action || "").toUpperCase();
                 if (actionStr === "DAILY_REPORT") {
                     validLogs7Days.push(log);
@@ -283,9 +249,8 @@ export async function GET(req: Request) {
 
             kpiRecords.forEach((k: any) => {
                 const userLogs = logsThisWeek.filter(log => log.userId === k.userId);
-                // 🚀 ĐẨY CHANNEL MEMBERSHIPS VÀO HÀM TÍNH TOÁN
-                const channelMemberships = k.user?.channelMemberships || [];
-                const kpiRes = calculateKpiForUser(userLogs, k.targetValue || 0, k.targetDetails, k.user?.role || "CONTENT", channelMemberships);
+                // 🚀 TRUYỀN VÀO HÀM TÍNH TOÁN CỰC GỌN NHẸ
+                const kpiRes = calculateKpiForUser(userLogs, k.targetValue || 0, k.targetDetails);
                 
                 if (k.targetValue > 0 || (kpiRes.targetDetails && kpiRes.targetDetails.length > 0)) {
                     sumPercent += kpiRes.percent;
@@ -334,8 +299,7 @@ export async function GET(req: Request) {
                 myActiveTasks,
                 myLogsAllTimeRaw,
                 myLogs7DaysRaw,
-                myKpiThisWeek,
-                myChannelMemberships // 🚀 BƠM DATA: Gọi thêm data Membership cho User nhân viên
+                myKpiThisWeek
             ] = await Promise.all([
                 prisma.task.findMany({
                     where: {
@@ -351,9 +315,10 @@ export async function GET(req: Request) {
                 }),
                 prisma.taskLog.findMany({
                     where: {
-                        userId: userId
+                        userId: userId,
+                        action: "DAILY_REPORT"
                     },
-                    select: { taskId: true, action: true, createdAt: true, details: true }
+                    select: { taskId: true, jobCategory: true, details: true }
                 }),
                 prisma.taskLog.findMany({
                     where: {
@@ -362,7 +327,7 @@ export async function GET(req: Request) {
                     },
                     orderBy: { createdAt: 'desc' },
                     select: {
-                        id: true, action: true, details: true, createdAt: true, taskId: true, userId: true,
+                        id: true, action: true, details: true, jobCategory: true, createdAt: true, taskId: true, userId: true,
                         task: { select: { id: true, title: true, duration: true, channelId: true, isRework: true, channel: { select: { id: true } } } }
                     }
                 }),
@@ -373,38 +338,35 @@ export async function GET(req: Request) {
                         month: today.getMonth() + 1,
                         weekNumber: currentWeekNum
                     }
-                }),
-                prisma.channelMember.findMany({
-                    where: { userId: userId },
-                    select: { channelId: true, roleOnChannel: true }
                 })
             ]);
 
             const validLogs7Days: any[] = [];
-            const dailyReportTracker7Days = new Set<string>();
             myLogs7DaysRaw.forEach(log => {
                 const actionStr = String(log.action || "").toUpperCase();
-                
-                if (actionStr !== "DAILY_REPORT") return;
-                
-                const dateStr = new Date(log.createdAt).toISOString().split('T')[0];
-                const uniqueKey = `${log.taskId}_${dateStr}`;
-                if (!dailyReportTracker7Days.has(uniqueKey)) {
-                    dailyReportTracker7Days.add(uniqueKey);
+                if (actionStr === "DAILY_REPORT") {
                     validLogs7Days.push(log);
                 }
             });
 
             const logsThisWeek = validLogs7Days.filter(log => new Date(log.createdAt) >= startOfWeek);
 
-            // 🚀 ĐẨY CHANNEL MEMBERSHIPS VÀO HÀM TÍNH TOÁN
-            const kpiRes = calculateKpiForUser(logsThisWeek, myKpiThisWeek?.targetValue || 0, myKpiThisWeek?.targetDetails, role, myChannelMemberships);
+            // 🚀 TÍNH KPI NHÂN VIÊN GỌN NHẸ
+            const kpiRes = calculateKpiForUser(logsThisWeek, myKpiThisWeek?.targetValue || 0, myKpiThisWeek?.targetDetails);
 
+            // Đếm tổng số bài đã nộp từ trước đến nay
             const uniqueTasksAllTime = new Set();
             myLogsAllTimeRaw.forEach((log: any) => {
-                const actionStr = String(log.action || "").toUpperCase();
-                if (actionStr === "DAILY_REPORT") {
-                    uniqueTasksAllTime.add(log.taskId);
+                let jobCat = log.jobCategory;
+                if (!jobCat) {
+                    const text = String(log.details || "").toLowerCase();
+                    if (text.includes("kịch bản") || text.includes("bố cục")) jobCat = "CONTENT";
+                    else if (text.includes("prj") || text.includes("âm thanh") || text.includes("audio") || text.includes("video render")) jobCat = "EDIT";
+                    else if (text.includes("đã đăng") || text.includes("thumbnail")) jobCat = "PUBLISH";
+                    else if (text.includes("chuyển động")) jobCat = "ANIMATION";
+                }
+                if (jobCat && jobCat !== 'GENERAL') {
+                    uniqueTasksAllTime.add(`${log.taskId}_${jobCat}`);
                 }
             });
 
