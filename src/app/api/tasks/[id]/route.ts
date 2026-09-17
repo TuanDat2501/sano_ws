@@ -33,7 +33,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         const rawBody = await req.json();
 
         const transactionResult = await prisma.$transaction(async (tx) => {
-            // 🚀 BƯỚC 1: Lấy thông tin Task cũ kèm theo danh sách Co-Users để đối chiếu
             const oldTask = await tx.task.findUnique({ 
                 where: { id: taskId },
                 include: {
@@ -150,7 +149,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 logsToCreate.push({ action: "UPDATE_STATUS", details: `Từ [${oldTask.status}] sang [${body.status}]`, taskId, userId });
             }
 
-            // 🚀 BƯỚC 2: CHECK PHÂN CÔNG THỰC TẾ
+            // 🚀 BƯỚC 2: CHECK PHÂN CÔNG THỰC TẾ CỦA CHÍNH NGƯỜI ĐANG THAO TÁC
             const checkAssignment = (roleType: 'CONTENT' | 'EDITOR' | 'ANIMATOR' | 'PUBLISHER') => {
                 switch (roleType) {
                     case 'CONTENT':
@@ -184,7 +183,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                     let actionType: any = "UPDATE_LINK";
                     let logCategory: 'CONTENT' | 'EDIT' | 'ANIMATION' | 'PUBLISH' | 'GENERAL' = 'GENERAL';
 
-                    // 🚀 BƯỚC 3: GHI NHẬN LOG DỰA TRÊN QUYỀN HẠN VÀ GẮN RỔ TƯƠNG ỨNG
+                    // 🚀 BƯỚC 3: GHI NHẬN LOG DỰA TRÊN QUYỀN HẠN
+                    // Nếu chính chủ làm -> Được KPI (DAILY_REPORT + ĐÚNG RỔ). 
+                    // Nếu người khác (Leader) làm hộ -> Không ai có KPI (UPDATE_LINK + GENERAL).
                     if (newValue && newValue.trim() !== "") {
                         if (['scriptLink', 'storyboardLink'].includes(fieldName) && isContentAssigned) {
                             actionType = "DAILY_REPORT";
@@ -220,7 +221,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                             details: `Báo cáo tiến độ: Đã cập nhật ${label}`,
                             jobCategory: logCategory,
                             taskId,
-                            userId 
+                            userId // Lưu theo ID người điền link
                         });
                     } else {
                         logsToCreate.push({
