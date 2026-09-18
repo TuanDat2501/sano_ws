@@ -7,34 +7,56 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
     
     const displayLogs = activeKpi?.logs?.filter((log: any) => log.isCounted) || [];
 
-    // 🚀 HÀM PHỤ TRỢ: Lấy tên nhãn Báo Cáo chi tiết
+    // 🚀 HÀM PHỤ TRỢ: Lấy tên nhãn Báo Cáo chi tiết và tô màu chuyên nghiệp
     const getReportBadge = (log: any) => {
-        let badgeText = "BÁO CÁO";
-        let badgeColor = "bg-blue-50 text-blue-600 border-blue-200";
+        let badgeText = "BÁO CÁO TỔNG";
+        let badgeColor = "bg-slate-50 text-slate-600 border-slate-200";
 
-        // Lấy từ jobCategory trước (dữ liệu mới)
+        // Lấy từ jobCategory trực tiếp từ Database
         if (log.jobCategory) {
             switch (log.jobCategory) {
-                case 'CONTENT': badgeText = "BÁO CÁO: KỊCH BẢN"; badgeColor = "bg-orange-50 text-orange-600 border-orange-200"; break;
-                case 'EDIT': badgeText = "BÁO CÁO: DỰNG VIDEO"; badgeColor = "bg-blue-50 text-blue-600 border-blue-200"; break;
-                case 'ANIMATION': badgeText = "BÁO CÁO: CHUYỂN ĐỘNG"; badgeColor = "bg-purple-50 text-purple-600 border-purple-200"; break;
-                case 'PUBLISH': badgeText = "BÁO CÁO: UPLOAD (YT)"; badgeColor = "bg-rose-50 text-rose-600 border-rose-200"; break;
-                case 'MANUAL': badgeText = "BÁO CÁO: GÁN THỦ CÔNG"; badgeColor = "bg-emerald-50 text-emerald-600 border-emerald-200"; break;
+                case 'CONTENT': 
+                    badgeText = "BÁO CÁO: KỊCH BẢN"; 
+                    badgeColor = "bg-orange-50 text-orange-600 border-orange-200"; 
+                    break;
+                case 'EDIT': 
+                    // Tách biệt màu cho Edit Audio/Render nếu cần, hoặc để chung màu xanh dương
+                    badgeText = "BÁO CÁO: DỰNG VIDEO/AUDIO"; 
+                    badgeColor = "bg-blue-50 text-blue-600 border-blue-200"; 
+                    break;
+                case 'ANIMATION': 
+                    badgeText = "BÁO CÁO: CHUYỂN ĐỘNG"; 
+                    badgeColor = "bg-purple-50 text-purple-600 border-purple-200"; 
+                    break;
+                case 'PUBLISH': 
+                    // 🚀 ĐÃ SỬA: Thêm chữ THUMBNAIL vào rổ Publish cho rõ ràng
+                    badgeText = "BÁO CÁO: UPLOAD / THUMB"; 
+                    badgeColor = "bg-rose-50 text-rose-600 border-rose-200"; 
+                    break;
+                case 'MANUAL': 
+                    badgeText = "BÁO CÁO: GÁN THỦ CÔNG"; 
+                    badgeColor = "bg-emerald-50 text-emerald-600 border-emerald-200"; 
+                    break;
             }
         } 
-        // Fallback xử lý chuỗi details (dữ liệu cũ)
+        // Fallback xử lý chuỗi details cho các Log cũ sinh ra trước khi cập nhật tính năng
         else if (log.details) {
             const detailText = String(log.details).toLowerCase();
             if (detailText.includes("kịch bản") || detailText.includes("bố cục")) {
-                badgeText = "BÁO CÁO: KỊCH BẢN"; badgeColor = "bg-orange-50 text-orange-600 border-orange-200";
+                badgeText = "BÁO CÁO: KỊCH BẢN"; 
+                badgeColor = "bg-orange-50 text-orange-600 border-orange-200";
             } else if (detailText.includes("prj thô") || detailText.includes("link project") || detailText.includes("audio") || detailText.includes("video render")) {
-                badgeText = "BÁO CÁO: DỰNG VIDEO"; badgeColor = "bg-blue-50 text-blue-600 border-blue-200";
+                badgeText = "BÁO CÁO: DỰNG VIDEO/AUDIO"; 
+                badgeColor = "bg-blue-50 text-blue-600 border-blue-200";
             } else if (detailText.includes("chuyển động")) {
-                badgeText = "BÁO CÁO: CHUYỂN ĐỘNG"; badgeColor = "bg-purple-50 text-purple-600 border-purple-200";
+                badgeText = "BÁO CÁO: CHUYỂN ĐỘNG"; 
+                badgeColor = "bg-purple-50 text-purple-600 border-purple-200";
             } else if (detailText.includes("đã đăng") || detailText.includes("thumbnail")) {
-                badgeText = "BÁO CÁO: UPLOAD (YT)"; badgeColor = "bg-rose-50 text-rose-600 border-rose-200";
+                badgeText = "BÁO CÁO: UPLOAD / THUMB"; 
+                badgeColor = "bg-rose-50 text-rose-600 border-rose-200";
             } else if (detailText.includes("gán thủ công")) {
-                badgeText = "BÁO CÁO: GÁN THỦ CÔNG"; badgeColor = "bg-emerald-50 text-emerald-600 border-emerald-200";
+                badgeText = "BÁO CÁO: GÁN THỦ CÔNG"; 
+                badgeColor = "bg-emerald-50 text-emerald-600 border-emerald-200";
             }
         }
         
@@ -69,7 +91,7 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                                 {(activeKpi.totalTargetMinutes > 0 || activeKpi.totalActualMinutes > 0) && (
                                     <div className="inline-flex flex-col items-center mt-1">
                                         <p className="text-[11px] md:text-xs font-black text-blue-700 bg-blue-50 py-1.5 px-3 rounded-lg border border-blue-100">
-                                            Khối lượng (Phút): {activeKpi.totalActualMinutes || 0} / {activeKpi.targetValue > 0 ? activeKpi.totalTargetMinutes : '---'}
+                                            Khối lượng (Phút): {activeKpi.totalActualMinutes || 0} / {activeKpi.targetValue > 0 ? activeKpi.targetTargetMinutes : '---'}
                                         </p>
                                     </div>
                                 )}

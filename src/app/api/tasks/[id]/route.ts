@@ -191,21 +191,25 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                             actionType = "DAILY_REPORT";
                             logCategory = 'CONTENT';
                         }
-                        if (['audioLink', 'roughProjectLink', 'linkProject'].includes(fieldName) && isEditorAssigned) {
+                        else if (['audioLink', 'roughProjectLink', 'linkProject', 'videoLink'].includes(fieldName) && isEditorAssigned) {
                             actionType = "DAILY_REPORT";
                             logCategory = 'EDIT';
                         }
-                        if (['videoLink', 'thumbnailLink'].includes(fieldName) && (isEditorAssigned || isPublisherAssigned)) {
-                            actionType = "DAILY_REPORT";
-                            logCategory = isEditorAssigned ? 'EDIT' : 'PUBLISH'; 
-                        }
-                        if (['animationLink'].includes(fieldName) && isAnimatorAssigned) {
+                        else if (['animationLink'].includes(fieldName) && isAnimatorAssigned) {
                             actionType = "DAILY_REPORT";
                             logCategory = 'ANIMATION';
                         }
-                        if (['publishLink'].includes(fieldName) && isPublisherAssigned) {
-                            actionType = "DAILY_REPORT";
-                            logCategory = 'PUBLISH';
+                        else if (['thumbnailLink', 'publishLink'].includes(fieldName)) {
+                            // 🚀 FIX LỖI "LÀM TẤT ĂN CẢ": Ưu tiên đưa Thumbnail vào rổ PUBLISH
+                            if (isPublisherAssigned) {
+                                actionType = "DAILY_REPORT";
+                                logCategory = 'PUBLISH';
+                            } 
+                            // Lớp bảo hiểm: Nếu Task không có Publisher mà Editor phải tự làm Thumb -> Tính tạm vào rổ EDIT
+                            else if (isEditorAssigned && fieldName === 'thumbnailLink') {
+                                actionType = "DAILY_REPORT";
+                                logCategory = 'EDIT';
+                            }
                         }
                     }
 

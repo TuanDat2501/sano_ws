@@ -59,18 +59,25 @@ export default function DailyReportPage() {
     }, []);
 
     useEffect(() => {
+        // 🚀 ĐÃ SỬA: Phải đợi load xong data thì bảng mới đủ độ dài để cuộn
+        if (isLoading) return;
+
         const todayObj = new Date();
         todayObj.setHours(12, 0, 0, 0);
-        const todayKey = todayObj.toISOString().split('T')[0];
+        
+        // Xử lý múi giờ để tránh lệch ngày
+        const offset = todayObj.getTimezoneOffset() * 60000;
+        const todayKey = new Date(todayObj.getTime() - offset).toISOString().split('T')[0];
 
         const todayElem = document.getElementById(`day-col-${todayKey}`);
         if (todayElem && scrollContainerRef.current) {
             setTimeout(() => {
+                // Trừ đi 300px để cột ngày hiện tại nằm ở vị trí dễ nhìn (không bị sát mép trái)
                 const scrollLeft = todayElem.offsetLeft - 300; 
                 scrollContainerRef.current?.scrollTo({ left: Math.max(0, scrollLeft), behavior: 'smooth' });
-            }, 200);
+            }, 100); // Delay 100ms đợi DOM vẽ xong Grid
         }
-    }, [tableDays]);
+    }, [tableDays, isLoading]);`    `
 
     useEffect(() => {
         if (status === "loading") return;
