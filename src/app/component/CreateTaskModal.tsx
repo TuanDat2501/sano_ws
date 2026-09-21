@@ -3,13 +3,14 @@
 import { useState, useEffect } from "react";
 import { X, UsersIcon, Loader2, FileEdit, Film, Clock, Link as LinkIcon, FileText, Key, CalendarDays, MonitorPlay, UserCheck, RefreshCw, Search, Check } from "lucide-react";
 import { createPortal } from "react-dom";
+import { useToast } from "./ToastProvider"; 
 
 interface CreateTaskModalProps {
   isOpen: boolean; onClose: () => void; teams: any[]; users?: any[]; projects?: any[]; initialData?: any;
   onSubmit: (taskData: any) => Promise<void>; isSubmitting: boolean; errors: { [key: string]: string };
 }
 
-// 🚀 NÂNG CẤP COMPONENT: Thêm trạng thái Loading
+// 🚀 ĐÃ GỠ BỎ: Các viền đỏ cảnh báo và dấu sao bắt buộc
 const MultiSelectUser = ({ label, icon: Icon, options, selectedIds, onChange, disabled, isLoading }: any) => {
   const handleSelect = (e: React.ChangeEvent<HTMLSelectElement>) => {
     if (e.target.value) {
@@ -25,11 +26,13 @@ const MultiSelectUser = ({ label, icon: Icon, options, selectedIds, onChange, di
   return (
     <div>
       <label className="text-[10px] font-black text-emerald-600 uppercase tracking-widest flex items-center justify-between mb-1.5">
-        <span className="flex items-center gap-1.5"><Icon size={12} /> {label}</span>
+        <span className="flex items-center gap-1.5">
+            <Icon size={12} /> {label}
+        </span>
         {isLoading && <Loader2 size={10} className="animate-spin text-emerald-400" />}
       </label>
       <div className="flex flex-wrap gap-1.5 mb-2 min-h-[28px] p-1 bg-white border border-emerald-100 rounded-lg">
-        {selectedIds.length === 0 && <span className="text-xs text-slate-400 italic px-1">Chưa chọn ai...</span>}
+        {selectedIds.length === 0 && <span className="text-xs italic text-slate-400 px-1">Chưa chọn ai...</span>}
         {selectedIds.map((id: string) => {
           const opt = options.find((o: any) => o.id === id);
           return (
@@ -52,6 +55,7 @@ const MultiSelectUser = ({ label, icon: Icon, options, selectedIds, onChange, di
 
 export default function CreateTaskModal({ isOpen, onClose, teams, initialData, onSubmit, isSubmitting, errors }: CreateTaskModalProps) {
   const [mounted, setMounted] = useState(false);
+  const { showToast } = useToast(); 
 
   const [newTask, setNewTask] = useState({
     id: "", title: "", keywords: "", linkContent: "", 
@@ -66,17 +70,16 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
   const [teamProjects, setTeamProjects] = useState<any[]>([]);
   const [teamChannels, setTeamChannels] = useState<any[]>([]);
   
-  // States chứa danh sách nhân sự đã được LỌC THEO KÊNH
   const [teamContents, setTeamContents] = useState<any[]>([]);
   const [teamEditors, setTeamEditors] = useState<any[]>([]);
   const [teamAnimators, setTeamAnimators] = useState<any[]>([]);
   const [teamPublishers, setTeamPublishers] = useState<any[]>([]);
   
-  const [rawTeamUsers, setRawTeamUsers] = useState<any[]>([]); // Lưu toàn bộ user của team để dùng phòng hờ
+  const [rawTeamUsers, setRawTeamUsers] = useState<any[]>([]); 
 
   const [isLoadingProjects, setIsLoadingProjects] = useState(false);
   const [isLoadingChannels, setIsLoadingChannels] = useState(false);
-  const [isLoadingUsers, setIsLoadingUsers] = useState(false); // 🚀 Thêm state loading riêng cho User
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false); 
 
   const [isRework, setIsRework] = useState(false);
   const [reworkContent, setReworkContent] = useState(true);
@@ -133,7 +136,6 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
     }
   }, [isOpen, initialData]);
 
-  // 🚀 TÁCH RIÊNG FETCH THEO TEAM
   useEffect(() => {
     if (!newTask.teamId || !isOpen) {
         setTeamProjects([]); setTeamChannels([]); setRawTeamUsers([]); 
@@ -157,7 +159,6 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
         } finally { setIsLoadingChannels(false); }
     };
 
-    // 🚀 ĐÃ SỬA LẠI THEO YÊU CẦU: HIỂN THỊ TOÀN BỘ USER TRONG TEAM MẶC ĐỊNH
     const fetchUsers = async () => {
         setIsLoadingUsers(true);
         try {
@@ -166,13 +167,6 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
             const listUsers = Array.isArray(data.users) ? data.users : [];
             setRawTeamUsers(listUsers);
 
-            // Mặc định nạp dữ liệu toàn bộ Team (hoặc bạn có thể giữ nguyên bộ lọc Role cơ bản)
-            // Nếu bạn muốn dropdown HẾT LUÔN thì bỏ phần filter đi:
-            
-            // Cách 1: Vẫn chia Role nhưng lấy gốc (Như cũ)
-            // setTeamContents(listUsers.filter((u: any) => ['CONTENT', 'LEADER'].includes(u.role)));
-            
-            // Cách 2: SẾP YÊU CẦU HIỂN THỊ HẾT -> Lấy toàn bộ mảng User đưa vào Dropdown
             setTeamContents(listUsers);
             setTeamEditors(listUsers);
             setTeamAnimators(listUsers);
@@ -185,51 +179,6 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
     fetchChannels();
     fetchUsers();
   }, [newTask.teamId, isOpen]);
-
-  // 🚀 LOGIC ĐỘNG: LỌC LẠI DROPDOWN KHI CHỌN KÊNH
-  /* useEffect(() => {
-    if (!newTask.channelId || rawTeamUsers.length === 0) {
-        // Nếu không có Kênh, đổ lại dữ liệu Role gốc
-        setTeamContents(rawTeamUsers.filter((u: any) => ['CONTENT', 'LEADER'].includes(u.role)));
-        setTeamEditors(rawTeamUsers.filter((u: any) => ['EDITOR', 'LEADER'].includes(u.role)));
-        setTeamAnimators(rawTeamUsers.filter((u: any) => ['EDITOR', 'CONTENT', 'LEADER'].includes(u.role)));
-        setTeamPublishers(rawTeamUsers.filter((u: any) => ['PUBLISHER', 'LEADER'].includes(u.role)));
-        return;
-    }
-
-    setIsLoadingUsers(true);
-    
-    // Tạo timer siêu nhỏ để UI kịp cập nhật state Loading
-    const timer = setTimeout(() => {
-        const contents: any[] = [];
-        const editors: any[] = [];
-        const animators: any[] = [];
-        const publishers: any[] = [];
-
-        rawTeamUsers.forEach(user => {
-            // Tìm xem user này có role gì ở kênh hiện tại không
-            const channelMembership = user.channelMemberships?.find((cm: any) => cm.channelId === newTask.channelId);
-            
-            // Ưu tiên Role theo Kênh, nếu không có thì lấy Role gốc
-            const effectiveRole = channelMembership ? channelMembership.roleOnChannel : user.role;
-
-            if (['CONTENT', 'LEADER'].includes(effectiveRole)) contents.push(user);
-            if (['EDITOR', 'LEADER'].includes(effectiveRole)) editors.push(user);
-            if (['ANIMATOR', 'ANIMATION', 'LEADER'].includes(effectiveRole)) animators.push(user);
-            if (['PUBLISHER', 'CHANNEL_MANAGER', 'LEADER', 'SEO'].includes(effectiveRole)) publishers.push(user);
-        });
-
-        setTeamContents(contents);
-        setTeamEditors(editors);
-        setTeamAnimators(animators);
-        setTeamPublishers(publishers);
-        
-        setIsLoadingUsers(false);
-    }, 150);
-
-    return () => clearTimeout(timer);
-  }, [newTask.channelId, rawTeamUsers]); */
-
 
   useEffect(() => {
     if (isOpen && isRework && newTask.teamId) {
@@ -244,8 +193,15 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
 
   if (!isOpen || !mounted) return null;
 
+  const selectedChannel = teamChannels.find(c => c.id === newTask.channelId);
+  const isTongHopChannel = selectedChannel?.category === 'TONG_HOP';
+  const filteredProjects = newTask.channelId ? teamProjects.filter(p => p.channelId === newTask.channelId) : teamProjects;
+  
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+
+    // 🚀 ĐÃ GỠ BỎ: Toàn bộ Validation (If check) ép chọn nhân sự ở đây.
+
     const payload = { 
         ...newTask, 
         duration: newTask.duration ? Number(newTask.duration) : null,
@@ -276,10 +232,6 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
     onSubmit(payload);
   };
 
-  const selectedChannel = teamChannels.find(c => c.id === newTask.channelId);
-  const isTongHopChannel = selectedChannel?.category === 'TONG_HOP';
-  const filteredProjects = newTask.channelId ? teamProjects.filter(p => p.channelId === newTask.channelId) : teamProjects;
-  
   const filteredDoneTasks = doneTasks.filter(t => t.title.toLowerCase().includes(searchReworkTask.toLowerCase()));
 
   const handleSelectSourceTask = async (task: any) => {
@@ -460,9 +412,15 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
 
                 {/* ======== CỘT PHẢI: PHÂN BỔ ======== */}
                 <div className="space-y-4">
-                  <h3 className="font-bold text-[13px] text-slate-800 border-b border-slate-100 pb-2 flex items-center gap-2">
-                    <UsersIcon className="text-emerald-500" size={14} /> Phân bổ tài nguyên
-                  </h3>
+                  <div>
+                    <h3 className="font-bold text-[13px] text-slate-800 border-b border-slate-100 pb-2 flex items-center gap-2">
+                      <UsersIcon className="text-emerald-500" size={14} /> Phân bổ tài nguyên
+                    </h3>
+                    {/* 🚀 THÊM NOTE NHẮC NHỞ MÀU ĐỎ IN NGHIÊNG */}
+                    <p className="text-[11px] text-red-500 italic font-medium mt-2">
+                      * Lưu ý: Vui lòng phân công đủ nhân sự (nhất là Quản lý kênh) để hệ thống tính chính xác KPI!
+                    </p>
+                  </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="col-span-2">
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Team <span className="text-red-500">*</span></label>
@@ -497,9 +455,11 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
                     </div>
                     
                     <div className="col-span-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1.5"><UserCheck size={12} /> Quản lý kênh / Up Kênh</label>
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 flex items-center gap-1.5">
+                          <UserCheck size={12} /> Quản lý kênh / Up Kênh
+                      </label>
                       <select disabled={!newTask.teamId || isLoadingUsers} className="w-full border border-slate-200 rounded-xl p-2.5 outline-none font-bold text-sm text-slate-900 bg-slate-50 disabled:opacity-50 disabled:text-slate-400 cursor-pointer" value={newTask.publisherId} onChange={(e) => setNewTask({ ...newTask, publisherId: e.target.value })}>
-                        <option value="">{isLoadingUsers ? "-- Đang tải nhân sự --" : "-- Bỏ trống nếu chưa có --"}</option>
+                        <option value="">{isLoadingUsers ? "-- Đang tải nhân sự --" : "-- Có thể chọn sau --"}</option>
                         {teamPublishers.map((u: any) => <option key={u.id} value={u.id}>{u.fullName}</option>)}
                       </select>
                     </div>

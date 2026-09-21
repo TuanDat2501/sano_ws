@@ -51,17 +51,32 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             }
 
             if (rawBody.status !== undefined) body.status = rawBody.status;
-            if (rawBody.scriptLink !== undefined) body.scriptLink = rawBody.scriptLink;
-            if (rawBody.englishScriptLink !== undefined) body.englishScriptLink = rawBody.englishScriptLink;
-            if (rawBody.audioLink !== undefined) body.audioLink = rawBody.audioLink;
-            if (rawBody.storyboardLink !== undefined) body.storyboardLink = rawBody.storyboardLink;
-            if (rawBody.thumbnailLink !== undefined) body.thumbnailLink = rawBody.thumbnailLink;
-            if (rawBody.videoLink !== undefined) body.videoLink = rawBody.videoLink;
-            if (rawBody.publishLink !== undefined) body.publishLink = rawBody.publishLink;
-            if (rawBody.roughProjectLink !== undefined) body.roughProjectLink = rawBody.roughProjectLink;
-            if (rawBody.animationLink !== undefined) body.animationLink = rawBody.animationLink;
-            if (rawBody.linkProject !== undefined) body.linkProject = rawBody.linkProject;
             if (rawBody.note !== undefined) body.note = rawBody.note;
+
+            // 🚀 BẢO VỆ LINK: Tránh Modal xóa nhầm Link khi Update Thông Tin Task
+            const isFromModal = rawBody.title !== undefined || rawBody.teamId !== undefined;
+
+            const handleLinkField = (field: string) => {
+                if (rawBody[field] !== undefined) {
+                    if (isFromModal && rawBody[field] === "") {
+                        // Modal gửi "" -> Bỏ qua để bảo tồn link cũ
+                    } else {
+                        // Drawer gửi null -> Chấp nhận xóa. Hoặc gửi string -> Cập nhật.
+                        body[field] = rawBody[field];
+                    }
+                }
+            };
+
+            handleLinkField('scriptLink');
+            handleLinkField('englishScriptLink');
+            handleLinkField('audioLink');
+            handleLinkField('storyboardLink');
+            handleLinkField('thumbnailLink');
+            handleLinkField('videoLink');
+            handleLinkField('publishLink');
+            handleLinkField('roughProjectLink');
+            handleLinkField('animationLink');
+            handleLinkField('linkProject');
 
             if (rawBody.publishDate !== undefined) {
                 body.publishDate = rawBody.publishDate ? new Date(rawBody.publishDate) : null;
@@ -106,39 +121,44 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 }
             }
 
-            const linksToCheck = [
-                { key: 'scriptLink', value: body.scriptLink },
-                { key: 'audioLink', value: body.audioLink },
-                { key: 'storyboardLink', value: body.storyboardLink },
-                { key: 'animationLink', value: body.animationLink },
-                { key: 'roughProjectLink', value: body.roughProjectLink },
-                { key: 'thumbnailLink', value: body.thumbnailLink },
-                { key: 'videoLink', value: body.videoLink },
-                { key: 'linkProject', value: body.linkProject },
-                { key: 'publishLink', value: body.publishLink },
-            ].filter(l => l.value && l.value.trim() !== "");
+            // 🚀 FIX LỖI: Bỏ qua check trùng Link nếu Task đang sửa là Xào lại
+            const currentIsRework = rawBody.isRework !== undefined ? rawBody.isRework : oldTask.isRework;
 
-            if (linksToCheck.length > 0) {
-                const orConditions = linksToCheck.map(l => ({
-                    [l.key]: { contains: getBaseUrl(l.value).replace(/^https?:\/\//, '') }
-                }));
+            if (!currentIsRework) {
+                const linksToCheck = [
+                    { key: 'scriptLink', value: body.scriptLink },
+                    { key: 'audioLink', value: body.audioLink },
+                    { key: 'storyboardLink', value: body.storyboardLink },
+                    { key: 'animationLink', value: body.animationLink },
+                    { key: 'roughProjectLink', value: body.roughProjectLink },
+                    { key: 'thumbnailLink', value: body.thumbnailLink },
+                    { key: 'videoLink', value: body.videoLink },
+                    { key: 'linkProject', value: body.linkProject },
+                    { key: 'publishLink', value: body.publishLink },
+                ].filter(l => l.value && l.value.trim() !== "");
 
-                const potentialTasks = await tx.task.findMany({
-                    where: { id: { not: taskId }, OR: orConditions }
-                });
+                if (linksToCheck.length > 0) {
+                    const orConditions = linksToCheck.map(l => ({
+                        [l.key]: { contains: getBaseUrl(l.value).replace(/^https?:\/\//, '') }
+                    }));
 
-                let duplicateField = "";
-                const isDuplicate = potentialTasks.some(task => {
-                    return linksToCheck.some(l => {
-                        const dbValue = (task as any)[l.key];
-                        const isMatch = dbValue && getBaseUrl(dbValue) === getBaseUrl(l.value);
-                        if (isMatch) duplicateField = l.key;
-                        return isMatch;
+                    const potentialTasks = await tx.task.findMany({
+                        where: { id: { not: taskId }, OR: orConditions }
                     });
-                });
 
-                if (isDuplicate) {
-                    throw new Error(`Link này đã được sử dụng ở Task khác! Trường: ${duplicateField}`);
+                    let duplicateField = "";
+                    const isDuplicate = potentialTasks.some(task => {
+                        return linksToCheck.some(l => {
+                            const dbValue = (task as any)[l.key];
+                            const isMatch = dbValue && getBaseUrl(dbValue) === getBaseUrl(l.value);
+                            if (isMatch) duplicateField = l.key;
+                            return isMatch;
+                        });
+                    });
+
+                    if (isDuplicate) {
+                        throw new Error(`Link này đã được sử dụng ở Task khác! Trường: ${duplicateField}`);
+                    }
                 }
             }
 
@@ -175,7 +195,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             const isAnimatorAssigned = checkAssignment('ANIMATOR');
             const isPublisherAssigned = checkAssignment('PUBLISHER');
 
-            // 🚀 BƯỚC 1: Lấy mốc thời gian đầu ngày hôm nay để khoanh vùng Log
             const todayStart = new Date();
             todayStart.setHours(0, 0, 0, 0);
 
@@ -187,20 +206,24 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                     let logCategory: 'CONTENT' | 'EDIT' | 'ANIMATION' | 'PUBLISH' | 'GENERAL' = 'GENERAL';
 
                     if (newValue && newValue.trim() !== "") {
-                        if (['scriptLink', 'storyboardLink'].includes(fieldName) && isContentAssigned) {
+                        const isContentField = ['scriptLink', 'storyboardLink'].includes(fieldName);
+                        const isEditField = ['audioLink', 'roughProjectLink', 'linkProject', 'videoLink'].includes(fieldName);
+                        const isAnimField = ['animationLink'].includes(fieldName);
+                        const isPublishField = ['thumbnailLink', 'publishLink'].includes(fieldName);
+
+                        if (isContentField && isContentAssigned) {
                             actionType = "DAILY_REPORT";
                             logCategory = 'CONTENT';
                         }
-                        else if (['audioLink', 'roughProjectLink', 'linkProject', 'videoLink'].includes(fieldName) && isEditorAssigned) {
+                        else if (isEditField && isEditorAssigned) {
                             actionType = "DAILY_REPORT";
                             logCategory = 'EDIT';
                         }
-                        else if (['animationLink'].includes(fieldName) && isAnimatorAssigned) {
+                        else if (isAnimField && isAnimatorAssigned) {
                             actionType = "DAILY_REPORT";
                             logCategory = 'ANIMATION';
                         }
-                        // 🚀 CẬP NHẬT TỪ CASE TRƯỚC: Ép Thumbnail vào rổ Publish nếu có quyền
-                        else if (['thumbnailLink', 'publishLink'].includes(fieldName)) {
+                        else if (isPublishField) {
                             if (isPublisherAssigned) {
                                 actionType = "DAILY_REPORT";
                                 logCategory = 'PUBLISH';
@@ -211,9 +234,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                         }
                     }
 
-                    // 🚀 BƯỚC 2: BẢO VỆ KPI LỊCH SỬ
-                    // Chỉ xóa các log bị trùng (nhập đi nhập lại) sinh ra TRONG NGÀY HÔM NAY.
-                    // Log của ngày hôm qua hoặc tuần trước sẽ được giữ nguyên tuyệt đối.
                     logsToDelete.push({
                         taskId,
                         action: { in: ["DAILY_REPORT", "UPDATE_LINK"] },
