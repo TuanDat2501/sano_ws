@@ -227,10 +227,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                             if (isPublisherAssigned) {
                                 actionType = "DAILY_REPORT";
                                 logCategory = 'PUBLISH';
-                            } else if (isEditorAssigned && fieldName === 'thumbnailLink') {
-                                actionType = "DAILY_REPORT";
-                                logCategory = 'EDIT';
-                            }
+                            } 
+                            //else if (isEditorAssigned && fieldName === 'thumbnailLink') {
+                             //   actionType = "DAILY_REPORT";
+                              //  logCategory = 'EDIT';
+                            //}
                         }
                     }
 
