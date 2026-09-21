@@ -108,11 +108,16 @@ export default function KpiDashboard() {
     const isHighLevel = ["BAN_GIAM_DOC", "ADMIN", "HR", "KE_TOAN"].includes(userRole);
     const isManager = ["LEADER", "BAN_GIAM_DOC", "ADMIN", "HR", "KE_TOAN"].includes(userRole);
 
+    // 🚀 BỔ SUNG LOGIC: Gộp chung quyền Lọc Team cho HR, Admin, và Trưởng phòng (Leader + isTeamLeader)
+    const canFilterTeam = isHighLevel || currentUser?.isTeamLeader || currentUser?.permissions?.includes("MENU_TEAMS");
+
     const [mainTab, setMainTab] = useState<'KPI' | 'LOGS'>('KPI');
 
     const [teams, setTeams] = useState<any[]>([]);
     const [selectedTeamFilter, setSelectedTeamFilter] = useState<string>("ALL");
-    const queryTeamId = isHighLevel ? selectedTeamFilter : teamId;
+    
+    // 🚀 SỬA LẠI: Cho phép những người có quyền canFilterTeam sử dụng selectedTeamFilter
+    const queryTeamId = canFilterTeam ? selectedTeamFilter : teamId;
 
     const currentInfo = getCurrentWeekInfo();
     const [selectedYear, setSelectedYear] = useState(currentInfo.year);
@@ -140,10 +145,11 @@ export default function KpiDashboard() {
     }, [selectedMonth, selectedYear, availableWeeks]);
 
     useEffect(() => {
-        if (isHighLevel || session?.user.isTeamLeader) {
+        // 🚀 Chỉ tải danh sách Teams nếu có quyền filter
+        if (canFilterTeam) {
             fetch("/api/teams").then(res => res.ok ? res.json() : []).then(setTeams);
         }
-    }, [isHighLevel, session?.user.isTeamLeader]);
+    }, [canFilterTeam]);
 
     const fetchKpiData = async () => {
         setIsLoading(true);
@@ -153,12 +159,10 @@ export default function KpiDashboard() {
                     setIsLoading(false);
                     return;
                 }
-                let url = ""
-                if (session?.user.isTeamLeader) {
-                    url = `/api/kpi?teamId=ALL&year=${selectedYear}&month=${selectedMonth}&week=${selectedWeek}`
-                } else {
-                    url = `/api/kpi?teamId=${queryTeamId}&year=${selectedYear}&month=${selectedMonth}&week=${selectedWeek}`
-                }
+                
+                // 🚀 ĐÃ GỠ BỎ ĐOẠN IF ÉP CỨNG teamId=ALL CỦA isTeamLeader
+                const url = `/api/kpi?teamId=${queryTeamId}&year=${selectedYear}&month=${selectedMonth}&week=${selectedWeek}`;
+                
                 const res = await fetch(url);
                 const data = await res.json();
                 if (res.ok) {
@@ -266,10 +270,8 @@ export default function KpiDashboard() {
                     const uData = userMap.get(userKpi.userId);
                     uData.weeks[w] = userKpi;
 
-                    // 🚀 THUẬT TOÁN GOM NHÓM CHỐNG LỖI ĐẺ DÒNG THỪA
                     if (userKpi.targetDetails && userKpi.targetDetails.length > 0) {
                         userKpi.targetDetails.forEach((td: any) => {
-                            // Ép chuẩn kiểu dữ liệu để so sánh, tránh lỗi "30" khác 30 hoặc null khác false
                             const safeDuration = Number(td.duration) || 0;
                             const safeRework = Boolean(td.isRework);
                             const safeChannelName = td.channelName || "Khác";
@@ -406,12 +408,10 @@ export default function KpiDashboard() {
 
                         if (weekKpi) {
                             if (tIdx === 0) {
-                                // 🚀 ĐÃ BỎ ĐUÔI ,00% CHO SỐ LIỆU SẠCH SẼ
                                 percentStr = `${weekKpi.percent || 0}%`;
                             }
 
                             if (weekKpi.targetDetails && weekKpi.targetDetails.length > 0) {
-                                // 🚀 TÌM KIẾM ĐỒNG BỘ: Ép kiểu toàn bộ tránh lỗi
                                 const detail = weekKpi.targetDetails.find((d:any) => 
                                     (d.channelName || "Khác") === tg.channelName && 
                                     Number(d.duration) === Number(tg.duration) && 
@@ -491,7 +491,7 @@ export default function KpiDashboard() {
         }
     };
 
-    if (isManager && !isHighLevel && !queryTeamId) return <div className="h-full flex-1 p-8 text-center text-slate-500 flex items-center justify-center font-medium">Bạn chưa được phân vào Team nào để xem KPI.</div>;
+    if (isManager && !canFilterTeam && !queryTeamId) return <div className="h-full flex-1 p-8 text-center text-slate-500 flex items-center justify-center font-medium">Bạn chưa được phân vào Team nào để xem KPI.</div>;
 
     const activeKpi = kpiList.find(k => k.userId === viewingUserId);
     const totalPages = Math.ceil(kpiList.length / itemsPerPage);
@@ -535,7 +535,9 @@ export default function KpiDashboard() {
                         </div>
 
                         <div className="flex items-center gap-1 md:gap-2 bg-white p-1.5 md:p-2 rounded-xl shadow-sm border border-slate-200 overflow-x-auto w-full xl:w-auto custom-scrollbar-thin">
-                            {isHighLevel && (
+                            
+                            {/* 🚀 ĐÃ SỬA: Gom gọn 1 khung Dropdown Team duy nhất cho người có quyền canFilterTeam */}
+                            {canFilterTeam && (
                                 <div className="flex items-center gap-1 px-2 md:px-3 border-r border-slate-200 shrink-0">
                                     <Users size={14} className="text-slate-400 md:w-4 md:h-4" />
                                     <select className="bg-transparent text-xs md:text-sm font-black text-slate-800 outline-none cursor-pointer max-w-[100px] md:max-w-[140px] truncate" value={selectedTeamFilter} onChange={(e) => setSelectedTeamFilter(e.target.value)}>
@@ -545,16 +547,7 @@ export default function KpiDashboard() {
                                     </select>
                                 </div>
                             )}
-                            {session?.user.isTeamLeader && (
-                                <div className="flex items-center gap-1 px-2 md:px-3 border-r border-slate-200 shrink-0">
-                                    <Users size={14} className="text-slate-400 md:w-4 md:h-4" />
-                                    <select className="bg-transparent text-xs md:text-sm font-black text-slate-800 outline-none cursor-pointer max-w-[100px] md:max-w-[140px] truncate" value={selectedTeamFilter} onChange={(e) => setSelectedTeamFilter(e.target.value)}>
-                                        <option value="ALL">Toàn công ty</option>
-                                        <option value="" disabled>--- Chọn Team ---</option>
-                                        {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                                    </select>
-                                </div>
-                            )}
+
                             <div className="flex items-center gap-1 px-2 md:px-3 border-r border-slate-200 shrink-0">
                                 <span className="text-[10px] md:text-sm font-bold text-slate-500">Tháng:</span>
                                 <select className="bg-transparent text-xs md:text-sm font-black text-slate-800 outline-none cursor-pointer" value={selectedMonth} onChange={(e) => setSelectedMonth(Number(e.target.value))}>
@@ -598,6 +591,7 @@ export default function KpiDashboard() {
                                         teamId={queryTeamId}
                                         year={selectedYear}
                                         month={selectedMonth}
+                                        week={selectedWeek} 
                                     />
                                 </div>
 
