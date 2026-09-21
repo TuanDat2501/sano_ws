@@ -102,11 +102,14 @@ export async function GET(req: Request) {
                 const bucketMins: Record<string, number> = {};
                 const bucketTaskCount: Record<string, number> = {};
 
-                uniqueTasks.forEach(task => {
-                    const key = `${task.channel?.id || 'no_channel'}_${task.isRework ? 'rework' : 'new'}`;
-                    bucketMins[key] = (bucketMins[key] || 0) + Number(task.duration || 0);
-                    bucketTaskCount[key] = (bucketTaskCount[key] || 0) + 1; 
-                });
+                uniqueTasks.forEach((task, uniqueKey) => {
+                const jobCategory = uniqueKey.split('_').pop(); 
+                const isReworkBucket = (jobCategory === 'PUBLISH') ? false : task.isRework;
+
+                const key = `${task.channel?.id || 'no_channel'}_${isReworkBucket ? 'rework' : 'new'}`;
+                bucketMins[key] = (bucketMins[key] || 0) + Number(task.duration || 0);
+                bucketTaskCount[key] = (bucketTaskCount[key] || 0) + 1; 
+            });
 
                 const specificTargets: Record<string, any[]> = {};
                 const anyTargets: Record<string, any[]> = {};

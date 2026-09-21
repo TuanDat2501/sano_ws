@@ -90,7 +90,7 @@ export async function GET(req: Request) {
                     id: true,
                     action: true,
                     details: true,
-                    jobCategory: true, // 🚀 BỔ SUNG: Gọi nhãn nghiệp vụ từ Database
+                    jobCategory: true, 
                     createdAt: true,
                     taskId: true,
                     userId: true,
@@ -125,7 +125,6 @@ export async function GET(req: Request) {
             mappedLogs.forEach(log => {
                 if (!log.task) return;
 
-                // 🚀 LẤY TRỰC TIẾP TỪ DATABASE HOẶC FALLBACK DỮ LIỆU CŨ NẾU SÓT
                 let jobCategory = (log as any).jobCategory;
 
                 if (!jobCategory) {
@@ -138,10 +137,7 @@ export async function GET(req: Request) {
                     else jobCategory = "GENERAL";
                 }
 
-                // 🚀 LOGIC ĐẾM KPI CHỐT HẠ BẰNG RỔ NHIỆM VỤ
                 if (log.action === "DAILY_REPORT" && jobCategory && jobCategory !== 'GENERAL') {
-                    // 1 người làm Editor, up 3 link thuộc rổ EDIT thì uniqueKey vẫn chỉ là "taskId_EDIT" -> Tính 1 KPI.
-                    // Nhưng nếu họ up thêm link thuộc rổ PUBLISH -> Ra "taskId_PUBLISH" -> Cộng thành 2.
                     const uniqueKey = `${log.taskId}_${jobCategory}`; 
                     
                     if (!uniqueTasks.has(uniqueKey)) {
@@ -168,11 +164,20 @@ export async function GET(req: Request) {
             const bucketMins: Record<string, number> = {};
             const bucketTaskCount: Record<string, number> = {};
 
-            uniqueTasks.forEach(task => {
-                const key = `${task.channel?.id || 'no_channel'}_${task.isRework ? 'rework' : 'new'}`;
+            // 🚀 BẮT ĐẦU SỬA Ở ĐÂY: VÒNG LẶP ĐẾM BUCKET
+            uniqueTasks.forEach((task, uniqueKey) => {
+                // Bóc tách nhãn nghiệp vụ (VD: PUBLISH) từ uniqueKey (có format: taskId_jobCategory)
+                const jobCategory = uniqueKey.split('_').pop(); 
+                
+                // ĐẶC QUYỀN: Nếu khâu này là PUBLISH thì bất chấp Task mẹ có bị "xào lại" hay không,
+                // hệ thống vẫn ghi nhận đây là sản phẩm "Mới" cho người quản lý kênh.
+                const isReworkBucket = (jobCategory === 'PUBLISH') ? false : task.isRework;
+
+                const key = `${task.channel?.id || 'no_channel'}_${isReworkBucket ? 'rework' : 'new'}`;
                 bucketMins[key] = (bucketMins[key] || 0) + Number(task.duration || 0);
                 bucketTaskCount[key] = (bucketTaskCount[key] || 0) + 1; 
             });
+            // 🚀 KẾT THÚC ĐOẠN SỬA
 
             if (targetDetails && targetDetails.length > 0) {
                 const specificTargets: Record<string, any[]> = {};

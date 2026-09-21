@@ -146,10 +146,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             const logsToDelete: any[] = [];
 
             if (body.status && body.status !== oldTask.status) {
-                logsToCreate.push({ action: "UPDATE_STATUS", details: "`Từ [${oldTask.status}] sang [${body.status}]`", taskId, userId });
+                logsToCreate.push({ action: "UPDATE_STATUS", details: `Từ [${oldTask.status}] sang [${body.status}]`, taskId, userId });
             }
 
-            // 🚀 BƯỚC 2: CHECK PHÂN CÔNG THỰC TẾ CỦA CHÍNH NGƯỜI ĐANG THAO TÁC
             const checkAssignment = (roleType: 'CONTENT' | 'EDITOR' | 'ANIMATOR' | 'PUBLISHER') => {
                 switch (roleType) {
                     case 'CONTENT':
@@ -176,6 +175,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             const isAnimatorAssigned = checkAssignment('ANIMATOR');
             const isPublisherAssigned = checkAssignment('PUBLISHER');
 
+            // 🚀 BƯỚC 1: Lấy mốc thời gian đầu ngày hôm nay để khoanh vùng Log
+            const todayStart = new Date();
+            todayStart.setHours(0, 0, 0, 0);
+
             const addLinkLog = (fieldName: string, label: string) => {
                 if (body[fieldName] !== undefined && body[fieldName] !== (oldTask as any)[fieldName]) {
                     const newValue = body[fieldName];
@@ -183,9 +186,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                     let actionType: any = "UPDATE_LINK";
                     let logCategory: 'CONTENT' | 'EDIT' | 'ANIMATION' | 'PUBLISH' | 'GENERAL' = 'GENERAL';
 
-                    // 🚀 BƯỚC 3: GHI NHẬN LOG DỰA TRÊN QUYỀN HẠN
-                    // Nếu chính chủ làm -> Được KPI (DAILY_REPORT + ĐÚNG RỔ). 
-                    // Nếu người khác (Leader) làm hộ -> Không ai có KPI (UPDATE_LINK + GENERAL).
                     if (newValue && newValue.trim() !== "") {
                         if (['scriptLink', 'storyboardLink'].includes(fieldName) && isContentAssigned) {
                             actionType = "DAILY_REPORT";
@@ -199,24 +199,26 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                             actionType = "DAILY_REPORT";
                             logCategory = 'ANIMATION';
                         }
+                        // 🚀 CẬP NHẬT TỪ CASE TRƯỚC: Ép Thumbnail vào rổ Publish nếu có quyền
                         else if (['thumbnailLink', 'publishLink'].includes(fieldName)) {
-                            // 🚀 FIX LỖI "LÀM TẤT ĂN CẢ": Ưu tiên đưa Thumbnail vào rổ PUBLISH
                             if (isPublisherAssigned) {
                                 actionType = "DAILY_REPORT";
                                 logCategory = 'PUBLISH';
-                            } 
-                            // Lớp bảo hiểm: Nếu Task không có Publisher mà Editor phải tự làm Thumb -> Tính tạm vào rổ EDIT
-                            else if (isEditorAssigned && fieldName === 'thumbnailLink') {
+                            } else if (isEditorAssigned && fieldName === 'thumbnailLink') {
                                 actionType = "DAILY_REPORT";
                                 logCategory = 'EDIT';
                             }
                         }
                     }
 
+                    // 🚀 BƯỚC 2: BẢO VỆ KPI LỊCH SỬ
+                    // Chỉ xóa các log bị trùng (nhập đi nhập lại) sinh ra TRONG NGÀY HÔM NAY.
+                    // Log của ngày hôm qua hoặc tuần trước sẽ được giữ nguyên tuyệt đối.
                     logsToDelete.push({
                         taskId,
                         action: { in: ["DAILY_REPORT", "UPDATE_LINK"] },
-                        details: { contains: label }
+                        details: { contains: label },
+                        createdAt: { gte: todayStart } 
                     });
 
                     if (newValue && newValue.trim() !== "") {
@@ -225,7 +227,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                             details: `Báo cáo tiến độ: Đã cập nhật ${label}`,
                             jobCategory: logCategory,
                             taskId,
-                            userId // Lưu theo ID người điền link
+                            userId
                         });
                     } else {
                         logsToCreate.push({

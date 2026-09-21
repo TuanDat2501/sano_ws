@@ -12,7 +12,7 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
         let badgeText = "BÁO CÁO TỔNG";
         let badgeColor = "bg-slate-50 text-slate-600 border-slate-200";
 
-        // Lấy từ jobCategory trực tiếp từ Database
+        // Lấy từ jobCategory trực tiếp từ genDatabase
         if (log.jobCategory) {
             switch (log.jobCategory) {
                 case 'CONTENT': 

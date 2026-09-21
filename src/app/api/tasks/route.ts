@@ -176,42 +176,44 @@ export async function POST(req: Request) {
     const rawLink = linkContent;
 
     // 🚀 CHẶN TRÙNG LẶP (ĐÃ LOẠI BỎ CHẶN linkContent THEO YÊU CẦU)
-    const linksToCheck = [
-        { key: 'scriptLink', value: scriptLink },
-        { key: 'audioLink', value: audioLink },
-        { key: 'storyboardLink', value: storyboardLink },
-        { key: 'animationLink', value: animationLink },
-        { key: 'roughProjectLink', value: roughProjectLink },
-        { key: 'thumbnailLink', value: thumbnailLink },
-        { key: 'videoLink', value: videoLink },
-        { key: 'linkProject', value: linkProject },
-        { key: 'publishLink', value: publishLink },
-    ].filter(l => l.value && l.value.trim() !== "");
+    if (!isRework) {
+        const linksToCheck = [
+            { key: 'scriptLink', value: scriptLink },
+            { key: 'audioLink', value: audioLink },
+            { key: 'storyboardLink', value: storyboardLink },
+            { key: 'animationLink', value: animationLink },
+            { key: 'roughProjectLink', value: roughProjectLink },
+            { key: 'thumbnailLink', value: thumbnailLink },
+            { key: 'videoLink', value: videoLink },
+            { key: 'linkProject', value: linkProject },
+            { key: 'publishLink', value: publishLink },
+        ].filter(l => l.value && l.value.trim() !== "");
 
-    if (linksToCheck.length > 0) {
-        const orConditions = linksToCheck.map(l => ({
-            [l.key]: { contains: getBaseUrl(l.value).replace(/^https?:\/\//, '') }
-        }));
+        if (linksToCheck.length > 0) {
+            const orConditions = linksToCheck.map(l => ({
+                [l.key]: { contains: getBaseUrl(l.value).replace(/^https?:\/\//, '') }
+            }));
 
-        const potentialDuplicateTasks = await prisma.task.findMany({
-            where: { OR: orConditions }
-        });
-
-        let duplicateField = "";
-        const isDuplicate = potentialDuplicateTasks.some(task => {
-            return linksToCheck.some(l => {
-                const dbValue = (task as any)[l.key];
-                const isMatch = dbValue && getBaseUrl(dbValue) === getBaseUrl(l.value);
-                if (isMatch) duplicateField = l.key;
-                return isMatch;
+            const potentialDuplicateTasks = await prisma.task.findMany({
+                where: { OR: orConditions }
             });
-        });
 
-        if (isDuplicate) {
-            return NextResponse.json(
-                { error: `Link này đã tồn tại ở một Task khác trên hệ thống! Trường: ${duplicateField}` }, 
-                { status: 400 }
-            );
+            let duplicateField = "";
+            const isDuplicate = potentialDuplicateTasks.some(task => {
+                return linksToCheck.some(l => {
+                    const dbValue = (task as any)[l.key];
+                    const isMatch = dbValue && getBaseUrl(dbValue) === getBaseUrl(l.value);
+                    if (isMatch) duplicateField = l.key;
+                    return isMatch;
+                });
+            });
+
+            if (isDuplicate) {
+                return NextResponse.json(
+                    { error: `Link này đã tồn tại ở một Task khác trên hệ thống! Trường: ${duplicateField}` }, 
+                    { status: 400 }
+                );
+            }
         }
     }
 
