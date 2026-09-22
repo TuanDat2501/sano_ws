@@ -39,6 +39,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                     coContentUsers: { select: { id: true } },
                     coEditorUsers: { select: { id: true } },
                     coAnimatorUsers: { select: { id: true } }
+                    // 🚀 KHÔNG CẦN INCLUDE PUBLISHERUSER NỮA VÌ CHỈ CẦN publisherId LÀ ĐỦ
                 }
             });
             if (!oldTask) throw new Error("Task không tồn tại");
@@ -53,15 +54,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             if (rawBody.status !== undefined) body.status = rawBody.status;
             if (rawBody.note !== undefined) body.note = rawBody.note;
 
-            // 🚀 BẢO VỆ LINK: Tránh Modal xóa nhầm Link khi Update Thông Tin Task
             const isFromModal = rawBody.title !== undefined || rawBody.teamId !== undefined;
 
             const handleLinkField = (field: string) => {
                 if (rawBody[field] !== undefined) {
                     if (isFromModal && rawBody[field] === "") {
-                        // Modal gửi "" -> Bỏ qua để bảo tồn link cũ
                     } else {
-                        // Drawer gửi null -> Chấp nhận xóa. Hoặc gửi string -> Cập nhật.
                         body[field] = rawBody[field];
                     }
                 }
@@ -97,6 +95,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 if (rawBody.duration !== undefined) body.duration = rawBody.duration;
                 if (rawBody.channelId !== undefined) body.channelId = rawBody.channelId || null;
                 if (rawBody.priority !== undefined) body.priority = rawBody.priority;
+                
+                // Cập nhật lại ID Publisher nếu có thay đổi từ Modal
                 if (rawBody.publisherId !== undefined) body.publisherId = rawBody.publisherId || null;
 
                 if (rawBody.contentIds !== undefined) {
@@ -121,7 +121,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 }
             }
 
-            // 🚀 FIX LỖI: Bỏ qua check trùng Link nếu Task đang sửa là Xào lại
             const currentIsRework = rawBody.isRework !== undefined ? rawBody.isRework : oldTask.isRework;
 
             if (!currentIsRework) {
@@ -184,6 +183,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                                (rawBody.animatorIds || []).includes(userId) || 
                                oldTask.coAnimatorUsers?.some((u: any) => u.id === userId);
                     case 'PUBLISHER':
+                        // 🚀 KIỂM TRA CHẶT ID QUẢN LÝ KÊNH
                         return (body.publisherId ?? oldTask.publisherId) === userId;
                     default:
                         return false;
@@ -193,6 +193,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             const isContentAssigned = checkAssignment('CONTENT');
             const isEditorAssigned = checkAssignment('EDITOR');
             const isAnimatorAssigned = checkAssignment('ANIMATOR');
+            
+            // Lấy kết quả kiểm tra người up link có phải là Publisher hay không
             const isPublisherAssigned = checkAssignment('PUBLISHER');
 
             const todayStart = new Date();
@@ -211,6 +213,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                         const isAnimField = ['animationLink'].includes(fieldName);
                         const isPublishField = ['thumbnailLink', 'publishLink'].includes(fieldName);
 
+                        // 🚀 ÁP DỤNG TRỞ LẠI LOGIC CHẶN GHI ĐIỂM NẾU KHÔNG ĐÚNG NGƯỜI
                         if (isContentField && isContentAssigned) {
                             actionType = "DAILY_REPORT";
                             logCategory = 'CONTENT';
@@ -224,14 +227,16 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                             logCategory = 'ANIMATION';
                         }
                         else if (isPublishField) {
+                            // 🚀 TRẢ VỀ ĐÚNG QUY CỦ: CHỈ PUBLISHER XỊN MỚI ĐƯỢC TÍNH ĐIỂM
                             if (isPublisherAssigned) {
                                 actionType = "DAILY_REPORT";
                                 logCategory = 'PUBLISH';
                             } 
-                            //else if (isEditorAssigned && fieldName === 'thumbnailLink') {
-                             //   actionType = "DAILY_REPORT";
-                              //  logCategory = 'EDIT';
-                            //}
+                            // Nếu Editor up thumbnail thì vẫn cho tính là EDIT
+                            else if (isEditorAssigned && fieldName === 'thumbnailLink') {
+                                actionType = "DAILY_REPORT";
+                                logCategory = 'EDIT';
+                            }
                         }
                     }
 
@@ -321,7 +326,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                     ...(body.coContentUsers && { coContentUsers: body.coContentUsers }),
                     ...(body.coEditorUsers && { coEditorUsers: body.coEditorUsers }),
                     ...(body.coAnimatorUsers && { coAnimatorUsers: body.coAnimatorUsers }),
-                    publisherId: body.publisherId !== undefined ? body.publisherId : undefined
+                    publisherId: body.publisherId !== undefined ? body.publisherId : undefined // Đảm bảo ID Publisher được cập nhật
                 }
             });
 
