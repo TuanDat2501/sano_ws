@@ -151,7 +151,7 @@ export default function ChannelFormDrawer({
                                         <h3 className="text-xl md:text-2xl font-black text-slate-900">{formData.name}</h3>
                                         <button onClick={() => setIsEditMode(true)} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all" title="Chỉnh sửa kênh"><Edit3 size={18} /></button>
                                     </div>
-                                    <a href={`https:/${formData.link}`} target="_blank" className="text-sm font-medium text-slate-500 hover:text-blue-600 mt-0.5 inline-block transition-colors">{formData.link || "youtube.com/@..."}</a>
+                                    <a href={`${formData.link}`} target="_blank" className="text-sm font-medium text-slate-500 hover:text-blue-600 mt-0.5 inline-block transition-colors">{formData.link || "youtube.com/@..."}</a>
                                     
                                     <div className="flex flex-wrap items-center justify-center md:justify-start gap-2.5 mt-3.5">
                                         <div className={`px-3 py-1 rounded-full border text-[10px] font-black tracking-wide flex items-center gap-1.5 shadow-sm ${formData.category === 'AI' ? 'bg-purple-50 text-purple-700 border-purple-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>

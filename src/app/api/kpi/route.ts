@@ -138,7 +138,7 @@ export async function GET(req: Request) {
                 }
 
                 if (log.action === "DAILY_REPORT" && jobCategory && jobCategory !== 'GENERAL') {
-                    const uniqueKey = `${log.taskId}_${jobCategory}`; 
+                    const uniqueKey = jobCategory === 'MANUAL' ? `${log.id}_MANUAL` : `${log.taskId}_${jobCategory}`; 
                     
                     if (!uniqueTasks.has(uniqueKey)) {
                         uniqueTasks.set(uniqueKey, log.task);
@@ -164,20 +164,14 @@ export async function GET(req: Request) {
             const bucketMins: Record<string, number> = {};
             const bucketTaskCount: Record<string, number> = {};
 
-            // 🚀 BẮT ĐẦU SỬA Ở ĐÂY: VÒNG LẶP ĐẾM BUCKET
             uniqueTasks.forEach((task, uniqueKey) => {
-                // Bóc tách nhãn nghiệp vụ (VD: PUBLISH) từ uniqueKey (có format: taskId_jobCategory)
                 const jobCategory = uniqueKey.split('_').pop(); 
-                
-                // ĐẶC QUYỀN: Nếu khâu này là PUBLISH thì bất chấp Task mẹ có bị "xào lại" hay không,
-                // hệ thống vẫn ghi nhận đây là sản phẩm "Mới" cho người quản lý kênh.
                 const isReworkBucket = (jobCategory === 'PUBLISH') ? false : task.isRework;
 
                 const key = `${task.channel?.id || 'no_channel'}_${isReworkBucket ? 'rework' : 'new'}`;
                 bucketMins[key] = (bucketMins[key] || 0) + Number(task.duration || 0);
                 bucketTaskCount[key] = (bucketTaskCount[key] || 0) + 1; 
             });
-            // 🚀 KẾT THÚC ĐOẠN SỬA
 
             if (targetDetails && targetDetails.length > 0) {
                 const specificTargets: Record<string, any[]> = {};
@@ -251,6 +245,37 @@ export async function GET(req: Request) {
                     totalActualMinutes += res.assignedMinsTotal;
                 });
 
+                let remainingMinsGlobal = 0;
+                let remainingTasksGlobal = 0;
+                Object.keys(bucketMins).forEach(bKey => {
+                    remainingMinsGlobal += bucketMins[bKey];
+                    remainingTasksGlobal += bucketTaskCount[bKey];
+                });
+
+                if (remainingTasksGlobal > 0) {
+                    targetDetails.forEach(t => {
+                         const tMins = Number(t.targetCount) * Number(t.duration);
+                         const minShortage = tMins - (t.actualMinutes || 0);
+                         const countShortage = Number(t.targetCount) - (t.actualCount || 0);
+
+                         if (countShortage > 0 && remainingTasksGlobal > 0) {
+                             const fillCount = Math.min(countShortage, remainingTasksGlobal);
+                             const fillMins = Math.min(minShortage, remainingMinsGlobal);
+
+                             t.actualCount = (t.actualCount || 0) + fillCount;
+                             t.actualMinutes = (t.actualMinutes || 0) + fillMins;
+
+                             remainingTasksGlobal -= fillCount;
+                             remainingMinsGlobal -= fillMins;
+                             totalActualMinutes += fillMins;
+                         }
+                    });
+
+                    if (remainingMinsGlobal > 0) {
+                        totalActualMinutes += remainingMinsGlobal;
+                    }
+                }
+
                 percent = totalTargetMinutes > 0 ? Math.round((totalActualMinutes / totalTargetMinutes) * 100) : 0;
             } else {
                 percent = targetValue > 0 ? Math.round((actualCount / targetValue) * 100) : 0;
@@ -263,6 +288,9 @@ export async function GET(req: Request) {
                 teamName: user.team?.name || "Chưa có team", 
                 targetValue, actualValue: actualCount, percent, logs: allUserLogs, 
                 targetDetails, totalTargetMinutes, totalActualMinutes,
+                note: kpiRecord?.note || "",
+                isLocked: kpiRecord?.isLocked || false, // 🚀 TRẢ VỀ FRONTEND ĐỂ HIỆN Ổ KHÓA
+                oldTargetValue: kpiRecord?.oldTargetValue || null,
                 avatarUrl: user.avatarUrl || null
             };
         });
@@ -288,7 +316,7 @@ export async function POST(req: Request) {
         }
 
         const body = await req.json();
-        const { userId, year, month, weekNumber, targetValue, targetDetails } = body;
+        const { userId, year, month, weekNumber, targetValue, targetDetails, note } = body;
         
         const pYear = parseInt(year);
         const pMonth = parseInt(month);
@@ -299,8 +327,6 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "Thiếu dữ liệu" }, { status: 400 });
         }
 
-        const targetDetailsJson = targetDetails ? targetDetails : [];
-
         const existingKPI = await prisma.weeklyKPI.findFirst({
             where: {
                 userId: userId,
@@ -310,25 +336,38 @@ export async function POST(req: Request) {
             }
         });
 
+        // 🚀 CẢNH VỆ BACKEND: CHẶN CỨNG NẾU ĐÃ BỊ KHÓA MÀ KHÔNG PHẢI ADMIN/HR
+        const isAdminOrHR = ["ADMIN", "BAN_GIAM_DOC", "HR"].includes(currentUser?.role);
+        if (existingKPI?.isLocked && !isAdminOrHR) {
+            return NextResponse.json({ error: "Tuần này đã bị chốt KPI, không thể chỉnh sửa!" }, { status: 403 });
+        }
+
+        const targetDetailsJson = targetDetails ? targetDetails : [];
         let kpiRecord;
 
         if (existingKPI) {
+            // 🚀 LOGIC TỰ ĐỘNG LƯU SỐ CŨ
+            let oldTargetToSave = existingKPI.oldTargetValue;
+            if (existingKPI.targetValue !== pTarget) {
+                oldTargetToSave = existingKPI.targetValue; // Nếu có thay đổi, lấy số hiện tại làm số cũ
+            }
+
             kpiRecord = await prisma.weeklyKPI.update({
                 where: { id: existingKPI.id },
                 data: { 
                     targetValue: pTarget,
-                    targetDetails: targetDetailsJson 
+                    oldTargetValue: oldTargetToSave, // 🚀 LƯU VÀO DB
+                    targetDetails: targetDetailsJson,
+                    note: note || null 
                 }
             });
         } else {
             kpiRecord = await prisma.weeklyKPI.create({
                 data: { 
-                    userId, 
-                    year: pYear, 
-                    month: pMonth, 
-                    weekNumber: pWeek, 
+                    userId, year: pYear, month: pMonth, weekNumber: pWeek, 
                     targetValue: pTarget,
-                    targetDetails: targetDetailsJson
+                    targetDetails: targetDetailsJson,
+                    note: note || null 
                 }
             });
         }

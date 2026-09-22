@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import { TrendingUp, Calendar, Users, ChevronLeft, ChevronRight, Database, Download, Loader2 } from "lucide-react";
+import { TrendingUp, Calendar, Users, ChevronLeft, ChevronRight, Database, Download, Loader2,Lock } from "lucide-react";
 import { useToast } from "@/app/component/ToastProvider";
 
 import KpiEmployeeDetail from "./components/KpiEmployeeDetail";
@@ -204,14 +204,17 @@ export default function KpiDashboard() {
         }
     }, [kpiList, currentUser, viewingUserId, isManager]);
 
-    const handleUpdateTarget = async (userId: string, newTarget: string | number, targetDetails: any[] = []) => {
+    // 🚀 BỔ SUNG THAM SỐ note VÀ GỬI LÊN API
+    const handleUpdateTarget = async (userId: string, newTarget: string | number, targetDetails: any[] = [], note: string = "") => {
         const targetNum = parseInt(newTarget as string);
         if (isNaN(targetNum) || targetNum < 0) return;
 
         setKpiList(prev => prev.map(k => {
             if (k.userId === userId) {
+                // 🚀 LẤY SỐ HIỆN TẠI LÀM SỐ CŨ TRƯỚC KHI GHI ĐÈ SỐ MỚI
+                const oldT = k.targetValue !== targetNum ? k.targetValue : k.oldTargetValue;
                 const newPercent = targetNum > 0 ? Math.round((k.actualValue / targetNum) * 100) : 0;
-                return { ...k, targetValue: targetNum, percent: newPercent, targetDetails };
+                return { ...k, targetValue: targetNum, oldTargetValue: oldT, percent: newPercent, targetDetails, note };
             }
             return k;
         }));
@@ -222,7 +225,7 @@ export default function KpiDashboard() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     userId, year: selectedYear, month: selectedMonth, weekNumber: selectedWeek,
-                    targetValue: targetNum, targetDetails 
+                    targetValue: targetNum, targetDetails, note 
                 })
             });
 
@@ -531,6 +534,11 @@ export default function KpiDashboard() {
                             <p className="text-xs md:text-sm font-medium text-slate-500 mt-1 md:mt-1.5 flex items-center gap-1.5 md:gap-2">
                                 <Calendar size={14} className="md:w-4 md:h-4" />
                                 {selectedWeek === 0 ? `Tháng ${selectedMonth}/${selectedYear}` : getWeekData(selectedYear, selectedMonth, selectedWeek).label}
+                                {kpiList.length > 0 && kpiList[0]?.isLocked && (
+                                    <span className="bg-red-50 text-red-600 px-2.5 py-0.5 rounded-md border border-red-200 text-[10px] md:text-[11px] font-black uppercase flex items-center gap-1 shadow-sm ml-1 md:ml-2">
+                                        <Lock size={12} strokeWidth={2.5} /> ĐÃ CHỐT SỔ (KHÓA KPI)
+                                    </span>
+                                )}
                             </p>
                         </div>
 

@@ -43,7 +43,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
         // Kiểm tra quyền động từ mảng permissions
         const currentUser = session.user as any;
-        const hasPermission = currentUser.permissions?.includes("MENU_CHANNELS") || currentUser.role === "ADMIN";
+        const hasPermission = currentUser.permissions?.includes("MENU_CHANNELS") || currentUser.role === "ADMIN"|| currentUser.role === "LEADER";
 
         if (!hasPermission) {
             return NextResponse.json({ error: "Bạn không có quyền sửa Kênh!" }, { status: 403 });

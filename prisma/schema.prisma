@@ -335,8 +335,10 @@ model WeeklyKPI {
   month       Int
   weekNumber  Int
   targetValue Int 
-
+  oldTargetValue Int?
+  isLocked      Boolean  @default(false)
   userId String
+  note        String? @db.Text
   user   User   @relation(fields: [userId], references: [id])
   targetDetails Json?
   @@unique([userId, year, month, weekNumber], name: "user_time_unique")
