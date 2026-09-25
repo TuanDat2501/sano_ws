@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Network, Loader2 } from "lucide-react";
 import ReactFlow, { Background, Controls, MiniMap, addEdge, useNodesState, useEdgesState } from "reactflow";
-import "reactflow/dist/style.css"; 
+import "reactflow/dist/style.css";
 import dagre from "dagre";
 import CustomNode from "./CustomNode";
 import { useToast } from "@/app/component/ToastProvider";
@@ -17,8 +17,8 @@ const nodeTypes = {
 const getLayoutedElements = (nodes: any[], edges: any[], direction = 'TB') => {
     const dagreGraph = new dagre.graphlib.Graph();
     dagreGraph.setDefaultEdgeLabel(() => ({}));
-    
-    const nodeWidth = 260; 
+
+    const nodeWidth = 260;
     const nodeHeight = 160;
 
     dagreGraph.setGraph({ rankdir: direction, nodesep: 40, ranksep: 60 });
@@ -45,7 +45,7 @@ const getLayoutedElements = (nodes: any[], edges: any[], direction = 'TB') => {
 export default function OrgChartPage() {
     const { showToast } = useToast();
     const [loading, setLoading] = useState(true);
-    
+
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [selectedNodeData, setSelectedNodeData] = useState<any>(null);
 
@@ -74,10 +74,10 @@ export default function OrgChartPage() {
         ]).then(([teamsData, deptsData, usersData, channelsData]) => {
             const initialNodes: any[] = [];
             const initialEdges: any[] = [];
-            
-            const bgdUsers = usersData.filter((u: any) => u.role === "BAN_GIAM_DOC" );
+
+            const bgdUsers = usersData.filter((u: any) => u.role === "BAN_GIAM_DOC");
             const bgdTeamIds = bgdUsers.map((u: any) => u.teamId).filter(Boolean);
-            const bgdDeptIds = bgdTeamIds.map((tid: string) => teamsData.find((t:any) => t.id === tid)?.departmentId).filter(Boolean);
+            const bgdDeptIds = bgdTeamIds.map((tid: string) => teamsData.find((t: any) => t.id === tid)?.departmentId).filter(Boolean);
 
             const rootId = "root_bgd";
             initialNodes.push({
@@ -89,8 +89,8 @@ export default function OrgChartPage() {
                 const userNodeId = `user_${user.id}`;
                 initialNodes.push({
                     id: userNodeId, type: 'custom', position: { x: 0, y: 0 },
-                    data: { 
-                        label: user.fullName, role: user.role === "ADMIN" ? "Giám Đốc" : "Phó Giám Đốc", 
+                    data: {
+                        label: user.fullName, role: user.role === "ADMIN" ? "Giám Đốc" : "Phó Giám Đốc",
                         borderColor: 'border-red-300', textColor: 'text-red-600', fullUserObj: user, targetPosition: 'top'
                     }
                 });
@@ -108,7 +108,7 @@ export default function OrgChartPage() {
 
             teamsData.filter((t: any) => !bgdTeamIds.includes(t.id)).forEach((team: any) => {
                 const teamNodeId = `team_${team.id}`;
-                const parentId = team.departmentId && !bgdDeptIds.includes(team.departmentId) ? `dept_${team.departmentId}` : rootId; 
+                const parentId = team.departmentId && !bgdDeptIds.includes(team.departmentId) ? `dept_${team.departmentId}` : rootId;
                 initialNodes.push({
                     id: teamNodeId, type: 'custom', position: { x: 0, y: 0 },
                     data: { label: team.name, role: "Team", borderColor: "border-slate-800", textColor: "text-slate-800", isSystemNode: true, desc: team.description, targetPosition: 'top' }
@@ -153,9 +153,9 @@ export default function OrgChartPage() {
                     const uId = `user_${u.id}`;
                     initialNodes.push({
                         id: uId, type: 'custom', position: { x: 0, y: 0 },
-                        data: { 
-                            label: u.fullName, role: u.role, actual: u.currentWeekStats?.actual || 0, target: u.currentWeekStats?.target || 0, 
-                            surplusDetails: u.surplusDetails || [], surplusTaskList: u.surplusTaskList || [], 
+                        data: {
+                            label: u.fullName, role: u.role, actual: u.currentWeekStats?.actual || 0, target: u.currentWeekStats?.target || 0,
+                            surplusDetails: u.surplusDetails || [], surplusTaskList: u.surplusTaskList || [],
                             avatar: u.avatarUrl || null, borderColor: 'border-red-300', textColor: 'text-red-600', fullUserObj: u, targetPosition: 'top'
                         }
                     });
@@ -166,10 +166,11 @@ export default function OrgChartPage() {
                 if (channels.length > 0) {
                     const membersByChannel: Record<string, any[]> = {};
                     channels.forEach(c => membersByChannel[c.id] = []);
-                    
+
                     const unassigned: any[] = [];
-                    
-                    members.forEach(u => {
+
+                    // SỬA LỖI QUAN TRỌNG: Lặp qua 'users' thay vì 'members' để bao gồm cả LEADER
+                    users.forEach(u => {
                         const userChannels = u.channelMemberships || [];
                         if (userChannels.length > 0) {
                             let assignedToAtLeastOne = false;
@@ -179,11 +180,14 @@ export default function OrgChartPage() {
                                     assignedToAtLeastOne = true;
                                 }
                             });
-                            if (!assignedToAtLeastOne) {
+                            // Nếu không gắn vào kênh nào mà cũng không phải Leader thì vứt vào hàng đợi unassigned
+                            if (!assignedToAtLeastOne && u.role !== 'LEADER') {
                                 unassigned.push(u);
                             }
                         } else {
-                            unassigned.push(u);
+                            if (u.role !== 'LEADER') {
+                                unassigned.push(u);
+                            }
                         }
                     });
 
@@ -191,16 +195,15 @@ export default function OrgChartPage() {
                         const cId = `channel_${c.id}`;
                         initialNodes.push({
                             id: cId, type: 'custom', position: { x: 0, y: 0 },
-                            data: { 
-                                label: c.name, role: "Kênh", borderColor: "border-teal-300", textColor: "text-teal-600", 
+                            data: {
+                                label: c.name, role: "Kênh", borderColor: "border-teal-300", textColor: "text-teal-600",
                                 isSystemNode: false, fullChannelObj: c, targetPosition: 'top'
                             }
                         });
                         initialEdges.push({ id: `e_${lastLeaderId}-${cId}`, source: lastLeaderId, target: cId, type: 'smoothstep' });
 
                         let lastNodeId = cId;
-                        
-                        // 🚀 ĐÃ SỬA: Sắp xếp danh sách nhân sự trên Kênh (Ưu tiên Up kênh lên đầu tiên)
+
                         const sortedMembers = [...membersByChannel[c.id]].sort((a, b) => {
                             const getRank = (roleObj: any) => {
                                 const r = String(roleObj).toUpperCase();
@@ -214,10 +217,12 @@ export default function OrgChartPage() {
                         });
 
                         sortedMembers.forEach(u => {
-                            const uId = `user_${c.id}_${u.id}`; 
-                            
+                            // Đảm bảo ID duy nhất cho mỗi node (mỗi vị trí của cùng 1 người)
+                            const safeRole = u.roleOnChannel || u.role || "UNKNOWN";
+                            const uId = `user_${c.id}_${u.id}_${safeRole}`;
+
                             const channelSurplusList = (u.surplusTaskList || []).filter((task: any) => task.channelId === c.id);
-                            
+
                             const durCount: Record<number, number> = {};
                             channelSurplusList.forEach((t: any) => {
                                 durCount[t.duration] = (durCount[t.duration] || 0) + 1;
@@ -228,14 +233,18 @@ export default function OrgChartPage() {
 
                             initialNodes.push({
                                 id: uId, type: 'custom', position: { x: 0, y: 0 },
-                                data: { 
-                                    label: u.fullName, role: u.roleOnChannel || u.role, actual: u.currentWeekStats?.actual || 0, target: u.currentWeekStats?.target || 0, 
-                                    surplusDetails: channelSurplusDetails, 
-                                    surplusTaskList: channelSurplusList,   
+                                data: {
+                                    label: u.fullName, role: u.roleOnChannel || u.role, actual: u.currentWeekStats?.actual || 0, target: u.currentWeekStats?.target || 0,
+                                    surplusDetails: channelSurplusDetails,
+                                    surplusTaskList: channelSurplusList,
                                     avatar: u.avatarUrl || null, borderColor: 'border-slate-200', textColor: 'text-slate-500', fullUserObj: u, targetPosition: 'top'
                                 }
                             });
+                            
+                            // Nối thẳng tắp từ lastNodeId sang thẻ hiện tại
                             initialEdges.push({ id: `e_${lastNodeId}-${uId}`, source: lastNodeId, target: uId, type: 'smoothstep' });
+                            
+                            // Gắn thẻ hiện tại thành "thẻ nối tiếp" cho vòng lặp sau
                             lastNodeId = uId;
                         });
                     });
@@ -245,9 +254,9 @@ export default function OrgChartPage() {
                         const uId = `user_unassigned_${u.id}`;
                         initialNodes.push({
                             id: uId, type: 'custom', position: { x: 0, y: 0 },
-                            data: { 
-                                label: u.fullName, role: u.role, actual: u.currentWeekStats?.actual || 0, target: u.currentWeekStats?.target || 0, 
-                                surplusDetails: u.surplusDetails || [], surplusTaskList: u.surplusTaskList || [], 
+                            data: {
+                                label: u.fullName, role: u.role, actual: u.currentWeekStats?.actual || 0, target: u.currentWeekStats?.target || 0,
+                                surplusDetails: u.surplusDetails || [], surplusTaskList: u.surplusTaskList || [],
                                 avatar: u.avatarUrl || null, borderColor: 'border-slate-200', textColor: 'text-slate-500', fullUserObj: u, targetPosition: 'top'
                             }
                         });
@@ -261,9 +270,9 @@ export default function OrgChartPage() {
                         const uId = `user_${u.id}`;
                         initialNodes.push({
                             id: uId, type: 'custom', position: { x: 0, y: 0 },
-                            data: { 
-                                label: u.fullName, role: u.role, actual: u.currentWeekStats?.actual || 0, target: u.currentWeekStats?.target || 0, 
-                                surplusDetails: u.surplusDetails || [], surplusTaskList: u.surplusTaskList || [], 
+                            data: {
+                                label: u.fullName, role: u.role, actual: u.currentWeekStats?.actual || 0, target: u.currentWeekStats?.target || 0,
+                                surplusDetails: u.surplusDetails || [], surplusTaskList: u.surplusTaskList || [],
                                 avatar: u.avatarUrl || null, borderColor: 'border-slate-200', textColor: 'text-slate-500', fullUserObj: u, targetPosition: 'top'
                             }
                         });
@@ -275,11 +284,11 @@ export default function OrgChartPage() {
 
             const { nodes: finalNodes, edges: finalEdges } = getLayoutedElements(initialNodes, initialEdges, 'TB');
 
-            setNodes(finalNodes); 
-            setEdges(finalEdges); 
+            setNodes(finalNodes);
+            setEdges(finalEdges);
             setLoading(false);
         }).catch(() => {
-            showToast("error", "Lỗi tải dữ liệu Sơ đồ"); 
+            showToast("error", "Lỗi tải dữ liệu Sơ đồ");
             setLoading(false);
         });
     }, []);
@@ -288,51 +297,51 @@ export default function OrgChartPage() {
 
     return (
         <PermissionGuard moduleId="MENU_ORG_CHART">
-        <div className="h-full w-full flex flex-col animate-fade-in bg-white relative overflow-hidden">
-            <div className="px-5 py-3 md:px-6 md:py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 shrink-0 bg-white border-b border-slate-200 z-10 shadow-sm">
-                <div>
-                    <h1 className="text-lg md:text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-                        <Network className="text-red-600 w-5 h-5 md:w-6 md:h-6" />
-                        Sơ Đồ <span className="text-red-600">Tổ Chức</span>
-                    </h1>
-                    <p className="text-[10px] md:text-xs text-slate-500 font-medium mt-0.5">Dùng 2 ngón tay hoặc con lăn chuột để Zoom. Kéo thả vùng trống để di chuyển.</p>
-                </div>
-            </div>
-
-            <div className="flex-1 w-full h-full bg-slate-50 relative z-0">
-                {loading ? (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 font-medium gap-3 bg-white/50 backdrop-blur-sm z-20">
-                        <Loader2 size={28} className="animate-spin text-red-500" /> 
-                        <span className="text-sm">Đang tính toán toạ độ sơ đồ...</span>
+            <div className="h-full w-full flex flex-col animate-fade-in bg-white relative overflow-hidden">
+                <div className="px-5 py-3 md:px-6 md:py-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 shrink-0 bg-white border-b border-slate-200 z-10 shadow-sm">
+                    <div>
+                        <h1 className="text-lg md:text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+                            <Network className="text-red-600 w-5 h-5 md:w-6 md:h-6" />
+                            Sơ Đồ <span className="text-red-600">Tổ Chức</span>
+                        </h1>
+                        <p className="text-[10px] md:text-xs text-slate-500 font-medium mt-0.5">Dùng 2 ngón tay hoặc con lăn chuột để Zoom. Kéo thả vùng trống để di chuyển.</p>
                     </div>
-                ) : (
-                    <ReactFlow
-                        nodesDraggable={true} 
-                        nodes={nodes}
-                        edges={edges}
-                        onNodesChange={onNodesChange}
-                        onEdgesChange={onEdgesChange}
-                        onConnect={onConnect}
-                        nodeTypes={nodeTypes}
-                        fitView 
-                        fitViewOptions={{ padding: 0.15, minZoom: 0.1, maxZoom: 1.2 }} 
-                        attributionPosition="bottom-right"
-                        className="bg-transparent"
-                        onNodeClick={onNodeClick}
-                    >
-                        <Background color="#cbd5e1" gap={20} size={1} />
-                        <Controls className="!bg-white !shadow-md !border-slate-200 !rounded-xl overflow-hidden hidden sm:flex" showInteractive={false}/>
-                        <MiniMap className="!bg-white !border-slate-200 !rounded-xl !shadow-md hidden md:block" />
-                    </ReactFlow>
-                )}
+                </div>
+
+                <div className="flex-1 w-full h-full bg-slate-50 relative z-0">
+                    {loading ? (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 font-medium gap-3 bg-white/50 backdrop-blur-sm z-20">
+                            <Loader2 size={28} className="animate-spin text-red-500" />
+                            <span className="text-sm">Đang tính toán toạ độ sơ đồ...</span>
+                        </div>
+                    ) : (
+                        <ReactFlow
+                            nodesDraggable={true}
+                            nodes={nodes}
+                            edges={edges}
+                            onNodesChange={onNodesChange}
+                            onEdgesChange={onEdgesChange}
+                            onConnect={onConnect}
+                            nodeTypes={nodeTypes}
+                            fitView
+                            fitViewOptions={{ padding: 0.15, minZoom: 0.1, maxZoom: 1.2 }}
+                            attributionPosition="bottom-right"
+                            className="bg-transparent"
+                            onNodeClick={onNodeClick}
+                        >
+                            <Background color="#cbd5e1" gap={20} size={1} />
+                            <Controls className="!bg-white !shadow-md !border-slate-200 !rounded-xl overflow-hidden hidden sm:flex" showInteractive={false} />
+                            <MiniMap className="!bg-white !border-slate-200 !rounded-xl !shadow-md hidden md:block" />
+                        </ReactFlow>
+                    )}
+                </div>
+
+                <OrgNodeDrawer
+                    isOpen={isDrawerOpen}
+                    onClose={() => setIsDrawerOpen(false)}
+                    nodeData={selectedNodeData}
+                />
             </div>
-            
-            <OrgNodeDrawer 
-                isOpen={isDrawerOpen} 
-                onClose={() => setIsDrawerOpen(false)} 
-                nodeData={selectedNodeData} 
-            />
-        </div>
         </PermissionGuard>
     );
 }

@@ -7,7 +7,7 @@ const translateRole = (role: string) => {
     if (!role) return "";
     const r = String(role).toUpperCase();
     switch (r) {
-        case 'LEADER': return 'Trưởng Nhóm';
+        case 'LEADER': return 'LEADER';
         case 'CHANNEL_MANAGER': return 'Quản Lý Kênh';
         case 'PUBLISHER': return 'Up Kênh';
         case 'CONTENT': return 'Nội Dung';
