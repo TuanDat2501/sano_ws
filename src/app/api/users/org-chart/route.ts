@@ -3,6 +3,10 @@ import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 
+// 🚀 IMPORT HÀM GET TỪ API KPI CỦA BẠN (Sửa lại đường dẫn này cho đúng với dự án)
+// Ví dụ file route_2.ts của bạn nằm ở thư mục app/api/kpi/route.ts
+import { GET as getKpiApi } from "@/app/api/kpi/route"; 
+
 function getCurrentWeekInfo() {
     const d = new Date();
     d.setHours(0,0,0,0);
@@ -31,31 +35,6 @@ function getCurrentWeekInfo() {
     return { year: targetYear, month: targetMonth, week: weekNumber > 0 ? weekNumber : 1 };
 }
 
-function getWeekDateRangeByMonth(year: number, month: number, weekNumber: number) {
-    const firstDayOfMonth = new Date(year, month - 1, 1);
-    const dayOfWeek = firstDayOfMonth.getDay(); 
-    const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-    const startOfFirstWeek = new Date(year, month - 1, 1 + diffToMonday);
-
-    const thursdayOfFirstWeek = new Date(startOfFirstWeek);
-    thursdayOfFirstWeek.setDate(startOfFirstWeek.getDate() + 3);
-    
-    if (thursdayOfFirstWeek.getMonth() !== month - 1) {
-        startOfFirstWeek.setDate(startOfFirstWeek.getDate() + 7);
-    }
-
-    const startOfWeek = new Date(startOfFirstWeek);
-    startOfWeek.setDate(startOfFirstWeek.getDate() + (weekNumber - 1) * 7);
-
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(startOfWeek.getDate() + 6);
-
-    startOfWeek.setHours(0, 0, 0, 0);
-    endOfWeek.setHours(23, 59, 59, 999);
-
-    return { start: startOfWeek, end: endOfWeek };
-}
-
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
@@ -68,8 +47,35 @@ export async function GET(req: Request) {
         const month = currentInfo.month;
         const currentWeekNumber = currentInfo.week;
 
-        const { start: startOfWeek, end: endOfWeek } = getWeekDateRangeByMonth(year, month, currentWeekNumber);
+        // =========================================================
+        // 1. GỌI API KPI ĐỂ LẤY SỐ LIỆU CHUẨN MỚI NHẤT
+        // =========================================================
+        const kpiUrl = new URL(req.url);
+        kpiUrl.searchParams.set("teamId", "ALL"); // Ép lấy toàn bộ công ty
+        kpiUrl.searchParams.set("year", year.toString());
+        kpiUrl.searchParams.set("month", month.toString());
+        kpiUrl.searchParams.set("week", currentWeekNumber.toString());
 
+        // Tạo Request ảo truyền vào API KPI (giữ nguyên Headers để Auth không bị văng)
+        const kpiReq = new Request(kpiUrl.toString(), {
+            method: "GET",
+            headers: req.headers,
+        });
+
+        let kpiList: any[] = [];
+        try {
+            const kpiRes = await getKpiApi(kpiReq); // Gọi thẳng hàm không qua HTTP
+            if (kpiRes.ok) {
+                const kpiData = await kpiRes.json();
+                kpiList = kpiData.kpiList || []; // Dữ liệu chuẩn từ route_2.ts
+            }
+        } catch (error) {
+            console.error("Lỗi khi gọi nội bộ API KPI:", error);
+        }
+
+        // =========================================================
+        // 2. LẤY DỮ LIỆU USER & HÀNG TỒN (Chỉ dành riêng cho Chart)
+        // =========================================================
         const users = await prisma.user.findMany({
             where: { isActive: true },
             select: {
@@ -82,45 +88,18 @@ export async function GET(req: Request) {
                 team: { select: { name: true } }, 
                 isActive: true,
                 channelMemberships: {
-                    // 🚀 ĐÃ SỬA: Lọc bỏ các kênh đã "Dừng hoạt động"
                     where: {
-                        channel: {
-                            status: {
-                                not: "DUNG_HOAT_DONG"
-                            }
-                        }
+                        channel: { status: { not: "DUNG_HOAT_DONG" } }
                     },
                     select: {
                         channelId: true,
                         roleOnChannel: true
                     }
-                },
-                weeklyKPIs: {
-                    where: { year: year, month: month, weekNumber: currentWeekNumber },
-                    take: 1
                 }
             }
         });
 
-        const taskLogs = await prisma.taskLog.findMany({
-            where: {
-                createdAt: { gte: startOfWeek, lte: endOfWeek },
-                action: { 
-                    in: ["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK", "DAILY_REPORT", "UPDATE_LINK"] 
-                }
-            },
-            include: {
-                task: {
-                    select: {
-                        id: true,
-                        duration: true,
-                        isRework: true,
-                        channelId: true
-                    }
-                }
-            }
-        });
-
+        // Hàng tồn (Surplus) không liên quan đến KPI nên vẫn giữ lại logic truy vấn
         const surplusTasks = await prisma.task.findMany({
             where: {
                 isClosed: false,
@@ -180,45 +159,12 @@ export async function GET(req: Request) {
             });
         });
 
+        // =========================================================
+        // 3. MAP DATA ĐỂ TRẢ VỀ CHO SƠ ĐỒ
+        // =========================================================
         const formattedUsers = users.map(user => {
-            const kpiRecord = user.weeklyKPIs.length > 0 ? user.weeklyKPIs[0] : null;
-            const targetValue = kpiRecord?.targetValue || 0;
-            
-            const userLogs = taskLogs.filter(log => log.userId === user.id);
-            const uniqueTasks = new Map<string, any>();
-
-            userLogs.forEach(log => {
-                if (!log.task) return;
-
-                let isKpiQualifying = true; 
-                const actionStr = String(log.action || "").toUpperCase();
-                const combinedText = String(log.details || "").toLowerCase();
-
-                if (["DAILY_REPORT", "UPDATE_TASK", "UPDATE", "UPDATE_LINK"].includes(actionStr)) {
-                    if (user.role === "EDITOR") {
-                        if (combinedText.includes("kịch bản") || combinedText.includes("chuyển động") || combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) {
-                            isKpiQualifying = false;
-                        }
-                    } else if (user.role === "CONTENT") {
-                        // 🚀 ĐÃ ĐỒNG BỘ: Cho phép Content ôm luôn mảng chuyển động để tính KPI
-                        if (combinedText.includes("video render") || combinedText.includes("prj thô") || combinedText.includes("audio") || combinedText.includes("âm thanh") || combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) {
-                            isKpiQualifying = false;
-                        }
-                    } else if (user.role === "PUBLISHER" || user.role === "CHANNEL_MANAGER") {
-                        if (combinedText.includes("kịch bản") || combinedText.includes("video render") || combinedText.includes("prj thô") || combinedText.includes("audio") || combinedText.includes("âm thanh") || combinedText.includes("chuyển động")) {
-                            isKpiQualifying = false;
-                        }
-                    }
-                }
-
-                if (isKpiQualifying) {
-                    if (!uniqueTasks.has(log.taskId)) {
-                        uniqueTasks.set(log.taskId, log.task);
-                    }
-                }
-            });
-
-            const actualCount = uniqueTasks.size;
+            // Mapping trực tiếp với số liệu đã được tính chuẩn 100% từ API KPI
+            const userKpi = kpiList.find(k => k.userId === user.id);
 
             const sData = userSurplusDetails[user.id] || {};
             const surplusDetails = Object.entries(sData)
@@ -237,9 +183,10 @@ export async function GET(req: Request) {
                 channelMemberships: user.channelMemberships,
                 surplusDetails: surplusDetails, 
                 surplusTaskList: userSurplusList[user.id] || [], 
+                // 🚀 Lấy số liệu từ API KPI truyền xuống
                 currentWeekStats: {
-                    target: targetValue,
-                    actual: actualCount
+                    target: userKpi?.targetValue || 0,
+                    actual: userKpi?.actualValue || 0
                 }
             };
         });
