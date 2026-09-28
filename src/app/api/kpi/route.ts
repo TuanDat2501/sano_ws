@@ -3,26 +3,28 @@ import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
 
+// 🚀 ĐÃ SỬA: HÀM TÍNH TUẦN CHUẨN CẮT BIÊN THÁNG (Đồng bộ với Frontend và Analytics)
 function getWeekDateRangeByMonth(year: number, month: number, weekNumber: number) {
-    const firstDayOfMonth = new Date(year, month - 1, 1);
-    const dayOfWeek = firstDayOfMonth.getDay(); 
-    const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-    const startOfFirstWeek = new Date(year, month - 1, 1 + diffToMonday);
-
-    const thursdayOfFirstWeek = new Date(startOfFirstWeek);
-    thursdayOfFirstWeek.setDate(startOfFirstWeek.getDate() + 3);
+    const totalDays = new Date(year, month, 0).getDate(); 
+    const startDayOfWeek = new Date(year, month - 1, 1).getDay(); 
     
-    if (thursdayOfFirstWeek.getMonth() !== month - 1) {
-        startOfFirstWeek.setDate(startOfFirstWeek.getDate() + 7);
+    // Tìm ngày Chủ Nhật đầu tiên của tháng
+    const diffToSunday = startDayOfWeek === 0 ? 0 : 7 - startDayOfWeek;
+    const firstSunday = 1 + diffToSunday;
+
+    let startDay = 1;
+    let endDay = firstSunday;
+
+    // Nếu không phải tuần 1, tịnh tiến mỗi tuần 7 ngày
+    if (weekNumber > 1) {
+        startDay = firstSunday + (weekNumber - 2) * 7 + 1;
+        endDay = Math.min(startDay + 6, totalDays); // Ép chặn không vượt quá ngày cuối tháng
     }
 
-    const startOfWeek = new Date(startOfFirstWeek);
-    startOfWeek.setDate(startOfFirstWeek.getDate() + (weekNumber - 1) * 7);
-
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(startOfWeek.getDate() + 6);
-
+    const startOfWeek = new Date(year, month - 1, startDay);
     startOfWeek.setHours(0, 0, 0, 0);
+
+    const endOfWeek = new Date(year, month - 1, endDay);
     endOfWeek.setHours(23, 59, 59, 999);
 
     return { start: startOfWeek, end: endOfWeek };
