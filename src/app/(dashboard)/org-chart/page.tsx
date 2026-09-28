@@ -41,23 +41,62 @@ const getLayoutedElements = (nodes: any[], edges: any[], direction = 'TB') => {
 
     return { nodes, edges };
 };
+const getCurrentWeekDisplay = () => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    const dayOfWeek = d.getDay();
+    const diffToThursday = dayOfWeek === 0 ? -3 : 4 - dayOfWeek;
+    const thursday = new Date(d);
+    thursday.setDate(d.getDate() + diffToThursday);
 
+    const targetYear = thursday.getFullYear();
+    const targetMonth = thursday.getMonth() + 1;
+
+    const firstDayOfMonth = new Date(targetYear, targetMonth - 1, 1);
+    const firstDayOfWeek = firstDayOfMonth.getDay();
+    const diffToMonday = firstDayOfWeek === 0 ? -6 : 1 - firstDayOfWeek;
+    const startOfFirstWeek = new Date(targetYear, targetMonth - 1, 1 + diffToMonday);
+
+    const thursdayOfFirstWeek = new Date(startOfFirstWeek);
+    thursdayOfFirstWeek.setDate(startOfFirstWeek.getDate() + 3);
+    if (thursdayOfFirstWeek.getMonth() !== targetMonth - 1) {
+        startOfFirstWeek.setDate(startOfFirstWeek.getDate() + 7);
+    }
+
+    const diffTime = d.getTime() - startOfFirstWeek.getTime();
+    let weekNumber = Math.floor(diffTime / (7 * 24 * 60 * 60 * 1000)) + 1;
+    weekNumber = weekNumber > 0 ? weekNumber : 1;
+
+    // Tính ngày bắt đầu và kết thúc của tuần đó
+    const startOfWeek = new Date(startOfFirstWeek);
+    startOfWeek.setDate(startOfFirstWeek.getDate() + (weekNumber - 1) * 7);
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+
+    const formatDate = (date: Date) => {
+        return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    };
+
+    return `Tuần ${weekNumber} - Tháng ${targetMonth} (${formatDate(startOfWeek)} - ${formatDate(endOfWeek)})`;
+};
 export default function OrgChartPage() {
     const { showToast } = useToast();
     const [loading, setLoading] = useState(true);
-
+    const [weekDisplay, setWeekDisplay] = useState("");
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [selectedNodeData, setSelectedNodeData] = useState<any>(null);
-
+    
     const [nodes, setNodes, onNodesChange] = useNodesState([]);
     const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-
+    
     const onNodeClick = useCallback((event: React.MouseEvent, node: any) => {
         setSelectedNodeData(node.data);
         setIsDrawerOpen(true);
     }, []);
-
+    
+    
     useEffect(() => {
+        setWeekDisplay(getCurrentWeekDisplay());
         Promise.all([
             fetch("/api/teams").then(res => res.ok ? res.json() : []),
             fetch("/api/departments").then(res => res.ok ? res.json() : []),
@@ -240,10 +279,10 @@ export default function OrgChartPage() {
                                     avatar: u.avatarUrl || null, borderColor: 'border-slate-200', textColor: 'text-slate-500', fullUserObj: u, targetPosition: 'top'
                                 }
                             });
-                            
+
                             // Nối thẳng tắp từ lastNodeId sang thẻ hiện tại
                             initialEdges.push({ id: `e_${lastNodeId}-${uId}`, source: lastNodeId, target: uId, type: 'smoothstep' });
-                            
+
                             // Gắn thẻ hiện tại thành "thẻ nối tiếp" cho vòng lặp sau
                             lastNodeId = uId;
                         });
@@ -306,6 +345,15 @@ export default function OrgChartPage() {
                         </h1>
                         <p className="text-[10px] md:text-xs text-slate-500 font-medium mt-0.5">Dùng 2 ngón tay hoặc con lăn chuột để Zoom. Kéo thả vùng trống để di chuyển.</p>
                     </div>
+                    
+                    {/* KHỐI HIỂN THỊ THỜI GIAN */}
+                    {weekDisplay && (
+                        <div className="bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-lg flex items-center shadow-sm">
+                            <span className="text-xs md:text-sm font-bold text-slate-700 whitespace-nowrap">
+                                {weekDisplay}
+                            </span>
+                        </div>
+                    )}
                 </div>
 
                 <div className="flex-1 w-full h-full bg-slate-50 relative z-0">

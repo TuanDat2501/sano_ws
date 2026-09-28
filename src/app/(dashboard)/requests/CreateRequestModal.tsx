@@ -136,45 +136,55 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
 
     const isOneStepHR = APPROVAL_CONFIG.REQUEST_FLOWS.ONE_STEP_HR.includes(selectedType);
     const isTwoStepHR = APPROVAL_CONFIG.REQUEST_FLOWS.TWO_STEP_HR.includes(selectedType);
-
+    
+    
     let showC1 = true, showC2 = true;
     let c1Options: any[] = [], c2Options: any[] = [];
     let c1Label = "", c2Label = "";
 
-    if (isBGDOrAdmin) {
+    // 1. 🚀 ƯU TIÊN SỐ 1: Bắt riêng Trưởng phòng nhân sự (Role LEADER và đúng teamId nhân sự)
+    if (currentUser?.role === "LEADER" && currentUser?.teamId === "ee9ce62d-8c1a-4ad8-897a-f723864bda91") {
+        showC1 = false;
+        c2Options = bgdApprovers;
+        c2Label = "Người phê duyệt (Ban giám đốc)";
+    }
+    // 2. Giám đốc hoặc Admin
+    else if (isBGDOrAdmin) {
         showC1 = false;
         c2Options = bgdApprovers;
         c2Label = "Người phê duyệt";
     }
+    // 3. Nhân sự HR bình thường / Kế toán
     else if (isHRorKeToan) {
         showC1 = false;
         c2Options = isOneStepHR ? hrApprovers : rawLevel2;
         c2Label = isOneStepHR ? "Người phê duyệt (Hành chính / HR)" : "Người phê duyệt";
     }
+    // 4. Các đơn nộp một bước hoặc nộp cho team Nhân sự (bị chặn lại nếu là Trưởng phòng nộp do đã lọt vào bước 1)
     else if (isOneStepHR || isTeamNhanSu) {
         showC1 = false;
         c2Options = hrApprovers;
         c2Label = "Người phê duyệt (Hành chính / HR)";
     }
+    // 5. Leader các team khác
     else if (isLeader) {
         if (selectedType === "DI_MUON_VE_SOM") {
             showC1 = false;
             c2Options = hrApprovers;
             c2Label = "Người phê duyệt (Hành chính / HR)";
-        }else{
+        } else {
             c1Options = hrApprovers;
             c1Label = "Cấp 1 (Hành chính / HR)";
             c2Options = bgdApprovers;
             c2Label = "Cấp 2 (Ban giám đốc)";
         }
     }
+    // 6. Nhân sự bình thường
     else {
-        
-            c1Options = teamLeaders;
-            c1Label = "Cấp 1 (Quản lý trực tiếp)";
-            c2Options = isTwoStepHR ? hrApprovers : bgdApprovers;
-            c2Label = isTwoStepHR ? "Cấp 2 (Hành chính / HR)" : "Cấp 2 (Ban giám đốc)";
-        
+        c1Options = teamLeaders;
+        c1Label = "Cấp 1 (Quản lý trực tiếp)";
+        c2Options = isTwoStepHR ? hrApprovers : bgdApprovers;
+        c2Label = isTwoStepHR ? "Cấp 2 (Hành chính / HR)" : "Cấp 2 (Ban giám đốc)";
     }
 
     const renderDynamicFields = () => {
