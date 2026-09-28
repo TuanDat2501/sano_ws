@@ -1,31 +1,22 @@
+// 🚀 LOGIC MỚI: CẮT GỌN TUẦN THEO BIÊN THÁNG
 export function getContinuousWeekRange(year: number, month: number, weekNumber: number) {
-    // Lấy ngày mùng 1 của tháng
-    const firstDayOfMonth = new Date(year, month - 1, 1);
-    
-    // Tìm ngày Thứ 2 của tuần chứa mùng 1
-    const dayOfWeek = firstDayOfMonth.getDay(); 
-    const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-    const startOfFirstWeek = new Date(year, month - 1, 1 + diffToMonday);
+    const totalDays = new Date(year, month, 0).getDate(); 
+    const startDayOfWeek = new Date(year, month - 1, 1).getDay(); 
+    const diffToSunday = startDayOfWeek === 0 ? 0 : 7 - startDayOfWeek;
+    const firstSunday = 1 + diffToSunday;
 
-    // 🚀 CHUẨN ISO 8601: Kiểm tra xem Thứ 5 của tuần này thuộc tháng nào
-    const thursdayOfFirstWeek = new Date(startOfFirstWeek);
-    thursdayOfFirstWeek.setDate(startOfFirstWeek.getDate() + 3);
-    
-    // Nếu Thứ 5 thuộc tháng trước -> Dịch tuần 1 của tháng này sang tuần kế tiếp
-    if (thursdayOfFirstWeek.getMonth() !== month - 1) {
-        startOfFirstWeek.setDate(startOfFirstWeek.getDate() + 7);
+    let startDay = 1;
+    let endDay = firstSunday;
+
+    if (weekNumber > 1) {
+        startDay = firstSunday + (weekNumber - 2) * 7 + 1;
+        endDay = Math.min(startDay + 6, totalDays); 
     }
 
-    // Tính ngày Thứ 2 của tuần được chọn
-    const startOfWeek = new Date(startOfFirstWeek);
-    startOfWeek.setDate(startOfFirstWeek.getDate() + (weekNumber - 1) * 7);
-
-    // Tính ngày Chủ nhật của tuần đó
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(startOfWeek.getDate() + 6);
-
-    // Chuẩn hóa thời gian 00:00:00 -> 23:59:59
+    const startOfWeek = new Date(year, month - 1, startDay);
     startOfWeek.setHours(0, 0, 0, 0);
+
+    const endOfWeek = new Date(year, month - 1, endDay);
     endOfWeek.setHours(23, 59, 59, 999);
 
     const pad = (num: number) => num.toString().padStart(2, '0');
@@ -38,86 +29,39 @@ export function getContinuousWeekRange(year: number, month: number, weekNumber: 
     };
 }
 
-export function getCurrentWeekNumber(date: Date) {
+export function getCurrentWeekNumber(date: Date = new Date()) {
     const d = new Date(date);
-    d.setHours(0, 0, 0, 0);
+    const year = d.getFullYear();
+    const month = d.getMonth() + 1;
+    const currentDate = d.getDate();
 
-    // Dò tìm ngày Thứ 5 của tuần hiện tại để biết tuần này thuộc về tháng nào
-    const dayOfWeek = d.getDay();
-    const diffToThursday = dayOfWeek === 0 ? -3 : 4 - dayOfWeek;
-    const thursday = new Date(d);
-    thursday.setDate(d.getDate() + diffToThursday);
+    const startDayOfWeek = new Date(year, month - 1, 1).getDay();
+    const diffToSunday = startDayOfWeek === 0 ? 0 : 7 - startDayOfWeek;
+    const firstSunday = 1 + diffToSunday;
 
-    const targetYear = thursday.getFullYear();
-    const targetMonth = thursday.getMonth() + 1;
-
-    // Lấy ngày bắt đầu của tuần 1 thuộc tháng đó (targetMonth)
-    const firstDayOfMonth = new Date(targetYear, targetMonth - 1, 1);
-    const firstDayOfWeek = firstDayOfMonth.getDay();
-    const diffToMonday = firstDayOfWeek === 0 ? -6 : 1 - firstDayOfWeek;
-    const startOfFirstWeek = new Date(targetYear, targetMonth - 1, 1 + diffToMonday);
-
-    const thursdayOfFirstWeek = new Date(startOfFirstWeek);
-    thursdayOfFirstWeek.setDate(startOfFirstWeek.getDate() + 3);
-    if (thursdayOfFirstWeek.getMonth() !== targetMonth - 1) {
-        startOfFirstWeek.setDate(startOfFirstWeek.getDate() + 7);
+    let week = 1;
+    if (currentDate > firstSunday) {
+        week = 2 + Math.floor((currentDate - firstSunday - 1) / 7);
     }
-
-    // Tính khoảng cách giữa ngày hiện tại và ngày bắt đầu của tuần 1
-    const diffTime = d.getTime() - startOfFirstWeek.getTime();
-    const weekNumber = Math.floor(diffTime / (7 * 24 * 60 * 60 * 1000)) + 1;
-
-    return weekNumber > 0 ? weekNumber : 1;
+    return week;
 }
 
-// ==============================================================
-// 🚀 TẶNG THÊM: HÀM LẤY SỐ TUẦN (4 HOẶC 5) TRONG 1 THÁNG
-// ==============================================================
 export function getAvailableWeeks(year: number, month: number) {
-    const weeks = [];
-    const firstDayOfMonth = new Date(year, month - 1, 1);
-    const dayOfWeek = firstDayOfMonth.getDay();
-    const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-    const startOfFirstWeek = new Date(year, month - 1, 1 + diffToMonday);
+    const totalDays = new Date(year, month, 0).getDate();
+    const startDayOfWeek = new Date(year, month - 1, 1).getDay();
+    const diffToSunday = startDayOfWeek === 0 ? 0 : 7 - startDayOfWeek;
+    const firstSunday = 1 + diffToSunday;
 
-    const thursdayOfFirstWeek = new Date(startOfFirstWeek);
-    thursdayOfFirstWeek.setDate(startOfFirstWeek.getDate() + 3);
-    
-    if (thursdayOfFirstWeek.getMonth() !== month - 1) {
-        startOfFirstWeek.setDate(startOfFirstWeek.getDate() + 7);
-    }
+    const remainingDays = totalDays - firstSunday;
+    const totalWeeks = 1 + Math.ceil(remainingDays / 7);
 
-    for (let w = 1; w <= 5; w++) {
-        const startOfWeek = new Date(startOfFirstWeek);
-        startOfWeek.setDate(startOfFirstWeek.getDate() + (w - 1) * 7);
-        
-        const thursday = new Date(startOfWeek);
-        thursday.setDate(startOfWeek.getDate() + 3);
-        
-        // Dừng lại nếu Thứ 5 của tuần này đã rơi qua tháng tiếp theo
-        if (thursday.getMonth() !== month - 1) {
-            break;
-        }
-        weeks.push(w);
-    }
-    return weeks;
+    return Array.from({ length: totalWeeks }, (_, i) => i + 1);
 }
 
-// ==============================================================
-// 🚀 TẶNG THÊM: HÀM LẤY ĐẦY ĐỦ (NĂM, THÁNG, TUẦN) CHUẨN CỦA HIỆN TẠI
-// ==============================================================
 export function getCurrentWeekInfo(date: Date = new Date()) {
-    const d = new Date(date);
-    d.setHours(0, 0, 0, 0);
-
-    const dayOfWeek = d.getDay();
-    const diffToThursday = dayOfWeek === 0 ? -3 : 4 - dayOfWeek;
-    const thursday = new Date(d);
-    thursday.setDate(d.getDate() + diffToThursday);
-
     return {
-        year: thursday.getFullYear(),
-        month: thursday.getMonth() + 1,
+        year: date.getFullYear(),
+        month: date.getMonth() + 1,
         week: getCurrentWeekNumber(date)
     };
 }

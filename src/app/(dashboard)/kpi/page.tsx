@@ -13,27 +13,28 @@ import TaskLogManager from "./components/TaskLogManager";
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 
-// 🚀 HÀM SINH TEXT TUẦN CHUẨN ISO
+// 🚀 HÀM 1: SINH TEXT TUẦN CHUẨN THEO THÁNG (KHÔNG VẮT NGANG THÁNG)
 function getWeekData(year: number, month: number, weekNumber: number) {
-    const firstDayOfMonth = new Date(year, month - 1, 1);
-    const dayOfWeek = firstDayOfMonth.getDay();
-    const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-    const startOfFirstWeek = new Date(year, month - 1, 1 + diffToMonday);
-
-    const thursdayOfFirstWeek = new Date(startOfFirstWeek);
-    thursdayOfFirstWeek.setDate(startOfFirstWeek.getDate() + 3);
+    const totalDays = new Date(year, month, 0).getDate(); // Lấy tổng số ngày trong tháng
+    const startDayOfWeek = new Date(year, month - 1, 1).getDay(); // Ngày 1 là thứ mấy
     
-    if (thursdayOfFirstWeek.getMonth() !== month - 1) {
-        startOfFirstWeek.setDate(startOfFirstWeek.getDate() + 7);
+    // Tìm ngày Chủ Nhật đầu tiên của tháng
+    const diffToSunday = startDayOfWeek === 0 ? 0 : 7 - startDayOfWeek;
+    const firstSunday = 1 + diffToSunday;
+
+    let startDay = 1;
+    let endDay = firstSunday;
+
+    // Nếu không phải tuần 1, tính tịnh tiến mỗi tuần 7 ngày
+    if (weekNumber > 1) {
+        startDay = firstSunday + (weekNumber - 2) * 7 + 1;
+        endDay = Math.min(startDay + 6, totalDays); // Ép giới hạn không vượt quá ngày cuối tháng
     }
 
-    const startOfWeek = new Date(startOfFirstWeek);
-    startOfWeek.setDate(startOfFirstWeek.getDate() + (weekNumber - 1) * 7);
-
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(startOfWeek.getDate() + 6);
-
+    const startOfWeek = new Date(year, month - 1, startDay);
     startOfWeek.setHours(0, 0, 0, 0);
+
+    const endOfWeek = new Date(year, month - 1, endDay);
     endOfWeek.setHours(23, 59, 59, 999);
 
     const pad = (num: number) => num.toString().padStart(2, '0');
@@ -42,62 +43,39 @@ function getWeekData(year: number, month: number, weekNumber: number) {
     return { start: startOfWeek, end: endOfWeek, label };
 }
 
-// 🚀 TÍNH SỐ TUẦN HỢP LỆ TRONG THÁNG
+// 🚀 HÀM 2: TÍNH SỐ TUẦN HỢP LỆ TRONG THÁNG (CẮT GỌN TRONG THÁNG ĐÓ)
 function getAvailableWeeks(year: number, month: number) {
-    const weeks = [];
-    const firstDayOfMonth = new Date(year, month - 1, 1);
-    const dayOfWeek = firstDayOfMonth.getDay();
-    const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-    const startOfFirstWeek = new Date(year, month - 1, 1 + diffToMonday);
+    const totalDays = new Date(year, month, 0).getDate();
+    const startDayOfWeek = new Date(year, month - 1, 1).getDay();
+    const diffToSunday = startDayOfWeek === 0 ? 0 : 7 - startDayOfWeek;
+    const firstSunday = 1 + diffToSunday;
 
-    const thursdayOfFirstWeek = new Date(startOfFirstWeek);
-    thursdayOfFirstWeek.setDate(startOfFirstWeek.getDate() + 3);
-    
-    if (thursdayOfFirstWeek.getMonth() !== month - 1) {
-        startOfFirstWeek.setDate(startOfFirstWeek.getDate() + 7);
-    }
+    // Tính số ngày còn lại sau Chủ Nhật đầu tiên, chia cho 7 để ra số tuần còn lại
+    const remainingDays = totalDays - firstSunday;
+    const totalWeeks = 1 + Math.ceil(remainingDays / 7);
 
-    for (let w = 1; w <= 5; w++) {
-        const startOfWeek = new Date(startOfFirstWeek);
-        startOfWeek.setDate(startOfFirstWeek.getDate() + (w - 1) * 7);
-        const thursday = new Date(startOfWeek);
-        thursday.setDate(startOfWeek.getDate() + 3);
-        
-        if (thursday.getMonth() !== month - 1) break;
-        weeks.push(w);
-    }
-    return weeks;
+    // Trả về mảng tuần (VD: [1, 2, 3, 4, 5])
+    return Array.from({ length: totalWeeks }, (_, i) => i + 1);
 }
 
-// 🚀 LẤY NGÀY HIỆN TẠI
+// 🚀 HÀM 3: LẤY THÔNG TIN TUẦN HIỆN TẠI VÀO HÔM NAY (ÁP DỤNG LOGIC MỚI)
 function getCurrentWeekInfo() {
-    const d = new Date();
-    d.setHours(0,0,0,0);
-    const dayOfWeek = d.getDay();
-    const diffToThursday = dayOfWeek === 0 ? -3 : 4 - dayOfWeek;
-    const thursday = new Date(d);
-    thursday.setDate(d.getDate() + diffToThursday);
-    
-    const targetYear = thursday.getFullYear();
-    const targetMonth = thursday.getMonth() + 1;
-    
-    const firstDayOfMonth = new Date(targetYear, targetMonth - 1, 1);
-    const firstDayOfWeek = firstDayOfMonth.getDay();
-    const diffToMonday = firstDayOfWeek === 0 ? -6 : 1 - firstDayOfWeek;
-    const startOfFirstWeek = new Date(targetYear, targetMonth - 1, 1 + diffToMonday);
-    
-    const thursdayOfFirstWeek = new Date(startOfFirstWeek);
-    thursdayOfFirstWeek.setDate(startOfFirstWeek.getDate() + 3);
-    if (thursdayOfFirstWeek.getMonth() !== targetMonth - 1) {
-        startOfFirstWeek.setDate(startOfFirstWeek.getDate() + 7);
-    }
-    
-    const diffTime = d.getTime() - startOfFirstWeek.getTime();
-    const weekNumber = Math.floor(diffTime / (7 * 24 * 60 * 60 * 1000)) + 1;
-    
-    return { year: targetYear, month: targetMonth, week: weekNumber > 0 ? weekNumber : 1 };
-}
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = today.getMonth() + 1;
+    const date = today.getDate();
 
+    const startDayOfWeek = new Date(year, month - 1, 1).getDay();
+    const diffToSunday = startDayOfWeek === 0 ? 0 : 7 - startDayOfWeek;
+    const firstSunday = 1 + diffToSunday;
+
+    let week = 1;
+    if (date > firstSunday) {
+        week = 2 + Math.floor((date - firstSunday - 1) / 7);
+    }
+
+    return { year, month, week };
+}
 export default function KpiDashboard() {
     const { data: session } = useSession();
     const currentUser = session?.user as any;
