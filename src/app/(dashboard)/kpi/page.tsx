@@ -277,7 +277,9 @@ export default function KpiDashboard() {
                 });
             });
 
+            // 🚀 BỎ LOGIC LỌC BỎ NHÂN SỰ. LẤY TOÀN BỘ DANH SÁCH TỪ API
             const users = Array.from(userMap.values());
+            
             if (users.length === 0) {
                 showToast("error", "Không có dữ liệu trong tháng này.");
                 setIsExporting(false);
@@ -326,7 +328,6 @@ export default function KpiDashboard() {
                 ws.mergeCells(1, startCol, 1, endCol);
                 const weekCell = ws.getCell(1, startCol);
                 
-                // 🚀 LẤY NGÀY BẰNG HÀM NỘI BỘ THAY VÌ TỪ API ĐỂ TRÁNH LỆCH MÚI GIỜ SERVER
                 const { start: sd, end: ed } = getWeekData(selectedYear, selectedMonth, w);
                 const pad = (num: number) => num.toString().padStart(2, '0');
                 const dateStr = `(${pad(sd.getDate())}-${pad(ed.getDate())}/${pad(ed.getMonth() + 1)})`;
@@ -360,7 +361,7 @@ export default function KpiDashboard() {
 
             users.forEach((u, uIdx) => {
                 const targetList = Array.from(u.targets.values());
-                if (targetList.length === 0) targetList.push({ channelName: '', duration: '', isRework: false });
+                if (targetList.length === 0) targetList.push({ channelName: '', duration: 0, isRework: false });
                 
                 const numRows = targetList.length;
 
@@ -381,10 +382,13 @@ export default function KpiDashboard() {
                     for (let i = 0; i < availableWeeks.length; i++) {
                         const w = availableWeeks[i];
                         const weekKpi = u.weeks[w];
-                        let tMins = "";
-                        let giao: number | string = "";
-                        let hoanThanh: number | string = "";
-                        let percentStr = "";
+                        
+                        // 🚀 GÁN MẶC ĐỊNH LÀ 0 CHO MỌI TRƯỜNG HỢP Ô TRỐNG
+                        let tMins: string | number = tg.duration || 0; 
+                        let giao: number | string = 0;
+                        let hoanThanh: number | string = 0;
+                        // Dòng đầu tiên (tIdx === 0) luôn hiển thị phần trăm, mặc định 0%
+                        let percentStr = tIdx === 0 ? "0%" : ""; 
 
                         if (weekKpi) {
                             if (tIdx === 0) {
@@ -398,12 +402,12 @@ export default function KpiDashboard() {
                                     Boolean(d.isRework) === Boolean(tg.isRework)
                                 );
                                 if (detail) {
-                                    tMins = detail.duration || "";
+                                    tMins = detail.duration || 0;
                                     giao = detail.targetCount || 0;
                                     hoanThanh = detail.actualCount || 0;
                                 }
-                            } else if (tg.channelName === 'Chung') {
-                                tMins = "0";
+                            } else if (tg.channelName === 'Chung' || tg.channelName === '') {
+                                tMins = 0;
                                 giao = weekKpi.targetValue || 0;
                                 hoanThanh = weekKpi.actualValue || 0;
                             }
