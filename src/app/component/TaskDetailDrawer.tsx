@@ -516,10 +516,16 @@ export default function TaskDetailDrawer({
                 <div className="bg-white border border-slate-200 rounded-[20px] shadow-sm overflow-hidden flex flex-col max-h-[550px]">
 
                   <div className="p-4 pb-3 border-b border-slate-100 shrink-0 bg-white z-10">
-                    <h3 className="font-bold text-[14px] text-slate-800 flex items-center gap-1.5">
-                      <CheckCircle2 className="text-emerald-500 w-4 h-4" /> Kết Quả Công Việc
-                      <span className="text-[9px] font-bold text-slate-400 ml-auto bg-slate-50 px-2 py-0.5 rounded border border-slate-100 shadow-sm">(Tự động lưu)</span>
-                    </h3>
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-bold text-[14px] text-slate-800 flex items-center gap-1.5">
+                        <CheckCircle2 className="text-emerald-500 w-4 h-4" /> Kết Quả Công Việc
+                      </h3>
+                      <span className="text-[9px] font-bold text-slate-400 bg-slate-50 px-2 py-0.5 rounded border border-slate-100 shadow-sm">(Tự động lưu)</span>
+                    </div>
+                    {/* Hướng dẫn ngắn cho người dùng */}
+                    <p className="text-[11px] font-medium text-amber-600 mt-2 bg-amber-50 px-2 py-1.5 rounded-lg border border-amber-100 flex items-start gap-1">
+                      💡 <span><strong>Lưu ý:</strong> Bấm "Sửa" và dán link (hệ thống tự động gắn tên). Bấm "+ Thêm Link" nếu có nhiều người nộp chung 1 mục.</span>
+                    </p>
                   </div>
 
                   <div className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-slate-50/30">
