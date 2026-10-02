@@ -3,41 +3,45 @@ import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
 
-// 🚀 ĐÃ SỬA: HÀM TÍNH TUẦN CHUẨN CẮT BIÊN THÁNG (Đồng bộ với Frontend và Analytics)
+// 🚀 HÀM TÍNH TUẦN CHUẨN CẮT BIÊN THÁNG (Đồng bộ với Frontend và Analytics)
+// 🚀 HÀM CHUẨN XÁC 100% CHO CẢ 2 FILE API (ĐỒNG BỘ LOGIC VÀ ÉP CỨNG MÚI GIỜ VIỆT NAM)
 function getWeekDateRangeByMonth(year: number, month: number, weekNumber: number) {
-    const totalDays = new Date(year, month, 0).getDate(); 
-    const startDayOfWeek = new Date(year, month - 1, 1).getDay(); 
+    // 1. Dùng Date.UTC kết hợp 12h trưa để đảm bảo việc lấy ngày không bao giờ bị lệch qua hôm trước/hôm sau do timezone
+    const totalDays = new Date(Date.UTC(year, month, 0, 12, 0, 0)).getUTCDate(); 
+    const startDayOfWeek = new Date(Date.UTC(year, month - 1, 1, 12, 0, 0)).getUTCDay(); 
     
-    // Tìm ngày Chủ Nhật đầu tiên của tháng
+    // 2. Tìm ngày Chủ Nhật đầu tiên của tháng (0 là Chủ Nhật)
     const diffToSunday = startDayOfWeek === 0 ? 0 : 7 - startDayOfWeek;
     const firstSunday = 1 + diffToSunday;
 
     let startDay = 1;
     let endDay = firstSunday;
 
-    // Nếu không phải tuần 1, tịnh tiến mỗi tuần 7 ngày
+    // 3. Nếu không phải tuần 1, tịnh tiến mỗi tuần 7 ngày
     if (weekNumber > 1) {
         startDay = firstSunday + (weekNumber - 2) * 7 + 1;
-        endDay = Math.min(startDay + 6, totalDays); // Ép chặn không vượt quá ngày cuối tháng
+        endDay = Math.min(startDay + 6, totalDays); // Chặn biên không vượt quá ngày cuối tháng
     }
 
-    const startOfWeek = new Date(year, month - 1, startDay);
-    startOfWeek.setHours(0, 0, 0, 0);
+    const pad = (num: number) => num.toString().padStart(2, '0');
 
-    const endOfWeek = new Date(year, month - 1, endDay);
-    endOfWeek.setHours(23, 59, 59, 999);
+    // 4. Khởi tạo mốc thời gian bằng chuỗi ISO ép cứng múi giờ Việt Nam (+07:00)
+    // VD: "2026-10-01T00:00:00+07:00". Prisma khi filter DB sẽ tự động đối chiếu rất chuẩn xác.
+    const startOfWeek = new Date(`${year}-${pad(month)}-${pad(startDay)}T00:00:00+07:00`);
+    const endOfWeek = new Date(`${year}-${pad(month)}-${pad(endDay)}T23:59:59.999+07:00`);
 
     return { start: startOfWeek, end: endOfWeek };
 }
 
 export const dynamic = "force-dynamic";
 
-export async function GET(req: Request) {
+export async function GET(req: Request, context: any) {
     try {
         const session = await getServerSession(authOptions);
         if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-        const currentUser = session.user as any;
+        const requestedUserId = context?.params ? (await context.params).id : null;
+
         const { searchParams } = new URL(req.url);
         const teamId = searchParams.get("teamId");
         const year = parseInt(searchParams.get("year") || String(new Date().getFullYear()));
@@ -49,31 +53,30 @@ export async function GET(req: Request) {
             role: { notIn: ["ADMIN", "BAN_GIAM_DOC", "HR", "KE_TOAN"] }
         };
 
+        const currentUser = session.user as any;
         const canFilterTeam = currentUser.permissions?.includes("MENU_TEAMS") || ["ADMIN", "BAN_GIAM_DOC", "KE_TOAN"].includes(currentUser.role);
 
-        if (currentUser.role === "ADMIN" || canFilterTeam || currentUser.role === "LEADER") {
-            if (teamId && teamId !== "ALL") userWhere.teamId = teamId;
+        if (requestedUserId) {
+            userWhere = { id: requestedUserId };
         } else {
-            if (!teamId || teamId === "ALL") return NextResponse.json({ error: "Thiếu Team ID" }, { status: 400 });
-            userWhere.teamId = teamId;
+            if (currentUser.role === "ADMIN" || canFilterTeam || currentUser.role === "LEADER") {
+                if (teamId && teamId !== "ALL") userWhere.teamId = teamId;
+            } else {
+                if (!teamId || teamId === "ALL") return NextResponse.json({ error: "Thiếu Team ID" }, { status: 400 });
+                userWhere.teamId = teamId;
+            }
         }
 
         const usersRaw = await prisma.user.findMany({
             where: userWhere,
             select: { 
-                id: true, 
-                fullName: true, 
-                role: true, 
-                avatarUrl: true,
+                id: true, fullName: true, role: true, avatarUrl: true,
                 team: { select: { name: true } },
-                channelMemberships: {
-                    select: { channelId: true, roleOnChannel: true }
-                }
+                channelMemberships: { select: { channelId: true, roleOnChannel: true } }
             }
         });
 
-        const users = usersRaw.filter(u => u.team?.name !== "Nhân sự" && u.team?.name !== "HR");
-
+        const users = requestedUserId ? usersRaw : usersRaw.filter(u => u.team?.name !== "Nhân sự" && u.team?.name !== "HR");
         if (users.length === 0) return NextResponse.json({ weekData: { year, month, weekIndex }, kpiList: [] });
 
         const userIds = users.map(u => u.id);
@@ -86,21 +89,12 @@ export async function GET(req: Request) {
             prisma.taskLog.findMany({
                 where: {
                     userId: { in: userIds },
-                    createdAt: { gte: start, lte: end }
+                    createdAt: { gte: new Date(start.setHours(0,0,0,0)), lte: new Date(end.setHours(23,59,59,999)) }
                 },
                 select: {
-                    id: true,
-                    action: true,
-                    details: true,
-                    jobCategory: true, 
-                    createdAt: true,
-                    taskId: true,
-                    userId: true,
+                    id: true, action: true, details: true, jobCategory: true, createdAt: true, taskId: true, userId: true,
                     task: { 
-                        select: { 
-                            id: true, title: true, status: true, duration: true, isRework: true, channelId: true,
-                            channel: { select: { id: true, name: true } }
-                        } 
+                        select: { id: true, title: true, status: true, duration: true, isRework: true, channelId: true, channel: { select: { id: true, name: true } } } 
                     } 
                 }
             })
@@ -109,24 +103,14 @@ export async function GET(req: Request) {
         const kpiData = users.map(user => {
             const kpiRecord = allKpis.find(k => k.userId === user.id);
             const rawUserLogs = allLogs.filter(l => l.userId === user.id);
-            const validUserLogs: typeof rawUserLogs = [];
             
-            rawUserLogs.forEach(log => {
-                const actionStr = String(log.action || "").toUpperCase();
-                if (actionStr === "DAILY_REPORT") {
-                    validUserLogs.push(log);
-                }
-            });
-
-            const mappedLogs = validUserLogs.map(log => {
-                return { ...log, typeStr: "Báo cáo", isCounted: false }; 
-            });
+            const validUserLogs = rawUserLogs.filter(log => String(log.action || "").toUpperCase() === "DAILY_REPORT");
+            const mappedLogs = validUserLogs.map(log => ({ ...log, typeStr: "Báo cáo", isCounted: false }));
 
             const uniqueTasks = new Map<string, any>();
             
             mappedLogs.forEach(log => {
                 if (!log.task) return;
-
                 let jobCategory = (log as any).jobCategory;
 
                 if (!jobCategory) {
@@ -139,9 +123,8 @@ export async function GET(req: Request) {
                     else jobCategory = "GENERAL";
                 }
 
-                if (log.action === "DAILY_REPORT" && jobCategory && jobCategory !== 'GENERAL') {
+                if (jobCategory && jobCategory !== 'GENERAL') {
                     const uniqueKey = jobCategory === 'MANUAL' ? `${log.id}_MANUAL` : `${log.taskId}_${jobCategory}`; 
-                    
                     if (!uniqueTasks.has(uniqueKey)) {
                         uniqueTasks.set(uniqueKey, log.task);
                         log.isCounted = true;
@@ -159,7 +142,8 @@ export async function GET(req: Request) {
 
             let percent = 0;
             let totalTargetMinutes = 0;
-            let totalActualMinutes = 0;
+            // Dùng để tính % thật (không lố)
+            let cappedActualMinutesForPercent = 0;
             
             let actualCount = uniqueTasks.size;
 
@@ -182,7 +166,6 @@ export async function GET(req: Request) {
                 targetDetails.forEach(t => {
                     t.actualMinutes = 0;
                     t.actualCount = 0; 
-
                     if (t.channelId) {
                         const key = `${t.channelId}_${t.isRework ? 'rework' : 'new'}`;
                         if (!specificTargets[key]) specificTargets[key] = [];
@@ -221,15 +204,25 @@ export async function GET(req: Request) {
                     return { minsLeft, tasksLeft, assignedMinsTotal };
                 };
 
+                // 1. Phân bổ cho các Kênh cụ thể (Ví dụ: WOTA US)
                 Object.keys(specificTargets).forEach(key => {
                     const targets = specificTargets[key];
                     const res = distributeToTargets(targets, bucketMins[key] || 0, bucketTaskCount[key] || 0);
-                    totalActualMinutes += res.assignedMinsTotal;
                     
-                    bucketMins[key] = res.minsLeft;
-                    bucketTaskCount[key] = res.tasksLeft;
+                    // Phút này là phút CẤP ĐÚNG QUOTA -> Dùng để tính %
+                    cappedActualMinutesForPercent += res.assignedMinsTotal;
+                    
+                    // Nếu làm dư thừa TRÊN ĐÚNG KÊNH ĐÓ -> Ghi nhận vào chỉ tiêu để nhìn cho đẹp, nhưng KHÔNG CỘNG VÀO % TỔNG
+                    if (res.minsLeft > 0) {
+                        targets[targets.length - 1].actualCount += res.tasksLeft;
+                        targets[targets.length - 1].actualMinutes += res.minsLeft;
+                    }
+                    
+                    bucketMins[key] = 0;
+                    bucketTaskCount[key] = 0;
                 });
 
+                // 2. Phân bổ cho các Kênh bất kỳ
                 Object.keys(anyTargets).forEach(reworkKey => {
                     const targets = anyTargets[reworkKey];
                     let remainingMins = 0;
@@ -244,64 +237,56 @@ export async function GET(req: Request) {
                     });
 
                     const res = distributeToTargets(targets, remainingMins, remainingTasks);
-                    totalActualMinutes += res.assignedMinsTotal;
-                });
-
-                let remainingMinsGlobal = 0;
-                let remainingTasksGlobal = 0;
-                Object.keys(bucketMins).forEach(bKey => {
-                    remainingMinsGlobal += bucketMins[bKey];
-                    remainingTasksGlobal += bucketTaskCount[bKey];
-                });
-
-                if (remainingTasksGlobal > 0) {
-                    targetDetails.forEach(t => {
-                         const tMins = Number(t.targetCount) * Number(t.duration);
-                         const minShortage = tMins - (t.actualMinutes || 0);
-                         const countShortage = Number(t.targetCount) - (t.actualCount || 0);
-
-                         if (countShortage > 0 && remainingTasksGlobal > 0) {
-                             const fillCount = Math.min(countShortage, remainingTasksGlobal);
-                             const fillMins = Math.min(minShortage, remainingMinsGlobal);
-
-                             t.actualCount = (t.actualCount || 0) + fillCount;
-                             t.actualMinutes = (t.actualMinutes || 0) + fillMins;
-
-                             remainingTasksGlobal -= fillCount;
-                             remainingMinsGlobal -= fillMins;
-                             totalActualMinutes += fillMins;
-                         }
-                    });
-
-                    if (remainingMinsGlobal > 0) {
-                        totalActualMinutes += remainingMinsGlobal;
+                    cappedActualMinutesForPercent += res.assignedMinsTotal;
+                    
+                    // Với kênh bất kỳ, làm dư thừa cũng không cộng vào % tổng
+                    if (res.minsLeft > 0) {
+                        targets[targets.length - 1].actualCount += res.tasksLeft;
+                        targets[targets.length - 1].actualMinutes += res.minsLeft;
                     }
-                }
+                });
 
-                percent = totalTargetMinutes > 0 ? Math.round((totalActualMinutes / totalTargetMinutes) * 100) : 0;
+                // 🚀 ĐÃ XÓA logic cộng dồn remainingMinsGlobal (kênh rác) vào điểm tổng
+
+                percent = totalTargetMinutes > 0 ? Math.round((cappedActualMinutesForPercent / totalTargetMinutes) * 100) : 0;
             } else {
                 percent = targetValue > 0 ? Math.round((actualCount / targetValue) * 100) : 0;
             }
 
-            return {
-                userId: user.id, 
-                fullName: user.fullName, 
-                role: user.role,
-                teamName: user.team?.name || "Chưa có team", 
+            // Tính tổng phút thực tế (Hiển thị UI: Khối lượng phút: X / Y)
+            let totalVisualMinutes = 0;
+            if (targetDetails && targetDetails.length > 0) {
+                targetDetails.forEach(t => totalVisualMinutes += (t.actualMinutes || 0));
+            }
+
+            const responseData = {
+                userId: user.id, fullName: user.fullName, role: user.role, teamName: user.team?.name || "Chưa có team", 
                 targetValue, actualValue: actualCount, percent, logs: allUserLogs, 
-                targetDetails, totalTargetMinutes, totalActualMinutes,
-                note: kpiRecord?.note || "",
-                isLocked: kpiRecord?.isLocked || false, // 🚀 TRẢ VỀ FRONTEND ĐỂ HIỆN Ổ KHÓA
-                oldTargetValue: kpiRecord?.oldTargetValue || null,
+                targetDetails, totalTargetMinutes, 
+                totalActualMinutes: totalVisualMinutes, // Hiển thị 30/80 thay vì 120/80
                 avatarUrl: user.avatarUrl || null
             };
+
+            if (!requestedUserId) {
+                return {
+                    ...responseData,
+                    note: kpiRecord?.note || "",
+                    isLocked: kpiRecord?.isLocked || false,
+                    oldTargetValue: kpiRecord?.oldTargetValue || null
+                };
+            }
+            return responseData;
         });
 
-        kpiData.sort((a, b) => b.percent - a.percent);
+        if (!requestedUserId) {
+            kpiData.sort((a, b) => b.percent - a.percent);
+            return NextResponse.json({ weekData: { year, month, weekIndex, startDate: start, endDate: end }, kpiList: kpiData });
+        } else {
+            return NextResponse.json(kpiData[0]);
+        }
 
-        return NextResponse.json({ weekData: { year, month, weekIndex, startDate: start, endDate: end }, kpiList: kpiData });
     } catch (error) {
-        console.error("LỖI API KPI GET:", error);
+        console.error("LỖI API KPI:", error);
         return NextResponse.json({ error: "Lỗi hệ thống" }, { status: 500 });
     }
 }
@@ -338,7 +323,6 @@ export async function POST(req: Request) {
             }
         });
 
-        // 🚀 CẢNH VỆ BACKEND: CHẶN CỨNG NẾU ĐÃ BỊ KHÓA MÀ KHÔNG PHẢI ADMIN/HR
         const isAdminOrHR = ["ADMIN", "BAN_GIAM_DOC", "HR"].includes(currentUser?.role);
         if (existingKPI?.isLocked && !isAdminOrHR) {
             return NextResponse.json({ error: "Tuần này đã bị chốt KPI, không thể chỉnh sửa!" }, { status: 403 });
@@ -348,17 +332,16 @@ export async function POST(req: Request) {
         let kpiRecord;
 
         if (existingKPI) {
-            // 🚀 LOGIC TỰ ĐỘNG LƯU SỐ CŨ
             let oldTargetToSave = existingKPI.oldTargetValue;
             if (existingKPI.targetValue !== pTarget) {
-                oldTargetToSave = existingKPI.targetValue; // Nếu có thay đổi, lấy số hiện tại làm số cũ
+                oldTargetToSave = existingKPI.targetValue;
             }
 
             kpiRecord = await prisma.weeklyKPI.update({
                 where: { id: existingKPI.id },
                 data: { 
                     targetValue: pTarget,
-                    oldTargetValue: oldTargetToSave, // 🚀 LƯU VÀO DB
+                    oldTargetValue: oldTargetToSave, 
                     targetDetails: targetDetailsJson,
                     note: note || null 
                 }
