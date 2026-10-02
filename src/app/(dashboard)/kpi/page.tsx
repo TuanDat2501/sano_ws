@@ -13,34 +13,28 @@ import TaskLogManager from "./components/TaskLogManager";
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 
-// 🚀 HÀM 1: SINH TEXT TUẦN CHUẨN THEO THÁNG (KHÔNG VẮT NGANG THÁNG)
+// 🚀 HÀM 1: SINH TEXT TUẦN CHUẨN THEO THÁNG (LỊCH VIỆT NAM: THỨ 2 - CHỦ NHẬT)
 function getWeekData(year: number, month: number, weekNumber: number) {
-    // 1. Ép lấy tổng số ngày của tháng (Giờ luôn set 12h trưa để tránh lỗi Timezone)
+    // Ép giờ 12:00:00 trưa để tuyệt đối không bị nhảy ngày do lệch múi giờ
     const totalDays = new Date(year, month, 0, 12, 0, 0).getDate(); 
-    
-    // 2. Xác định mùng 1 là thứ mấy (0: Chủ nhật, 1: Thứ 2, ... 6: Thứ 7)
     const firstDayOfMonth = new Date(year, month - 1, 1, 12, 0, 0);
-    const startDayOfWeek = firstDayOfMonth.getDay(); 
+    const startDayOfWeek = firstDayOfMonth.getDay(); // 0 là Chủ Nhật, 1 là Thứ Hai...
     
-    // 3. Tính ngày của Chủ Nhật đầu tiên trong tháng
+    // Tính khoảng cách từ mùng 1 đến Chủ Nhật đầu tiên
     const diffToSunday = startDayOfWeek === 0 ? 0 : 7 - startDayOfWeek;
     const firstSunday = 1 + diffToSunday;
 
     let startDay = 1;
     let endDay = firstSunday;
 
-    // Nếu không phải tuần 1, tính tịnh tiến mỗi tuần 7 ngày
+    // Các tuần sau tuần 1 thì cứ tịnh tiến cộng 7 ngày
     if (weekNumber > 1) {
         startDay = firstSunday + (weekNumber - 2) * 7 + 1;
         endDay = Math.min(startDay + 6, totalDays); // Ép giới hạn không vượt quá ngày cuối tháng
     }
 
-    // 4. Khởi tạo ngày bắt đầu và kết thúc tuần (Set giờ Local chuẩn)
-    const startOfWeek = new Date(year, month - 1, startDay);
-    startOfWeek.setHours(0, 0, 0, 0);
-
-    const endOfWeek = new Date(year, month - 1, endDay);
-    endOfWeek.setHours(23, 59, 59, 999);
+    const startOfWeek = new Date(year, month - 1, startDay, 12, 0, 0);
+    const endOfWeek = new Date(year, month - 1, endDay, 12, 0, 0);
 
     const pad = (num: number) => num.toString().padStart(2, '0');
     const label = `Tuần ${weekNumber} (${pad(startDay)}/${pad(month)}/${year} - ${pad(endDay)}/${pad(month)}/${year})`;
@@ -57,22 +51,20 @@ function getAvailableWeeks(year: number, month: number) {
     const diffToSunday = startDayOfWeek === 0 ? 0 : 7 - startDayOfWeek;
     const firstSunday = 1 + diffToSunday;
 
-    // Tính số ngày còn lại sau Chủ Nhật đầu tiên, chia cho 7 để ra số tuần còn lại
     const remainingDays = totalDays - firstSunday;
     const totalWeeks = 1 + Math.ceil(remainingDays / 7);
 
-    // Trả về mảng tuần (VD: [1, 2, 3, 4, 5])
     return Array.from({ length: totalWeeks }, (_, i) => i + 1);
 }
 
-// 🚀 HÀM 3: LẤY THÔNG TIN TUẦN HIỆN TẠI VÀO HÔM NAY (ÁP DỤNG LOGIC MỚI)
+// 🚀 HÀM 3: LẤY THÔNG TIN TUẦN HIỆN TẠI VÀO HÔM NAY (ÉP CHUẨN GIỜ VIỆT NAM)
 function getCurrentWeekInfo() {
     const today = new Date();
-    // Ép múi giờ về giờ Việt Nam (bỏ qua timezone server)
+    // Khử múi giờ của Server, ép cứng về múi giờ Việt Nam (UTC+7)
     const localTime = today.getTime();
     const localOffset = today.getTimezoneOffset() * 60000;
     const utc = localTime + localOffset;
-    const vietnamTime = new Date(utc + (3600000 * 7)); // +7 là múi giờ VN
+    const vietnamTime = new Date(utc + (3600000 * 7)); 
 
     const year = vietnamTime.getFullYear();
     const month = vietnamTime.getMonth() + 1;
@@ -91,6 +83,7 @@ function getCurrentWeekInfo() {
 
     return { year, month, week };
 }
+
 export default function KpiDashboard() {
     const { data: session } = useSession();
     const currentUser = session?.user as any;
@@ -101,7 +94,6 @@ export default function KpiDashboard() {
     const isHighLevel = ["BAN_GIAM_DOC", "ADMIN", "HR", "KE_TOAN"].includes(userRole);
     const isManager = ["LEADER", "BAN_GIAM_DOC", "ADMIN", "HR", "KE_TOAN"].includes(userRole);
 
-    // 🚀 BỔ SUNG LOGIC: Gộp chung quyền Lọc Team cho HR, Admin, và Trưởng phòng (Leader + isTeamLeader)
     const canFilterTeam = isHighLevel || currentUser?.isTeamLeader || currentUser?.permissions?.includes("MENU_TEAMS");
 
     const [mainTab, setMainTab] = useState<'KPI' | 'LOGS'>('KPI');
@@ -109,7 +101,6 @@ export default function KpiDashboard() {
     const [teams, setTeams] = useState<any[]>([]);
     const [selectedTeamFilter, setSelectedTeamFilter] = useState<string>("ALL");
     
-    // 🚀 SỬA LẠI: Cho phép những người có quyền canFilterTeam sử dụng selectedTeamFilter
     const queryTeamId = canFilterTeam ? selectedTeamFilter : teamId;
 
     const currentInfo = getCurrentWeekInfo();
@@ -138,7 +129,6 @@ export default function KpiDashboard() {
     }, [selectedMonth, selectedYear, availableWeeks]);
 
     useEffect(() => {
-        // 🚀 Chỉ tải danh sách Teams nếu có quyền filter
         if (canFilterTeam) {
             fetch("/api/teams").then(res => res.ok ? res.json() : []).then(setTeams);
         }
@@ -153,7 +143,6 @@ export default function KpiDashboard() {
                     return;
                 }
                 
-                // 🚀 ĐÃ GỠ BỎ ĐOẠN IF ÉP CỨNG teamId=ALL CỦA isTeamLeader
                 const url = `/api/kpi?teamId=${queryTeamId}&year=${selectedYear}&month=${selectedMonth}&week=${selectedWeek}`;
                 
                 const res = await fetch(url);
@@ -197,14 +186,12 @@ export default function KpiDashboard() {
         }
     }, [kpiList, currentUser, viewingUserId, isManager]);
 
-    // 🚀 BỔ SUNG THAM SỐ note VÀ GỬI LÊN API
     const handleUpdateTarget = async (userId: string, newTarget: string | number, targetDetails: any[] = [], note: string = "") => {
         const targetNum = parseInt(newTarget as string);
         if (isNaN(targetNum) || targetNum < 0) return;
 
         setKpiList(prev => prev.map(k => {
             if (k.userId === userId) {
-                // 🚀 LẤY SỐ HIỆN TẠI LÀM SỐ CŨ TRƯỚC KHI GHI ĐÈ SỐ MỚI
                 const oldT = k.targetValue !== targetNum ? k.targetValue : k.oldTargetValue;
                 const newPercent = targetNum > 0 ? Math.round((k.actualValue / targetNum) * 100) : 0;
                 return { ...k, targetValue: targetNum, oldTargetValue: oldT, percent: newPercent, targetDetails, note };
@@ -339,13 +326,10 @@ export default function KpiDashboard() {
                 ws.mergeCells(1, startCol, 1, endCol);
                 const weekCell = ws.getCell(1, startCol);
                 
-                const weekDataRes = weeksData[i]?.weekData;
-                let dateStr = "";
-                if (weekDataRes && weekDataRes.startDate) {
-                    const sd = new Date(weekDataRes.startDate);
-                    const ed = new Date(weekDataRes.endDate);
-                    dateStr = `(${sd.getDate()}-${ed.getDate()}/${ed.getMonth()+1})`;
-                }
+                // 🚀 LẤY NGÀY BẰNG HÀM NỘI BỘ THAY VÌ TỪ API ĐỂ TRÁNH LỆCH MÚI GIỜ SERVER
+                const { start: sd, end: ed } = getWeekData(selectedYear, selectedMonth, w);
+                const pad = (num: number) => num.toString().padStart(2, '0');
+                const dateStr = `(${pad(sd.getDate())}-${pad(ed.getDate())}/${pad(ed.getMonth() + 1)})`;
 
                 weekCell.value = `KHỐI LƯỢNG CÔNG VIỆC TUẦN ${w}\n${dateStr}`;
                 weekCell.font = { name: 'Times New Roman', size: 10, bold: true };
@@ -537,7 +521,6 @@ export default function KpiDashboard() {
 
                         <div className="flex items-center gap-1 md:gap-2 bg-white p-1.5 md:p-2 rounded-xl shadow-sm border border-slate-200 overflow-x-auto w-full xl:w-auto custom-scrollbar-thin">
                             
-                            {/* 🚀 ĐÃ SỬA: Gom gọn 1 khung Dropdown Team duy nhất cho người có quyền canFilterTeam */}
                             {canFilterTeam && (
                                 <div className="flex items-center gap-1 px-2 md:px-3 border-r border-slate-200 shrink-0">
                                     <Users size={14} className="text-slate-400 md:w-4 md:h-4" />

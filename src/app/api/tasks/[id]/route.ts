@@ -4,18 +4,29 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { Prisma } from "@prisma/client";
 
+// 🚀 HÀM GETBASEURL MỚI: TỐI GIẢN VÀ CHÍNH XÁC HƠN
 const getBaseUrl = (rawUrl: string) => {
     if (!rawUrl || rawUrl.trim() === "") return "";
+    
+    let url = rawUrl.trim();
+    if (!url.startsWith('http')) {
+        url = `https://${url}`;
+    }
+
     try {
-        const urlString = rawUrl.startsWith('http') ? rawUrl : `https://${rawUrl}`;
-        const url = new URL(urlString);
-        if (url.hostname.includes('youtube.com')) {
-            const v = url.searchParams.get('v');
-            return v ? `${url.origin}${url.pathname}?v=${v}` : `${url.origin}${url.pathname}`;
+        const parsedUrl = new URL(url);
+        
+        // Với YouTube, giữ nguyên Video ID
+        if (parsedUrl.hostname.includes('youtube.com')) {
+            const v = parsedUrl.searchParams.get('v');
+            return v ? `${parsedUrl.origin}${parsedUrl.pathname}?v=${v}` : `${parsedUrl.origin}${parsedUrl.pathname}`;
         }
-        return url.origin + url.pathname;
+        
+        // Với các link khác (nhất là Google Drive, Sheets), trả về nguyên vẹn domain + path (cắt bỏ search query ?)
+        return parsedUrl.origin + parsedUrl.pathname;
     } catch (e) {
-        return rawUrl.trim().split('?')[0];
+        // Nếu parse lỗi, chỉ cắt bỏ phần ?query
+        return url.split('?')[0];
     }
 };
 
@@ -39,7 +50,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                     coContentUsers: { select: { id: true } },
                     coEditorUsers: { select: { id: true } },
                     coAnimatorUsers: { select: { id: true } }
-                    // 🚀 KHÔNG CẦN INCLUDE PUBLISHERUSER NỮA VÌ CHỈ CẦN publisherId LÀ ĐỦ
                 }
             });
             if (!oldTask) throw new Error("Task không tồn tại");
@@ -96,7 +106,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 if (rawBody.channelId !== undefined) body.channelId = rawBody.channelId || null;
                 if (rawBody.priority !== undefined) body.priority = rawBody.priority;
                 
-                // Cập nhật lại ID Publisher nếu có thay đổi từ Modal
                 if (rawBody.publisherId !== undefined) body.publisherId = rawBody.publisherId || null;
 
                 if (rawBody.contentIds !== undefined) {
@@ -123,35 +132,71 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
             const currentIsRework = rawBody.isRework !== undefined ? rawBody.isRework : oldTask.isRework;
 
+            // 🚀 BẮT ĐẦU LOGIC KIỂM TRA TRÙNG LINK TỐI ƯU MỚI
             if (!currentIsRework) {
-                const linksToCheck = [
-                    { key: 'scriptLink', value: body.scriptLink },
-                    { key: 'audioLink', value: body.audioLink },
-                    { key: 'storyboardLink', value: body.storyboardLink },
-                    { key: 'animationLink', value: body.animationLink },
-                    { key: 'roughProjectLink', value: body.roughProjectLink },
-                    { key: 'thumbnailLink', value: body.thumbnailLink },
-                    { key: 'videoLink', value: body.videoLink },
-                    { key: 'linkProject', value: body.linkProject },
-                    { key: 'publishLink', value: body.publishLink },
-                ].filter(l => l.value && l.value.trim() !== "");
+                const fieldsToCheck = [
+                    'scriptLink', 'audioLink', 'storyboardLink', 'animationLink', 
+                    'roughProjectLink', 'thumbnailLink', 'videoLink', 'linkProject', 'publishLink'
+                ];
 
-                if (linksToCheck.length > 0) {
-                    const orConditions = linksToCheck.map(l => ({
-                        [l.key]: { contains: getBaseUrl(l.value).replace(/^https?:\/\//, '') }
-                    }));
+                // 1. Thu thập TẤT CẢ các URL thuần túy (đã bóc tách tên) từ Payload gửi lên
+                let urlsToVerify: { field: string, cleanUrl: string }[] = [];
+                
+                fieldsToCheck.forEach(field => {
+                    const fieldValue = body[field];
+                    if (fieldValue && typeof fieldValue === 'string' && fieldValue.trim() !== "") {
+                        // Tách theo dòng (vì có thể có nhiều người nộp trong 1 field)
+                        const lines = fieldValue.split('\n');
+                        lines.forEach(line => {
+                            const match = line.match(/(https?:\/\/[^\s]+)/);
+                            if (match) {
+                                // Rút gọn url bằng getBaseUrl để so sánh chính xác nhất
+                                const processedUrl = getBaseUrl(match[0]).replace(/^https?:\/\//, '');
+                                if(processedUrl) {
+                                    urlsToVerify.push({ field, cleanUrl: processedUrl });
+                                }
+                            }
+                        });
+                    }
+                });
 
-                    const potentialTasks = await tx.task.findMany({
-                        where: { id: { not: taskId }, OR: orConditions }
+                if (urlsToVerify.length > 0) {
+                    // 2. Lấy TẤT CẢ Task khác trong Database ra kiểm tra
+                    // 🚀 ĐÃ BỎ ĐIỀU KIỆN `status: { not: "CANCEL" }` ĐỂ TRÁNH LỖI ENUM PRISMA
+                    const allOtherTasks = await tx.task.findMany({
+                        where: { id: { not: taskId } },
+                        select: {
+                            id: true,
+                            scriptLink: true, audioLink: true, storyboardLink: true, 
+                            animationLink: true, roughProjectLink: true, thumbnailLink: true, 
+                            videoLink: true, linkProject: true, publishLink: true
+                        }
                     });
 
+                    // 3. Duyệt mảng bằng tay (Chính xác 100%)
                     let duplicateField = "";
-                    const isDuplicate = potentialTasks.some(task => {
-                        return linksToCheck.some(l => {
-                            const dbValue = (task as any)[l.key];
-                            const isMatch = dbValue && getBaseUrl(dbValue) === getBaseUrl(l.value);
-                            if (isMatch) duplicateField = l.key;
-                            return isMatch;
+                    
+                    const isDuplicate = allOtherTasks.some(otherTask => {
+                        return urlsToVerify.some(incomingLink => {
+                            // Kiểm tra xem incomingLink.cleanUrl có nằm trong BẤT KỲ trường nào của otherTask không
+                            return fieldsToCheck.some(dbField => {
+                                const dbRawValue = (otherTask as any)[dbField];
+                                if (!dbRawValue || typeof dbRawValue !== 'string') return false;
+
+                                // Bóc tách từng URL trong DB ra so sánh
+                                const dbLines = dbRawValue.split('\n');
+                                return dbLines.some((dbLine: string) => {
+                                    const dbMatch = dbLine.match(/(https?:\/\/[^\s]+)/);
+                                    if (dbMatch) {
+                                        const dbCleanUrl = getBaseUrl(dbMatch[0]).replace(/^https?:\/\//, '');
+                                        if (dbCleanUrl === incomingLink.cleanUrl) {
+                                            duplicateField = incomingLink.field;
+                                            return true;
+                                        }
+                                    }
+                                    return false;
+                                });
+                            });
                         });
                     });
 
@@ -160,6 +205,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                     }
                 }
             }
+            // 🚀 KẾT THÚC LOGIC KIỂM TRA TRÙNG LINK
 
             const logsToCreate: any[] = [];
             const logsToDelete: any[] = [];
@@ -183,7 +229,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                                (rawBody.animatorIds || []).includes(userId) || 
                                oldTask.coAnimatorUsers?.some((u: any) => u.id === userId);
                     case 'PUBLISHER':
-                        // 🚀 KIỂM TRA CHẶT ID QUẢN LÝ KÊNH
                         return (body.publisherId ?? oldTask.publisherId) === userId;
                     default:
                         return false;
@@ -193,8 +238,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             const isContentAssigned = checkAssignment('CONTENT');
             const isEditorAssigned = checkAssignment('EDITOR');
             const isAnimatorAssigned = checkAssignment('ANIMATOR');
-            
-            // Lấy kết quả kiểm tra người up link có phải là Publisher hay không
             const isPublisherAssigned = checkAssignment('PUBLISHER');
 
             const todayStart = new Date();
@@ -213,7 +256,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                         const isAnimField = ['animationLink'].includes(fieldName);
                         const isPublishField = ['thumbnailLink', 'publishLink'].includes(fieldName);
 
-                        // 🚀 ÁP DỤNG TRỞ LẠI LOGIC CHẶN GHI ĐIỂM NẾU KHÔNG ĐÚNG NGƯỜI
                         if (isContentField && isContentAssigned) {
                             actionType = "DAILY_REPORT";
                             logCategory = 'CONTENT';
@@ -227,12 +269,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                             logCategory = 'ANIMATION';
                         }
                         else if (isPublishField) {
-                            // 🚀 TRẢ VỀ ĐÚNG QUY CỦ: CHỈ PUBLISHER XỊN MỚI ĐƯỢC TÍNH ĐIỂM
                             if (isPublisherAssigned) {
                                 actionType = "DAILY_REPORT";
                                 logCategory = 'PUBLISH';
                             } 
-                            // Nếu Editor up thumbnail thì vẫn cho tính là EDIT
                             else if (isEditorAssigned && fieldName === 'thumbnailLink') {
                                 actionType = "DAILY_REPORT";
                                 logCategory = 'EDIT';
@@ -326,7 +366,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                     ...(body.coContentUsers && { coContentUsers: body.coContentUsers }),
                     ...(body.coEditorUsers && { coEditorUsers: body.coEditorUsers }),
                     ...(body.coAnimatorUsers && { coAnimatorUsers: body.coAnimatorUsers }),
-                    publisherId: body.publisherId !== undefined ? body.publisherId : undefined // Đảm bảo ID Publisher được cập nhật
+                    publisherId: body.publisherId !== undefined ? body.publisherId : undefined 
                 }
             });
 
