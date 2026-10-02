@@ -190,13 +190,22 @@ export default function TaskDetailDrawer({
 
       const res = await fetch(`/api/tasks/${selectedTask.id}`, {
         method: "PATCH", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ [fieldKey]: payloadValue })
+        body: JSON.stringify({ 
+            [fieldKey]: payloadValue,
+            // 🚀 BỔ SUNG: Gửi thêm giá trị gốc để Backend đối chiếu 3-Way Merge
+            [`base_${fieldKey}`]: selectedTask[fieldKey] || "" 
+        })
       });
 
       const data = await res.json();
 
       if (res.ok) {
-        selectedTask[fieldKey] = finalValue;
+        // 🚀 CẬP NHẬT THEO GIÁ TRỊ BACKEND TRẢ VỀ (Đã được trộn nếu có người khác sửa cùng lúc)
+        const mergedValue = data.task[fieldKey] || "";
+        selectedTask[fieldKey] = mergedValue;
+        
+        // Buộc UI render lại nếu Backend có nối thêm link của người khác vào
+        setTaskLinks((prev: any) => ({ ...prev, [fieldKey]: mergedValue }));
 
         if (data.task?.publishDate) {
           selectedTask.publishDate = data.task.publishDate;
@@ -522,9 +531,8 @@ export default function TaskDetailDrawer({
                       </h3>
                       <span className="text-[9px] font-bold text-slate-400 bg-slate-50 px-2 py-0.5 rounded border border-slate-100 shadow-sm">(Tự động lưu)</span>
                     </div>
-                    {/* Hướng dẫn ngắn cho người dùng */}
                     <p className="text-[11px] font-medium text-amber-600 mt-2 bg-amber-50 px-2 py-1.5 rounded-lg border border-amber-100 flex items-start gap-1">
-                      💡 <span><strong>Lưu ý:</strong> Bấm "Sửa" và dán link (hệ thống tự động gắn tên). Bấm "+ Thêm Link" nếu có nhiều người nộp chung 1 mục.</span>
+                      💡 <span><strong>Lưu ý:</strong> Bấm "Sửa" và dán link (hệ thống tự động gắn tên bạn). Bấm "+ Thêm Link" nếu có nhiều người nộp chung 1 mục.</span>
                     </p>
                   </div>
 
@@ -635,7 +643,7 @@ export default function TaskDetailDrawer({
                                                     {textPart.replace(/^[-:\[\]]+|[-:\[\]]+$/g, '').trim()}
                                                   </span>
                                                 )}
-                                                <a href={url} target="_blank" rel="noreferrer" className="text-[12px] font-semibold text-blue-600 hover:text-blue-700 hover:underline truncate w-full break-all">
+                                                <a href={url} target="_blank" rel="noreferrer" className="text-[12px] font-semibold text-blue-600 hover:text-red-700 hover:underline truncate w-full break-all">
                                                   {url}
                                                 </a>
                                              </>

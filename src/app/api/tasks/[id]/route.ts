@@ -25,7 +25,6 @@ const getBaseUrl = (rawUrl: string) => {
         // Với các link khác (nhất là Google Drive, Sheets), trả về nguyên vẹn domain + path (cắt bỏ search query ?)
         return parsedUrl.origin + parsedUrl.pathname;
     } catch (e) {
-        // Nếu parse lỗi, chỉ cắt bỏ phần ?query
         return url.split('?')[0];
     }
 };
@@ -66,11 +65,37 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
             const isFromModal = rawBody.title !== undefined || rawBody.teamId !== undefined;
 
+            // 🚀 ÁP DỤNG THUẬT TOÁN 3-WAY MERGE CHỐNG GHI ĐÈ
             const handleLinkField = (field: string) => {
                 if (rawBody[field] !== undefined) {
-                    if (isFromModal && rawBody[field] === "") {
+                    const incomingValue = rawBody[field] || "";
+                    const baseValue = rawBody[`base_${field}`]; 
+                    const dbValue = (oldTask as any)[field] || "";
+
+                    // Xảy ra CONFLICT: Có người đã sửa Database trong lúc user này đang thao tác
+                    if (baseValue !== undefined && baseValue !== dbValue && !isFromModal) {
+                        const dbLines = dbValue.split('\n').map((l: string) => l.trim()).filter(Boolean);
+                        const baseLines = baseValue.split('\n').map((l: string) => l.trim()).filter(Boolean);
+                        const incomingLines = incomingValue.split('\n').map((l: string) => l.trim()).filter(Boolean);
+
+                        // Tìm ra những dòng người dùng THÊM và XÓA so với lúc họ mở Task
+                        const addedLines = incomingLines.filter((l: string) => !baseLines.includes(l));
+                        const deletedLines = baseLines.filter((l: string) => !incomingLines.includes(l));
+
+                        // Trộn vào DB hiện tại (Loại bỏ dòng họ xóa, nhét thêm dòng họ thêm)
+                        let finalLines = dbLines.filter((l: string) => !deletedLines.includes(l));
+                        addedLines.forEach((l: string) => {
+                            if (!finalLines.includes(l)) finalLines.push(l);
+                        });
+
+                        body[field] = finalLines.length > 0 ? finalLines.join('\n') : null;
                     } else {
-                        body[field] = rawBody[field];
+                        // Không có conflict hoặc từ Modal gửi lên -> Xử lý đè bình thường
+                        if (isFromModal && rawBody[field] === "") {
+                            // Bỏ qua
+                        } else {
+                            body[field] = incomingValue === "" ? null : incomingValue;
+                        }
                     }
                 }
             };
@@ -132,25 +157,21 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
             const currentIsRework = rawBody.isRework !== undefined ? rawBody.isRework : oldTask.isRework;
 
-            // 🚀 BẮT ĐẦU LOGIC KIỂM TRA TRÙNG LINK TỐI ƯU MỚI
             if (!currentIsRework) {
                 const fieldsToCheck = [
                     'scriptLink', 'audioLink', 'storyboardLink', 'animationLink', 
                     'roughProjectLink', 'thumbnailLink', 'videoLink', 'linkProject', 'publishLink'
                 ];
 
-                // 1. Thu thập TẤT CẢ các URL thuần túy (đã bóc tách tên) từ Payload gửi lên
                 let urlsToVerify: { field: string, cleanUrl: string }[] = [];
                 
                 fieldsToCheck.forEach(field => {
                     const fieldValue = body[field];
                     if (fieldValue && typeof fieldValue === 'string' && fieldValue.trim() !== "") {
-                        // Tách theo dòng (vì có thể có nhiều người nộp trong 1 field)
                         const lines = fieldValue.split('\n');
                         lines.forEach(line => {
                             const match = line.match(/(https?:\/\/[^\s]+)/);
                             if (match) {
-                                // Rút gọn url bằng getBaseUrl để so sánh chính xác nhất
                                 const processedUrl = getBaseUrl(match[0]).replace(/^https?:\/\//, '');
                                 if(processedUrl) {
                                     urlsToVerify.push({ field, cleanUrl: processedUrl });
@@ -161,8 +182,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 });
 
                 if (urlsToVerify.length > 0) {
-                    // 2. Lấy TẤT CẢ Task khác trong Database ra kiểm tra
-                    // 🚀 ĐÃ BỎ ĐIỀU KIỆN `status: { not: "CANCEL" }` ĐỂ TRÁNH LỖI ENUM PRISMA
                     const allOtherTasks = await tx.task.findMany({
                         where: { id: { not: taskId } },
                         select: {
@@ -173,17 +192,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                         }
                     });
 
-                    // 3. Duyệt mảng bằng tay (Chính xác 100%)
                     let duplicateField = "";
                     
                     const isDuplicate = allOtherTasks.some(otherTask => {
                         return urlsToVerify.some(incomingLink => {
-                            // Kiểm tra xem incomingLink.cleanUrl có nằm trong BẤT KỲ trường nào của otherTask không
                             return fieldsToCheck.some(dbField => {
                                 const dbRawValue = (otherTask as any)[dbField];
                                 if (!dbRawValue || typeof dbRawValue !== 'string') return false;
 
-                                // Bóc tách từng URL trong DB ra so sánh
                                 const dbLines = dbRawValue.split('\n');
                                 return dbLines.some((dbLine: string) => {
                                     const dbMatch = dbLine.match(/(https?:\/\/[^\s]+)/);
@@ -205,7 +221,6 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                     }
                 }
             }
-            // 🚀 KẾT THÚC LOGIC KIỂM TRA TRÙNG LINK
 
             const logsToCreate: any[] = [];
             const logsToDelete: any[] = [];
