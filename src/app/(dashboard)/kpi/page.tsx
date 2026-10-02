@@ -15,10 +15,14 @@ import { saveAs } from 'file-saver';
 
 // 🚀 HÀM 1: SINH TEXT TUẦN CHUẨN THEO THÁNG (KHÔNG VẮT NGANG THÁNG)
 function getWeekData(year: number, month: number, weekNumber: number) {
-    const totalDays = new Date(year, month, 0).getDate(); // Lấy tổng số ngày trong tháng
-    const startDayOfWeek = new Date(year, month - 1, 1).getDay(); // Ngày 1 là thứ mấy
+    // 1. Ép lấy tổng số ngày của tháng (Giờ luôn set 12h trưa để tránh lỗi Timezone)
+    const totalDays = new Date(year, month, 0, 12, 0, 0).getDate(); 
     
-    // Tìm ngày Chủ Nhật đầu tiên của tháng
+    // 2. Xác định mùng 1 là thứ mấy (0: Chủ nhật, 1: Thứ 2, ... 6: Thứ 7)
+    const firstDayOfMonth = new Date(year, month - 1, 1, 12, 0, 0);
+    const startDayOfWeek = firstDayOfMonth.getDay(); 
+    
+    // 3. Tính ngày của Chủ Nhật đầu tiên trong tháng
     const diffToSunday = startDayOfWeek === 0 ? 0 : 7 - startDayOfWeek;
     const firstSunday = 1 + diffToSunday;
 
@@ -31,6 +35,7 @@ function getWeekData(year: number, month: number, weekNumber: number) {
         endDay = Math.min(startDay + 6, totalDays); // Ép giới hạn không vượt quá ngày cuối tháng
     }
 
+    // 4. Khởi tạo ngày bắt đầu và kết thúc tuần (Set giờ Local chuẩn)
     const startOfWeek = new Date(year, month - 1, startDay);
     startOfWeek.setHours(0, 0, 0, 0);
 
@@ -38,15 +43,17 @@ function getWeekData(year: number, month: number, weekNumber: number) {
     endOfWeek.setHours(23, 59, 59, 999);
 
     const pad = (num: number) => num.toString().padStart(2, '0');
-    const label = `Tuần ${weekNumber} (${pad(startOfWeek.getDate())}/${pad(startOfWeek.getMonth() + 1)}/${startOfWeek.getFullYear()} - ${pad(endOfWeek.getDate())}/${pad(endOfWeek.getMonth() + 1)}/${endOfWeek.getFullYear()})`;
+    const label = `Tuần ${weekNumber} (${pad(startDay)}/${pad(month)}/${year} - ${pad(endDay)}/${pad(month)}/${year})`;
 
     return { start: startOfWeek, end: endOfWeek, label };
 }
 
 // 🚀 HÀM 2: TÍNH SỐ TUẦN HỢP LỆ TRONG THÁNG (CẮT GỌN TRONG THÁNG ĐÓ)
 function getAvailableWeeks(year: number, month: number) {
-    const totalDays = new Date(year, month, 0).getDate();
-    const startDayOfWeek = new Date(year, month - 1, 1).getDay();
+    const totalDays = new Date(year, month, 0, 12, 0, 0).getDate();
+    const firstDayOfMonth = new Date(year, month - 1, 1, 12, 0, 0);
+    const startDayOfWeek = firstDayOfMonth.getDay();
+    
     const diffToSunday = startDayOfWeek === 0 ? 0 : 7 - startDayOfWeek;
     const firstSunday = 1 + diffToSunday;
 
@@ -61,11 +68,19 @@ function getAvailableWeeks(year: number, month: number) {
 // 🚀 HÀM 3: LẤY THÔNG TIN TUẦN HIỆN TẠI VÀO HÔM NAY (ÁP DỤNG LOGIC MỚI)
 function getCurrentWeekInfo() {
     const today = new Date();
-    const year = today.getFullYear();
-    const month = today.getMonth() + 1;
-    const date = today.getDate();
+    // Ép múi giờ về giờ Việt Nam (bỏ qua timezone server)
+    const localTime = today.getTime();
+    const localOffset = today.getTimezoneOffset() * 60000;
+    const utc = localTime + localOffset;
+    const vietnamTime = new Date(utc + (3600000 * 7)); // +7 là múi giờ VN
 
-    const startDayOfWeek = new Date(year, month - 1, 1).getDay();
+    const year = vietnamTime.getFullYear();
+    const month = vietnamTime.getMonth() + 1;
+    const date = vietnamTime.getDate();
+
+    const firstDayOfMonth = new Date(year, month - 1, 1, 12, 0, 0);
+    const startDayOfWeek = firstDayOfMonth.getDay();
+    
     const diffToSunday = startDayOfWeek === 0 ? 0 : 7 - startDayOfWeek;
     const firstSunday = 1 + diffToSunday;
 
