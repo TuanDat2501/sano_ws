@@ -230,7 +230,7 @@ export default function TaskDetailDrawer({
 
   const handleClose = () => {
     if (savingField) {
-      showToast("warning", "Hệ thống đang lưu dữ liệu & KPI. Vui lòng chờ giây lát...");
+      showToast("error", "Hệ thống đang lưu dữ liệu & KPI. Vui lòng chờ giây lát...");
       return;
     }
     onClose();
@@ -564,7 +564,7 @@ export default function TaskDetailDrawer({
                                         />
                                         <button
                                           onClick={() => {
-                                            const newLines = lines.filter((_, idx) => idx !== i);
+                                            const newLines = lines.filter((_: string, idx: number) => idx !== i);
                                             setTaskLinks({ ...taskLinks, [field.key]: newLines.join('\n') });
                                           }}
                                           className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md mt-0.5 transition-colors"
@@ -614,7 +614,7 @@ export default function TaskDetailDrawer({
                                   ) : currentLink.split('\n').filter((l: string) => l.trim() !== '').map((line: string, i: number) => {
                                     const urlMatch = line.match(/(https?:\/\/[^\s]+)/);
                                     const url = urlMatch ? urlMatch[0] : null;
-                                    const textPart = urlMatch ? line.replace(url, '').trim() : null;
+                                    const textPart = urlMatch ? line.replace(url as any, '').trim() : null;
 
                                     return (
                                       <div key={i} className="flex items-start gap-2 group/link">
@@ -686,7 +686,7 @@ export default function TaskDetailDrawer({
                                      />
                                      <button
                                        onClick={() => {
-                                         const newLines = pubLinks.filter((_, idx) => idx !== i);
+                                         const newLines = pubLinks.filter((_: string, idx: number) => idx !== i);
                                          setTaskLinks({ ...taskLinks, publishLink: newLines.join('\n') });
                                        }}
                                        className="p-1.5 text-red-300 hover:text-red-600 hover:bg-red-100 rounded-md mt-0.5 transition-colors"
@@ -736,7 +736,7 @@ export default function TaskDetailDrawer({
                               ) : taskLinks.publishLink.split('\n').filter((l: string) => l.trim() !== '').map((line: string, i: number) => {
                                 const urlMatch = line.match(/(https?:\/\/[^\s]+)/);
                                 const url = urlMatch ? urlMatch[0] : null;
-                                const textPart = urlMatch ? line.replace(url, '').trim() : null;
+                                const textPart = urlMatch ? line.replace(url as any, '').trim() : null;
 
                                 return (
                                   <div key={i} className="flex items-start gap-2 group/link">
