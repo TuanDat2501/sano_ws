@@ -64,7 +64,7 @@ export async function GET(req: Request) {
 
         let kpiList: any[] = [];
         try {
-            const kpiRes = await getKpiApi(kpiReq); // Gọi thẳng hàm không qua HTTP
+            const kpiRes = await getKpiApi(kpiReq, {});// Gọi thẳng hàm không qua HTTP
             if (kpiRes.ok) {
                 const kpiData = await kpiRes.json();
                 kpiList = kpiData.kpiList || []; // Dữ liệu chuẩn từ route_2.ts
