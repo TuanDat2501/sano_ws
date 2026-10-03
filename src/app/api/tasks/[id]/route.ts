@@ -4,7 +4,6 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { Prisma } from "@prisma/client";
 
-// 🚀 HÀM GETBASEURL MỚI: TỐI GIẢN VÀ CHÍNH XÁC HƠN
 const getBaseUrl = (rawUrl: string) => {
     if (!rawUrl || rawUrl.trim() === "") return "";
     
@@ -16,13 +15,11 @@ const getBaseUrl = (rawUrl: string) => {
     try {
         const parsedUrl = new URL(url);
         
-        // Với YouTube, giữ nguyên Video ID
         if (parsedUrl.hostname.includes('youtube.com')) {
             const v = parsedUrl.searchParams.get('v');
             return v ? `${parsedUrl.origin}${parsedUrl.pathname}?v=${v}` : `${parsedUrl.origin}${parsedUrl.pathname}`;
         }
         
-        // Với các link khác (nhất là Google Drive, Sheets), trả về nguyên vẹn domain + path (cắt bỏ search query ?)
         return parsedUrl.origin + parsedUrl.pathname;
     } catch (e) {
         return url.split('?')[0];
@@ -65,24 +62,20 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
             const isFromModal = rawBody.title !== undefined || rawBody.teamId !== undefined;
 
-            // 🚀 ÁP DỤNG THUẬT TOÁN 3-WAY MERGE CHỐNG GHI ĐÈ
             const handleLinkField = (field: string) => {
                 if (rawBody[field] !== undefined) {
                     const incomingValue = rawBody[field] || "";
                     const baseValue = rawBody[`base_${field}`]; 
                     const dbValue = (oldTask as any)[field] || "";
 
-                    // Xảy ra CONFLICT: Có người đã sửa Database trong lúc user này đang thao tác
                     if (baseValue !== undefined && baseValue !== dbValue && !isFromModal) {
                         const dbLines = dbValue.split('\n').map((l: string) => l.trim()).filter(Boolean);
                         const baseLines = baseValue.split('\n').map((l: string) => l.trim()).filter(Boolean);
                         const incomingLines = incomingValue.split('\n').map((l: string) => l.trim()).filter(Boolean);
 
-                        // Tìm ra những dòng người dùng THÊM và XÓA so với lúc họ mở Task
                         const addedLines = incomingLines.filter((l: string) => !baseLines.includes(l));
                         const deletedLines = baseLines.filter((l: string) => !incomingLines.includes(l));
 
-                        // Trộn vào DB hiện tại (Loại bỏ dòng họ xóa, nhét thêm dòng họ thêm)
                         let finalLines = dbLines.filter((l: string) => !deletedLines.includes(l));
                         addedLines.forEach((l: string) => {
                             if (!finalLines.includes(l)) finalLines.push(l);
@@ -90,9 +83,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
                         body[field] = finalLines.length > 0 ? finalLines.join('\n') : null;
                     } else {
-                        // Không có conflict hoặc từ Modal gửi lên -> Xử lý đè bình thường
                         if (isFromModal && rawBody[field] === "") {
-                            // Bỏ qua
                         } else {
                             body[field] = incomingValue === "" ? null : incomingValue;
                         }
@@ -350,6 +341,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 reworkFlag = true;
             }
 
+            // 🚀 BƯỚC 1: UPDATE TASK
             const updatedTask = await tx.task.update({
                 where: { id: taskId },
                 data: {
@@ -385,6 +377,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 }
             });
 
+            // 🚀 BƯỚC 2: TẠO VÀ XÓA TASK LOG ĐỂ TÍNH KPI NẰM CHẶT TRONG TRANSACTION
             if (logsToDelete.length > 0) {
                 for (const condition of logsToDelete) {
                     await tx.taskLog.deleteMany({ where: condition });
@@ -394,6 +387,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                 await tx.taskLog.createMany({ data: logsToCreate });
             }
 
+            // Nếu đến được đây thì cả Task và TaskLog đều đã lưu thành công.
             return { updatedTask, oldTask };
         }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
@@ -409,7 +403,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         });
 
     } catch (error: any) {
-        console.error(">>> LỖI CẬP NHẬT TASK:", error);
+        console.error(">>> LỖI CẬP NHẬT TASK VÀ GHI LOG:", error);
         if (error.message.includes("Task đã nghiệm thu")) return NextResponse.json({ error: error.message }, { status: 403 });
         if (error.message.includes("Task không tồn tại")) return NextResponse.json({ error: error.message }, { status: 404 });
         if (error.message.includes("Link này đã được sử dụng")) {
@@ -417,7 +411,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             const duplicateField = fieldSplit.length > 1 ? fieldSplit[1] : "";
             return NextResponse.json({ error: error.message.split(" Trường:")[0], field: duplicateField }, { status: 400 });
         }
-        return NextResponse.json({ error: "Lỗi Server" }, { status: 500 });
+        return NextResponse.json({ error: "Lỗi hệ thống khi cập nhật hoặc ghi KPI Log. Cập nhật đã bị hoàn tác." }, { status: 500 });
     }
 }
 
