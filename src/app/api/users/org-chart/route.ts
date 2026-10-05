@@ -62,7 +62,7 @@ export async function GET(req: Request) {
 
         let kpiList: any[] = [];
         try {
-            const kpiRes = await getKpiApi(kpiReq, {});
+            const kpiRes = await getKpiApi(kpiReq);
             if (kpiRes.ok) {
                 const kpiData = await kpiRes.json();
                 kpiList = kpiData.kpiList || [];
