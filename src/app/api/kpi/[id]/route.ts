@@ -3,29 +3,34 @@ import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
 
-// 🚀 HÀM CHUẨN XÁC 100% CHO CẢ 2 FILE API (ĐỒNG BỘ LOGIC VÀ ÉP CỨNG MÚI GIỜ VIỆT NAM)
+// 🚀 HÀM TÍNH TUẦN CHUẨN CẮT BIÊN THÁNG (Đồng bộ với Frontend và Analytics)
+// 🚀 HÀM CHUẨN XÁC 100% (CẮT GỌT TRONG THÁNG VÀ ÉP CỨNG MÚI GIỜ VIỆT NAM)
 function getWeekDateRangeByMonth(year: number, month: number, weekNumber: number) {
-    // 1. Dùng Date.UTC kết hợp 12h trưa để đảm bảo việc lấy ngày không bao giờ bị lệch qua hôm trước/hôm sau do timezone
+    // 1. Lấy tổng số ngày trong tháng (vd: 30 hoặc 31)
     const totalDays = new Date(Date.UTC(year, month, 0, 12, 0, 0)).getUTCDate(); 
-    const startDayOfWeek = new Date(Date.UTC(year, month - 1, 1, 12, 0, 0)).getUTCDay(); 
     
-    // 2. Tìm ngày Chủ Nhật đầu tiên của tháng (0 là Chủ Nhật)
-    const diffToSunday = startDayOfWeek === 0 ? 0 : 7 - startDayOfWeek;
+    // 2. Xác định ngày mùng 1 của tháng là thứ mấy (0: Chủ Nhật, 1: Thứ 2...)
+    const firstDayOfMonth = new Date(Date.UTC(year, month - 1, 1, 12, 0, 0)).getUTCDay(); 
+    
+    // 3. Tính ngày của Chủ Nhật đầu tiên trong tháng
+    const diffToSunday = firstDayOfMonth === 0 ? 0 : 7 - firstDayOfMonth;
     const firstSunday = 1 + diffToSunday;
 
     let startDay = 1;
     let endDay = firstSunday;
 
-    // 3. Nếu không phải tuần 1, tịnh tiến mỗi tuần 7 ngày
+    // 4. Nếu không phải tuần 1, tịnh tiến mỗi tuần 7 ngày
     if (weekNumber > 1) {
         startDay = firstSunday + (weekNumber - 2) * 7 + 1;
-        endDay = Math.min(startDay + 6, totalDays); // Chặn biên không vượt quá ngày cuối tháng
+        // Ép giới hạn: Ngày kết thúc không được vượt quá ngày cuối cùng của tháng
+        endDay = Math.min(startDay + 6, totalDays); 
     }
 
     const pad = (num: number) => num.toString().padStart(2, '0');
 
-    // 4. Khởi tạo mốc thời gian bằng chuỗi ISO ép cứng múi giờ Việt Nam (+07:00)
-    // VD: "2026-10-01T00:00:00+07:00". Prisma khi filter DB sẽ tự động đối chiếu rất chuẩn xác.
+    // 5. Khởi tạo mốc thời gian bằng chuỗi ISO ép cứng múi giờ Việt Nam (+07:00)
+    // - Bắt đầu từ 00:00:00 của ngày bắt đầu (startDay)
+    // - Kết thúc ở 23:59:59 của ngày kết thúc (endDay)
     const startOfWeek = new Date(`${year}-${pad(month)}-${pad(startDay)}T00:00:00+07:00`);
     const endOfWeek = new Date(`${year}-${pad(month)}-${pad(endDay)}T23:59:59.999+07:00`);
 

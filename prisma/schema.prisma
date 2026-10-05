@@ -537,6 +537,7 @@ model Channel {
   updatedAt       DateTime           @updatedAt
   tasks           Task[]
   revenueTargets  ChannelRevenueTarget[]
+  legacyInventories LegacyInventory[]
 }
 model ChannelRevenueTarget {
   id        String   @id @default(uuid())
@@ -586,4 +587,25 @@ model SystemSetting {
   settingKey   String   @unique 
   settingValue Json?    
   updatedAt    DateTime @updatedAt
+}
+
+// BẢNG QUẢN LÝ SỐ DƯ TỒN KHO ĐẦU KỲ (LEGACY INVENTORY)
+model LegacyInventory {
+  id              String  @id @default(uuid())
+  channelId       String
+  channel         Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  
+  duration        Int     // Phân loại thời lượng (VD: 30, 45, 60 phút)
+  
+  // Số lượng bài tồn kho cũ theo từng khâu
+  contentCount    Int @default(0)
+  animationCount  Int @default(0)
+  roughCount      Int @default(0)
+  videoCount      Int @default(0)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Đảm bảo 1 kênh không có 2 dòng trùng một mốc thời lượng
+  @@unique([channelId, duration])
 }
