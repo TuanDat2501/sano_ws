@@ -4,7 +4,6 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 
 // 🚀 IMPORT HÀM GET TỪ API KPI CỦA BẠN (Sửa lại đường dẫn này cho đúng với dự án)
-// Ví dụ file route_2.ts của bạn nằm ở thư mục app/api/kpi/route.ts
 import { GET as getKpiApi } from "@/app/api/kpi/route"; 
 
 function getCurrentWeekInfo() {
@@ -51,12 +50,11 @@ export async function GET(req: Request) {
         // 1. GỌI API KPI ĐỂ LẤY SỐ LIỆU CHUẨN MỚI NHẤT
         // =========================================================
         const kpiUrl = new URL(req.url);
-        kpiUrl.searchParams.set("teamId", "ALL"); // Ép lấy toàn bộ công ty
+        kpiUrl.searchParams.set("teamId", "ALL");
         kpiUrl.searchParams.set("year", year.toString());
         kpiUrl.searchParams.set("month", month.toString());
         kpiUrl.searchParams.set("week", currentWeekNumber.toString());
 
-        // Tạo Request ảo truyền vào API KPI (giữ nguyên Headers để Auth không bị văng)
         const kpiReq = new Request(kpiUrl.toString(), {
             method: "GET",
             headers: req.headers,
@@ -64,10 +62,10 @@ export async function GET(req: Request) {
 
         let kpiList: any[] = [];
         try {
-            const kpiRes = await getKpiApi(kpiReq, {});// Gọi thẳng hàm không qua HTTP
+            const kpiRes = await getKpiApi(kpiReq, {});
             if (kpiRes.ok) {
                 const kpiData = await kpiRes.json();
-                kpiList = kpiData.kpiList || []; // Dữ liệu chuẩn từ route_2.ts
+                kpiList = kpiData.kpiList || [];
             }
         } catch (error) {
             console.error("Lỗi khi gọi nội bộ API KPI:", error);
@@ -79,27 +77,15 @@ export async function GET(req: Request) {
         const users = await prisma.user.findMany({
             where: { isActive: true },
             select: {
-                id: true,
-                fullName: true,
-                username: true,
-                role: true,
-                avatarUrl: true,
-                teamId: true,
-                team: { select: { name: true } }, 
-                isActive: true,
+                id: true, fullName: true, username: true, role: true, avatarUrl: true, teamId: true,
+                team: { select: { name: true } }, isActive: true,
                 channelMemberships: {
-                    where: {
-                        channel: { status: { not: "DUNG_HOAT_DONG" } }
-                    },
-                    select: {
-                        channelId: true,
-                        roleOnChannel: true
-                    }
+                    where: { channel: { status: { not: "DUNG_HOAT_DONG" } } },
+                    select: { channelId: true, roleOnChannel: true }
                 }
             }
         });
 
-        // Hàng tồn (Surplus) không liên quan đến KPI nên vẫn giữ lại logic truy vấn
         const surplusTasks = await prisma.task.findMany({
             where: {
                 isClosed: false,
@@ -107,13 +93,15 @@ export async function GET(req: Request) {
                 status: { not: "BACKLOG" }
             },
             select: {
-                id: true, title: true, 
+                id: true, title: true, status: true, // 🚀 Bổ sung lấy Status
                 channelId: true,
                 contentId: true, editorId: true, animatorId: true, duration: true,
                 coContentUsers: { select: { id: true } },
                 coEditorUsers: { select: { id: true } },
                 coAnimatorUsers: { select: { id: true } },
-                scriptLink: true, animationLink: true, roughProjectLink: true, videoLink: true,
+                // 🚀 Bổ sung đầy đủ các trường Link để soi chiếu
+                scriptLink: true, storyboardLink: true, englishScriptLink: true, audioLink: true, 
+                animationLink: true, roughProjectLink: true, videoLink: true, publishLink: true, 
                 channel: { select: { name: true, avatarUrl: true } } 
             }
         });
@@ -122,27 +110,44 @@ export async function GET(req: Request) {
         const userSurplusList: Record<string, any[]> = {}; 
         
         surplusTasks.forEach(t => {
-            const hasScript = t.scriptLink && t.scriptLink.trim() !== "";
-            const hasAnim = t.animationLink && t.animationLink.trim() !== "";
-            const hasRough = t.roughProjectLink && t.roughProjectLink.trim() !== "";
+            const hasPublish = t.publishLink && t.publishLink.trim() !== "";
+            if (hasPublish) return; // Nếu đã đăng -> Loại luôn, không tính là hàng tồn
+
+            // Bóc tách trạng thái các Link
             const hasVideo = t.videoLink && t.videoLink.trim() !== "";
+            const hasRough = t.roughProjectLink && t.roughProjectLink.trim() !== "";
+            const hasAudio = t.audioLink && t.audioLink.trim() !== "";
+            const hasAnim = t.animationLink && t.animationLink.trim() !== "";
+            const hasScript = (t.scriptLink && t.scriptLink.trim() !== "") || 
+                              (t.storyboardLink && t.storyboardLink.trim() !== "") || 
+                              (t.englishScriptLink && t.englishScriptLink.trim() !== "");
+
+            // Bóc tách Status
+            const isDone = t.status === "DONE";
+            const isEditPhase = t.status === "EDIT_DOING" || t.status === "EDIT_REVIEW";
+            const isAnimPhase = t.status === "ANIMATION_DOING" || t.status === "ANIMATION_REVIEW";
+
             const duration = t.duration || 0;
-            
             const involvedIds = new Set<string>();
             
-            if (hasScript) {
-                if (t.contentId) involvedIds.add(t.contentId);
-                t.coContentUsers.forEach(u => involvedIds.add(u.id));
-            }
-            if (hasAnim) {
-                if (t.animatorId) involvedIds.add(t.animatorId);
-                t.coAnimatorUsers.forEach(u => involvedIds.add(u.id));
-            }
-            if (hasRough || hasVideo) {
+            // 🚀 LOGIC PHÂN TẦNG (WATERFALL): Khâu sau đè khâu trước
+            // 1. Nằm ở khâu EDIT: Trạng thái Done/Edit Hoặc đã nộp Audio/Rough/Video
+            if (isDone || isEditPhase || hasVideo || hasRough || hasAudio) {
                 if (t.editorId) involvedIds.add(t.editorId);
-                t.coEditorUsers.forEach(u => involvedIds.add(u.id));
+                t.coEditorUsers.forEach((u: any) => involvedIds.add(u.id));
+            }
+            // 2. Nằm ở khâu ANIMATION: Trạng thái Anim Hoặc có link Anim
+            else if (isAnimPhase || hasAnim) {
+                if (t.animatorId) involvedIds.add(t.animatorId);
+                t.coAnimatorUsers.forEach((u: any) => involvedIds.add(u.id));
+            }
+            // 3. Nằm ở khâu CONTENT: Chỉ mới có Kịch bản / Bố cục
+            else if (hasScript) {
+                if (t.contentId) involvedIds.add(t.contentId);
+                t.coContentUsers.forEach((u: any) => involvedIds.add(u.id));
             }
             
+            // Bơm vào kết quả của nhân sự tương ứng
             involvedIds.forEach(id => {
                 if (!userSurplusDetails[id]) userSurplusDetails[id] = {};
                 userSurplusDetails[id][duration] = (userSurplusDetails[id][duration] || 0) + 1;
@@ -163,7 +168,6 @@ export async function GET(req: Request) {
         // 3. MAP DATA ĐỂ TRẢ VỀ CHO SƠ ĐỒ
         // =========================================================
         const formattedUsers = users.map(user => {
-            // Mapping trực tiếp với số liệu đã được tính chuẩn 100% từ API KPI
             const userKpi = kpiList.find(k => k.userId === user.id);
 
             const sData = userSurplusDetails[user.id] || {};
@@ -183,7 +187,6 @@ export async function GET(req: Request) {
                 channelMemberships: user.channelMemberships,
                 surplusDetails: surplusDetails, 
                 surplusTaskList: userSurplusList[user.id] || [], 
-                // 🚀 Lấy số liệu từ API KPI truyền xuống
                 currentWeekStats: {
                     target: userKpi?.targetValue || 0,
                     actual: userKpi?.actualValue || 0
