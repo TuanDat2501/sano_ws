@@ -4,33 +4,23 @@ import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
 
 // 🚀 HÀM TÍNH TUẦN CHUẨN CẮT BIÊN THÁNG (Đồng bộ với Frontend và Analytics)
-// 🚀 HÀM CHUẨN XÁC 100% (CẮT GỌT TRONG THÁNG VÀ ÉP CỨNG MÚI GIỜ VIỆT NAM)
 function getWeekDateRangeByMonth(year: number, month: number, weekNumber: number) {
-    // 1. Lấy tổng số ngày trong tháng (vd: 30 hoặc 31)
     const totalDays = new Date(Date.UTC(year, month, 0, 12, 0, 0)).getUTCDate(); 
-    
-    // 2. Xác định ngày mùng 1 của tháng là thứ mấy (0: Chủ Nhật, 1: Thứ 2...)
     const firstDayOfMonth = new Date(Date.UTC(year, month - 1, 1, 12, 0, 0)).getUTCDay(); 
     
-    // 3. Tính ngày của Chủ Nhật đầu tiên trong tháng
     const diffToSunday = firstDayOfMonth === 0 ? 0 : 7 - firstDayOfMonth;
     const firstSunday = 1 + diffToSunday;
 
     let startDay = 1;
     let endDay = firstSunday;
 
-    // 4. Nếu không phải tuần 1, tịnh tiến mỗi tuần 7 ngày
     if (weekNumber > 1) {
         startDay = firstSunday + (weekNumber - 2) * 7 + 1;
-        // Ép giới hạn: Ngày kết thúc không được vượt quá ngày cuối cùng của tháng
         endDay = Math.min(startDay + 6, totalDays); 
     }
 
     const pad = (num: number) => num.toString().padStart(2, '0');
 
-    // 5. Khởi tạo mốc thời gian bằng chuỗi ISO ép cứng múi giờ Việt Nam (+07:00)
-    // - Bắt đầu từ 00:00:00 của ngày bắt đầu (startDay)
-    // - Kết thúc ở 23:59:59 của ngày kết thúc (endDay)
     const startOfWeek = new Date(`${year}-${pad(month)}-${pad(startDay)}T00:00:00+07:00`);
     const endOfWeek = new Date(`${year}-${pad(month)}-${pad(endDay)}T23:59:59.999+07:00`);
 
@@ -39,13 +29,12 @@ function getWeekDateRangeByMonth(year: number, month: number, weekNumber: number
 
 export const dynamic = "force-dynamic";
 
-export async function GET(req: Request, context: any) {
+export async function GET(req: Request) {
     try {
         const session = await getServerSession(authOptions);
         if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-        const requestedUserId = context?.params ? (await context.params).id : null;
-
+        const currentUser = session.user as any;
         const { searchParams } = new URL(req.url);
         const teamId = searchParams.get("teamId");
         const year = parseInt(searchParams.get("year") || String(new Date().getFullYear()));
@@ -57,18 +46,13 @@ export async function GET(req: Request, context: any) {
             role: { notIn: ["ADMIN", "BAN_GIAM_DOC", "HR", "KE_TOAN"] }
         };
 
-        const currentUser = session.user as any;
         const canFilterTeam = currentUser.permissions?.includes("MENU_TEAMS") || ["ADMIN", "BAN_GIAM_DOC", "KE_TOAN"].includes(currentUser.role);
 
-        if (requestedUserId) {
-            userWhere = { id: requestedUserId };
+        if (currentUser.role === "ADMIN" || canFilterTeam || currentUser.role === "LEADER") {
+            if (teamId && teamId !== "ALL") userWhere.teamId = teamId;
         } else {
-            if (currentUser.role === "ADMIN" || canFilterTeam || currentUser.role === "LEADER") {
-                if (teamId && teamId !== "ALL") userWhere.teamId = teamId;
-            } else {
-                if (!teamId || teamId === "ALL") return NextResponse.json({ error: "Thiếu Team ID" }, { status: 400 });
-                userWhere.teamId = teamId;
-            }
+            if (!teamId || teamId === "ALL") return NextResponse.json({ error: "Thiếu Team ID" }, { status: 400 });
+            userWhere.teamId = teamId;
         }
 
         const usersRaw = await prisma.user.findMany({
@@ -80,7 +64,7 @@ export async function GET(req: Request, context: any) {
             }
         });
 
-        const users = requestedUserId ? usersRaw : usersRaw.filter(u => u.team?.name !== "Nhân sự" && u.team?.name !== "HR");
+        const users = usersRaw.filter(u => u.team?.name !== "Nhân sự" && u.team?.name !== "HR");
         if (users.length === 0) return NextResponse.json({ weekData: { year, month, weekIndex }, kpiList: [] });
 
         const userIds = users.map(u => u.id);
@@ -93,7 +77,7 @@ export async function GET(req: Request, context: any) {
             prisma.taskLog.findMany({
                 where: {
                     userId: { in: userIds },
-                    createdAt: { gte: new Date(start.setHours(0,0,0,0)), lte: new Date(end.setHours(23,59,59,999)) }
+                    createdAt: { gte: start, lte: end } // 🚀 Dùng chuẩn mốc thời gian, KHÔNG dùng setHours
                 },
                 select: {
                     id: true, action: true, details: true, jobCategory: true, createdAt: true, taskId: true, userId: true,
@@ -146,12 +130,10 @@ export async function GET(req: Request, context: any) {
 
             let percent = 0;
             let totalTargetMinutes = 0;
-            // Dùng để tính % thật (không lố)
             let cappedActualMinutesForPercent = 0;
-            
             let actualCount = uniqueTasks.size;
 
-            const bucketMins: Record<string, number> = {};
+            // 🚀 BƯỚC 1: Chỉ gom đếm số lượng Bài thực tế của người dùng
             const bucketTaskCount: Record<string, number> = {};
 
             uniqueTasks.forEach((task, uniqueKey) => {
@@ -159,7 +141,6 @@ export async function GET(req: Request, context: any) {
                 const isReworkBucket = (jobCategory === 'PUBLISH') ? false : task.isRework;
 
                 const key = `${task.channel?.id || 'no_channel'}_${isReworkBucket ? 'rework' : 'new'}`;
-                bucketMins[key] = (bucketMins[key] || 0) + Number(task.duration || 0);
                 bucketTaskCount[key] = (bucketTaskCount[key] || 0) + 1; 
             });
 
@@ -181,116 +162,88 @@ export async function GET(req: Request, context: any) {
                     }
                 });
 
-                const distributeToTargets = (targets: any[], minsLeft: number, tasksLeft: number) => {
+                // 🚀 BƯỚC 2: Rót SỐ LƯỢNG bài vào Target, tính phút thực tế = SỐ BÀI x ĐƠN GIÁ GIAO
+                const distributeToTargets = (targets: any[], tasksLeft: number) => {
                     let assignedMinsTotal = 0;
+                    
                     targets.forEach((t, index) => {
-                        const tMins = Number(t.targetCount) * Number(t.duration);
+                        const tDuration = Number(t.duration) || 0; // Đơn giá phút (Ví dụ: 10 phút/bài)
+                        const tMins = Number(t.targetCount) * tDuration; // Phút kỳ vọng tổng cộng
                         totalTargetMinutes += tMins;
 
-                        let assignedMins = 0;
                         let assignedTasks = 0;
 
                         if (index === targets.length - 1) {
-                            assignedMins = minsLeft;
+                            // Target cuối cùng gánh số lượng bài thừa
                             assignedTasks = tasksLeft;
                         } else {
-                            assignedMins = Math.min(minsLeft, tMins);
                             assignedTasks = Math.min(tasksLeft, Number(t.targetCount));
                         }
 
-                        minsLeft -= assignedMins;
                         tasksLeft -= assignedTasks;
-                        assignedMinsTotal += assignedMins;
+                        
+                        // Tính phút đạt được bằng Số bài * Đơn giá giao trong Target
+                        const calculatedMins = assignedTasks * tDuration;
+                        assignedMinsTotal += calculatedMins;
 
-                        t.actualMinutes = (t.actualMinutes || 0) + assignedMins;
                         t.actualCount = (t.actualCount || 0) + assignedTasks; 
+                        t.actualMinutes = (t.actualMinutes || 0) + calculatedMins; 
                     });
-                    return { minsLeft, tasksLeft, assignedMinsTotal };
+                    
+                    return { tasksLeft, assignedMinsTotal };
                 };
 
-                // 1. Phân bổ cho các Kênh cụ thể (Ví dụ: WOTA US)
+                // Phân bổ Kênh Cụ thể
                 Object.keys(specificTargets).forEach(key => {
                     const targets = specificTargets[key];
-                    const res = distributeToTargets(targets, bucketMins[key] || 0, bucketTaskCount[key] || 0);
+                    const res = distributeToTargets(targets, bucketTaskCount[key] || 0);
                     
-                    // Phút này là phút CẤP ĐÚNG QUOTA -> Dùng để tính %
                     cappedActualMinutesForPercent += res.assignedMinsTotal;
-                    
-                    // Nếu làm dư thừa TRÊN ĐÚNG KÊNH ĐÓ -> Ghi nhận vào chỉ tiêu để nhìn cho đẹp, nhưng KHÔNG CỘNG VÀO % TỔNG
-                    if (res.minsLeft > 0) {
-                        targets[targets.length - 1].actualCount += res.tasksLeft;
-                        targets[targets.length - 1].actualMinutes += res.minsLeft;
-                    }
-                    
-                    bucketMins[key] = 0;
-                    bucketTaskCount[key] = 0;
+                    bucketTaskCount[key] = 0; 
                 });
 
-                // 2. Phân bổ cho các Kênh bất kỳ
+                // Phân bổ Kênh Bất kỳ
                 Object.keys(anyTargets).forEach(reworkKey => {
                     const targets = anyTargets[reworkKey];
-                    let remainingMins = 0;
                     let remainingTasks = 0;
-                    Object.keys(bucketMins).forEach(bKey => {
+                    Object.keys(bucketTaskCount).forEach(bKey => {
                         if (bKey.endsWith(`_${reworkKey}`)) {
-                            remainingMins += bucketMins[bKey];
                             remainingTasks += bucketTaskCount[bKey];
-                            bucketMins[bKey] = 0; 
-                            bucketTaskCount[bKey] = 0;
+                            bucketTaskCount[bKey] = 0; 
                         }
                     });
 
-                    const res = distributeToTargets(targets, remainingMins, remainingTasks);
+                    const res = distributeToTargets(targets, remainingTasks);
                     cappedActualMinutesForPercent += res.assignedMinsTotal;
-                    
-                    // Với kênh bất kỳ, làm dư thừa cũng không cộng vào % tổng
-                    if (res.minsLeft > 0) {
-                        targets[targets.length - 1].actualCount += res.tasksLeft;
-                        targets[targets.length - 1].actualMinutes += res.minsLeft;
-                    }
                 });
-
-                // 🚀 ĐÃ XÓA logic cộng dồn remainingMinsGlobal (kênh rác) vào điểm tổng
 
                 percent = totalTargetMinutes > 0 ? Math.round((cappedActualMinutesForPercent / totalTargetMinutes) * 100) : 0;
             } else {
                 percent = targetValue > 0 ? Math.round((actualCount / targetValue) * 100) : 0;
             }
 
-            // Tính tổng phút thực tế (Hiển thị UI: Khối lượng phút: X / Y)
             let totalVisualMinutes = 0;
             if (targetDetails && targetDetails.length > 0) {
                 targetDetails.forEach(t => totalVisualMinutes += (t.actualMinutes || 0));
             }
 
-            const responseData = {
+            return {
                 userId: user.id, fullName: user.fullName, role: user.role, teamName: user.team?.name || "Chưa có team", 
                 targetValue, actualValue: actualCount, percent, logs: allUserLogs, 
                 targetDetails, totalTargetMinutes, 
-                totalActualMinutes: totalVisualMinutes, // Hiển thị 30/80 thay vì 120/80
+                totalActualMinutes: totalVisualMinutes, 
+                note: kpiRecord?.note || "",
+                isLocked: kpiRecord?.isLocked || false,
+                oldTargetValue: kpiRecord?.oldTargetValue || null,
                 avatarUrl: user.avatarUrl || null
             };
-
-            if (!requestedUserId) {
-                return {
-                    ...responseData,
-                    note: kpiRecord?.note || "",
-                    isLocked: kpiRecord?.isLocked || false,
-                    oldTargetValue: kpiRecord?.oldTargetValue || null
-                };
-            }
-            return responseData;
         });
 
-        if (!requestedUserId) {
-            kpiData.sort((a, b) => b.percent - a.percent);
-            return NextResponse.json({ weekData: { year, month, weekIndex, startDate: start, endDate: end }, kpiList: kpiData });
-        } else {
-            return NextResponse.json(kpiData[0]);
-        }
+        kpiData.sort((a, b) => b.percent - a.percent);
 
+        return NextResponse.json({ weekData: { year, month, weekIndex, startDate: start, endDate: end }, kpiList: kpiData });
     } catch (error) {
-        console.error("LỖI API KPI:", error);
+        console.error("LỖI API KPI GET:", error);
         return NextResponse.json({ error: "Lỗi hệ thống" }, { status: 500 });
     }
 }
