@@ -347,7 +347,7 @@ export default function RequestsPage() {
                                     setFilterUserId(""); 
                                 }}
                             >
-                                <option value="">Mọi phòng ban</option>
+                                <option value="">Tất cả Team</option>
                                 {dbTeams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                             </select>
                         )}
@@ -358,7 +358,7 @@ export default function RequestsPage() {
                                 value={filterUserId}
                                 onChange={(e) => setFilterUserId(e.target.value)}
                             >
-                                <option value="">Mọi nhân sự</option>
+                                <option value="">Tất cả nhân sự</option>
                                 {dbUsers
                                     .filter(u => {
                                         if (filterTeamId) return u.teamId === filterTeamId; 
@@ -375,7 +375,7 @@ export default function RequestsPage() {
                             value={filterType}
                             onChange={(e) => setFilterType(e.target.value)}
                         >
-                            <option value="">Mọi loại đơn</option>
+                            <option value="">Tất cả loại đơn</option>
                             {REQUEST_TYPES_CONFIG.map(t => (
                                 <option key={t.id} value={t.id}>{t.label}</option>
                             ))}
@@ -386,7 +386,7 @@ export default function RequestsPage() {
                             value={filterStatus}
                             onChange={(e) => setFilterStatus(e.target.value)}
                         >
-                            <option value="">Mọi trạng thái</option>
+                            <option value="">Tất cả trạng thái</option>
                             <option value="PENDING_1">Chờ duyệt Cấp 1</option>
                             <option value="PENDING_2">Chờ duyệt Cấp 2</option>
                             <option value="APPROVED">Đã duyệt hoàn tất</option>
