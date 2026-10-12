@@ -77,7 +77,7 @@ export async function GET(req: Request) {
             prisma.taskLog.findMany({
                 where: {
                     userId: { in: userIds },
-                    createdAt: { gte: start, lte: end } // 🚀 Dùng chuẩn mốc thời gian, KHÔNG dùng setHours
+                    createdAt: { gte: start, lte: end } 
                 },
                 select: {
                     id: true, action: true, details: true, jobCategory: true, createdAt: true, taskId: true, userId: true,
@@ -133,14 +133,14 @@ export async function GET(req: Request) {
             let cappedActualMinutesForPercent = 0;
             let actualCount = uniqueTasks.size;
 
-            // 🚀 BƯỚC 1: Chỉ gom đếm số lượng Bài thực tế của người dùng
             const bucketTaskCount: Record<string, number> = {};
 
             uniqueTasks.forEach((task, uniqueKey) => {
-                const jobCategory = uniqueKey.split('_').pop(); 
+                const jobCategory = uniqueKey.split('_').pop() || 'CONTENT'; 
                 const isReworkBucket = (jobCategory === 'PUBLISH') ? false : task.isRework;
 
-                const key = `${task.channel?.id || 'no_channel'}_${isReworkBucket ? 'rework' : 'new'}`;
+                // 🚀 BƯỚC 1: Gom bài dư với chìa khóa chứa jobCategory
+                const key = `${task.channel?.id || 'no_channel'}_${jobCategory}_${isReworkBucket ? 'rework' : 'new'}`;
                 bucketTaskCount[key] = (bucketTaskCount[key] || 0) + 1; 
             });
 
@@ -148,33 +148,35 @@ export async function GET(req: Request) {
                 const specificTargets: Record<string, any[]> = {};
                 const anyTargets: Record<string, any[]> = {};
 
+                // 🚀 BƯỚC 2: Phân nhóm Target theo jobCategory mới được gán từ Frontend
                 targetDetails.forEach(t => {
                     t.actualMinutes = 0;
                     t.actualCount = 0; 
+                    
+                    const targetJob = t.jobCategory || 'CONTENT'; // Fallback nếu bản ghi cũ chưa có
+
                     if (t.channelId) {
-                        const key = `${t.channelId}_${t.isRework ? 'rework' : 'new'}`;
+                        const key = `${t.channelId}_${targetJob}_${t.isRework ? 'rework' : 'new'}`;
                         if (!specificTargets[key]) specificTargets[key] = [];
                         specificTargets[key].push(t);
                     } else {
-                        const key = t.isRework ? 'rework' : 'new';
+                        const key = `${targetJob}_${t.isRework ? 'rework' : 'new'}`;
                         if (!anyTargets[key]) anyTargets[key] = [];
                         anyTargets[key].push(t);
                     }
                 });
 
-                // 🚀 BƯỚC 2: Rót SỐ LƯỢNG bài vào Target, tính phút thực tế = SỐ BÀI x ĐƠN GIÁ GIAO
                 const distributeToTargets = (targets: any[], tasksLeft: number) => {
                     let assignedMinsTotal = 0;
                     
                     targets.forEach((t, index) => {
-                        const tDuration = Number(t.duration) || 0; // Đơn giá phút (Ví dụ: 10 phút/bài)
-                        const tMins = Number(t.targetCount) * tDuration; // Phút kỳ vọng tổng cộng
+                        const tDuration = Number(t.duration) || 0; 
+                        const tMins = Number(t.targetCount) * tDuration; 
                         totalTargetMinutes += tMins;
 
                         let assignedTasks = 0;
 
                         if (index === targets.length - 1) {
-                            // Target cuối cùng gánh số lượng bài thừa
                             assignedTasks = tasksLeft;
                         } else {
                             assignedTasks = Math.min(tasksLeft, Number(t.targetCount));
@@ -182,7 +184,6 @@ export async function GET(req: Request) {
 
                         tasksLeft -= assignedTasks;
                         
-                        // Tính phút đạt được bằng Số bài * Đơn giá giao trong Target
                         const calculatedMins = assignedTasks * tDuration;
                         assignedMinsTotal += calculatedMins;
 
@@ -203,10 +204,12 @@ export async function GET(req: Request) {
                 });
 
                 // Phân bổ Kênh Bất kỳ
-                Object.keys(anyTargets).forEach(reworkKey => {
+                Object.keys(anyTargets).forEach(reworkKey => { // reworkKey lúc này là: jobCategory_rework/new
                     const targets = anyTargets[reworkKey];
                     let remainingTasks = 0;
                     Object.keys(bucketTaskCount).forEach(bKey => {
+                        // bKey có định dạng: channelId_jobCategory_rework/new
+                        // So khớp phần đuôi để lấy chính xác loại Khâu và Trạng thái
                         if (bKey.endsWith(`_${reworkKey}`)) {
                             remainingTasks += bucketTaskCount[bKey];
                             bucketTaskCount[bKey] = 0; 

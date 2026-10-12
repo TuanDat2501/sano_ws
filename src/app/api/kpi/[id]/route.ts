@@ -67,7 +67,7 @@ export async function GET(req: Request, context: any) {
             prisma.taskLog.findMany({
                 where: {
                     userId: user.id,
-                    // 🚀 ĐÃ SỬA: Dùng trực tiếp start, end. Tuyệt đối không dùng setHours
+                    // 🚀 Dùng chuẩn thời gian, KHÔNG dùng setHours
                     createdAt: { gte: start, lte: end }
                 },
                 select: {
@@ -142,14 +142,14 @@ export async function GET(req: Request, context: any) {
         let cappedActualMinutesForPercent = 0;
         let actualCount = uniqueTasks.size;
 
-        // 🚀 BƯỚC 1: Chỉ đếm số lượng bài (Task Count)
         const bucketTaskCount: Record<string, number> = {};
 
         uniqueTasks.forEach((task, uniqueKey) => {
-            const jobCategory = uniqueKey.split('_').pop(); 
+            const jobCategory = uniqueKey.split('_').pop() || 'CONTENT'; 
             const isReworkBucket = (jobCategory === 'PUBLISH') ? false : task.isRework;
 
-            const key = `${task.channel?.id || 'no_channel'}_${isReworkBucket ? 'rework' : 'new'}`;
+            // 🚀 Thêm jobCategory vào khóa gom nhóm
+            const key = `${task.channel?.id || 'no_channel'}_${jobCategory}_${isReworkBucket ? 'rework' : 'new'}`;
             bucketTaskCount[key] = (bucketTaskCount[key] || 0) + 1; 
         });
 
@@ -161,18 +161,19 @@ export async function GET(req: Request, context: any) {
                 t.actualMinutes = 0;
                 t.actualCount = 0;
 
+                const targetJob = t.jobCategory || 'CONTENT';
+
                 if (t.channelId) {
-                    const key = `${t.channelId}_${t.isRework ? 'rework' : 'new'}`;
+                    const key = `${t.channelId}_${targetJob}_${t.isRework ? 'rework' : 'new'}`;
                     if (!specificTargets[key]) specificTargets[key] = [];
                     specificTargets[key].push(t);
                 } else {
-                    const key = t.isRework ? 'rework' : 'new';
+                    const key = `${targetJob}_${t.isRework ? 'rework' : 'new'}`;
                     if (!anyTargets[key]) anyTargets[key] = [];
                     anyTargets[key].push(t);
                 }
             });
 
-            // 🚀 BƯỚC 2: Rót Số lượng bài vào Target -> Tính Phút = Số Bài x Đơn giá Target
             const distributeToTargets = (targets: any[], tasksLeft: number) => {
                 let assignedMinsTotal = 0;
                 

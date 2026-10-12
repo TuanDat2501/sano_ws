@@ -107,6 +107,9 @@ const CopyTargetModal = ({ isOpen, onClose, onConfirm, currentMonth, currentYear
 // ========================================================
 // 🚀 COMPONENT MODAL: THIẾT LẬP KPI CHI TIẾT CÓ GHI CHÚ
 // ========================================================
+// ========================================================
+// 🚀 COMPONENT MODAL: THIẾT LẬP KPI CHI TIẾT CÓ GHI CHÚ
+// ========================================================
 const TargetSettingModal = ({ isOpen, onClose, user, onSave }: any) => {
     const [mounted, setMounted] = useState(false);
     const [mode, setMode] = useState<'CHUNG' | 'CHI_TIET'>(user?.targetDetails?.length > 0 ? 'CHI_TIET' : 'CHUNG');
@@ -114,8 +117,6 @@ const TargetSettingModal = ({ isOpen, onClose, user, onSave }: any) => {
     const [details, setDetails] = useState<any[]>([]);
     const [channels, setChannels] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    
-    // 🚀 THÊM STATE QUẢN LÝ GHI CHÚ
     const [note, setNote] = useState(user?.note || "");
 
     useEffect(() => { setMounted(true); }, []);
@@ -129,7 +130,8 @@ const TargetSettingModal = ({ isOpen, onClose, user, onSave }: any) => {
             if (user.targetDetails?.length > 0) {
                 setDetails(user.targetDetails.map((d: any, idx: number) => ({ ...d, id: Date.now() + idx })));
             } else {
-                setDetails([{ id: Date.now(), channelId: "", channelName: "", duration: 10, isRework: false, targetCount: 1 }]);
+                // 🚀 THÊM MẶC ĐỊNH jobCategory
+                setDetails([{ id: Date.now(), channelId: "", channelName: "", duration: 10, isRework: false, targetCount: 1, jobCategory: "CONTENT" }]);
             }
 
             fetch("/api/channels").then(res => res.json()).then(data => {
@@ -142,7 +144,8 @@ const TargetSettingModal = ({ isOpen, onClose, user, onSave }: any) => {
     if (!isOpen || !mounted || !user) return null;
 
     const handleAddRow = () => {
-        setDetails([...details, { id: Date.now(), channelId: "", channelName: "", duration: 10, isRework: false, targetCount: 1 }]);
+        // 🚀 THÊM MẶC ĐỊNH jobCategory
+        setDetails([...details, { id: Date.now(), channelId: "", channelName: "", duration: 10, isRework: false, targetCount: 1, jobCategory: "CONTENT" }]);
     };
 
     const handleRemoveRow = (id: number) => {
@@ -181,7 +184,7 @@ const TargetSettingModal = ({ isOpen, onClose, user, onSave }: any) => {
         <>
             <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100000] animate-fade-in" onClick={onClose} />
             <div className="fixed inset-0 z-[100001] flex items-center justify-center p-4 pointer-events-none">
-                <div className="bg-white rounded-[24px] shadow-2xl w-full max-w-2xl pointer-events-auto flex flex-col max-h-[95vh] overflow-hidden animate-scale-in">
+                <div className="bg-white rounded-[24px] shadow-2xl w-full max-w-[800px] pointer-events-auto flex flex-col max-h-[95vh] overflow-hidden animate-scale-in">
                     
                     <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-50 shrink-0">
                         <div>
@@ -217,7 +220,7 @@ const TargetSettingModal = ({ isOpen, onClose, user, onSave }: any) => {
 
                             {mode === 'CHUNG' ? (
                                 <div className="bg-blue-50/50 border border-blue-100 p-6 rounded-2xl animate-fade-in flex flex-col items-center justify-center py-8">
-                                    <label className="text-sm font-black text-blue-800 uppercase tracking-widest mb-4">Tổng số lượng Video / Tuần</label>
+                                    <label className="text-sm font-black text-blue-800 uppercase tracking-widest mb-4">Tổng số lượng Bài / Tuần</label>
                                     <input 
                                         type="number" min="0"
                                         className="w-32 text-center text-3xl font-black text-blue-600 bg-white border-2 border-blue-200 rounded-2xl py-3 shadow-inner focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 outline-none transition-all"
@@ -231,11 +234,13 @@ const TargetSettingModal = ({ isOpen, onClose, user, onSave }: any) => {
                                     {isLoading ? (
                                         <div className="py-10 flex justify-center"><Loader2 className="animate-spin text-blue-500" /></div>
                                     ) : (
-                                        <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-                                            <table className="w-full text-left bg-white">
+                                        <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm overflow-x-auto">
+                                            <table className="w-full text-left bg-white min-w-[700px]">
                                                 <thead className="bg-slate-100 border-b border-slate-200 text-[10px] font-black uppercase text-slate-500 tracking-widest">
                                                     <tr>
                                                         <th className="p-3">Thuộc Kênh</th>
+                                                        {/* 🚀 THÊM CỘT KHÂU (JOB) */}
+                                                        <th className="p-3 w-[120px] text-center">Khâu (Job)</th>
                                                         <th className="p-3 w-[100px] text-center">Phút</th>
                                                         <th className="p-3 w-[140px] text-center">Loại Bài</th>
                                                         <th className="p-3 w-[100px] text-center">Số lượng</th>
@@ -255,6 +260,21 @@ const TargetSettingModal = ({ isOpen, onClose, user, onSave }: any) => {
                                                                     {channels.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                                                                 </select>
                                                             </td>
+                                                            
+                                                            {/* 🚀 DROPDOWN CHỌN KHÂU */}
+                                                            <td className="p-2">
+                                                                <select 
+                                                                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs font-bold text-indigo-700 outline-none focus:border-indigo-500"
+                                                                    value={d.jobCategory || 'CONTENT'}
+                                                                    onChange={e => handleChangeRow(d.id, 'jobCategory', e.target.value)}
+                                                                >
+                                                                    <option value="CONTENT">✍️ Content</option>
+                                                                    <option value="EDIT">🎬 Editor</option>
+                                                                    <option value="ANIMATION">✨ Animation</option>
+                                                                    <option value="PUBLISH">🚀 Quản Lý Kênh</option>
+                                                                </select>
+                                                            </td>
+
                                                             <td className="p-2">
                                                                 <input 
                                                                     type="number" min="0" 
@@ -304,7 +324,6 @@ const TargetSettingModal = ({ isOpen, onClose, user, onSave }: any) => {
                             )}
                         </div>
 
-                        {/* 🚀 VÙNG NHẬP GHI CHÚ */}
                         <div className="bg-amber-50/50 border border-amber-100 rounded-2xl p-4 shadow-sm">
                             <label className="text-xs font-black text-amber-800 flex items-center gap-1.5 mb-2">
                                 <FileText size={14} className="text-amber-500" /> Lý do / Ghi chú sửa đổi

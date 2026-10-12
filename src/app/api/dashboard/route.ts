@@ -49,7 +49,7 @@ export async function GET(req: Request) {
             return chartTemplate;
         };
 
-        // 🚀 ĐÃ NÂNG CẤP: Dùng jobCategory để tính KPI, không cần truyền Role hay ChannelMemberships nữa
+        // 🚀 HÀM TÍNH TOÁN KPI ĐÃ ĐƯỢC ĐỒNG BỘ LOGIC KHOÁN SỐ PHÚT
         const calculateKpiForUser = (userLogs: any[], targetValue: number, targetDetailsRaw: any) => {
             const validUserLogs: any[] = [];
             
@@ -65,7 +65,6 @@ export async function GET(req: Request) {
             validUserLogs.forEach(log => {
                 if (!log.task) return;
 
-                // 🚀 LẤY TRỰC TIẾP NHÃN TỪ DATABASE HOẶC FALLBACK DỮ LIỆU CŨ
                 let jobCategory = log.jobCategory;
 
                 if (!jobCategory) {
@@ -80,9 +79,8 @@ export async function GET(req: Request) {
                 
                 log.isCounted = false; 
 
-                // 🚀 GHI NHẬN KPI BẰNG [ID TASK + RỔ NHIỆM VỤ]
                 if (jobCategory && jobCategory !== 'GENERAL') {
-                    const uniqueKey = `${log.taskId}_${jobCategory}`; 
+                    const uniqueKey = jobCategory === 'MANUAL' ? `${log.id}_MANUAL` : `${log.taskId}_${jobCategory}`; 
                     if (!uniqueTasks.has(uniqueKey)) {
                         uniqueTasks.set(uniqueKey, log.task);
                         log.isCounted = true; 
@@ -98,79 +96,84 @@ export async function GET(req: Request) {
 
             if (targetDetails && targetDetails.length > 0) {
                 let totalTargetMinutes = 0;
-                let totalActualMinutes = 0;
-                const bucketMins: Record<string, number> = {};
+                let cappedActualMinutesForPercent = 0; // Đổi biến tương tự kpi route
+                
                 const bucketTaskCount: Record<string, number> = {};
 
                 uniqueTasks.forEach((task, uniqueKey) => {
-                const jobCategory = uniqueKey.split('_').pop(); 
-                const isReworkBucket = (jobCategory === 'PUBLISH') ? false : task.isRework;
+                    const jobCategory = uniqueKey.split('_').pop() || 'CONTENT'; 
+                    const isReworkBucket = (jobCategory === 'PUBLISH') ? false : task.isRework;
 
-                const key = `${task.channel?.id || 'no_channel'}_${isReworkBucket ? 'rework' : 'new'}`;
-                bucketMins[key] = (bucketMins[key] || 0) + Number(task.duration || 0);
-                bucketTaskCount[key] = (bucketTaskCount[key] || 0) + 1; 
-            });
+                    const key = `${task.channel?.id || 'no_channel'}_${jobCategory}_${isReworkBucket ? 'rework' : 'new'}`;
+                    bucketTaskCount[key] = (bucketTaskCount[key] || 0) + 1; 
+                });
 
                 const specificTargets: Record<string, any[]> = {};
                 const anyTargets: Record<string, any[]> = {};
 
                 targetDetails.forEach(t => {
                     t.actualCount = 0; 
+                    t.actualMinutes = 0;
+
+                    const targetJob = t.jobCategory || 'CONTENT';
+
                     if (t.channelId) {
-                        const key = `${t.channelId}_${t.isRework ? 'rework' : 'new'}`;
+                        const key = `${t.channelId}_${targetJob}_${t.isRework ? 'rework' : 'new'}`;
                         if (!specificTargets[key]) specificTargets[key] = [];
                         specificTargets[key].push(t);
                     } else {
-                        const key = t.isRework ? 'rework' : 'new';
+                        const key = `${targetJob}_${t.isRework ? 'rework' : 'new'}`;
                         if (!anyTargets[key]) anyTargets[key] = [];
                         anyTargets[key].push(t);
                     }
                 });
 
-                const distributeToTargets = (targets: any[], minsLeft: number, tasksLeft: number) => {
+                // 🚀 RÓT SỐ LƯỢNG VÀ NHÂN VỚI ĐƠN GIÁ CỦA TARGET
+                const distributeToTargets = (targets: any[], tasksLeft: number) => {
                     let assignedMinsTotal = 0;
                     targets.forEach((t, index) => {
-                        const tMins = Number(t.targetCount) * Number(t.duration);
+                        const tDuration = Number(t.duration) || 0;
+                        const tMins = Number(t.targetCount) * tDuration;
                         totalTargetMinutes += tMins;
-                        let assignedMins = 0;
+
                         let assignedTasks = 0;
 
                         if (index === targets.length - 1) {
-                            assignedMins = minsLeft;
                             assignedTasks = tasksLeft;
                         } else {
-                            assignedMins = Math.min(minsLeft, tMins);
                             assignedTasks = Math.min(tasksLeft, Number(t.targetCount));
                         }
-                        minsLeft -= assignedMins;
+
                         tasksLeft -= assignedTasks;
-                        assignedMinsTotal += assignedMins;
-                        t.actualCount = (t.actualCount || 0) + assignedTasks; 
+                        
+                        const calculatedMins = assignedTasks * tDuration;
+                        assignedMinsTotal += calculatedMins;
+
+                        t.actualCount = (t.actualCount || 0) + assignedTasks;
+                        t.actualMinutes = (t.actualMinutes || 0) + calculatedMins;
                     });
-                    return { minsLeft, tasksLeft, assignedMinsTotal };
+                    return { tasksLeft, assignedMinsTotal };
                 };
 
                 Object.keys(specificTargets).forEach(key => {
-                    const res = distributeToTargets(specificTargets[key], bucketMins[key] || 0, bucketTaskCount[key] || 0);
-                    totalActualMinutes += res.assignedMinsTotal;
-                    bucketMins[key] = res.minsLeft;
-                    bucketTaskCount[key] = res.tasksLeft;
+                    const res = distributeToTargets(specificTargets[key], bucketTaskCount[key] || 0);
+                    cappedActualMinutesForPercent += res.assignedMinsTotal;
+                    bucketTaskCount[key] = 0;
                 });
 
                 Object.keys(anyTargets).forEach(reworkKey => {
-                    let remainingMins = 0, remainingTasks = 0;
-                    Object.keys(bucketMins).forEach(bKey => {
+                    let remainingTasks = 0;
+                    Object.keys(bucketTaskCount).forEach(bKey => {
                         if (bKey.endsWith(`_${reworkKey}`)) {
-                            remainingMins += bucketMins[bKey];
                             remainingTasks += bucketTaskCount[bKey];
-                            bucketMins[bKey] = 0; bucketTaskCount[bKey] = 0;
+                            bucketTaskCount[bKey] = 0;
                         }
                     });
-                    const res = distributeToTargets(anyTargets[reworkKey], remainingMins, remainingTasks);
-                    totalActualMinutes += res.assignedMinsTotal;
+                    const res = distributeToTargets(anyTargets[reworkKey], remainingTasks);
+                    cappedActualMinutesForPercent += res.assignedMinsTotal;
                 });
 
-                percent = totalTargetMinutes > 0 ? Math.round((totalActualMinutes / totalTargetMinutes) * 100) : 0;
+                percent = totalTargetMinutes > 0 ? Math.round((cappedActualMinutesForPercent / totalTargetMinutes) * 100) : 0;
             } else {
                 percent = targetValue > 0 ? Math.round((actualCount / targetValue) * 100) : 0;
             }
@@ -252,7 +255,6 @@ export async function GET(req: Request) {
 
             kpiRecords.forEach((k: any) => {
                 const userLogs = logsThisWeek.filter(log => log.userId === k.userId);
-                // 🚀 TRUYỀN VÀO HÀM TÍNH TOÁN CỰC GỌN NHẸ
                 const kpiRes = calculateKpiForUser(userLogs, k.targetValue || 0, k.targetDetails);
                 
                 if (k.targetValue > 0 || (kpiRes.targetDetails && kpiRes.targetDetails.length > 0)) {
@@ -354,10 +356,8 @@ export async function GET(req: Request) {
 
             const logsThisWeek = validLogs7Days.filter(log => new Date(log.createdAt) >= startOfWeek);
 
-            // 🚀 TÍNH KPI NHÂN VIÊN GỌN NHẸ
             const kpiRes = calculateKpiForUser(logsThisWeek, myKpiThisWeek?.targetValue || 0, myKpiThisWeek?.targetDetails);
 
-            // Đếm tổng số bài đã nộp từ trước đến nay
             const uniqueTasksAllTime = new Set();
             myLogsAllTimeRaw.forEach((log: any) => {
                 let jobCat = log.jobCategory;

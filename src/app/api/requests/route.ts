@@ -116,8 +116,12 @@ export async function GET(req: Request) {
 
         const tab = searchParams.get("tab") || "MY_REQUESTS";
         const searchKeyword = searchParams.get("search") || "";
+        
+        const filterType = searchParams.get("type") || "";
+        const filterStatus = searchParams.get("status") || "";
+        const filterTeamId = searchParams.get("teamId") || "";
+        const filterRequesterId = searchParams.get("requesterId") || "";
 
-        // Nhận diện Quản lý tổng và Leader
         const canViewAllCompany = user.permissions?.includes("MENU_TEAMS") || 
                                   user.permissions?.includes("DEPARTMENT_LEADER") || 
                                   ["ADMIN", "BAN_GIAM_DOC", "HR"].includes(user.role);
@@ -136,6 +140,7 @@ export async function GET(req: Request) {
         } else if (tab === "ALL_REQUESTS") {
             if (canViewAllCompany) {
                 whereClause = {}; 
+                if (filterTeamId) whereClause.teamId = filterTeamId; 
             } else if (isTeamLeader && user.teamId) {
                 whereClause = { teamId: user.teamId }; 
             } else {
@@ -145,11 +150,28 @@ export async function GET(req: Request) {
             whereClause = { requesterId: user.id };
         }
 
+        if (tab === "NEED_APPROVAL" && filterTeamId !== "") {
+            whereClause.teamId = filterTeamId;
+        }
+
+        if (tab !== "MY_REQUESTS" && filterRequesterId !== "") {
+            whereClause.requesterId = filterRequesterId;
+        }
+
+        // 🚀 BỔ SUNG: TÌM KIẾM CẢ MÃ ĐƠN LẪN TÊN NGƯỜI TẠO ĐƠN
         if (searchKeyword.trim() !== "") {
-            whereClause = {
-                ...whereClause,
-                id: { startsWith: searchKeyword.trim() }
-            };
+            whereClause.OR = [
+                { id: { startsWith: searchKeyword.trim() } },
+                { requester: { fullName: { contains: searchKeyword.trim() } } }
+            ];
+        }
+
+        if (filterType !== "") {
+            whereClause.type = filterType;
+        }
+
+        if (filterStatus !== "") {
+            whereClause.status = filterStatus;
         }
 
         const [requests, totalCount] = await Promise.all([

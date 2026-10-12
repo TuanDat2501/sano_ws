@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Settings, Power, ShieldAlert, Loader2, Info } from "lucide-react";
+import { Settings, Power, ShieldAlert, Loader2, Database, DownloadCloud } from "lucide-react";
 import { useToast } from "@/app/component/ToastProvider";
 
 export default function SettingsPage() {
@@ -9,6 +9,9 @@ export default function SettingsPage() {
     const [isMaintenance, setIsMaintenance] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSubmitting] = useState(false);
+    
+    // State cho tính năng Backup
+    const [isBackingUp, setIsBackingUp] = useState(false);
 
     useEffect(() => {
         const fetchSettings = async () => {
@@ -54,6 +57,48 @@ export default function SettingsPage() {
             showToast("error", "Mất kết nối tới server.");
         } finally {
             setIsSubmitting(false);
+        }
+    };
+
+    // 🚀 HÀM GỌI API VÀ XỬ LÝ TẢI FILE SQL
+    const handleBackupDatabase = async () => {
+        if (!window.confirm("Hệ thống sẽ nén và tải xuống toàn bộ dữ liệu hiện tại. Quá trình này có thể mất vài giây. Tiếp tục?")) return;
+        
+        setIsBackingUp(true);
+        try {
+            const res = await fetch("/api/settings/backup");
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.error || "Lỗi hệ thống khi sao lưu");
+            }
+
+            // Xử lý stream file trả về từ Backend
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            
+            // Lấy filename từ Header hoặc tự tạo tên mặc định
+            const contentDisposition = res.headers.get("Content-Disposition");
+            let fileName = "Backup_NoiBo.sql";
+            if (contentDisposition) {
+                const fileNameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
+                if (fileNameMatch && fileNameMatch.length === 2) {
+                    fileName = fileNameMatch[1];
+                }
+            }
+            
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+            
+            showToast("success", "Đã xuất file .sql thành công!");
+        } catch (error: any) {
+            showToast("error", error.message);
+        } finally {
+            setIsBackingUp(false);
         }
     };
 
@@ -122,17 +167,30 @@ export default function SettingsPage() {
                     )}
                 </div>
 
-                {/* Khối Cài đặt khác (Placeholder chờ nâng cấp sau này) */}
-                <div className="p-6 rounded-3xl bg-white border border-slate-200 shadow-sm opacity-60">
-                    <div className="flex gap-4 items-start">
-                        <div className="p-3 bg-slate-100 text-slate-400 rounded-2xl shrink-0">
-                            <Info size={28} />
+                {/* 🚀 KHỐI SAO LƯU DỮ LIỆU */}
+                <div className="p-6 rounded-3xl bg-white border border-slate-200 shadow-sm">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
+                        <div className="flex gap-4 items-start flex-1 pr-4">
+                            <div className="p-3 bg-blue-50 text-blue-600 rounded-2xl shrink-0">
+                                <Database size={28} />
+                            </div>
+                            <div>
+                                <h2 className="text-lg font-black tracking-wide text-slate-800">Sao lưu Dữ liệu (Backup)</h2>
+                                <p className="text-sm font-medium text-slate-500 mt-1.5 leading-relaxed">
+                                    Trích xuất toàn bộ cấu trúc và dữ liệu hiện tại của hệ thống thành một file <code className="bg-slate-100 px-1 py-0.5 rounded text-slate-700">.sql</code> để cất giữ phòng ngừa rủi ro.
+                                </p>
+                            </div>
                         </div>
-                        <div>
-                            <h2 className="text-lg font-black tracking-wide text-slate-800">Các tính năng đang phát triển</h2>
-                            <p className="text-sm font-medium text-slate-500 mt-1.5 leading-relaxed">
-                                Cài đặt cảnh báo Telegram, Tự động sao lưu dữ liệu, Quy tắc tự động xoá Log rác... (Sẽ được ra mắt trong bản cập nhật tới).
-                            </p>
+
+                        <div className="shrink-0 flex items-center justify-center w-full sm:w-auto border-t sm:border-t-0 border-slate-100 pt-4 sm:pt-0">
+                            <button 
+                                onClick={handleBackupDatabase}
+                                disabled={isBackingUp}
+                                className="px-5 py-2.5 bg-slate-800 text-white font-bold rounded-xl shadow-md flex items-center gap-2 hover:bg-slate-700 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                            >
+                                {isBackingUp ? <Loader2 size={18} className="animate-spin" /> : <DownloadCloud size={18} />}
+                                {isBackingUp ? "Đang trích xuất..." : "Tải bản sao lưu"}
+                            </button>
                         </div>
                     </div>
                 </div>
