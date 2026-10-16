@@ -15,6 +15,7 @@ const REQUEST_TYPES_CONFIG = [
     { id: "NGHI_PHEP", label: "Xin nghỉ phép", category: "HR", allowedRoles: ["ALL"] },
     { id: "DI_MUON_VE_SOM", label: "Đi muộn / Về sớm", category: "HR", allowedRoles: ["ALL"] },
     { id: "LAM_REMOTE", label: "Xin làm Remote", category: "HR", allowedRoles: ["ALL"] },
+    
     { id: "MUA_SAM", label: "Đề xuất Mua sắm", category: "ADMIN", allowedRoles: ["ADMIN", "BAN_GIAM_DOC", "LEADER", "CHANNEL_MANAGER"] },
     { id: "TAM_UNG", label: "Xin Tạm ứng", category: "ADMIN", allowedRoles: ["ADMIN", "BAN_GIAM_DOC", "LEADER", "CHANNEL_MANAGER"] },
     { id: "THANH_TOAN", label: "Đề nghị Thanh toán", category: "ADMIN", allowedRoles: ["ADMIN", "BAN_GIAM_DOC", "CHANNEL_MANAGER"] },
@@ -220,7 +221,11 @@ export default function RequestsPage() {
                 let leaveTypeLabel = "";
                 if (content.leaveType === "PAID") leaveTypeLabel = "Có lương";
                 else if (content.leaveType === "UNPAID") leaveTypeLabel = "Không lương";
-
+                else if (content.leaveType === "KHAM_THAI") leaveTypeLabel = "Khám thai";
+                else if (content.leaveType === "THAI_SAN") leaveTypeLabel = "Nghỉ thai sản";
+                else if (content.leaveType === "NGHIA_VU") leaveTypeLabel = "Khám NVQS";
+                else if (content.leaveType === "CUOI_HOI") leaveTypeLabel = "Cưới hỏi";
+                else if (content.leaveType === "DAM_HIEU") leaveTypeLabel = "Đám hiếu";
                 worksheet.addRow({
                     id: req.id.slice(0, 6).toUpperCase(),
                     type: getTypeLabel(req.type),

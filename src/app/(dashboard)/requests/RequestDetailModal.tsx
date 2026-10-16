@@ -63,6 +63,7 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
     const renderRequestType = (type: string) => {
         switch (type) {
             case "NGHI_PHEP": return "Xin nghỉ phép";
+            case "NGHI_CHE_DO": return "Xin nghỉ chế độ"; // <-- Mới thêm
             case "DI_MUON_VE_SOM": return "Đi muộn / Về sớm";
             case "LAM_REMOTE": return "Làm Remote (Từ xa)";
             case "MUA_SAM": return "Mua sắm / Cấp thiết bị";
@@ -71,6 +72,19 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
             case "THANH_TOAN": return "Thanh toán chi phí";
             case "THUONG": return "Đề xuất thưởng";
             default: return type || "Không xác định";
+        }
+    };
+
+    const renderLeaveTypeLabel = (type: string) => {
+        switch (type) {
+            case "PAID": return "✅ Nghỉ phép có lương";
+            case "UNPAID": return "⚠️ Nghỉ không lương";
+            case "KHAM_THAI": return "🩺 Khám thai";
+            case "THAI_SAN": return "🍼 Nghỉ thai sản";
+            case "NGHIA_VU": return "🎖️ Khám NVQS";
+            case "CUOI_HOI": return "💒 Cưới hỏi";
+            case "DAM_HIEU": return "🥀 Đám hiếu";
+            default: return type;
         }
     };
 
@@ -150,11 +164,21 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
         const start = new Date(startDate);
         const end = new Date(endDate);
         if (end >= start) {
-            const dayDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 3600 * 24)) + 1;
+            let workingDays = 0;
+            let currentDate = new Date(start);
+
+            // Vòng lặp đếm ngày làm việc giống CreateRequestModal
+            while (currentDate <= end) {
+                if (currentDate.getDay() !== 0) {
+                    workingDays++;
+                }
+                currentDate.setDate(currentDate.getDate() + 1);
+            }
+
             if (timeSlot === "MORNING" || timeSlot === "AFTERNOON") {
-                numDays = dayDiff > 1 ? dayDiff - 0.5 : 0.5;
+                numDays = workingDays > 1 ? workingDays - 0.5 : (workingDays === 1 ? 0.5 : 0);
             } else {
-                numDays = dayDiff;
+                numDays = workingDays;
             }
         }
     }
@@ -222,28 +246,30 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
                                 <div className="bg-white p-4 md:p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
                                     {startDate && endDate && (
                                         <div className="border-b border-slate-50 pb-3">
-                                            <p className="text-[11px] text-slate-400 font-bold mb-2">Thời gian & Chế độ nghỉ</p>
+                                            <p className="text-[11px] text-slate-400 font-bold mb-2">Thời gian & Phân loại</p>
                                             <p className="text-sm text-slate-900 font-black flex items-center flex-wrap gap-2 mb-2">
                                                 Từ <span className="text-blue-600">{new Date(startDate).toLocaleDateString('vi-VN')}</span> đến <span className="text-blue-600">{new Date(endDate).toLocaleDateString('vi-VN')}</span>
                                                 {numDays > 0 && <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-md text-[11px]">({numDays} ngày)</span>}
                                             </p>
 
                                             <div className="mt-1.5 flex flex-wrap gap-2">
-                                                {/* 🚀 ĐÃ SỬA: KHÔNG HIỂN THỊ CẢ NGÀY CHO ĐI MUỘN VỀ SỚM */}
                                                 {timeSlot && request?.type !== "DI_MUON_VE_SOM" && (
                                                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border bg-purple-50 text-purple-700 border-purple-200">
                                                         <Clock size={12} /> {timeSlot === 'FULL_DAY' ? 'Cả ngày' : timeSlot === 'MORNING' ? 'Nửa buổi sáng' : 'Nửa buổi chiều'}
                                                     </span>
                                                 )}
-                                                {/* 🚀 BỔ SUNG: Hiển thị buổi cho ĐI MUỘN VỀ SỚM nhưng không có Cả ngày */}
                                                 {timeSlot && request?.type === "DI_MUON_VE_SOM" && timeSlot !== 'FULL_DAY' && (
                                                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border bg-purple-50 text-purple-700 border-purple-200">
                                                         <Clock size={12} /> {timeSlot === 'MORNING' ? 'Nửa buổi sáng' : 'Nửa buổi chiều'}
                                                     </span>
                                                 )}
                                                 {leaveType && (
-                                                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border ${leaveType === 'PAID' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-orange-50 text-orange-700 border-orange-200'}`}>
-                                                        {leaveType === 'PAID' ? '✅ Nghỉ phép có lương' : '⚠️ Nghỉ không lương'}
+                                                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border 
+                                                        ${leaveType === 'PAID' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                                                        : leaveType === 'UNPAID' ? 'bg-orange-50 text-orange-700 border-orange-200' 
+                                                        : 'bg-indigo-50 text-indigo-700 border-indigo-200'}`}
+                                                    >
+                                                        {renderLeaveTypeLabel(leaveType)}
                                                     </span>
                                                 )}
                                             </div>
@@ -256,14 +282,12 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
                                                 {new Date(targetDate).toLocaleDateString('vi-VN')}
                                                 {time && <span className="text-red-600 bg-red-50 border border-red-100 px-2 py-0.5 rounded-md text-[11px]"><Clock size={12} className="inline mr-1 mb-0.5" />{time}</span>}
                                 
-                                                {/* 🚀 LOGIC HIỂN THỊ CHUNG (Làm Remote, Nghỉ phép...): Cho phép hiện "Cả ngày" */}
                                                 {timeSlot && request?.type !== "DI_MUON_VE_SOM" && (
                                                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border bg-purple-50 text-purple-700 border-purple-200">
                                                         <Clock size={12} /> {timeSlot === 'FULL_DAY' ? 'Cả ngày' : timeSlot === 'MORNING' ? 'Nửa buổi sáng' : 'Nửa buổi chiều'}
                                                     </span>
                                                 )}
 
-                                                {/* 🚀 LOGIC RIÊNG CHO ĐI MUỘN / VỀ SỚM: Bỏ hiển thị "Cả ngày" */}
                                                 {timeSlot && request?.type === "DI_MUON_VE_SOM" && timeSlot !== 'FULL_DAY' && (
                                                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border bg-purple-50 text-purple-700 border-purple-200">
                                                         <Clock size={12} /> {timeSlot === 'MORNING' ? 'Nửa buổi sáng' : 'Nửa buổi chiều'}

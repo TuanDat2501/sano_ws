@@ -96,12 +96,27 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
                 if (contentData.startDate && contentData.endDate) {
                     const start = new Date(contentData.startDate);
                     const end = new Date(contentData.endDate);
+                    
                     if (end >= start) {
-                        const dayDiff = Math.ceil((end.getTime() - start.getTime()) / (1000 * 3600 * 24)) + 1;
+                        let workingDays = 0;
+                        let currentDate = new Date(start);
+
+                        // Vòng lặp đếm từng ngày từ start đến end
+                        while (currentDate <= end) {
+                            // Hàm getDay() trả về 0 cho Chủ nhật. Nếu khác 0 thì là ngày làm việc.
+                            if (currentDate.getDay() !== 0) {
+                                workingDays++;
+                            }
+                            // Tăng thêm 1 ngày để ktra tiếp
+                            currentDate.setDate(currentDate.getDate() + 1);
+                        }
+
+                        // Nếu có chọn nghỉ nửa buổi (Sáng/Chiều)
                         if (contentData.timeSlot === "MORNING" || contentData.timeSlot === "AFTERNOON") {
-                            numDays = dayDiff > 1 ? dayDiff - 0.5 : 0.5;
+                            // Nếu số ngày làm việc thực tế > 1 thì trừ đi 0.5, nếu = 1 thì tính là 0.5 ngày, nếu = 0 (xin đúng Chủ nhật) thì = 0
+                            numDays = workingDays > 1 ? workingDays - 0.5 : (workingDays === 1 ? 0.5 : 0);
                         } else {
-                            numDays = dayDiff;
+                            numDays = workingDays;
                         }
                     }
                 }
@@ -119,6 +134,12 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
                                     <option value="">-- Chọn loại nghỉ phép --</option>
                                     <option value="PAID">Nghỉ phép có lương (Trừ vào phép năm)</option>
                                     <option value="UNPAID">Nghỉ không lương</option>
+                                    <option disabled>────── Chế độ ──────</option>
+                                    <option value="KHAM_THAI">Khám thai</option>
+                                    <option value="THAI_SAN">Nghỉ thai sản</option>
+                                    <option value="NGHIA_VU">Khám nghĩa vụ quân sự</option>
+                                    <option value="CUOI_HOI">Cưới hỏi</option>
+                                    <option value="DAM_HIEU">Đám hiếu</option>
                                 </select>
                             </div>
 
@@ -308,7 +329,7 @@ export default function CreateRequestModal({ isOpen, onClose, allowedTypes, team
                 showToast("error", "Thiếu tên hạng mục, số tiền hoặc lý do!"); return;
             }
         }
-
+        
         setIsSubmitting(true);
         try {
             const finalContentData = { ...contentData, timeSlot: contentData.timeSlot || "FULL_DAY" };
