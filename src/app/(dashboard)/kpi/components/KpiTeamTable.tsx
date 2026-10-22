@@ -107,9 +107,6 @@ const CopyTargetModal = ({ isOpen, onClose, onConfirm, currentMonth, currentYear
 // ========================================================
 // 🚀 COMPONENT MODAL: THIẾT LẬP KPI CHI TIẾT CÓ GHI CHÚ
 // ========================================================
-// ========================================================
-// 🚀 COMPONENT MODAL: THIẾT LẬP KPI CHI TIẾT CÓ GHI CHÚ
-// ========================================================
 const TargetSettingModal = ({ isOpen, onClose, user, onSave }: any) => {
     const [mounted, setMounted] = useState(false);
     const [mode, setMode] = useState<'CHUNG' | 'CHI_TIET'>(user?.targetDetails?.length > 0 ? 'CHI_TIET' : 'CHUNG');
@@ -130,7 +127,6 @@ const TargetSettingModal = ({ isOpen, onClose, user, onSave }: any) => {
             if (user.targetDetails?.length > 0) {
                 setDetails(user.targetDetails.map((d: any, idx: number) => ({ ...d, id: Date.now() + idx })));
             } else {
-                // 🚀 THÊM MẶC ĐỊNH jobCategory
                 setDetails([{ id: Date.now(), channelId: "", channelName: "", duration: 10, isRework: false, targetCount: 1, jobCategory: "CONTENT" }]);
             }
 
@@ -144,7 +140,6 @@ const TargetSettingModal = ({ isOpen, onClose, user, onSave }: any) => {
     if (!isOpen || !mounted || !user) return null;
 
     const handleAddRow = () => {
-        // 🚀 THÊM MẶC ĐỊNH jobCategory
         setDetails([...details, { id: Date.now(), channelId: "", channelName: "", duration: 10, isRework: false, targetCount: 1, jobCategory: "CONTENT" }]);
     };
 
@@ -239,7 +234,6 @@ const TargetSettingModal = ({ isOpen, onClose, user, onSave }: any) => {
                                                 <thead className="bg-slate-100 border-b border-slate-200 text-[10px] font-black uppercase text-slate-500 tracking-widest">
                                                     <tr>
                                                         <th className="p-3">Thuộc Kênh</th>
-                                                        {/* 🚀 THÊM CỘT KHÂU (JOB) */}
                                                         <th className="p-3 w-[120px] text-center">Khâu (Job)</th>
                                                         <th className="p-3 w-[100px] text-center">Phút</th>
                                                         <th className="p-3 w-[140px] text-center">Loại Bài</th>
@@ -261,7 +255,6 @@ const TargetSettingModal = ({ isOpen, onClose, user, onSave }: any) => {
                                                                 </select>
                                                             </td>
                                                             
-                                                            {/* 🚀 DROPDOWN CHỌN KHÂU */}
                                                             <td className="p-2">
                                                                 <select 
                                                                     className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs font-bold text-indigo-700 outline-none focus:border-indigo-500"
@@ -271,7 +264,7 @@ const TargetSettingModal = ({ isOpen, onClose, user, onSave }: any) => {
                                                                     <option value="CONTENT">✍️ Content</option>
                                                                     <option value="EDIT">🎬 Editor</option>
                                                                     <option value="ANIMATION">✨ Animation</option>
-                                                                    <option value="PUBLISH">🚀 Quản Lý Kênh</option>
+                                                                    <option value="PUBLISH">🚀 Publish</option>
                                                                 </select>
                                                             </td>
 
@@ -378,6 +371,9 @@ export default function KpiTeamTable({
     const [isWeekLocked, setIsWeekLocked] = useState(false);
     const [isLocking, setIsLocking] = useState(false);
 
+    // 🚀 ĐÃ THÊM: Kiểm tra cờ xem Cả tháng
+    const isWholeMonth = week === 0;
+
     useEffect(() => {
         const locked = kpiList.some((u: any) => u.isLocked);
         setIsWeekLocked(locked);
@@ -413,7 +409,7 @@ export default function KpiTeamTable({
         try {
             for (const user of kpiList) {
                 if (user.targetValue !== num) {
-                    await handleUpdateTarget(user.userId, num, [], ""); // Bulk mặc định note rỗng
+                    await handleUpdateTarget(user.userId, num, [], ""); 
                 }
             }
             setBulkTarget("");
@@ -474,13 +470,13 @@ export default function KpiTeamTable({
                         <div>
                             <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
                                 Gán Hàng Loạt 
-                                {isWeekLocked && <span className="bg-red-100 text-red-600 px-1.5 py-0.5 rounded text-[9px] flex items-center gap-1 shadow-sm"><Lock size={10}/> ĐÃ KHÓA</span>}
+                                {isWeekLocked && !isWholeMonth && <span className="bg-red-100 text-red-600 px-1.5 py-0.5 rounded text-[9px] flex items-center gap-1 shadow-sm"><Lock size={10}/> ĐÃ KHÓA</span>}
                             </h3>
                         </div>
                     </div>
                     
                     <div className="flex items-center gap-2 flex-wrap justify-end">
-                        {isAdminOrHR && (
+                        {isAdminOrHR && !isWholeMonth && (
                             <button onClick={handleToggleLockWeek} disabled={isLocking} className={`font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5 transition-all shadow-sm active:scale-95 disabled:opacity-50 ${isWeekLocked ? 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-200' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100 border border-emerald-200'}`}>
                                 {isLocking ? <Loader2 size={14} className="animate-spin" /> : isWeekLocked ? <Unlock size={14} /> : <Lock size={14} />}
                                 {isWeekLocked ? 'Mở khóa sửa KPI' : 'Chốt KPI Tuần này'}
@@ -497,10 +493,28 @@ export default function KpiTeamTable({
                                 <th className="border border-slate-200 p-3 sticky left-[50px] bg-slate-200 z-40 w-[220px] shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)]">Nhân sự</th>
                                 <th className="border border-slate-200 p-3 w-[100px] text-center">Team</th>
                                 <th className="border border-slate-200 p-3 w-[100px] text-center">Vai trò</th>
-                                <th className="border border-slate-200 p-3 w-[120px] text-center text-blue-700 bg-blue-50/50">Chỉ tiêu (Target)</th>
-                                <th className="border border-slate-200 p-3 w-[120px] text-center text-emerald-700 bg-emerald-50/50">Đã làm (Actual)</th>
-                                <th className="border border-slate-200 p-3 w-[100px] text-center text-purple-700 bg-purple-50/50">Tiến độ (%)</th>
-                                <th className="border border-slate-200 p-3 w-[200px] text-center">Ghi chú sửa đổi</th>
+                                
+                                {/* 🚀 XỬ LÝ ẨN/HIỆN CỘT THEO VIEW */}
+                                {isWholeMonth ? (
+                                    <>
+                                        <th className="border border-slate-200 p-3 w-[90px] text-center text-blue-700 bg-blue-50/50">Target Tháng</th>
+                                        <th className="border border-slate-200 p-3 w-[90px] text-center text-emerald-700 bg-emerald-50/50">Đã làm</th>
+                                        <th className="border border-slate-200 p-3 w-[70px] text-center">Tuần 1</th>
+                                        <th className="border border-slate-200 p-3 w-[70px] text-center">Tuần 2</th>
+                                        <th className="border border-slate-200 p-3 w-[70px] text-center">Tuần 3</th>
+                                        <th className="border border-slate-200 p-3 w-[70px] text-center">Tuần 4</th>
+                                        <th className="border border-slate-200 p-3 w-[70px] text-center">Tuần 5</th>
+                                        <th className="border border-slate-200 p-3 w-[90px] text-center text-purple-700 bg-purple-50/50">Tổng (%)</th>
+                                    </>
+                                ) : (
+                                    <>
+                                        <th className="border border-slate-200 p-3 w-[120px] text-center text-blue-700 bg-blue-50/50">Chỉ tiêu (Target)</th>
+                                        <th className="border border-slate-200 p-3 w-[120px] text-center text-emerald-700 bg-emerald-50/50">Đã làm (Actual)</th>
+                                        <th className="border border-slate-200 p-3 w-[100px] text-center text-purple-700 bg-purple-50/50">Tiến độ (%)</th>
+                                        <th className="border border-slate-200 p-3 w-[200px] text-center">Ghi chú sửa đổi</th>
+                                    </>
+                                )}
+                                
                                 <th className="border border-slate-200 p-3 text-center sticky right-0 bg-slate-200 z-40 w-[90px] shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.1)]">Thao tác</th>
                             </tr>
                         </thead>
@@ -527,40 +541,81 @@ export default function KpiTeamTable({
                                         <td className="border border-slate-200 p-3 text-center align-middle bg-inherit"><span className="text-[10px] font-black uppercase tracking-widest text-slate-500 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200 shadow-sm">{user.teamName}</span></td>
                                         <td className="border border-slate-200 p-3 text-center align-middle bg-inherit"><span className="text-[10px] font-bold text-slate-600 bg-white border border-slate-200 px-2 py-1 rounded shadow-sm">{user.role}</span></td>
 
-                                        <td 
-                                            className={`border border-slate-200 p-2 text-center align-middle bg-inherit transition-colors ${isCellBlocked ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer group/cell hover:bg-blue-50/50'}`}
-                                            onClick={(e) => { 
-                                                e.stopPropagation(); 
-                                                if (isCellBlocked) { showToast("error", "KPI tuần này đã bị chốt!"); return; }
-                                                setEditingUser(user); 
-                                            }}
-                                        >
-                                            <div className={`font-black text-[15px] flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors border w-fit mx-auto shadow-sm ${isLockedStatus ? 'bg-slate-100 border-slate-200' : 'text-blue-600 bg-white border-transparent group-hover/cell:border-blue-200'}`}>
-                                                {isLockedStatus ? <Lock size={14} className={`shrink-0 ${isAdminOrHR ? 'text-red-500' : 'text-slate-500 opacity-60'}`} /> : <Target size={14} className="opacity-60 shrink-0" />}
-                                                {user.targetValue > 0 ? (
-                                                    <div className="flex flex-col items-center leading-none gap-0.5 mt-0.5">
-                                                        <span className={`drop-shadow-sm leading-none ${isLockedStatus ? 'text-slate-600' : ''}`}>{user.targetValue}</span>
-                                                        {user.targetDetails?.length > 0 && <span className={`text-[8px] font-bold uppercase tracking-widest px-1 rounded border ${isCellBlocked ? 'text-slate-500 bg-slate-200 border-slate-300' : 'text-blue-500 bg-blue-50 border-blue-100'}`}>Chi tiết</span>}
-                                                    </div>
-                                                ) : <span className={`text-xs italic font-bold px-1 ${isLockedStatus ? 'text-slate-500' : ''}`}>+ Gán</span>}
-                                            </div>
-                                        </td>
-
-                                        <td className="border border-slate-200 p-3 text-center align-middle bg-inherit"><span className="font-black text-[15px] text-emerald-600 drop-shadow-sm">{user.actualValue}</span></td>
-                                        <td className="border border-slate-200 p-3 text-center align-middle bg-inherit"><span className={`inline-flex items-center justify-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-black border shadow-sm w-[70px] ${percentColor}`}><TrendingUp size={12} /> {user.percent}%</span></td>
-                                        
-                                        <td className="border border-slate-200 p-3 text-[11px] md:text-xs font-medium text-slate-500 align-middle bg-inherit">
-                                            <div className="flex flex-col gap-1.5 text-center md:text-left items-center md:items-start">
-                                                {user.oldTargetValue !== null && user.oldTargetValue !== user.targetValue && (
-                                                    <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-200 w-fit inline-flex items-center gap-1 shadow-sm">
-                                                        Chỉ tiêu cũ: <span className="line-through opacity-70">{user.oldTargetValue}</span>
+                                        {/* 🚀 XỬ LÝ ẨN/HIỆN BODY DATA THEO VIEW */}
+                                        {isWholeMonth ? (
+                                            <>
+                                                <td className="border border-slate-200 p-3 text-center align-middle bg-inherit">
+                                                    <span className="font-black text-[15px] text-blue-600 drop-shadow-sm">{user.targetValue}</span>
+                                                </td>
+                                                <td className="border border-slate-200 p-3 text-center align-middle bg-inherit">
+                                                    <span className="font-black text-[15px] text-emerald-600 drop-shadow-sm">{user.actualValue}</span>
+                                                </td>
+                                                
+                                                {[1, 2, 3, 4, 5].map(wNum => {
+                                                    const wPct = user.weeklyPercents?.[wNum] || 0;
+                                                    let wColor = "text-slate-500 bg-slate-50";
+                                                    if (wPct >= 100) wColor = "text-emerald-700 bg-emerald-100 border-emerald-200";
+                                                    else if (wPct >= 80) wColor = "text-blue-700 bg-blue-100 border-blue-200";
+                                                    else if (wPct >= 50) wColor = "text-amber-700 bg-amber-100 border-amber-200";
+                                                    else if (wPct > 0) wColor = "text-rose-700 bg-rose-100 border-rose-200";
+                                                    
+                                                    return (
+                                                        <td key={wNum} className="border border-slate-200 p-2 text-center align-middle bg-inherit">
+                                                            {wPct > 0 ? (
+                                                                <span className={`inline-flex w-full items-center justify-center px-1 py-1 rounded text-[11px] font-black border shadow-sm ${wColor}`}>
+                                                                    {wPct}%
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-slate-300 text-xs font-medium">-</span>
+                                                            )}
+                                                        </td>
+                                                    )
+                                                })}
+                                                
+                                                <td className="border border-slate-200 p-3 text-center align-middle bg-inherit">
+                                                    <span className={`inline-flex items-center justify-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-black border shadow-sm w-[70px] ${percentColor}`}>
+                                                        <TrendingUp size={12} /> {user.percent}%
                                                     </span>
-                                                )}
-                                                <div className="line-clamp-3 whitespace-pre-wrap leading-snug text-center md:text-left" title={user.note}>
-                                                    {user.note ? user.note : <span className="italic text-slate-300">Không có ghi chú</span>}
-                                                </div>
-                                            </div>
-                                        </td>
+                                                </td>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <td 
+                                                    className={`border border-slate-200 p-2 text-center align-middle bg-inherit transition-colors ${isCellBlocked ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer group/cell hover:bg-blue-50/50'}`}
+                                                    onClick={(e) => { 
+                                                        e.stopPropagation(); 
+                                                        if (isCellBlocked) { showToast("error", "KPI tuần này đã bị chốt!"); return; }
+                                                        setEditingUser(user); 
+                                                    }}
+                                                >
+                                                    <div className={`font-black text-[15px] flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors border w-fit mx-auto shadow-sm ${isLockedStatus ? 'bg-slate-100 border-slate-200' : 'text-blue-600 bg-white border-transparent group-hover/cell:border-blue-200'}`}>
+                                                        {isLockedStatus ? <Lock size={14} className={`shrink-0 ${isAdminOrHR ? 'text-red-500' : 'text-slate-500 opacity-60'}`} /> : <Target size={14} className="opacity-60 shrink-0" />}
+                                                        {user.targetValue > 0 ? (
+                                                            <div className="flex flex-col items-center leading-none gap-0.5 mt-0.5">
+                                                                <span className={`drop-shadow-sm leading-none ${isLockedStatus ? 'text-slate-600' : ''}`}>{user.targetValue}</span>
+                                                                {user.targetDetails?.length > 0 && <span className={`text-[8px] font-bold uppercase tracking-widest px-1 rounded border ${isCellBlocked ? 'text-slate-500 bg-slate-200 border-slate-300' : 'text-blue-500 bg-blue-50 border-blue-100'}`}>Chi tiết</span>}
+                                                            </div>
+                                                        ) : <span className={`text-xs italic font-bold px-1 ${isLockedStatus ? 'text-slate-500' : ''}`}>+ Gán</span>}
+                                                    </div>
+                                                </td>
+
+                                                <td className="border border-slate-200 p-3 text-center align-middle bg-inherit"><span className="font-black text-[15px] text-emerald-600 drop-shadow-sm">{user.actualValue}</span></td>
+                                                <td className="border border-slate-200 p-3 text-center align-middle bg-inherit"><span className={`inline-flex items-center justify-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-black border shadow-sm w-[70px] ${percentColor}`}><TrendingUp size={12} /> {user.percent}%</span></td>
+                                                
+                                                <td className="border border-slate-200 p-3 text-[11px] md:text-xs font-medium text-slate-500 align-middle bg-inherit">
+                                                    <div className="flex flex-col gap-1.5 text-center md:text-left items-center md:items-start">
+                                                        {user.oldTargetValue !== null && user.oldTargetValue !== user.targetValue && (
+                                                            <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-200 w-fit inline-flex items-center gap-1 shadow-sm">
+                                                                Chỉ tiêu cũ: <span className="line-through opacity-70">{user.oldTargetValue}</span>
+                                                            </span>
+                                                        )}
+                                                        <div className="line-clamp-3 whitespace-pre-wrap leading-snug text-center md:text-left" title={user.note}>
+                                                            {user.note ? user.note : <span className="italic text-slate-300">Không có ghi chú</span>}
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                            </>
+                                        )}
 
                                         <td className="border border-slate-200 p-3 text-center sticky right-0 z-20 shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.1)] bg-inherit align-middle">
                                             <button className="text-[10px] bg-slate-800 hover:bg-slate-900 text-white font-bold px-3 py-1.5 rounded-lg transition-colors active:scale-95 whitespace-nowrap shadow-md border border-slate-700 flex items-center justify-center gap-1.5 w-full"><Eye size={12} /> Xem Log</button>

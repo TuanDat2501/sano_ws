@@ -16,13 +16,14 @@ import {
     FolderKanban,
     DollarSign,
     TvMinimalPlay,
-    Settings
+    Settings,
+    ClipboardList // 🚀 THÊM ICON MỚI CHO TAB ĐÁNH GIÁ
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
 import { signOut, useSession } from "next-auth/react";
-import { usePermission } from "./PermissionProvider"; // 🚀 Import Hook phân quyền
+import { usePermission } from "./PermissionProvider"; 
 
 interface SidebarProps {
     isSidebarOpen: boolean;
@@ -42,7 +43,8 @@ export default function Sidebar({ isSidebarOpen, setSidebarOpen }: SidebarProps)
         { name: "Bảng công việc", icon: <Trello size={20} />, path: "/tasks", show: hasPermission("MENU_TASKS") },
         { name: "Đơn từ & Đề xuất", icon: <FileText size={20} />, path: "/requests", show: hasPermission("MENU_REQUESTS") },
         { name: "Đánh giá KPI", icon: <BarChart3 size={20} />, path: "/kpi", show: hasPermission("MENU_KPI") },
-        { name: "Thảo luận", icon: <MessageSquare size={20} />, path: "/chat", show: true }, // Chat mặc định ai cũng được vào
+        { name: "Đánh giá NV", icon: <ClipboardList size={20} />, path: "/evaluations", show: hasPermission("MENU_EVALUATIONS") },
+        { name: "Thảo luận", icon: <MessageSquare size={20} />, path: "/chat", show: true },
         { name: "Hệ thống Kênh", icon: <TvMinimalPlay  size={20} />, path: "/channels", show: hasPermission("MENU_CHANNELS") },
         { name: "Dự án", icon: <FolderKanban size={20} />, path: "/projects", show: hasPermission("MENU_PROJECTS") },
         { name: "Doanh thu", icon: <DollarSign size={20} />, path: "/revenue", show: hasPermission("MENU_REVENUE") },
@@ -51,14 +53,12 @@ export default function Sidebar({ isSidebarOpen, setSidebarOpen }: SidebarProps)
         { name: "Sơ đồ tổ chức", icon: <Network size={20} />, path: "/org-chart", show: hasPermission("MENU_ORG_CHART") },
         { name: "Báo cáo ngày", icon: <PieChart size={20} />, path: "/daily-report", show: hasPermission("MENU_DAILY_REPORT") },
         { name: "Báo cáo chiến lược", icon: <PieChart size={20} />, path: "/analytics", show: hasPermission("MENU_ANALYTICS") },
-        // Riêng menu Phân quyền, fix cứng chỉ Admin cao nhất mới thấy để tránh rủi ro
         { name: "Phân quyền", icon: <ShieldCheck size={20} />, path: "/permissions", show: userRole === "ADMIN" || userRole === "BAN_GIAM_DOC" },
-         { name: "Cài đặt", icon: <Settings  size={20} />, path: "/settings", show: userRole === "ADMIN" || userRole === "BAN_GIAM_DOC" },
+        { name: "Cài đặt", icon: <Settings  size={20} />, path: "/settings", show: userRole === "ADMIN" || userRole === "BAN_GIAM_DOC" },
     ];
 
     return (
         <>
-            {/* LỚP PHỦ MỜ CHO MOBILE (OVERLAY) */}
             {isSidebarOpen && (
                 <div 
                     className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 md:hidden"
@@ -66,7 +66,6 @@ export default function Sidebar({ isSidebarOpen, setSidebarOpen }: SidebarProps)
                 />
             )}
 
-            {/* THANH SIDEBAR */}
             <aside className={`
                 fixed md:static top-0 left-0 h-screen shrink-0 bg-white border-r border-slate-200 transition-all duration-300 flex flex-col z-50
                 ${isSidebarOpen ? "translate-x-0 w-[260px] md:w-64" : "-translate-x-full md:translate-x-0 md:w-20"}
@@ -77,7 +76,6 @@ export default function Sidebar({ isSidebarOpen, setSidebarOpen }: SidebarProps)
                 </div>
 
                 <nav className="flex-grow px-3 space-y-1 overflow-y-auto custom-scrollbar pt-2">
-                    {/* Nếu hệ thống đang tải quyền thì hiện mờ mờ cho đẹp */}
                     {loading ? (
                         <div className="p-4 text-center text-slate-400 text-xs font-medium animate-pulse">Đang tải menu...</div>
                     ) : (

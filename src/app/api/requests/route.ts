@@ -15,11 +15,9 @@ export async function POST(req: Request) {
         const user = session.user as any;
         const userId = user.id;
         
-        // 🚀 Dùng quyền duyệt đơn (ACTION_APPROVE_REQUEST) hoặc Role Quản lý để quyết định luồng đi của đơn
         const isLeader = user.permissions?.includes("ACTION_APPROVE_REQUEST") || ["LEADER", "ADMIN", "BAN_GIAM_DOC"].includes(user.role);
 
         const body = await req.json();
-        
         const { type, teamId, contentData, firstApproverId, secondApproverId, status } = body;
 
         const targetDate = contentData.date ? new Date(contentData.date) : null;
@@ -57,7 +55,7 @@ export async function POST(req: Request) {
                 amount,
                 itemName,
                 reason,
-                contentData // Dữ liệu timeSlot và các field tuỳ biến khác sẽ được nhét gọn vào đây
+                contentData
             }
         });
 
@@ -115,7 +113,7 @@ export async function GET(req: Request) {
         const skip = (page - 1) * limit;
 
         const tab = searchParams.get("tab") || "MY_REQUESTS";
-        const searchKeyword = searchParams.get("search") || "";
+        const searchKeyword = searchParams.get("search")?.trim() || "";
         
         const filterType = searchParams.get("type") || "";
         const filterStatus = searchParams.get("status") || "";
@@ -128,51 +126,59 @@ export async function GET(req: Request) {
         
         const isTeamLeader = user.isTeamLeader || user.role === "LEADER";
 
-        let whereClause: any = {};
+        // Mảng chứa tất cả các điều kiện bắt buộc (AND)
+        const andConditions: any[] = [];
 
+        // 1. Phân loại theo Tab
         if (tab === "NEED_APPROVAL") {
-            whereClause = {
+            andConditions.push({
                 OR: [
                     { firstApproverId: user.id, status: "PENDING_1" },
                     { secondApproverId: user.id, status: "PENDING_2" }
                 ]
-            };
+            });
         } else if (tab === "ALL_REQUESTS") {
             if (canViewAllCompany) {
-                whereClause = {}; 
-                if (filterTeamId) whereClause.teamId = filterTeamId; 
+                if (filterTeamId) andConditions.push({ teamId: filterTeamId });
             } else if (isTeamLeader && user.teamId) {
-                whereClause = { teamId: user.teamId }; 
+                andConditions.push({ teamId: user.teamId });
             } else {
                 return NextResponse.json({ error: "Forbidden" }, { status: 403 });
             }
         } else {
-            whereClause = { requesterId: user.id };
+            // MY_REQUESTS
+            andConditions.push({ requesterId: user.id });
         }
 
+        // 2. Lọc theo Team/Người tạo bổ sung
         if (tab === "NEED_APPROVAL" && filterTeamId !== "") {
-            whereClause.teamId = filterTeamId;
+            andConditions.push({ teamId: filterTeamId });
         }
 
         if (tab !== "MY_REQUESTS" && filterRequesterId !== "") {
-            whereClause.requesterId = filterRequesterId;
-        }
-
-        // 🚀 BỔ SUNG: TÌM KIẾM CẢ MÃ ĐƠN LẪN TÊN NGƯỜI TẠO ĐƠN
-        if (searchKeyword.trim() !== "") {
-            whereClause.OR = [
-                { id: { startsWith: searchKeyword.trim() } },
-                { requester: { fullName: { contains: searchKeyword.trim() } } }
-            ];
+            andConditions.push({ requesterId: filterRequesterId });
         }
 
         if (filterType !== "") {
-            whereClause.type = filterType;
+            andConditions.push({ type: filterType });
         }
 
         if (filterStatus !== "") {
-            whereClause.status = filterStatus;
+            andConditions.push({ status: filterStatus });
         }
+
+        // 🚀 3. SỬA LỖI SEARCH: Đưa điều kiện tìm kiếm tên/mã đơn vào một khối OR độc lập bên trong AND
+        if (searchKeyword !== "") {
+            andConditions.push({
+                OR: [
+                    { id: { contains: searchKeyword } },
+                    { requester: { fullName: { contains: searchKeyword } } }
+                ]
+            });
+        }
+
+        // Gom tất cả điều kiện vào whereClause duy nhất
+        const whereClause = andConditions.length > 0 ? { AND: andConditions } : {};
 
         const [requests, totalCount] = await Promise.all([
             prisma.request.findMany({

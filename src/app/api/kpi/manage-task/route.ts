@@ -76,7 +76,7 @@ export async function PUT(req: Request) {
         const { id, title, duration, isRework, channelId } = body;
 
         if (!id) return NextResponse.json({ error: "Thiếu ID Task" }, { status: 400 });
-
+        
         const updatedTask = await prisma.task.update({
             where: { id },
             data: {
@@ -106,19 +106,39 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "Thiếu tham số" }, { status: 400 });
         }
 
-        let details = "Được gán tính KPI (Thủ công)";
-        if (actionType === "SUBMIT_SCRIPT") details = "Lên kịch bản (Gán thủ công)";
-        if (actionType === "SUBMIT_VIDEO") details = "Dựng Video (Gán thủ công)";
-        if (actionType === "PUBLISH_VIDEO") details = "Đăng Kênh (Gán thủ công)";
-        if (actionType === "DAILY_REPORT") details = "Báo cáo ngày (Gán thủ công)";
-        if (actionType === "COMPLETE_TASK") details = "Nghiệm thu Task (Gán thủ công)";
+        // 1. Tự động nhận diện Khâu (jobCategory) dựa trên lựa chọn ở Frontend
+        let jobCategory = "MANUAL"; 
+        let logDetails = "Báo cáo công việc (Gán thủ công)";
+
+        if (actionType === "SUBMIT_SCRIPT") {
+            jobCategory = "CONTENT";
+            logDetails = "Hoàn thành Kịch bản (Gán thủ công)";
+        } else if (actionType === "SUBMIT_VIDEO") {
+            jobCategory = "EDIT";
+            logDetails = "Dựng Video (Gán thủ công)";
+        } else if (actionType === "PUBLISH_VIDEO") {
+            jobCategory = "PUBLISH";
+            logDetails = "Đăng Kênh (Gán thủ công)";
+        } else if (actionType === "DAILY_REPORT") {
+            jobCategory = "MANUAL";
+            logDetails = "Báo cáo ngày (Gán thủ công)";
+        } else if (actionType === "COMPLETE_TASK") {
+            jobCategory = "GENERAL";
+            logDetails = "Nghiệm thu Task (Gán thủ công)";
+        }
+
+        // 2. ÉP BUỘC action thành DAILY_REPORT để hệ thống KPI tính được điểm
+        const finalAction = ["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "DAILY_REPORT"].includes(actionType) 
+                            ? "DAILY_REPORT" 
+                            : actionType;
 
         // Xử lý tạo Log
         const logData: any = {
             taskId,
             userId,
-            action: actionType,
-            details
+            action: finalAction,
+            details: logDetails,
+            jobCategory: jobCategory, // 🚀 Bổ sung dữ liệu Khâu
         };
 
         // Nếu sếp có truyền ngày cụ thể, thì set cứng vào createdAt luôn

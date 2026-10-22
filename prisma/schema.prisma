@@ -19,7 +19,6 @@ enum Role {
   PUBLISHER
 }
 
-
 enum TaskStatus {
   TODO
   CONTENT_DOING
@@ -28,7 +27,7 @@ enum TaskStatus {
   ANIMATION_REVIEW
   EDIT_DOING
   EDIT_REVIEW
-  DONE 
+  DONE
   BACKLOG
 }
 
@@ -106,21 +105,20 @@ enum ChannelCategory {
 
 // 🚀 CÁC ENUM TRẠNG THÁI CHO YOUTUBE
 enum MonetizationStatus {
-  CHUA_DAT          // Đang cày thông số
-  DA_DU_DIEU_KIEN   // Đã đạt 1k Sub/4k Giờ hoặc 10M View Shorts
-  CHO_DUYET         // Đang đợi YouTube xem xét đơn
-  DA_BAT            // Đã có biểu tượng $ xanh
-  TAT_KIEM_TIEN     // Bị tắt do vi phạm hoặc nội dung dùng lại
+  CHUA_DAT // Đang cày thông số
+  DA_DU_DIEU_KIEN // Đã đạt 1k Sub/4k Giờ hoặc 10M View Shorts
+  CHO_DUYET // Đang đợi YouTube xem xét đơn
+  DA_BAT // Đã có biểu tượng $ xanh
+  TAT_KIEM_TIEN // Bị tắt do vi phạm hoặc nội dung dùng lại
 }
 
 enum ChannelStatus {
-  XAY_DUNG      // Kênh mới, đang nuôi
-  HOAT_DONG     // Đang up video đều
-  CANH_BAO      // Dính gậy bản quyền / Nguyên tắc CĐ
-  BAY_KENH      // Bị khoá (Suspended)
+  XAY_DUNG // Kênh mới, đang nuôi
+  HOAT_DONG // Đang up video đều
+  CANH_BAO // Dính gậy bản quyền / Nguyên tắc CĐ
+  BAY_KENH // Bị khoá (Suspended)
   DUNG_HOAT_DONG
 }
-
 
 // ================= MODELS =================
 
@@ -128,28 +126,29 @@ enum ChannelStatus {
 // DANH SÁCH NGƯỜI DUYỆT ĐƠN CẤP 2 MẶC ĐỊNH
 // ==========================================
 model Level2Approver {
-  id        String   @id @default(uuid())
-  
-  userId    String   @unique 
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id String @id @default(uuid())
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
 }
 
 model Team {
-  id           String      @id @default(uuid())
-  name         String      @unique // VD: Team Anime, Team Manga
-  description  String?
-  departmentId String?
-  department   Department? @relation(fields: [departmentId], references: [id])
-  users        User[]
-  tasks        Task[]
-  rooms        ChatRoom[] // Group chat riêng của team
-  channels     Channel[]
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  requests  Request[]
-  projects  Project[]
+  id                 String              @id @default(uuid())
+  name               String              @unique // VD: Team Anime, Team Manga
+  description        String?
+  departmentId       String?
+  department         Department?         @relation(fields: [departmentId], references: [id])
+  users              User[]
+  tasks              Task[]
+  rooms              ChatRoom[] // Group chat riêng của team
+  channels           Channel[]
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  requests           Request[]
+  projects           Project[]
+  monthlyEvaluations MonthlyEvaluation[]
 }
 
 model User {
@@ -160,44 +159,44 @@ model User {
   role         Role    @default(CONTENT)
   isActive     Boolean @default(true)
   isTeamLeader Boolean @default(false)
-  teamId String?
-  team   Team?   @relation(fields: [teamId], references: [id])
+  teamId       String?
+  team         Team?   @relation(fields: [teamId], references: [id])
 
   // ==========================================
   // THÔNG TIN NHÂN SỰ (HR) BỔ SUNG
   // ==========================================
-  employeeCode     String?   @unique // Mã nhân viên
-  dob              DateTime? @db.Date // Ngày sinh
-  ethnicity        String?   // Dân tộc
-  
-  cccdNumber       String?   @unique // Số CCCD
-  cccdDate         DateTime? @db.Date // Ngày cấp CCCD
-  cccdPlace        String?   // Nơi cấp CCCD
-  
-  permanentAddress String?   @db.Text // Địa chỉ thường trú
-  currentAddress   String?   @db.Text // Nơi ở hiện nay
-  
-  phone            String?   // SĐT
-  personalEmail    String?   // Email cá nhân
-  
+  employeeCode String?   @unique // Mã nhân viên
+  dob          DateTime? @db.Date // Ngày sinh
+  ethnicity    String? // Dân tộc
+
+  cccdNumber String?   @unique // Số CCCD
+  cccdDate   DateTime? @db.Date // Ngày cấp CCCD
+  cccdPlace  String? // Nơi cấp CCCD
+
+  permanentAddress String? @db.Text // Địa chỉ thường trú
+  currentAddress   String? @db.Text // Nơi ở hiện nay
+
+  phone         String? // SĐT
+  personalEmail String? // Email cá nhân
+
   // Thông tin người thân (Liên hệ khẩn cấp)
-  relativeName     String?   // Tên người thân
-  relativePhone    String?   // SĐT người thân
-  relativeRelation String?   // Mối quan hệ (Bố/Mẹ/Vợ/Chồng)
-  
+  relativeName     String? // Tên người thân
+  relativePhone    String? // SĐT người thân
+  relativeRelation String? // Mối quan hệ (Bố/Mẹ/Vợ/Chồng)
+
   // Thông tin Thanh toán & Hợp đồng
-  bankAccount      String?   // Số tài khoản
-  bankName         String?   // Ngân hàng
-  joinDate         DateTime? @db.Date // Ngày vào làm
-  bhxhNumber       String?   // Số sổ BHXH
+  bankAccount String? // Số tài khoản
+  bankName    String? // Ngân hàng
+  joinDate    DateTime? @db.Date // Ngày vào làm
+  bhxhNumber  String? // Số sổ BHXH
 
   // Relations cho Workflow Task
-  tasksCreated       Task[]        @relation("TaskCreator")
-  tasksContent       Task[]        @relation("TaskContent")
-  tasksEdited        Task[]        @relation("TaskEditor")
-  tasksPub           Task[]        @relation("TaskPublisher")
-  assignedTasks      Task[]        @relation("TaskAssignee")
-  tasksAnimated      Task[]        @relation("TaskAnimator")
+  tasksCreated  Task[] @relation("TaskCreator")
+  tasksContent  Task[] @relation("TaskContent")
+  tasksEdited   Task[] @relation("TaskEditor")
+  tasksPub      Task[] @relation("TaskPublisher")
+  assignedTasks Task[] @relation("TaskAssignee")
+  tasksAnimated Task[] @relation("TaskAnimator")
 
   // Relations khác
   weeklyKPIs         WeeklyKPI[]
@@ -208,97 +207,101 @@ model User {
   messages           Message[]
   roomMembers        RoomMember[]
 
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  taskComments  TaskComment[]
-  notifications Notification[]
-  taskLogs      TaskLog[]
-  avatarUrl     String?
-  evaluations   Evaluation[]
-  supervisedProjects Project[] @relation("ProjectSupervisor")
-  revenueUpdates DailyRevenue[]
-  managedChannels   Channel[]       @relation("ChannelManager")
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  taskComments       TaskComment[]
+  notifications      Notification[]
+  taskLogs           TaskLog[]
+  avatarUrl          String?
+  evaluations        Evaluation[]
+  supervisedProjects Project[]       @relation("ProjectSupervisor")
+  revenueUpdates     DailyRevenue[]
+  managedChannels    Channel[]       @relation("ChannelManager")
   channelMemberships ChannelMember[]
   level2Approver     Level2Approver?
-  coTasksContent     Task[]        @relation("CoTaskContent")
-  coTasksEdited      Task[]        @relation("CoTaskEditor")
-  coTasksAnimated    Task[]        @relation("CoTaskAnimator")
+  coTasksContent     Task[]          @relation("CoTaskContent")
+  coTasksEdited      Task[]          @relation("CoTaskEditor")
+  coTasksAnimated    Task[]          @relation("CoTaskAnimator")
+
+  // 🚀 QUAN HỆ ĐÁNH GIÁ NHÂN SỰ
+  monthlyEvaluations MonthlyEvaluation[] @relation("UserEvaluations")
+  evaluationsGiven   MonthlyEvaluation[] @relation("EvaluatorLogs")
 }
 
 model Permission {
-  id        String  @id @default(uuid()) 
-  role      String 
-  moduleId  String 
+  id        String  @id @default(uuid())
+  role      String
+  moduleId  String
   isAllowed Boolean @default(false)
 
   @@unique([role, moduleId])
 }
 
 model Task {
-  id          String     @id @default(uuid())
-  title       String
-  keywords    String?    @db.Text 
-  linkContent String?    
-  status      TaskStatus @default(TODO)
-  priority   String?   @default("NORMAL")
-  scriptLink        String? @db.Text 
-  englishScriptLink String? @db.Text
-  storyboardLink    String? @db.Text 
-  audioLink         String? @db.Text 
-  thumbnailLink     String? @db.Text 
-  videoLink         String? @db.Text 
-  publishLink       String? @db.Text 
-  linkProject       String? @db.Text 
-  animationLink       String? @db.Text 
-  publishDate       DateTime? @db.Date 
-  duration          Int?     
-  note              String? @db.Text
+  id                String     @id @default(uuid())
+  title             String
+  keywords          String?    @db.Text
+  linkContent       String?
+  status            TaskStatus @default(TODO)
+  priority          String?    @default("NORMAL")
+  scriptLink        String?    @db.Text
+  englishScriptLink String?    @db.Text
+  storyboardLink    String?    @db.Text
+  audioLink         String?    @db.Text
+  thumbnailLink     String?    @db.Text
+  videoLink         String?    @db.Text
+  publishLink       String?    @db.Text
+  linkProject       String?    @db.Text
+  animationLink     String?    @db.Text
+  publishDate       DateTime?  @db.Date
+  duration          Int?
+  note              String?    @db.Text
 
-  creatorId     String
-  creator       User    @relation("TaskCreator", fields: [creatorId], references: [id])
-  isRework      Boolean  @default(false)
-  contentId     String?
-  contentUser   User?   @relation("TaskContent", fields: [contentId], references: [id])
-  
-  editorId      String?
-  editorUser    User?   @relation("TaskEditor", fields: [editorId], references: [id])
+  creatorId   String
+  creator     User    @relation("TaskCreator", fields: [creatorId], references: [id])
+  isRework    Boolean @default(false)
+  contentId   String?
+  contentUser User?   @relation("TaskContent", fields: [contentId], references: [id])
+
+  editorId   String?
+  editorUser User?   @relation("TaskEditor", fields: [editorId], references: [id])
 
   // Người làm Chuyển động (CĐ)
-  animatorId    String?
-  animatorUser  User?   @relation("TaskAnimator", fields: [animatorId], references: [id])
+  animatorId   String?
+  animatorUser User?   @relation("TaskAnimator", fields: [animatorId], references: [id])
 
   publisherId   String?
   publisherUser User?   @relation("TaskPublisher", fields: [publisherId], references: [id])
 
-  assigneeId    String?
-  assignee      User?   @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  assigneeId String?
+  assignee   User?   @relation("TaskAssignee", fields: [assigneeId], references: [id])
 
-  coContentUsers  User[]  @relation("CoTaskContent")
-  coEditorUsers   User[]  @relation("CoTaskEditor")
-  coAnimatorUsers User[]  @relation("CoTaskAnimator")
+  coContentUsers  User[] @relation("CoTaskContent")
+  coEditorUsers   User[] @relation("CoTaskEditor")
+  coAnimatorUsers User[] @relation("CoTaskAnimator")
 
-  projectId     String?
-  project       Project?    @relation(fields: [projectId], references: [id])
-  teamId        String?
-  team          Team?       @relation(fields: [teamId], references: [id])
-  channelId     String?
-  channel       Channel?    @relation(fields: [channelId], references: [id])
-  
-  chatRoom      ChatRoom?
-  taskComments  TaskComment[]
-  taskLogs      TaskLog[]
-  evaluations   Evaluation[]
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id])
+  teamId    String?
+  team      Team?    @relation(fields: [teamId], references: [id])
+  channelId String?
+  channel   Channel? @relation(fields: [channelId], references: [id])
 
-  isClosed      Boolean  @default(false)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  episodeNumber Int?           
-  isCompilation Boolean        @default(false) 
-  mergeCount    Int?           @default(0)     
-  sourceTasks   Task[]         @relation("VideoMergeRelation")
-  compiledInto  Task[]         @relation("VideoMergeRelation")
-  usedInMergeCount Int?        @default(0)
-  roughProjectLink String? @db.Text
+  chatRoom     ChatRoom?
+  taskComments TaskComment[]
+  taskLogs     TaskLog[]
+  evaluations  Evaluation[]
+
+  isClosed         Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  episodeNumber    Int?
+  isCompilation    Boolean  @default(false)
+  mergeCount       Int?     @default(0)
+  sourceTasks      Task[]   @relation("VideoMergeRelation")
+  compiledInto     Task[]   @relation("VideoMergeRelation")
+  usedInMergeCount Int?     @default(0)
+  roughProjectLink String?  @db.Text
 }
 
 model Evaluation {
@@ -316,32 +319,32 @@ model Evaluation {
   evaluator   User   @relation(fields: [evaluatorId], references: [id])
 
   createdAt DateTime @default(now())
-
 }
 
 model Department {
   id          String  @id @default(uuid())
-  name        String  @unique 
+  name        String  @unique
   description String?
 
-  teams Team[] 
+  teams Team[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model WeeklyKPI {
-  id          String @id @default(uuid())
-  year        Int
-  month       Int
-  weekNumber  Int
-  targetValue Int 
+  id             String  @id @default(uuid())
+  year           Int
+  month          Int
+  weekNumber     Int
+  targetValue    Int
   oldTargetValue Int?
-  isLocked      Boolean  @default(false)
-  userId String
-  note        String? @db.Text
-  user   User   @relation(fields: [userId], references: [id])
-  targetDetails Json?
+  isLocked       Boolean @default(false)
+  userId         String
+  note           String? @db.Text
+  user           User    @relation(fields: [userId], references: [id])
+  targetDetails  Json?
+
   @@unique([userId, year, month, weekNumber], name: "user_time_unique")
 }
 
@@ -350,12 +353,12 @@ model Request {
   type   RequestType
   status RequestStatus @default(PENDING_1)
 
-  startDate  DateTime? 
-  endDate    DateTime? 
-  targetDate DateTime? 
-  amount     Int? 
-  itemName   String? 
-  reason     String?   @db.Text 
+  startDate  DateTime?
+  endDate    DateTime?
+  targetDate DateTime?
+  amount     Int?
+  itemName   String?
+  reason     String?   @db.Text
 
   contentData Json?
 
@@ -381,8 +384,8 @@ model Request {
 
 model ApprovalLog {
   id      String         @id @default(uuid())
-  action  ApprovalAction 
-  comment String?        @db.Text 
+  action  ApprovalAction
+  comment String?        @db.Text
 
   requestId String
   request   Request @relation(fields: [requestId], references: [id], onDelete: Cascade)
@@ -400,7 +403,7 @@ model ChatRoom {
 
   taskId String? @unique
   task   Task?   @relation(fields: [taskId], references: [id])
-  
+
   teamId String?
   team   Team?   @relation(fields: [teamId], references: [id])
 
@@ -441,8 +444,8 @@ model TaskComment {
   text      String   @db.Text
   createdAt DateTime @default(now())
   imageUrl  String?  @db.Text
-  taskId String
-  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -458,31 +461,31 @@ model Notification {
   userId    String
   user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   taskId    String?
-  type      String  @default("info") 
+  type      String  @default("info")
   requestId String?
 }
 
 model TaskLog {
-  id          String        @id @default(uuid())
-  action      TaskLogAction 
-  details     String 
-  createdAt   DateTime      @default(now())
+  id        String        @id @default(uuid())
+  action    TaskLogAction
+  details   String
+  createdAt DateTime      @default(now())
 
   // 🚀 ĐÃ BỔ SUNG: Cột JobCategory để lưu nhãn khâu công việc phục vụ tính KPI
-  jobCategory JobCategory?  
+  jobCategory JobCategory?
 
-  taskId      String
-  task        Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  userId      String
-  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Attachment {
   id       String @id @default(uuid())
-  url      String @db.Text 
-  fileType String 
-  fileName String 
-  fileSize Int? 
+  url      String @db.Text
+  fileType String
+  fileName String
+  fileSize Int?
 
   messageId String
   message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
@@ -496,117 +499,148 @@ model Project {
   description  String?
   teamId       String?
   team         Team?   @relation(fields: [teamId], references: [id])
-  supervisorId String? 
+  supervisorId String?
   supervisor   User?   @relation("ProjectSupervisor", fields: [supervisorId], references: [id])
   status       String  @default("ACTIVE")
 
-  workflowNodes Json? 
-  workflowEdges Json? 
+  workflowNodes Json?
+  workflowEdges Json?
   criteria      Json?
-  
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  tasks       Task[]
-  channelId     String?
-  channel       Channel? @relation(fields: [channelId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  tasks     Task[]
+  channelId String?
+  channel   Channel? @relation(fields: [channelId], references: [id])
 }
 
 model Channel {
-  id              String   @id @default(uuid())
-  name            String   @unique
-  link            String?  @db.Text 
-  startedAt       DateTime? @db.Date
-  topic           String?
-  
+  id        String    @id @default(uuid())
+  name      String    @unique
+  link      String?   @db.Text
+  startedAt DateTime? @db.Date
+  topic     String?
+
   // 🚀 ĐÃ THÊM: Kênh sẽ lưu cứng trạng thái là AI hay Tổng hợp
-  category        ChannelCategory    @default(TONG_HOP)
+  category ChannelCategory @default(TONG_HOP)
 
-  status          ChannelStatus      @default(XAY_DUNG)
-  monetization    MonetizationStatus @default(CHUA_DAT)
+  status       ChannelStatus      @default(XAY_DUNG)
+  monetization MonetizationStatus @default(CHUA_DAT)
 
-  teamId          String?
-  team            Team?               @relation(fields: [teamId], references: [id])
-  
-  managerId       String?
-  manager         User?              @relation("ChannelManager", fields: [managerId], references: [id])
+  teamId String?
+  team   Team?   @relation(fields: [teamId], references: [id])
 
-  members         ChannelMember[]
-  projects        Project[]
-  revenues        DailyRevenue[]
-  avatarUrl       String?   @db.Text
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
-  tasks           Task[]
-  revenueTargets  ChannelRevenueTarget[]
+  managerId String?
+  manager   User?   @relation("ChannelManager", fields: [managerId], references: [id])
+
+  members           ChannelMember[]
+  projects          Project[]
+  revenues          DailyRevenue[]
+  avatarUrl         String?                @db.Text
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  tasks             Task[]
+  revenueTargets    ChannelRevenueTarget[]
   legacyInventories LegacyInventory[]
 }
+
 model ChannelRevenueTarget {
-  id        String   @id @default(uuid())
-  year      Int
-  month     Int
-  target    Float    @default(0)
+  id     String @id @default(uuid())
+  year   Int
+  month  Int
+  target Float  @default(0)
 
   channelId String
-  channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  channel   Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
 
   @@unique([channelId, year, month])
 }
+
 model DailyRevenue {
-  id          String   @id @default(uuid())
-  date        DateTime @db.Date 
-  amount      Float    
-  views       Int      @default(0)
-  channelId   String
-  channel     Channel  @relation(fields: [channelId], references: [id])
-  
-  updaterId   String
-  updater     User     @relation(fields: [updaterId], references: [id])
+  id        String   @id @default(uuid())
+  date      DateTime @db.Date
+  amount    Float
+  views     Int      @default(0)
+  channelId String
+  channel   Channel  @relation(fields: [channelId], references: [id])
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  updaterId String
+  updater   User   @relation(fields: [updaterId], references: [id])
 
-  @@unique([channelId, date]) 
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([channelId, date])
 }
 
 model ChannelMember {
-  id              String   @id @default(uuid())
-  channelId       String
-  channel         Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  
-  userId          String
-  user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  roleOnChannel   String  
+  id        String  @id @default(uuid())
+  channelId String
+  channel   Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
 
-  assignedAt      DateTime @default(now())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  roleOnChannel String
+
+  assignedAt DateTime @default(now())
 
   @@unique([channelId, userId, roleOnChannel])
 }
 
 model SystemSetting {
   id           String   @id @default(uuid())
-  settingKey   String   @unique 
-  settingValue Json?    
+  settingKey   String   @unique
+  settingValue Json?
   updatedAt    DateTime @updatedAt
 }
 
 // BẢNG QUẢN LÝ SỐ DƯ TỒN KHO ĐẦU KỲ (LEGACY INVENTORY)
 model LegacyInventory {
-  id              String  @id @default(uuid())
-  channelId       String
-  channel         Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  
-  duration        Int     // Phân loại thời lượng (VD: 30, 45, 60 phút)
-  
-  // Số lượng bài tồn kho cũ theo từng khâu
-  contentCount    Int @default(0)
-  animationCount  Int @default(0)
-  roughCount      Int @default(0)
-  videoCount      Int @default(0)
+  id        String  @id @default(uuid())
+  channelId String
+  channel   Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  duration Int // Phân loại thời lượng (VD: 30, 45, 60 phút)
+
+  // Số lượng bài tồn kho cũ theo từng khâu
+  contentCount   Int @default(0)
+  animationCount Int @default(0)
+  roughCount     Int @default(0)
+  videoCount     Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Đảm bảo 1 kênh không có 2 dòng trùng một mốc thời lượng
   @@unique([channelId, duration])
+}
+
+// ========================================================
+// 🚀 THÊM BẢNG QUẢN LÝ ĐÁNH GIÁ NHÂN SỰ HÀNG THÁNG
+// ========================================================
+model MonthlyEvaluation {
+  id    String @id @default(uuid())
+  year  Int
+  month Int
+
+  userId String
+  user   User   @relation("UserEvaluations", fields: [userId], references: [id], onDelete: Cascade)
+
+  teamId String
+  team   Team   @relation(fields: [teamId], references: [id])
+
+  evaluatorId String
+  evaluator   User   @relation("EvaluatorLogs", fields: [evaluatorId], references: [id])
+
+  totalScore Float
+  grade      String
+
+  details Json
+  note    String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, year, month], name: "user_time_unique")
 }

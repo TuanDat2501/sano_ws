@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import { Loader2, Trash2, Search, Database, Users, Edit, Target, Tv, Clock, RefreshCw, ChevronRight, Activity } from "lucide-react";
+import { Loader2, Trash2, Search, Database, Users, Edit, Target, Tv, Clock, RefreshCw, ChevronRight, Activity, Briefcase } from "lucide-react";
 import { useToast } from "@/app/component/ToastProvider";
 import TaskManageDrawer from "./TaskManageDrawer";
 import TaskDetailDrawer from "@/app/component/TaskDetailDrawer";
@@ -83,7 +83,6 @@ export default function TaskLogManager({ teams }: { teams: any[] }) {
         if (!selectedUserId) { setLogs([]); return; }
         setIsLoadingLogs(true);
         try {
-            // 🚀 ĐÃ SỬA: Gọi về API lấy Full Log gốc để xem toàn bộ Nhật ký hoạt động
             const res = await fetch(`/api/task-logs?userId=${selectedUserId}`);
             if (res.ok) {
                 const data = await res.json();
@@ -209,6 +208,58 @@ export default function TaskLogManager({ teams }: { teams: any[] }) {
             setIsDetailDrawerOpen(false);
             fetchTasks();
         } catch (e) { showToast("error", "Lỗi Server"); }
+    };
+
+    // 🚀 HÀM PHỤ TRỢ: Lấy tên nhãn Báo Cáo chi tiết
+    const getReportBadge = (log: any) => {
+        let badgeText = "KHÔNG RÕ";
+        let badgeColor = "bg-slate-50 text-slate-600 border-slate-200";
+
+        if (log.jobCategory) {
+            switch (log.jobCategory) {
+                case 'CONTENT': 
+                    badgeText = "✍️ CONTENT"; 
+                    badgeColor = "bg-orange-50 text-orange-600 border-orange-200"; 
+                    break;
+                case 'EDIT': 
+                    badgeText = "🎬 EDITOR"; 
+                    badgeColor = "bg-blue-50 text-blue-600 border-blue-200"; 
+                    break;
+                case 'ANIMATION': 
+                    badgeText = "✨ ANIMATION"; 
+                    badgeColor = "bg-purple-50 text-purple-600 border-purple-200"; 
+                    break;
+                case 'PUBLISH': 
+                    badgeText = "🚀 QUẢN LÝ KÊNH"; 
+                    badgeColor = "bg-rose-50 text-rose-600 border-rose-200"; 
+                    break;
+                case 'MANUAL': 
+                    badgeText = "GÁN THỦ CÔNG"; 
+                    badgeColor = "bg-emerald-50 text-emerald-600 border-emerald-200"; 
+                    break;
+            }
+        } 
+        else if (log.details) {
+            const detailText = String(log.details).toLowerCase();
+            if (detailText.includes("kịch bản") || detailText.includes("bố cục")) {
+                badgeText = "✍️ CONTENT"; 
+                badgeColor = "bg-orange-50 text-orange-600 border-orange-200";
+            } else if (detailText.includes("prj thô") || detailText.includes("link project") || detailText.includes("audio") || detailText.includes("video render")) {
+                badgeText = "🎬 EDITOR"; 
+                badgeColor = "bg-blue-50 text-blue-600 border-blue-200";
+            } else if (detailText.includes("chuyển động")) {
+                badgeText = "✨ ANIMATION"; 
+                badgeColor = "bg-purple-50 text-purple-600 border-purple-200";
+            } else if (detailText.includes("đã đăng") || detailText.includes("thumbnail")) {
+                badgeText = "🚀 QUẢN LÝ KÊNH"; 
+                badgeColor = "bg-rose-50 text-rose-600 border-rose-200";
+            } else if (detailText.includes("gán thủ công")) {
+                badgeText = "GÁN THỦ CÔNG"; 
+                badgeColor = "bg-emerald-50 text-emerald-600 border-emerald-200";
+            }
+        }
+        
+        return { text: badgeText, color: badgeColor };
     };
 
     // 🚀 HÀM RENDER NHÃN ACTION ĐẸP MẮT CHO NHẬT KÝ HOẠT ĐỘNG
@@ -418,6 +469,8 @@ export default function TaskLogManager({ teams }: { teams: any[] }) {
                                 <tr>
                                     <th className="px-4 py-3 w-32 md:w-40 rounded-tl-xl border-b border-slate-200">Thời gian tạo</th>
                                     <th className="px-4 py-3 w-36 md:w-44 text-center border-b border-slate-200">Phân loại</th>
+                                    {/* 🚀 ĐÃ BỔ SUNG: CỘT KHÂU BÁO CÁO */}
+                                    <th className="px-4 py-3 w-32 md:w-40 text-center border-b border-slate-200">Khâu (Job)</th>
                                     <th className="px-4 py-3 border-b border-slate-200">Chi tiết Ghi nhận</th>
                                     <th className="px-4 py-3 w-48 md:w-56 border-b border-slate-200">Thuộc Video (Task)</th>
                                     <th className="px-4 py-3 w-16 text-center rounded-tr-xl border-b border-slate-200">Xóa</th>
@@ -425,15 +478,23 @@ export default function TaskLogManager({ teams }: { teams: any[] }) {
                             </thead>
                             <tbody className="divide-y divide-slate-100">
                                 {logs.length === 0 ? (
-                                    <tr><td colSpan={5} className="text-center py-10 text-slate-400 font-medium">Không tìm thấy dữ liệu hoạt động.</td></tr>
+                                    <tr><td colSpan={6} className="text-center py-10 text-slate-400 font-medium">Không tìm thấy dữ liệu hoạt động.</td></tr>
                                 ) : (
-                                    logs.map((log) => (
+                                    logs.map((log) => {
+                                        const badge = getReportBadge(log);
+                                        return (
                                         <tr key={log.id} className="hover:bg-rose-50/30 transition-colors">
                                             <td className="px-4 py-3 font-bold text-slate-700 text-[11px] md:text-xs">
                                                 {new Date(log.createdAt).toLocaleString("vi-VN", {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'})}
                                             </td>
                                             <td className="px-4 py-3 text-center">
                                                 {renderActionBadge(log.action)}
+                                            </td>
+                                            {/* 🚀 ĐÃ BỔ SUNG: RENDER NHÃN KHÂU */}
+                                            <td className="px-4 py-3 text-center">
+                                                <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded border ${badge.color}`}>
+                                                    {badge.text}
+                                                </span>
                                             </td>
                                             <td className="px-4 py-3 font-medium text-slate-800 text-[11px] md:text-xs">
                                                 {log.details}
@@ -451,7 +512,7 @@ export default function TaskLogManager({ teams }: { teams: any[] }) {
                                                 </button>
                                             </td>
                                         </tr>
-                                    ))
+                                    )})
                                 )}
                             </tbody>
                         </table>

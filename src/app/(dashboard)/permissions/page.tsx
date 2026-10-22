@@ -28,6 +28,7 @@ const MODULES = [
     { id: "MENU_TEAMS", name: "Quản lý Cơ cấu Đội ngũ" },
     { id: "MENU_USERS", name: "Quản lý Nhân sự (Users)" },
     { id: "MENU_ORG_CHART", name: "Xem Sơ đồ tổ chức" },
+    { id: "MENU_EVALUATIONS", name: "Chấm điểm, Đánh giá Nhân sự" },
     { id: "MENU_DAILY_REPORT", name: "Xem Báo cáo Hằng ngày" },
     { id: "MENU_CHANNELS", name: "Quản lý Hệ thống Kênh" },
     { id: "MENU_ANALYTICS", name: "Xem Báo cáo Chiến lược (Tuyệt mật)" },
