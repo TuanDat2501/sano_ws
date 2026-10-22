@@ -114,7 +114,8 @@ export async function GET(req: Request) {
 
         const tab = searchParams.get("tab") || "MY_REQUESTS";
         const rawSearch = searchParams.get("search")?.trim() || "";
-        const searchKeyword = rawSearch.normalize("NFC");
+        const searchNFC = rawSearch.normalize("NFC"); // Chuẩn Windows, Unikey mặc định
+        const searchNFD = rawSearch.normalize("NFD");
 
         const filterType = searchParams.get("type") || "";
         const filterStatus = searchParams.get("status") || "";
@@ -165,11 +166,13 @@ export async function GET(req: Request) {
         }
 
         // 🚀 3. SỬA LỖI SEARCH TÊN: Kết hợp kiểm tra chính xác từ khóa
-        if (searchKeyword !== "") {
+        if (rawSearch !== "") {
             andConditions.push({
                 OR: [
-                    { id: { contains: searchKeyword } },
-                    { requester: { fullName: { contains: searchKeyword } } }
+                    { id: { contains: searchNFC } },
+                    // Tìm kiếm quét qua cả 2 định dạng Unicode để bao trọn mọi thiết bị gõ
+                    { requester: { fullName: { contains: searchNFC } } },
+                    { requester: { fullName: { contains: searchNFD } } }
                 ]
             });
         }
