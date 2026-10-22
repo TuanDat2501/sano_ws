@@ -168,15 +168,7 @@ export async function GET(req: Request) {
             andConditions.push({
                 OR: [
                     { id: { contains: searchKeyword } },
-                    { 
-                        requester: { 
-                            fullName: { 
-                                contains: searchKeyword,
-                                // Nếu dùng PostgreSQL thì thêm line dưới, MySQL thì Prisma sẽ query chuẩn hơn khi bọc trong AND
-                                mode: 'insensitive' 
-                            } 
-                        } 
-                    }
+                    { requester: { fullName: { contains: searchKeyword } } }
                 ]
             });
         }
