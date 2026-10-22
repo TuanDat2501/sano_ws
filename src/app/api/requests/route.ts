@@ -14,7 +14,7 @@ export async function POST(req: Request) {
 
         const user = session.user as any;
         const userId = user.id;
-        
+
         const isLeader = user.permissions?.includes("ACTION_APPROVE_REQUEST") || ["LEADER", "ADMIN", "BAN_GIAM_DOC"].includes(user.role);
 
         const body = await req.json();
@@ -44,7 +44,7 @@ export async function POST(req: Request) {
         const newRequest = await prisma.request.create({
             data: {
                 type,
-                status: status || (isLeader ? "PENDING_2" : "PENDING_1"), 
+                status: status || (isLeader ? "PENDING_2" : "PENDING_1"),
                 requesterId: userId,
                 teamId,
                 firstApproverId: firstApproverId,
@@ -79,7 +79,7 @@ export async function POST(req: Request) {
                     requestId: newRequest.id
                 }
             });
-            
+
             if (secondApproverId) {
                 await prisma.notification.create({
                     data: {
@@ -113,17 +113,18 @@ export async function GET(req: Request) {
         const skip = (page - 1) * limit;
 
         const tab = searchParams.get("tab") || "MY_REQUESTS";
-        const searchKeyword = searchParams.get("search")?.trim() || "";
-        
+        const rawSearch = searchParams.get("search")?.trim() || "";
+        const searchKeyword = rawSearch.normalize("NFC");
+
         const filterType = searchParams.get("type") || "";
         const filterStatus = searchParams.get("status") || "";
         const filterTeamId = searchParams.get("teamId") || "";
         const filterRequesterId = searchParams.get("requesterId") || "";
 
-        const canViewAllCompany = user.permissions?.includes("MENU_TEAMS") || 
-                                  user.permissions?.includes("DEPARTMENT_LEADER") || 
-                                  ["ADMIN", "BAN_GIAM_DOC", "HR"].includes(user.role);
-        
+        const canViewAllCompany = user.permissions?.includes("MENU_TEAMS") ||
+            user.permissions?.includes("DEPARTMENT_LEADER") ||
+            ["ADMIN", "BAN_GIAM_DOC", "HR"].includes(user.role);
+
         const isTeamLeader = user.isTeamLeader || user.role === "LEADER";
 
         // 🚀 DÙNG MẢNG AND ĐỂ CHỐNG XUNG ĐỘT BỘ LỌC
