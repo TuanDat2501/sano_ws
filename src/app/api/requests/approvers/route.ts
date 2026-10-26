@@ -43,6 +43,16 @@ export async function GET(req: Request) {
         const bgdApprovers = level2Users.filter(u => APPROVAL_CONFIG.BGD_ADMIN.includes(u.role));
         const hrApprovers = level2Users.filter(u => !APPROVAL_CONFIG.BGD_ADMIN.includes(u.role));
 
+        // Lấy danh sách Kế toán (Dành cho Cấp 1 đơn Mua sắm)
+        const ketoanApprovers = await prisma.user.findMany({
+            where: {
+                role: "KE_TOAN",
+                isActive: true,
+                id: { not: currentUserId }
+            },
+            select: { id: true, fullName: true, role: true, team: { select: { name: true } } }
+        });
+
         // Lấy danh sách Level 1 (Trưởng nhóm của team đang chọn)
         let teamLeaders: any[] = [];
         let selectedTeamName = "";
@@ -92,6 +102,13 @@ export async function GET(req: Request) {
             showC1 = false;
             c2Options = isOneStepHR ? hrApprovers : level2Users;
             c2Label = isOneStepHR ? "Người phê duyệt (Hành chính / HR)" : "Người phê duyệt";
+        }
+        else if (requestType === "MUA_SAM") {
+            // 🚀 BỔ SUNG: Nếu là đơn Mua sắm -> Cấp 1 là Kế toán, Cấp 2 là Ban Giám Đốc
+            c1Options = ketoanApprovers;
+            c1Label = "Cấp 1 (Kế toán)";
+            c2Options = bgdApprovers;
+            c2Label = "Cấp 2 (Ban giám đốc)";
         }
         else if (isOneStepHR || isTeamNhanSu) {
             // Đơn 1 bước HR hoặc Nhân sự phòng khác nộp vào team HR

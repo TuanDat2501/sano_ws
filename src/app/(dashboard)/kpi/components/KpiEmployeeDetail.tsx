@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock, CheckCircle, Tv, Target, LayoutList, RefreshCw, XCircle } from "lucide-react";
+import { Clock, CheckCircle, Tv, Target, LayoutList, RefreshCw, XCircle, ExternalLink } from "lucide-react";
 import { getProgressColor, InlineLoading } from "../utils";
 
 export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi: any, isLoading: boolean }) {
@@ -12,7 +12,6 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
         let badgeText = "BÁO CÁO TỔNG";
         let badgeColor = "bg-slate-50 text-slate-600 border-slate-200";
 
-        // Lấy từ jobCategory trực tiếp từ genDatabase
         if (log.jobCategory) {
             switch (log.jobCategory) {
                 case 'CONTENT': 
@@ -20,7 +19,6 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                     badgeColor = "bg-orange-50 text-orange-600 border-orange-200"; 
                     break;
                 case 'EDIT': 
-                    // Tách biệt màu cho Edit Audio/Render nếu cần, hoặc để chung màu xanh dương
                     badgeText = "BÁO CÁO: DỰNG VIDEO/AUDIO"; 
                     badgeColor = "bg-blue-50 text-blue-600 border-blue-200"; 
                     break;
@@ -29,7 +27,6 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                     badgeColor = "bg-purple-50 text-purple-600 border-purple-200"; 
                     break;
                 case 'PUBLISH': 
-                    // 🚀 ĐÃ SỬA: Thêm chữ THUMBNAIL vào rổ Publish cho rõ ràng
                     badgeText = "BÁO CÁO: UPLOAD / THUMB"; 
                     badgeColor = "bg-rose-50 text-rose-600 border-rose-200"; 
                     break;
@@ -38,9 +35,7 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                     badgeColor = "bg-emerald-50 text-emerald-600 border-emerald-200"; 
                     break;
             }
-        } 
-        // Fallback xử lý chuỗi details cho các Log cũ sinh ra trước khi cập nhật tính năng
-        else if (log.details) {
+        } else if (log.details) {
             const detailText = String(log.details).toLowerCase();
             if (detailText.includes("kịch bản") || detailText.includes("bố cục")) {
                 badgeText = "BÁO CÁO: KỊCH BẢN"; 
@@ -63,13 +58,38 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
         return { text: badgeText, color: badgeColor };
     };
 
+    // 🚀 HÀM LẤY ĐÚNG LINK URL TƯƠNG ƯNG VỚI KHÂU CÔNG VIỆC CỦA LOG ĐÓ
+    const getLogTaskUrl = (log: any) => {
+        const task = log.task;
+        if (!task) return null;
+
+        const category = log.jobCategory || "";
+        const details = String(log.details || "").toLowerCase();
+
+        // Ưu tiên check theo jobCategory hoặc nội dung chi tiết log
+        if (category === "CONTENT" || details.includes("kịch bản")) {
+            return task.scriptLink || task.storyboardLink || task.videoLink;
+        }
+        if (category === "EDIT" || details.includes("dựng") || details.includes("audio") || details.includes("render")) {
+            return task.videoLink || task.roughProjectLink || task.audioLink;
+        }
+        if (category === "ANIMATION" || details.includes("chuyển động")) {
+            return task.animationLink || task.videoLink;
+        }
+        if (category === "PUBLISH" || details.includes("đăng") || details.includes("thumbnail")) {
+            return task.publishLink || task.thumbnailLink;
+        }
+
+        // Fallback mặc định: trả về link bất kỳ có sẵn trên task theo thứ tự ưu tiên
+        return task.publishLink || task.videoLink || task.scriptLink || task.thumbnailLink || task.audioLink || null;
+    };
+
     return (
         <div className="flex flex-col lg:flex-row gap-4 md:gap-6 lg:gap-8 h-full min-h-0">
             
             {/* CỘT TRÁI: MỤC TIÊU & TIẾN ĐỘ TỔNG */}
            <div className="w-full lg:w-1/3 flex flex-col gap-4 md:gap-6 shrink-0 lg:overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                 
-                {/* 1. Thẻ Vòng Tròn - Tiến độ tổng */}
                 <div className="bg-white rounded-xl md:rounded-2xl p-4 md:p-6 shadow-sm border border-slate-200 flex flex-col items-center justify-center py-6 md:py-8 min-h-[220px] shrink-0">
                     {isLoading ? <InlineLoading /> : activeKpi && (
                         <>
@@ -91,7 +111,7 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                                 {(activeKpi.totalTargetMinutes > 0 || activeKpi.totalActualMinutes > 0) && (
                                     <div className="inline-flex flex-col items-center mt-1">
                                         <p className="text-[11px] md:text-xs font-black text-blue-700 bg-blue-50 py-1.5 px-3 rounded-lg border border-blue-100">
-                                            Khối lượng (Phút): {activeKpi.totalActualMinutes || 0} / {activeKpi.targetValue > 0 ? activeKpi.targetTargetMinutes : '---'}
+                                            Khối lượng (Phút): {activeKpi.totalActualMinutes || 0} / {activeKpi.targetValue > 0 ? activeKpi.totalTargetMinutes : '---'}
                                         </p>
                                     </div>
                                 )}
@@ -100,7 +120,6 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                     )}
                 </div>
 
-                {/* 2. Thẻ Chi tiết Chỉ tiêu theo Kênh */}
                 <div className="bg-white rounded-xl md:rounded-2xl p-4 md:p-5 shadow-sm border border-slate-200 shrink-0">
                     <div className="flex items-center gap-2 font-bold text-slate-800 mb-4 border-b border-slate-100 pb-3">
                         <Target className="text-blue-500 w-5 h-5" />
@@ -122,7 +141,7 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                                                 {detail.isRework ? (
                                                     <p className="font-bold text-rose-800 text-sm flex items-center gap-1.5">
                                                         <RefreshCw size={14} className="text-rose-500" /> {detail.channelName}
-                                                        <span className="text-[9px] bg-rose-100 text-rose-600 px-1.5 py-0.5 rounded border border-rose-200 uppercase tracking-widest ml-0.5 shadow-sm">Xào lại</span>
+                                                        <span className="text-[9px] bg-rose-100 text-rose-600 px-1.5 py-0.5 rounded border border-rose-200 uppercase tracking-widest ml-0.5 shadow-sm">Sửa lại</span>
                                                     </p>
                                                 ) : (
                                                     <p className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
@@ -179,6 +198,7 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                                 ) : (
                                     displayLogs.map((log: any) => {
                                         const badge = getReportBadge(log);
+                                        const targetUrl = getLogTaskUrl(log);
                                         return (
                                         <div key={log.id} className="p-3.5 border border-slate-200 rounded-xl bg-white shadow-sm flex flex-col gap-2.5 relative overflow-hidden">
                                             <div className="absolute left-0 top-0 bottom-0 w-1 bg-green-500"></div>
@@ -188,7 +208,15 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                                                 <span className="text-[10px] font-bold text-slate-400">{new Date(log.createdAt).toLocaleDateString('vi-VN')}</span>
                                             </div>
                                             
-                                            <p className="font-bold text-sm pl-2 leading-snug text-slate-800">{log.task?.title || "Task không xác định"}</p>
+                                            <div className="pl-2">
+                                                {targetUrl ? (
+                                                    <a href={targetUrl} target="_blank" rel="noopener noreferrer" className="font-bold text-sm leading-snug text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1">
+                                                        {log.task?.title || "Task không xác định"} <ExternalLink size={12} />
+                                                    </a>
+                                                ) : (
+                                                    <p className="font-bold text-sm leading-snug text-slate-800">{log.task?.title || "Task không xác định"}</p>
+                                                )}
+                                            </div>
                                             
                                             <div className="flex flex-wrap gap-2 pl-2 opacity-80">
                                                 <span className="text-[10px] font-bold text-slate-600 bg-slate-50 border border-slate-200 px-2 py-1 rounded flex items-center gap-1">
@@ -196,7 +224,7 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                                                 </span>
                                                 {log.task?.isRework && (
                                                     <span className="text-[10px] font-bold text-rose-600 bg-rose-50 border border-rose-200 px-2 py-1 rounded flex items-center gap-1">
-                                                        <RefreshCw size={10} /> Xào lại
+                                                        <RefreshCw size={10} /> Sửa lại
                                                     </span>
                                                 )}
                                                 {log.task?.duration && (
@@ -237,6 +265,7 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                                         ) : (
                                             displayLogs.map((log: any) => {
                                                 const badge = getReportBadge(log);
+                                                const targetUrl = getLogTaskUrl(log);
                                                 return (
                                                 <tr key={log.id} className="hover:bg-slate-50 transition-colors">
                                                     <td className="px-5 py-4 text-center">
@@ -247,7 +276,13 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                                                     </td>
                                                     
                                                     <td className="px-5 py-4">
-                                                        <p className="font-bold text-sm truncate max-w-[220px] text-slate-800" title={log.task?.title}>{log.task?.title}</p>
+                                                        {targetUrl ? (
+                                                            <a href={targetUrl} target="_blank" rel="noopener noreferrer" className="font-bold text-sm truncate max-w-[220px] text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1.5" title={log.task?.title}>
+                                                                {log.task?.title} <ExternalLink size={13} className="shrink-0" />
+                                                            </a>
+                                                        ) : (
+                                                            <p className="font-bold text-sm truncate max-w-[220px] text-slate-800" title={log.task?.title}>{log.task?.title}</p>
+                                                        )}
                                                         <p className={`text-[9px] font-black uppercase tracking-widest mt-1.5 px-2.5 py-0.5 rounded border w-fit shadow-sm ${badge.color}`}>{badge.text}</p>
                                                     </td>
 
@@ -261,7 +296,7 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                                                             
                                                             {log.task?.isRework && (
                                                                 <span className="flex items-center gap-1 bg-rose-50 text-rose-600 px-2 py-0.5 rounded w-fit border border-rose-200 text-[9px] uppercase tracking-widest">
-                                                                    <RefreshCw size={10} /> Xào lại
+                                                                    <RefreshCw size={10} /> Sửa lại
                                                                 </span>
                                                             )}
                                                         </div>

@@ -283,7 +283,7 @@ const TargetSettingModal = ({ isOpen, onClose, user, onSave }: any) => {
                                                                     onChange={e => handleChangeRow(d.id, 'isRework', e.target.value === "true")}
                                                                 >
                                                                     <option value="false">✨ BÀI MỚI</option>
-                                                                    <option value="true">♻️ BÀI CŨ (XÀO)</option>
+                                                                    <option value="true">♻️ BÀI CŨ (Sửa)</option>
                                                                 </select>
                                                             </td>
                                                             <td className="p-2">

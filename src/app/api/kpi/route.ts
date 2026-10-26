@@ -87,7 +87,19 @@ export async function GET(req: Request) {
                     select: {
                         id: true, action: true, details: true, jobCategory: true, createdAt: true, taskId: true, userId: true,
                         task: { 
-                            select: { id: true, title: true, status: true, duration: true, isRework: true, channelId: true, channel: { select: { id: true, name: true } } } 
+                            select: { 
+                                id: true, title: true, status: true, duration: true, isRework: true, channelId: true, 
+                                // 🚀 BỔ SUNG CÁC TRƯỜNG URL CẦN LẤY TỪ TASK
+                                scriptLink: true,
+                                englishScriptLink: true,
+                                storyboardLink: true,
+                                audioLink: true,
+                                thumbnailLink: true,
+                                videoLink: true,
+                                publishLink: true,
+                                roughProjectLink: true,
+                                channel: { select: { id: true, name: true } } 
+                            } 
                         } 
                     }
                 })

@@ -390,7 +390,7 @@ export default function TaskDetailDrawer({
             </span>
             {selectedTask.isRework && (
               <span className="text-[9px] font-black uppercase text-rose-700 bg-rose-100 px-2 py-0.5 rounded border border-rose-300 flex items-center gap-1 shadow-sm animate-pulse">
-                <RefreshCw size={10} /> XÀO LẠI / CHỈNH SỬA
+                <RefreshCw size={10} /> SỬA LẠI / CHỈNH SỬA
               </span>
             )}
             {selectedTask.duration && (

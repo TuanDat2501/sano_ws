@@ -242,7 +242,7 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
               const fullTask = await res.json();
               setNewTask(prev => ({
                   ...prev,
-                  title: prev.title === "" ? `[XÀO LẠI] ${fullTask.title}` : prev.title,
+                  title: prev.title === "" ? `[SỬA LẠI] ${fullTask.title}` : prev.title,
                   linkContent: prev.linkContent === "" ? (fullTask.publishLink || fullTask.videoLink || fullTask.scriptLink || "") : prev.linkContent,
                   scriptLink: fullTask.scriptLink || "",
                   englishScriptLink: fullTask.englishScriptLink || "",
@@ -297,7 +297,7 @@ export default function CreateTaskModal({ isOpen, onClose, teams, initialData, o
                               className="w-4 h-4 text-rose-600 rounded border-slate-300 focus:ring-rose-500" 
                           />
                           <span className="text-[12px] font-black text-rose-600 uppercase tracking-widest flex items-center gap-1.5 group-hover:text-rose-700 transition-colors">
-                              <RefreshCw size={14}/> Sửa lại Video (Xào lại)
+                              <RefreshCw size={14}/> Sửa lại Video (Sửa lại)
                           </span>
                       </label>
 

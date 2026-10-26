@@ -205,9 +205,9 @@ export default function SurplusView() {
                                     <td className="p-3 border-r border-slate-100 font-black text-blue-600 bg-blue-50/30">{row.videoCount > 0 ? row.videoCount : "-"}</td>
 
                                     <td className="p-2 text-xs text-left bg-slate-50/30">
-                                        {row.notes.length > 0 ? (
+                                        {row.notes?.length > 0 ? (
                                             <div className="flex flex-col gap-1">
-                                                {row.notes.map((n: string, i: number) => (
+                                                {row.notes?.map((n: string, i: number) => (
                                                     <span key={i} className="bg-white border border-slate-200 px-2 py-1 rounded text-slate-600 italic shadow-sm">{n}</span>
                                                 ))}
                                             </div>

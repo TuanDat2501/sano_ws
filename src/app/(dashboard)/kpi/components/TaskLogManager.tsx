@@ -414,7 +414,7 @@ export default function TaskLogManager({ teams }: { teams: any[] }) {
                                                     
                                                     {task.isRework && (
                                                         <span className="text-[9px] font-black text-rose-600 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded uppercase flex items-center gap-1 w-fit">
-                                                            <RefreshCw size={10} /> Xào lại
+                                                            <RefreshCw size={10} /> Sửa lại
                                                         </span>
                                                     )}
                                                 </div>

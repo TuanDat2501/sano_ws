@@ -150,7 +150,7 @@ export default function BoardView({ tasks, columns, getTeamColor, onDragEnd, onO
 
                                   {task.isRework && (
                                     <span className="text-[8px] md:text-[9px] font-black uppercase tracking-widest text-rose-700 bg-rose-100 px-2 py-0.5 rounded-md border border-rose-200 shadow-sm flex items-center gap-1 animate-pulse">
-                                      <RefreshCw size={10} strokeWidth={3} /> XÀO LẠI
+                                      <RefreshCw size={10} strokeWidth={3} /> SỬA LẠI
                                     </span>
                                   )}
                                 </div>

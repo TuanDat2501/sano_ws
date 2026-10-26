@@ -234,7 +234,7 @@ export default function TaskManageDrawer({ isOpen, onClose, mode, taskId, teams,
                                                     checked={currentTask.isRework}
                                                     onChange={(e) => setCurrentTask({...currentTask, isRework: e.target.checked})}
                                                 />
-                                                <span className="text-sm font-black text-slate-700 group-hover:text-rose-600 transition-colors">Xào Lại</span>
+                                                <span className="text-sm font-black text-slate-700 group-hover:text-rose-600 transition-colors">Sửa Lại</span>
                                             </label>
                                         </div>
                                     </div>

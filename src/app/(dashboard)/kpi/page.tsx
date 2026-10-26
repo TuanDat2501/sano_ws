@@ -2,13 +2,13 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import { TrendingUp, Calendar, Users, ChevronLeft, ChevronRight, Database, Download, Loader2,Lock } from "lucide-react";
+import { TrendingUp, Calendar, Users, ChevronLeft, ChevronRight, Database, Download, Loader2, Lock } from "lucide-react";
 import { useToast } from "@/app/component/ToastProvider";
 
 import KpiEmployeeDetail from "./components/KpiEmployeeDetail";
 import KpiTeamTable from "./components/KpiTeamTable";
 import KpiDrawer from "./components/KpiDrawer";
-import TaskLogManager from "./components/TaskLogManager"; 
+import TaskLogManager from "./components/TaskLogManager";
 
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
@@ -16,10 +16,10 @@ import { saveAs } from 'file-saver';
 // 🚀 HÀM 1: SINH TEXT TUẦN CHUẨN THEO THÁNG (LỊCH VIỆT NAM: THỨ 2 - CHỦ NHẬT)
 function getWeekData(year: number, month: number, weekNumber: number) {
     // Ép giờ 12:00:00 trưa để tuyệt đối không bị nhảy ngày do lệch múi giờ
-    const totalDays = new Date(year, month, 0, 12, 0, 0).getDate(); 
+    const totalDays = new Date(year, month, 0, 12, 0, 0).getDate();
     const firstDayOfMonth = new Date(year, month - 1, 1, 12, 0, 0);
     const startDayOfWeek = firstDayOfMonth.getDay(); // 0 là Chủ Nhật, 1 là Thứ Hai...
-    
+
     // Tính khoảng cách từ mùng 1 đến Chủ Nhật đầu tiên
     const diffToSunday = startDayOfWeek === 0 ? 0 : 7 - startDayOfWeek;
     const firstSunday = 1 + diffToSunday;
@@ -47,7 +47,7 @@ function getAvailableWeeks(year: number, month: number) {
     const totalDays = new Date(year, month, 0, 12, 0, 0).getDate();
     const firstDayOfMonth = new Date(year, month - 1, 1, 12, 0, 0);
     const startDayOfWeek = firstDayOfMonth.getDay();
-    
+
     const diffToSunday = startDayOfWeek === 0 ? 0 : 7 - startDayOfWeek;
     const firstSunday = 1 + diffToSunday;
 
@@ -64,7 +64,7 @@ function getCurrentWeekInfo() {
     const localTime = today.getTime();
     const localOffset = today.getTimezoneOffset() * 60000;
     const utc = localTime + localOffset;
-    const vietnamTime = new Date(utc + (3600000 * 7)); 
+    const vietnamTime = new Date(utc + (3600000 * 7));
 
     const year = vietnamTime.getFullYear();
     const month = vietnamTime.getMonth() + 1;
@@ -72,7 +72,7 @@ function getCurrentWeekInfo() {
 
     const firstDayOfMonth = new Date(year, month - 1, 1, 12, 0, 0);
     const startDayOfWeek = firstDayOfMonth.getDay();
-    
+
     const diffToSunday = startDayOfWeek === 0 ? 0 : 7 - startDayOfWeek;
     const firstSunday = 1 + diffToSunday;
 
@@ -100,7 +100,7 @@ export default function KpiDashboard() {
 
     const [teams, setTeams] = useState<any[]>([]);
     const [selectedTeamFilter, setSelectedTeamFilter] = useState<string>("ALL");
-    
+
     const queryTeamId = canFilterTeam ? selectedTeamFilter : teamId;
 
     const currentInfo = getCurrentWeekInfo();
@@ -142,9 +142,9 @@ export default function KpiDashboard() {
                     setIsLoading(false);
                     return;
                 }
-                
+
                 const url = `/api/kpi?teamId=${queryTeamId}&year=${selectedYear}&month=${selectedMonth}&week=${selectedWeek}`;
-                
+
                 const res = await fetch(url);
                 const data = await res.json();
                 if (res.ok) {
@@ -205,7 +205,7 @@ export default function KpiDashboard() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     userId, year: selectedYear, month: selectedMonth, weekNumber: selectedWeek,
-                    targetValue: targetNum, targetDetails, note 
+                    targetValue: targetNum, targetDetails, note
                 })
             });
 
@@ -221,35 +221,32 @@ export default function KpiDashboard() {
         }
     };
 
-    // ==========================================
-    // 🚀 XỬ LÝ XUẤT EXCEL CHUẨN XÁC
-    // ==========================================
     const handleExportExcelThang = async () => {
         setIsExporting(true);
         try {
-            const weekPromises = availableWeeks.map(w => 
+            const weekPromises = availableWeeks.map(w =>
                 fetch(`/api/kpi?teamId=${queryTeamId}&year=${selectedYear}&month=${selectedMonth}&week=${w}`).then(res => res.json())
             );
             const weeksData = await Promise.all(weekPromises);
 
             const userMap = new Map();
-            
+
             weeksData.forEach((weekRes, index) => {
                 const w = availableWeeks[index];
                 const list = weekRes.kpiList || [];
-                
+
                 list.forEach((userKpi: any) => {
                     if (!userMap.has(userKpi.userId)) {
                         userMap.set(userKpi.userId, {
                             id: userKpi.userId,
                             fullName: userKpi.fullName,
                             role: userKpi.role,
-                            teamName: userKpi.teamName || "Chưa có team", 
+                            teamName: userKpi.teamName || "Chưa có team",
                             weeks: {},
-                            targets: new Map() 
+                            targets: new Map()
                         });
                     }
-                    
+
                     const uData = userMap.get(userKpi.userId);
                     uData.weeks[w] = userKpi;
 
@@ -258,28 +255,30 @@ export default function KpiDashboard() {
                             const safeDuration = Number(td.duration) || 0;
                             const safeRework = Boolean(td.isRework);
                             const safeChannelName = td.channelName || "Khác";
+                            // 🚀 BỔ SUNG: Lấy thêm jobCategory để phân tách rõ các khâu trên cùng 1 kênh
+                            const safeJobCategory = td.jobCategory || td.job || "GENERAL";
 
-                            const tKey = `${safeChannelName}_${safeDuration}_${safeRework}`;
+                            const tKey = `${safeChannelName}_${safeJobCategory}_${safeDuration}_${safeRework}`;
                             if (!uData.targets.has(tKey)) {
                                 uData.targets.set(tKey, {
                                     channelName: safeChannelName,
+                                    jobCategory: safeJobCategory,
                                     duration: safeDuration,
                                     isRework: safeRework
                                 });
                             }
                         });
                     } else if (userKpi.targetValue > 0 || userKpi.actualValue > 0) {
-                        const tKey = `Chung_0_false`;
+                        const tKey = `Chung_GENERAL_0_false`;
                         if (!uData.targets.has(tKey)) {
-                            uData.targets.set(tKey, { channelName: "Chung", duration: 0, isRework: false });
+                            uData.targets.set(tKey, { channelName: "Chung", jobCategory: "GENERAL", duration: 0, isRework: false });
                         }
                     }
                 });
             });
 
-            // 🚀 BỎ LOGIC LỌC BỎ NHÂN SỰ. LẤY TOÀN BỘ DANH SÁCH TỪ API
             const users = Array.from(userMap.values());
-            
+
             if (users.length === 0) {
                 showToast("error", "Không có dữ liệu trong tháng này.");
                 setIsExporting(false);
@@ -297,17 +296,17 @@ export default function KpiDashboard() {
             const ws = workbook.addWorksheet(`KPI_Thang_${selectedMonth}`);
 
             const cols = [
-                { width: 5 },  
-                { width: 15 }, 
-                { width: 25 }, 
-                { width: 15 }, 
-                { width: 22 }, 
+                { width: 5 },
+                { width: 15 },
+                { width: 25 },
+                { width: 15 },
+                { width: 22 },
             ];
             for (let i = 1; i <= availableWeeks.length; i++) {
-                cols.push({ width: 10 }); 
-                cols.push({ width: 10 }); 
-                cols.push({ width: 10 }); 
-                cols.push({ width: 12 }); 
+                cols.push({ width: 10 });
+                cols.push({ width: 10 });
+                cols.push({ width: 10 });
+                cols.push({ width: 12 });
             }
             ws.columns = cols;
 
@@ -317,17 +316,17 @@ export default function KpiDashboard() {
             const titleCell = ws.getCell('A1');
             titleCell.value = `THÁNG ${selectedMonth}`;
             titleCell.font = { name: 'Times New Roman', size: 18, bold: true, color: { argb: 'FFFF0000' } };
-            titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF00FFFF' } }; 
+            titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF00FFFF' } };
             titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
 
             for (let i = 0; i < availableWeeks.length; i++) {
                 const w = availableWeeks[i];
                 const startCol = 5 + (i * 4) + 1;
                 const endCol = startCol + 3;
-                
+
                 ws.mergeCells(1, startCol, 1, endCol);
                 const weekCell = ws.getCell(1, startCol);
-                
+
                 const { start: sd, end: ed } = getWeekData(selectedYear, selectedMonth, w);
                 const pad = (num: number) => num.toString().padStart(2, '0');
                 const dateStr = `(${pad(sd.getDate())}-${pad(ed.getDate())}/${pad(ed.getMonth() + 1)})`;
@@ -348,11 +347,11 @@ export default function KpiDashboard() {
                 cell.font = { name: 'Times New Roman', size: 10, bold: true };
                 cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF00FFFF' } };
                 cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
-                cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+                cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
             });
-            
-            for(let i=1; i <= 5 + (availableWeeks.length * 4); i++) {
-                ws.getCell(1, i).border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
+
+            for (let i = 1; i <= 5 + (availableWeeks.length * 4); i++) {
+                ws.getCell(1, i).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
             }
 
             let startRow = 3;
@@ -361,34 +360,34 @@ export default function KpiDashboard() {
 
             users.forEach((u, uIdx) => {
                 const targetList = Array.from(u.targets.values());
-                if (targetList.length === 0) targetList.push({ channelName: '', duration: 0, isRework: false });
-                
+                if (targetList.length === 0) targetList.push({ channelName: '', jobCategory: 'GENERAL', duration: 0, isRework: false });
+
                 const numRows = targetList.length;
 
                 targetList.forEach((tg: any, tIdx: number) => {
                     const rowData = [];
-                    rowData.push(uIdx + 1); 
+                    rowData.push(uIdx + 1);
                     rowData.push(u.teamName);
                     rowData.push(u.fullName);
-                    
+
                     let roleStr = u.role;
                     if (roleStr === "CONTENT") roleStr = "Content";
                     if (roleStr === "EDITOR") roleStr = "Edit";
                     if (roleStr === "PUBLISHER") roleStr = "QLK";
                     rowData.push(roleStr);
-                    
-                    rowData.push(tg.channelName + (tg.isRework ? " (Xào)" : ""));
+
+                    // Hiển thị tên kênh kèm theo tên khâu cho rõ ràng nếu muốn (hoặc giữ nguyên tên kênh)
+                    const jobLabel = tg.jobCategory === 'PUBLISH' ? ' (Publish)' : tg.jobCategory === 'EDITOR' ? ' (Edit)' : '';
+                    rowData.push(tg.channelName + jobLabel + (tg.isRework ? " (Sửa)" : ""));
 
                     for (let i = 0; i < availableWeeks.length; i++) {
                         const w = availableWeeks[i];
                         const weekKpi = u.weeks[w];
-                        
-                        // 🚀 GÁN MẶC ĐỊNH LÀ 0 CHO MỌI TRƯỜNG HỢP Ô TRỐNG
-                        let tMins: string | number = tg.duration || 0; 
+
+                        let tMins: string | number = tg.duration || 0;
                         let giao: number | string = 0;
                         let hoanThanh: number | string = 0;
-                        // Dòng đầu tiên (tIdx === 0) luôn hiển thị phần trăm, mặc định 0%
-                        let percentStr = tIdx === 0 ? "0%" : ""; 
+                        let percentStr = tIdx === 0 ? "0%" : "";
 
                         if (weekKpi) {
                             if (tIdx === 0) {
@@ -396,9 +395,10 @@ export default function KpiDashboard() {
                             }
 
                             if (weekKpi.targetDetails && weekKpi.targetDetails.length > 0) {
-                                const detail = weekKpi.targetDetails.find((d:any) => 
-                                    (d.channelName || "Khác") === tg.channelName && 
-                                    Number(d.duration) === Number(tg.duration) && 
+                                const detail = weekKpi.targetDetails.find((d: any) =>
+                                    (d.channelName || "Khác") === tg.channelName &&
+                                    (d.jobCategory || d.job || "GENERAL") === tg.jobCategory &&
+                                    Number(d.duration) === Number(tg.duration) &&
                                     Boolean(d.isRework) === Boolean(tg.isRework)
                                 );
                                 if (detail) {
@@ -420,24 +420,24 @@ export default function KpiDashboard() {
                     r.eachCell((cell) => {
                         cell.font = { name: 'Times New Roman', size: 11 };
                         cell.alignment = { vertical: 'middle', horizontal: 'center' };
-                        cell.border = { top: {style:'thin'}, left: {style:'thin'}, bottom: {style:'thin'}, right: {style:'thin'} };
-                        
+                        cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+
                         if (uIdx % 2 === 0) {
                             cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2EFDA' } };
                         } else {
-                            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9E1F2' } }; 
+                            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9E1F2' } };
                         }
                     });
                 });
 
                 if (numRows > 1) {
-                    ws.mergeCells(startRow, 1, startRow + numRows - 1, 1); 
-                    ws.mergeCells(startRow, 3, startRow + numRows - 1, 3); 
-                    ws.mergeCells(startRow, 4, startRow + numRows - 1, 4); 
-                    
+                    ws.mergeCells(startRow, 1, startRow + numRows - 1, 1);
+                    ws.mergeCells(startRow, 3, startRow + numRows - 1, 3);
+                    ws.mergeCells(startRow, 4, startRow + numRows - 1, 4);
+
                     for (let i = 0; i < availableWeeks.length; i++) {
-                        const pCol = 5 + (i * 4) + 4; 
-                        ws.mergeCells(startRow, pCol, startRow + numRows - 1, pCol); 
+                        const pCol = 5 + (i * 4) + 4;
+                        ws.mergeCells(startRow, pCol, startRow + numRows - 1, pCol);
                     }
                 }
 
@@ -456,7 +456,7 @@ export default function KpiDashboard() {
 
                 if (uIdx === users.length - 1) {
                     if (startRow - 1 > startTeamRow) {
-                        ws.mergeCells(startTeamRow, 2, startRow - 1, 2); 
+                        ws.mergeCells(startTeamRow, 2, startRow - 1, 2);
                     }
                 }
             });
@@ -486,13 +486,13 @@ export default function KpiDashboard() {
 
             {userRole === 'ADMIN' && (
                 <div className="flex gap-1 mb-4 border-b border-slate-200 shrink-0">
-                    <button 
+                    <button
                         onClick={() => setMainTab('KPI')}
                         className={`px-4 py-2.5 text-sm font-black uppercase tracking-wider transition-colors border-b-2 ${mainTab === 'KPI' ? 'border-blue-600 text-blue-700 bg-blue-50/50' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
                     >
                         Bảng Theo Dõi KPI
                     </button>
-                    <button 
+                    <button
                         onClick={() => setMainTab('LOGS')}
                         className={`px-4 py-2.5 text-sm font-black uppercase tracking-wider transition-colors border-b-2 flex items-center gap-2 ${mainTab === 'LOGS' ? 'border-rose-600 text-rose-700 bg-rose-50/50' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
                     >
@@ -524,7 +524,7 @@ export default function KpiDashboard() {
                         </div>
 
                         <div className="flex items-center gap-1 md:gap-2 bg-white p-1.5 md:p-2 rounded-xl shadow-sm border border-slate-200 overflow-x-auto w-full xl:w-auto custom-scrollbar-thin">
-                            
+
                             {canFilterTeam && (
                                 <div className="flex items-center gap-1 px-2 md:px-3 border-r border-slate-200 shrink-0">
                                     <Users size={14} className="text-slate-400 md:w-4 md:h-4" />
@@ -549,8 +549,8 @@ export default function KpiDashboard() {
                                     {availableWeeks.map(w => <option key={w} value={w}>Tuần {w}</option>)}
                                 </select>
                             </div>
-                            
-                            <button 
+
+                            <button
                                 onClick={handleExportExcelThang}
                                 disabled={isExporting}
                                 className="h-7 md:h-8 bg-emerald-600 hover:bg-emerald-700 text-white px-3 rounded-lg font-bold flex items-center justify-center gap-1.5 transition-all shadow-md ml-1 disabled:opacity-70 text-xs whitespace-nowrap active:scale-95"
@@ -579,7 +579,7 @@ export default function KpiDashboard() {
                                         teamId={queryTeamId}
                                         year={selectedYear}
                                         month={selectedMonth}
-                                        week={selectedWeek} 
+                                        week={selectedWeek}
                                     />
                                 </div>
 
