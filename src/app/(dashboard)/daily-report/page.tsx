@@ -26,11 +26,25 @@ const getBadgeColor = (type: string) => {
     return 'bg-slate-50 text-slate-600 border-slate-200'; 
 };
 
-const getValidUrl = (url: string) => {
-    if (!url) return "#";
-    if (url.startsWith("/")) return url;
-    if (!/^https?:\/\//i.test(url)) return `https://${url}`;
-    return url;
+const getValidUrl = (value: string | null | undefined): string => {
+    const raw = value?.trim();
+    if (!raw) return "#";
+
+    // Giữ nguyên đường dẫn nội bộ
+    if (raw.startsWith("/") && !raw.startsWith("//")) {
+        return raw;
+    }
+
+    // Trích xuất URL từ chuỗi có tên nhân sự
+    const match = raw.match(/https?:\/\/[^\s<>"']+/i);
+    if (match) return match[0];
+
+    // Hỗ trợ domain không có https://
+    if (/^[\w-]+(?:\.[\w-]+)+(?:[/:?#][^\s]*)?$/i.test(raw)) {
+        return `https://${raw}`;
+    }
+
+    return "#";
 };
 
 export default function DailyReportPage() {
