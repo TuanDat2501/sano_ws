@@ -57,7 +57,23 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
         
         return { text: badgeText, color: badgeColor };
     };
+    const cleanAndExtractUrl = (rawLink: string | null) => {
+        if (!rawLink || typeof rawLink !== 'string') return null;
+        
+        // Nếu chuỗi chứa định dạng kiểu "[Tên]: https://...", dùng Regex tìm đoạn bắt đầu bằng http/https
+        const urlMatch = rawLink.match(/(https?:\/\/[^\s]+)/g);
+        if (urlMatch && urlMatch.length > 0) {
+            // Lấy URL đầu tiên tìm thấy và loại bỏ các ký tự thừa ở cuối nếu có
+            return urlMatch[0].replace(/[\])},;.]+$/, '');
+        }
 
+        // Nếu bản thân nó đã là link chuẩn
+        if (rawLink.startsWith('http://') || rawLink.startsWith('https://')) {
+            return rawLink.trim();
+        }
+
+        return null;
+    };
     // 🚀 HÀM LẤY ĐÚNG LINK URL TƯƠNG ƯNG VỚI KHÂU CÔNG VIỆC CỦA LOG ĐÓ
     const getLogTaskUrl = (log: any) => {
         const task = log.task;
@@ -66,22 +82,20 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
         const category = log.jobCategory || "";
         const details = String(log.details || "").toLowerCase();
 
-        // Ưu tiên check theo jobCategory hoặc nội dung chi tiết log
+        let rawLink = null;
         if (category === "CONTENT" || details.includes("kịch bản")) {
-            return task.scriptLink || task.storyboardLink || task.videoLink;
-        }
-        if (category === "EDIT" || details.includes("dựng") || details.includes("audio") || details.includes("render")) {
-            return task.videoLink || task.roughProjectLink || task.audioLink;
-        }
-        if (category === "ANIMATION" || details.includes("chuyển động")) {
-            return task.animationLink || task.videoLink;
-        }
-        if (category === "PUBLISH" || details.includes("đăng") || details.includes("thumbnail")) {
-            return task.publishLink || task.thumbnailLink;
+            rawLink = task.scriptLink || task.storyboardLink || task.videoLink;
+        } else if (category === "EDIT" || details.includes("dựng") || details.includes("audio") || details.includes("render")) {
+            rawLink = task.videoLink || task.roughProjectLink || task.audioLink;
+        } else if (category === "ANIMATION" || details.includes("chuyển động")) {
+            rawLink = task.animationLink || task.videoLink;
+        } else if (category === "PUBLISH" || details.includes("đăng") || details.includes("thumbnail")) {
+            rawLink = task.publishLink || task.thumbnailLink;
+        } else {
+            rawLink = task.publishLink || task.videoLink || task.scriptLink || task.thumbnailLink || task.audioLink;
         }
 
-        // Fallback mặc định: trả về link bất kỳ có sẵn trên task theo thứ tự ưu tiên
-        return task.publishLink || task.videoLink || task.scriptLink || task.thumbnailLink || task.audioLink || null;
+        return cleanAndExtractUrl(rawLink);
     };
 
     return (

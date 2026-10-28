@@ -224,6 +224,17 @@ export default function KpiDashboard() {
     const handleExportExcelThang = async () => {
         setIsExporting(true);
         try {
+            // 🚀 1. HÀM CHUẨN HÓA ĐỂ ĐẢM BẢO TÍNH ĐÚNG ACTUAL KHỚP 100% VỚI WEB
+            const normalizeJob = (role: string) => {
+                if (!role) return 'CONTENT';
+                const r = String(role).toUpperCase();
+                if (r.includes('EDIT')) return 'EDIT';
+                if (r.includes('ANIMAT') || r.includes('CHUYỂN') || r.includes('CHUYEN')) return 'ANIMATION';
+                if (r.includes('CONTENT')) return 'CONTENT';
+                if (r.includes('PUBLISH') || r.includes('QUẢN') || r.includes('QUAN')) return 'PUBLISH';
+                return 'GENERAL';
+            };
+
             const weekPromises = availableWeeks.map(w =>
                 fetch(`/api/kpi?teamId=${queryTeamId}&year=${selectedYear}&month=${selectedMonth}&week=${w}`).then(res => res.json())
             );
@@ -255,8 +266,7 @@ export default function KpiDashboard() {
                             const safeDuration = Number(td.duration) || 0;
                             const safeRework = Boolean(td.isRework);
                             const safeChannelName = td.channelName || "Khác";
-                            // 🚀 BỔ SUNG: Lấy thêm jobCategory để phân tách rõ các khâu trên cùng 1 kênh
-                            const safeJobCategory = td.jobCategory || td.job || "GENERAL";
+                            const safeJobCategory = normalizeJob(td.jobCategory || td.job || "GENERAL");
 
                             const tKey = `${safeChannelName}_${safeJobCategory}_${safeDuration}_${safeRework}`;
                             if (!uData.targets.has(tKey)) {
@@ -295,24 +305,26 @@ export default function KpiDashboard() {
             const workbook = new ExcelJS.Workbook();
             const ws = workbook.addWorksheet(`KPI_Thang_${selectedMonth}`);
 
+            // 🚀 2. TẠO CẤU TRÚC 5 CỘT CỐ ĐỊNH & (5 CỘT x SỐ TUẦN)
             const cols = [
-                { width: 5 },
-                { width: 15 },
-                { width: 25 },
-                { width: 15 },
-                { width: 22 },
+                { width: 5 },  // 1. STT
+                { width: 15 }, // 2. TEAM
+                { width: 25 }, // 3. HỌ TÊN
+                { width: 15 }, // 4. CÔNG VIỆC
+                { width: 22 }, // 5. KÊNH
             ];
             for (let i = 1; i <= availableWeeks.length; i++) {
-                cols.push({ width: 10 });
-                cols.push({ width: 10 });
-                cols.push({ width: 10 });
-                cols.push({ width: 12 });
+                cols.push({ width: 15 }); // 6. Khâu (Job)
+                cols.push({ width: 12 }); // 7. Phút
+                cols.push({ width: 12 }); // 8. Giao
+                cols.push({ width: 12 }); // 9. Hoàn thành
+                cols.push({ width: 12 }); // 10. %
             }
             ws.columns = cols;
 
             const row1 = ws.addRow([]);
             row1.height = 40;
-            ws.mergeCells('A1:E1');
+            ws.mergeCells('A1:E1'); 
             const titleCell = ws.getCell('A1');
             titleCell.value = `THÁNG ${selectedMonth}`;
             titleCell.font = { name: 'Times New Roman', size: 18, bold: true, color: { argb: 'FFFF0000' } };
@@ -321,8 +333,9 @@ export default function KpiDashboard() {
 
             for (let i = 0; i < availableWeeks.length; i++) {
                 const w = availableWeeks[i];
-                const startCol = 5 + (i * 4) + 1;
-                const endCol = startCol + 3;
+                // Tính tọa độ merge cho từng tuần (5 cột / 1 tuần)
+                const startCol = 5 + (i * 5) + 1;
+                const endCol = startCol + 4;
 
                 ws.mergeCells(1, startCol, 1, endCol);
                 const weekCell = ws.getCell(1, startCol);
@@ -339,7 +352,8 @@ export default function KpiDashboard() {
 
             const headers = ['STT', 'TEAM', 'HỌ TÊN NHÂN SỰ', 'CÔNG VIỆC', 'KÊNH PHỤ TRÁCH'];
             for (let i = 0; i < availableWeeks.length; i++) {
-                headers.push('Thời lượng video (phút)', 'KPI được giao/Tuần', 'KPI hoàn thành/Tuần', 'Mức độ hoàn thành');
+                // Rải Header 5 cột con cho từng tuần
+                headers.push('Khâu (Job)', 'Thời lượng video (phút)', 'KPI được giao/Tuần', 'KPI hoàn thành/Tuần', 'Mức độ hoàn thành');
             }
             const row2 = ws.addRow(headers);
             row2.height = 45;
@@ -350,7 +364,7 @@ export default function KpiDashboard() {
                 cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
             });
 
-            for (let i = 1; i <= 5 + (availableWeeks.length * 4); i++) {
+            for (let i = 1; i <= 5 + (availableWeeks.length * 5); i++) {
                 ws.getCell(1, i).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
             }
 
@@ -376,44 +390,57 @@ export default function KpiDashboard() {
                     if (roleStr === "PUBLISHER") roleStr = "QLK";
                     rowData.push(roleStr);
 
-                    // Hiển thị tên kênh kèm theo tên khâu cho rõ ràng nếu muốn (hoặc giữ nguyên tên kênh)
-                    const jobLabel = tg.jobCategory === 'PUBLISH' ? ' (Publish)' : tg.jobCategory === 'EDITOR' ? ' (Edit)' : '';
-                    rowData.push(tg.channelName + jobLabel + (tg.isRework ? " (Sửa)" : ""));
+                    rowData.push(tg.channelName || "Chung");
 
+                    // 🚀 3. RẢI DỮ LIỆU ĐÃ MAP CHUẨN XÁC VÀO TỪNG TUẦN
                     for (let i = 0; i < availableWeeks.length; i++) {
                         const w = availableWeeks[i];
                         const weekKpi = u.weeks[w];
 
-                        let tMins: string | number = tg.duration || 0;
+                        let jobLabel = "-";
+                        let tMins: string | number = 0;
                         let giao: number | string = 0;
                         let hoanThanh: number | string = 0;
-                        let percentStr = tIdx === 0 ? "0%" : "";
+                        let percentStr = "";
 
                         if (weekKpi) {
                             if (tIdx === 0) {
                                 percentStr = `${weekKpi.percent || 0}%`;
                             }
 
+                            let found = false;
                             if (weekKpi.targetDetails && weekKpi.targetDetails.length > 0) {
                                 const detail = weekKpi.targetDetails.find((d: any) =>
                                     (d.channelName || "Khác") === tg.channelName &&
-                                    (d.jobCategory || d.job || "GENERAL") === tg.jobCategory &&
+                                    normalizeJob(d.jobCategory || d.job || "GENERAL") === tg.jobCategory &&
                                     Number(d.duration) === Number(tg.duration) &&
                                     Boolean(d.isRework) === Boolean(tg.isRework)
                                 );
                                 if (detail) {
                                     tMins = detail.duration || 0;
                                     giao = detail.targetCount || 0;
-                                    hoanThanh = detail.actualCount || 0;
+                                    hoanThanh = detail.actualCount || 0; // Đã đảm bảo có số vì quét chung 1 hàm normalize
+                                    found = true;
                                 }
                             } else if (tg.channelName === 'Chung' || tg.channelName === '') {
                                 tMins = 0;
                                 giao = weekKpi.targetValue || 0;
                                 hoanThanh = weekKpi.actualValue || 0;
+                                found = true;
+                            }
+
+                            if (found) {
+                                if (tg.jobCategory === 'PUBLISH') jobLabel = 'Publish';
+                                else if (tg.jobCategory === 'EDIT') jobLabel = 'Editor';
+                                else if (tg.jobCategory === 'CONTENT') jobLabel = 'Content';
+                                else if (tg.jobCategory === 'ANIMATION') jobLabel = 'Chuyển động';
+                                else jobLabel = tg.jobCategory === 'GENERAL' ? 'Chung' : tg.jobCategory;
+
+                                if (tg.isRework) jobLabel += " (Sửa)";
                             }
                         }
 
-                        rowData.push(tMins, giao, hoanThanh, percentStr);
+                        rowData.push(jobLabel, tMins, giao, hoanThanh, percentStr);
                     }
 
                     const r = ws.addRow(rowData);
@@ -436,7 +463,7 @@ export default function KpiDashboard() {
                     ws.mergeCells(startRow, 4, startRow + numRows - 1, 4);
 
                     for (let i = 0; i < availableWeeks.length; i++) {
-                        const pCol = 5 + (i * 4) + 4;
+                        const pCol = 5 + (i * 5) + 5; 
                         ws.mergeCells(startRow, pCol, startRow + numRows - 1, pCol);
                     }
                 }

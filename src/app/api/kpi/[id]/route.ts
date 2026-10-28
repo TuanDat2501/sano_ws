@@ -67,7 +67,6 @@ export async function GET(req: Request, context: any) {
             prisma.taskLog.findMany({
                 where: {
                     userId: user.id,
-                    // 🚀 Dùng chuẩn thời gian, KHÔNG dùng setHours
                     createdAt: { gte: start, lte: end }
                 },
                 select: {
@@ -81,6 +80,16 @@ export async function GET(req: Request, context: any) {
                     task: {
                         select: {
                             id: true, title: true, status: true, duration: true, isRework: true, channelId: true,
+                            // 🚀 BỔ SUNG CÁC TRƯỜNG URL ĐỂ FRONTEND BÓC TÁCH LINK HIỂN THỊ
+                            scriptLink: true,
+                            englishScriptLink: true,
+                            storyboardLink: true,
+                            audioLink: true,
+                            thumbnailLink: true,
+                            videoLink: true,
+                            publishLink: true,
+                            roughProjectLink: true,
+                            animationLink: true,
                             channel: { select: { id: true, name: true } }
                         }
                     }
@@ -148,7 +157,6 @@ export async function GET(req: Request, context: any) {
             const jobCategory = uniqueKey.split('_').pop() || 'CONTENT'; 
             const isReworkBucket = (jobCategory === 'PUBLISH') ? false : task.isRework;
 
-            // 🚀 Thêm jobCategory vào khóa gom nhóm
             const key = `${task.channel?.id || 'no_channel'}_${jobCategory}_${isReworkBucket ? 'rework' : 'new'}`;
             bucketTaskCount[key] = (bucketTaskCount[key] || 0) + 1; 
         });
@@ -202,14 +210,12 @@ export async function GET(req: Request, context: any) {
                 return { tasksLeft, assignedMinsTotal };
             };
 
-            // Phân bổ Kênh Cụ thể
             Object.keys(specificTargets).forEach(key => {
                 const res = distributeToTargets(specificTargets[key], bucketTaskCount[key] || 0);
                 cappedActualMinutesForPercent += res.assignedMinsTotal;
                 bucketTaskCount[key] = 0;
             });
 
-            // Phân bổ Kênh Bất kỳ
             Object.keys(anyTargets).forEach(reworkKey => {
                 let remainingTasks = 0;
                 Object.keys(bucketTaskCount).forEach(bKey => {

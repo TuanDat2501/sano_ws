@@ -1,101 +1,129 @@
 import { Handle, Position } from "reactflow";
-import { Tv } from "lucide-react"; 
 
-// 🚀 ĐÃ SỬA: Bộ từ điển dịch vai trò sang Tiếng Việt
 const translateRole = (role: string) => {
     if (!role) return "";
     const r = String(role).toUpperCase();
     switch (r) {
-        case 'LEADER': return 'LEADER';
-        // case 'CHANNEL_MANAGER': return 'Quản Lý Kênh';
-        case 'PUBLISHER': return 'Quản Lý Kênh';
-        case 'CONTENT': return 'CONTENT';
-        case 'EDITOR': return 'EDITOR';
+        case 'LEADER': return 'Leader';
+        case 'PUBLISH':
+        case 'PUBLISHER':
+        case 'QUAN_LY':
+        case 'QUẢN LÝ':
+        case 'CHANNEL_MANAGER': return 'Quản lý kênh';
+        case 'CONTENT': return 'Content';
+        case 'EDIT':
+        case 'EDITOR': return 'Editor';
         case 'ANIMATOR':
         case 'ANIMATION': return 'Chuyển Động';
-        // case 'VOICE': return 'Thu Âm';
-        // case 'SEO': return 'SEO';
+        case 'KÊNH': return ''; 
         default: return role;
     }
 };
 
+const getBgColor = (role: string) => {
+    const r = String(role).toUpperCase();
+    if (r === 'KÊNH') return 'bg-[#7ae2e2]'; // Xanh ngọc (Cyan)
+    if (r.includes('PUBLISH') || r.includes('MANAGER') || r.includes('QUẢN LÝ') || r.includes('QUAN_LY')) return 'bg-[#fae14f]'; // Vàng
+    if (r.includes('EDIT')) return 'bg-[#eed7f8]'; // Tím nhạt
+    if (r.includes('CONTENT')) return 'bg-[#d6f2d6]'; // Xanh lá nhạt
+    if (r.includes('ANIMAT')) return 'bg-[#ffe4b5]'; // Cam đào
+    if (r === 'LEADER') return 'bg-[#facc15]'; 
+    if (r === 'SƠ ĐỒ TỔ CHỨC') return 'bg-[#fca5a5]';
+    return 'bg-slate-100';
+};
+
 export default function CustomNode({ data }: { data: any }) {
-    const actual = data.actual ?? 0;
-    const target = data.target ?? 0;
-    const surplusDetails = data.surplusDetails || []; 
-    
-    const percent = target > 0 ? Math.round((actual / target) * 100) : 0;
-    const barWidth = Math.min(percent, 100); 
-    const progressColor = percent >= 100 ? 'bg-emerald-500' : percent >= 50 ? 'bg-amber-400' : 'bg-red-500';
-
-    const initials = data.label ? data.label.charAt(0).toUpperCase() : "?";
-    const showAvatar = data.role !== "Điều hành" && data.role !== "Phòng Ban";
-
     const targetPos = data.targetPosition === 'left' ? Position.Left : Position.Top;
+    const bgColor = getBgColor(data.role);
+
+    // ==========================================
+    // 1. NODE NHÓM (Gộp nhiều nhân sự cùng Khâu)
+    // ==========================================
+    if (data.isGroup) {
+        const roleName = translateRole(data.role);
+        return (
+            <div className={`relative px-4 py-3 rounded-xl border border-slate-800 shadow-sm w-[220px] md:w-[240px] ${bgColor} font-['Times_New_Roman',_serif] font-bold text-center`}>
+                <Handle type="target" position={targetPos} className="!w-0 !h-0 !border-0 !bg-transparent opacity-0" />
+                
+                <div className="text-[15px] md:text-[16px] text-black leading-tight mb-2">
+                    {roleName}
+                </div>
+
+                {data.users.map((u: any, idx: number) => {
+                    let kpiStrings: string[] = [];
+                    if (u.targetDetails && u.targetDetails.length > 0) {
+                        u.targetDetails.forEach((td: any) => {
+                            if (td.targetCount > 0) {
+                                kpiStrings.push(`KPI: ${td.targetCount} bài ${td.duration || 0} phút${td.isRework ? ' (sửa)' : ''}`);
+                            }
+                        });
+                    }
+                    
+                    return (
+                        <div key={idx} className="mb-2 last:mb-0">
+                            <div className="text-[14px] md:text-[15px] text-black leading-tight">
+                                {u.fullName}
+                            </div>
+                            {kpiStrings.map((str, i) => (
+                                <div key={i} className="text-[13px] md:text-[14px] text-red-600 leading-tight">
+                                    {str}
+                                </div>
+                            ))}
+                            {u.surplusDetails.map((s: any, i: number) => (
+                                <div key={i} className="text-[13px] md:text-[14px] text-red-600 leading-tight">
+                                    Dư: {s.count} bài {s.duration ? s.duration + ' phút' : ''}
+                                </div>
+                            ))}
+                        </div>
+                    );
+                })}
+
+                <Handle type="source" position={Position.Bottom} className="!w-0 !h-0 !border-0 !bg-transparent opacity-0" />
+            </div>
+        );
+    }
+
+    // ==========================================
+    // 2. NODE ĐƠN LẺ (Kênh, Giám Đốc, Quản lý lẻ)
+    // ==========================================
+    const roleName = translateRole(data.role);
+    let kpiStrings: string[] = [];
+    if (data.targetDetails && data.targetDetails.length > 0) {
+         data.targetDetails.forEach((td: any) => {
+             if (td.targetCount > 0) {
+                 kpiStrings.push(`KPI: ${td.targetCount} bài ${td.duration || 0} phút${td.isRework ? ' (sửa)' : ''}`);
+             }
+         });
+    }
+    const surplusDetails = data.surplusDetails || [];
 
     return (
-        <div className={`relative p-3 md:p-3.5 rounded-[18px] border bg-white shadow-sm hover:shadow-xl transition-all w-[240px] md:w-[260px] ${data.borderColor}`}>
-            <Handle type="target" position={targetPos} className="!w-2 !h-2 !bg-slate-300 !border-white" />
+        <div className={`relative px-4 py-3 rounded-xl border border-slate-800 shadow-sm w-[220px] md:w-[240px] ${bgColor} font-['Times_New_Roman',_serif] font-bold text-center`}>
+            <Handle type="target" position={targetPos} className="!w-0 !h-0 !border-0 !bg-transparent opacity-0" />
             
-            <div className={`flex items-center ${showAvatar ? 'gap-3' : 'justify-center py-2'} mb-3`}>
-                {showAvatar && (
-                    data.avatar ? (
-                        <img src={data.avatar} alt="avatar" className="w-10 h-10 rounded-full object-cover border-2 border-slate-100 shadow-sm shrink-0" />
-                    ) : (
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black text-white shrink-0 shadow-sm text-sm ${data.role === 'EDITOR' ? 'bg-purple-500' : data.role === 'LEADER' ? 'bg-blue-500' : data.role === 'Kênh' ? 'bg-teal-500' : data.role === 'Team' ? 'bg-amber-500' : 'bg-slate-600'}`}>
-                            {data.role === 'Kênh' ? <Tv size={16} /> : initials}
-                        </div>
-                    )
-                )}
-
-                <div className={`${showAvatar ? 'text-left flex-1 min-w-0' : 'text-center'}`}>
-                    {/* 🚀 ĐÃ SỬA: Hiển thị tên Vai trò bằng Tiếng Việt */}
-                    <p className={`text-[9px] uppercase font-black tracking-widest leading-none mb-1 ${data.textColor}`}>
-                        {translateRole(data.role)}
-                    </p>
-                    <p className="text-[13px] md:text-sm font-bold text-slate-900 truncate leading-tight">
-                        {data.label}
-                    </p>
-                </div>
-            </div>
-            
-            {data.target !== undefined && data.role !== 'Kênh' && (
-                <div className="flex flex-col gap-2">
-                    
-                    <div className="bg-slate-50 p-2 md:p-2.5 rounded-xl border border-slate-100">
-                        <div className="flex justify-between items-center text-[10px] font-black mb-1.5">
-                            <span className="text-slate-400 uppercase tracking-widest">Tiến độ</span>
-                            <span className={percent >= 100 ? 'text-emerald-600' : 'text-slate-700'}>
-                                {actual} / {target} <span className="opacity-50">({percent}%)</span>
-                            </span>
-                        </div>
-                        
-                        <div className="h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
-                            <div 
-                                className={`h-full rounded-full transition-all duration-700 ease-out ${progressColor}`} 
-                                style={{ width: `${barWidth}%` }}
-                            ></div>
-                        </div>
-                    </div>
-
-                    {surplusDetails.length > 0 && (
-                        <div className="flex justify-center mt-1">
-                            <div className="flex text-[11px] md:text-xs font-black text-rose-500 leading-tight">
-                                <span className="mr-1.5">Dư:</span>
-                                <div className="flex flex-col">
-                                    {surplusDetails.map((s: any, idx: number) => (
-                                        <span key={idx}>
-                                            {s.count} bài {s.duration ? s.duration + ' phút' : '? phút'}
-                                        </span>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-                    )}
+            {roleName && data.role !== 'Kênh' && (
+                <div className="text-[15px] md:text-[16px] text-black leading-tight mb-1">
+                    {roleName}
                 </div>
             )}
+            
+            <div className="text-[15px] md:text-[16px] text-black leading-tight mt-0.5">
+                {data.label}
+            </div>
 
-            <Handle type="source" position={Position.Bottom} className="!w-2 !h-2 !bg-slate-300 !border-white" />
+            {kpiStrings.map((str, idx) => (
+                <div key={idx} className="text-[13px] md:text-[14px] text-red-600 leading-tight mt-0.5">
+                    {str}
+                </div>
+            ))}
+
+            {surplusDetails.map((s: any, idx: number) => (
+                <div key={idx} className="text-[13px] md:text-[14px] text-red-600 leading-tight mt-0.5">
+                    Dư: {s.count} bài {s.duration ? s.duration + ' phút' : ''}
+                </div>
+            ))}
+
+            <Handle type="source" position={Position.Bottom} className="!w-0 !h-0 !border-0 !bg-transparent opacity-0" />
         </div>
     );
 }

@@ -226,6 +226,8 @@ model User {
   // 🚀 QUAN HỆ ĐÁNH GIÁ NHÂN SỰ
   monthlyEvaluations MonthlyEvaluation[] @relation("UserEvaluations")
   evaluationsGiven   MonthlyEvaluation[] @relation("EvaluatorLogs")
+  savedOrgCharts WeeklyOrgChart[] @relation("UserSavedOrgCharts")
+  weeklySurpluses WeeklySurplus[] @relation("UserSurpluses")
 }
 
 model Permission {
@@ -643,4 +645,39 @@ model MonthlyEvaluation {
   updatedAt DateTime @updatedAt
 
   @@unique([userId, year, month], name: "user_time_unique")
+}
+// Thêm model mới này vào cuối file schema.prisma
+model WeeklyOrgChart {
+  id         String   @id @default(uuid())
+  year       Int
+  month      Int
+  weekNumber Int
+  chartData  Json     // Lưu trữ toàn bộ dữ liệu sơ đồ (nodes, edges, user data)
+  
+  savedById  String?
+  savedBy    User?    @relation("UserSavedOrgCharts", fields: [savedById], references: [id])
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Đảm bảo mỗi tuần chỉ có 1 bản ghi sơ đồ (Upsert)
+  @@unique([year, month, weekNumber], name: "orgchart_time_unique")
+}
+
+model WeeklySurplus {
+  id         String   @id @default(uuid())
+  year       Int
+  month      Int
+  weekNumber Int
+  
+  userId     String
+  user       User     @relation("UserSurpluses", fields: [userId], references: [id], onDelete: Cascade)
+
+  // Lưu dưới dạng mảng JSON: [{ channelId, channelName, jobCategory, duration, count }]
+  surplusData Json    
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([userId, year, month, weekNumber], name: "user_surplus_time_unique")
 }

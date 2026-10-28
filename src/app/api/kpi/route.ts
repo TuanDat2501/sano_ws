@@ -69,9 +69,6 @@ export async function GET(req: Request) {
 
         const userIds = users.map(u => u.id);
 
-        // ------------------------------------------------------------
-        // HÀM XỬ LÝ LÕI: TÍNH KPI CHO 1 TUẦN CỤ THỂ
-        // ------------------------------------------------------------
         const calculateKpiForWeek = async (targetWeek: number) => {
             const { start, end } = getWeekDateRangeByMonth(year, month, targetWeek);
 
@@ -89,15 +86,7 @@ export async function GET(req: Request) {
                         task: { 
                             select: { 
                                 id: true, title: true, status: true, duration: true, isRework: true, channelId: true, 
-                                // 🚀 BỔ SUNG CÁC TRƯỜNG URL CẦN LẤY TỪ TASK
-                                scriptLink: true,
-                                englishScriptLink: true,
-                                storyboardLink: true,
-                                audioLink: true,
-                                thumbnailLink: true,
-                                videoLink: true,
-                                publishLink: true,
-                                roughProjectLink: true,
+                                scriptLink: true, englishScriptLink: true, storyboardLink: true, audioLink: true, thumbnailLink: true, videoLink: true, publishLink: true, roughProjectLink: true,
                                 channel: { select: { id: true, name: true } } 
                             } 
                         } 
@@ -247,7 +236,6 @@ export async function GET(req: Request) {
                 let allLogs: any[] = [];
                 let isAnyWeekLocked = false;
                 
-                // 🚀 TẠO MẢNG LƯU % KPI CỦA TỪNG TUẦN ĐỂ RENDER LÊN GIAO DIỆN
                 let weeklyPercents: Record<number, number> = {};
                 
                 allWeeksData.forEach((weekData, index) => {
@@ -262,7 +250,6 @@ export async function GET(req: Request) {
                         allLogs = [...allLogs, ...userWeekKpi.logs];
                         if (userWeekKpi.isLocked) isAnyWeekLocked = true;
                         
-                        // 🚀 GHI NHẬN % CỦA TUẦN NÀY
                         weeklyPercents[weekNum] = userWeekKpi.percent;
                     } else {
                         weeklyPercents[weekNum] = 0;
@@ -291,7 +278,7 @@ export async function GET(req: Request) {
                     isLocked: isAnyWeekLocked,
                     oldTargetValue: null,
                     avatarUrl: user.avatarUrl || null,
-                    weeklyPercents // 🚀 TRẢ MẢNG % TỪNG TUẦN VỀ FRONTEND
+                    weeklyPercents
                 };
             });
 
@@ -352,6 +339,7 @@ export async function POST(req: Request) {
 
         const targetDetailsJson = targetDetails ? targetDetails : [];
         let kpiRecord;
+        let finalNote = note || "";
 
         if (existingKPI) {
             let oldTargetToSave = existingKPI.oldTargetValue;
@@ -359,13 +347,61 @@ export async function POST(req: Request) {
                 oldTargetToSave = existingKPI.targetValue;
             }
 
+            // 🚀 BẮT ĐẦU LOGIC TRACKING TỰ ĐỘNG SINH GHI CHÚ
+            try {
+                const oldDetails = (typeof existingKPI.targetDetails === 'string') 
+                    ? JSON.parse(existingKPI.targetDetails) 
+                    : (existingKPI.targetDetails || []);
+                
+                const newDetails = targetDetailsJson;
+
+                const oldMap = new Map();
+                oldDetails.forEach((d: any) => {
+                    const key = `${d.channelName || "Kênh chung"} (${d.jobCategory || "GENERAL"})`;
+                    oldMap.set(key, (oldMap.get(key) || 0) + Number(d.targetCount));
+                });
+
+                const newMap = new Map();
+                newDetails.forEach((d: any) => {
+                    const key = `${d.channelName || "Kênh chung"} (${d.jobCategory || "GENERAL"})`;
+                    newMap.set(key, (newMap.get(key) || 0) + Number(d.targetCount));
+                });
+
+                let changes: string[] = [];
+                // Bóc tách sự thay đổi hoặc thêm mới
+                newMap.forEach((newCount, key) => {
+                    const oldCount = oldMap.get(key) || 0;
+                    if (newCount !== oldCount) {
+                        changes.push(`• ${key}: ${oldCount} ➔ ${newCount} bài`);
+                    }
+                });
+                // Bóc tách dữ liệu bị xóa đi (0 bài)
+                oldMap.forEach((oldCount, key) => {
+                    if (!newMap.has(key)) {
+                        changes.push(`• ${key}: ${oldCount} ➔ 0 bài`);
+                    }
+                });
+
+                // Nếu có sự thay đổi, tự động tạo chuỗi Log và nối vào Ghi chú
+                if (changes.length > 0) {
+                    const timeStr = new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
+                    const editorName = currentUser?.fullName || "Hệ thống";
+                    const autoLog = `[${timeStr} - ${editorName} sửa]:\n${changes.join('\n')}`;
+                    
+                    finalNote = finalNote ? `${finalNote.trim()}\n\n${autoLog}` : autoLog;
+                }
+            } catch (e) {
+                console.error("Lỗi track thay đổi KPI", e);
+            }
+            // 🚀 KẾT THÚC LOGIC TRACKING
+
             kpiRecord = await prisma.weeklyKPI.update({
                 where: { id: existingKPI.id },
                 data: { 
                     targetValue: pTarget,
                     oldTargetValue: oldTargetToSave, 
                     targetDetails: targetDetailsJson,
-                    note: note || null 
+                    note: finalNote 
                 }
             });
         } else {

@@ -2,35 +2,26 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-
-// 🚀 IMPORT HÀM GET TỪ API KPI CỦA BẠN (Sửa lại đường dẫn này cho đúng với dự án)
 import { GET as getKpiApi } from "@/app/api/kpi/route"; 
 
 function getCurrentWeekInfo() {
     const d = new Date();
     d.setHours(0,0,0,0);
-    const dayOfWeek = d.getDay();
-    const diffToThursday = dayOfWeek === 0 ? -3 : 4 - dayOfWeek;
+    const diffToThursday = d.getDay() === 0 ? -3 : 4 - d.getDay();
     const thursday = new Date(d);
     thursday.setDate(d.getDate() + diffToThursday);
-    
     const targetYear = thursday.getFullYear();
     const targetMonth = thursday.getMonth() + 1;
-    
     const firstDayOfMonth = new Date(targetYear, targetMonth - 1, 1);
-    const firstDayOfWeek = firstDayOfMonth.getDay();
-    const diffToMonday = firstDayOfWeek === 0 ? -6 : 1 - firstDayOfWeek;
+    const diffToMonday = firstDayOfMonth.getDay() === 0 ? -6 : 1 - firstDayOfMonth.getDay();
     const startOfFirstWeek = new Date(targetYear, targetMonth - 1, 1 + diffToMonday);
-    
     const thursdayOfFirstWeek = new Date(startOfFirstWeek);
     thursdayOfFirstWeek.setDate(startOfFirstWeek.getDate() + 3);
     if (thursdayOfFirstWeek.getMonth() !== targetMonth - 1) {
         startOfFirstWeek.setDate(startOfFirstWeek.getDate() + 7);
     }
-    
     const diffTime = d.getTime() - startOfFirstWeek.getTime();
     const weekNumber = Math.floor(diffTime / (7 * 24 * 60 * 60 * 1000)) + 1;
-    
     return { year: targetYear, month: targetMonth, week: weekNumber > 0 ? weekNumber : 1 };
 }
 
@@ -42,43 +33,38 @@ export async function GET(req: Request) {
         if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
         const currentInfo = getCurrentWeekInfo();
-        const year = currentInfo.year;
-        const month = currentInfo.month;
-        const currentWeekNumber = currentInfo.week;
+        const { searchParams } = new URL(req.url);
+        
+        const year = searchParams.get("year") ? parseInt(searchParams.get("year") as string) : currentInfo.year;
+        const month = searchParams.get("month") ? parseInt(searchParams.get("month") as string) : currentInfo.month;
+        const currentWeekNumber = searchParams.get("week") ? parseInt(searchParams.get("week") as string) : currentInfo.week;
 
-        // =========================================================
-        // 1. GỌI API KPI ĐỂ LẤY SỐ LIỆU CHUẨN MỚI NHẤT
-        // =========================================================
+        // 1. GỌI API LẤY KPI CHUẨN (GIỮ NGUYÊN)
         const kpiUrl = new URL(req.url);
         kpiUrl.searchParams.set("teamId", "ALL");
         kpiUrl.searchParams.set("year", year.toString());
         kpiUrl.searchParams.set("month", month.toString());
         kpiUrl.searchParams.set("week", currentWeekNumber.toString());
 
-        const kpiReq = new Request(kpiUrl.toString(), {
-            method: "GET",
-            headers: req.headers,
-        });
-
+        const kpiReq = new Request(kpiUrl.toString(), { method: "GET", headers: req.headers });
         let kpiList: any[] = [];
         try {
             const kpiRes = await getKpiApi(kpiReq);
             if (kpiRes.ok) {
                 const kpiData = await kpiRes.json();
-                kpiList = kpiData.kpiList || [];
+                kpiList = kpiData.kpiList || []; 
             }
         } catch (error) {
             console.error("Lỗi khi gọi nội bộ API KPI:", error);
         }
 
-        // =========================================================
-        // 2. LẤY DỮ LIỆU USER & HÀNG TỒN (Chỉ dành riêng cho Chart)
-        // =========================================================
+        // 2. LẤY USER & CHANNEL 
         const users = await prisma.user.findMany({
             where: { isActive: true },
             select: {
                 id: true, fullName: true, username: true, role: true, avatarUrl: true, teamId: true,
-                team: { select: { name: true } }, isActive: true,
+                team: { select: { name: true } }, 
+                isActive: true,
                 channelMemberships: {
                     where: { channel: { status: { not: "DUNG_HOAT_DONG" } } },
                     select: { channelId: true, roleOnChannel: true }
@@ -86,90 +72,62 @@ export async function GET(req: Request) {
             }
         });
 
-        const surplusTasks = await prisma.task.findMany({
-            where: {
-                isClosed: false,
-                OR: [{ publishLink: null }, { publishLink: "" }],
-                status: { not: "BACKLOG" }
-            },
-            select: {
-                id: true, title: true, status: true, // 🚀 Bổ sung lấy Status
-                channelId: true,
-                contentId: true, editorId: true, animatorId: true, duration: true,
-                coContentUsers: { select: { id: true } },
-                coEditorUsers: { select: { id: true } },
-                coAnimatorUsers: { select: { id: true } },
-                // 🚀 Bổ sung đầy đủ các trường Link để soi chiếu
-                scriptLink: true, storyboardLink: true, englishScriptLink: true, audioLink: true, 
-                animationLink: true, roughProjectLink: true, videoLink: true, publishLink: true, 
-                channel: { select: { name: true, avatarUrl: true } } 
-            }
+        const allChannels = await prisma.channel.findMany({
+            select: { id: true, name: true, avatarUrl: true }
+        });
+
+        // =========================================================
+        // 🚀 3. LOGIC MỚI: ĐỌC DỮ LIỆU BÀI DƯ THỦ CÔNG TỪ BẢNG MỚI
+        // =========================================================
+        const weeklySurpluses = await prisma.weeklySurplus.findMany({
+            where: { year: year, month: month, weekNumber: currentWeekNumber }
         });
 
         const userSurplusDetails: Record<string, Record<number, number>> = {};
-        const userSurplusList: Record<string, any[]> = {}; 
-        
-        surplusTasks.forEach(t => {
-            const hasPublish = t.publishLink && t.publishLink.trim() !== "";
-            if (hasPublish) return; // Nếu đã đăng -> Loại luôn, không tính là hàng tồn
+        const userSurplusList: Record<string, any[]> = {};
+        const userRawSurplusData: Record<string, any[]> = {}; // Để load ngược lại Form khi sửa
 
-            // Bóc tách trạng thái các Link
-            const hasVideo = t.videoLink && t.videoLink.trim() !== "";
-            const hasRough = t.roughProjectLink && t.roughProjectLink.trim() !== "";
-            const hasAudio = t.audioLink && t.audioLink.trim() !== "";
-            const hasAnim = t.animationLink && t.animationLink.trim() !== "";
-            const hasScript = (t.scriptLink && t.scriptLink.trim() !== "") || 
-                              (t.storyboardLink && t.storyboardLink.trim() !== "") || 
-                              (t.englishScriptLink && t.englishScriptLink.trim() !== "");
-
-            // Bóc tách Status
-            const isDone = t.status === "DONE";
-            const isEditPhase = t.status === "EDIT_DOING" || t.status === "EDIT_REVIEW";
-            const isAnimPhase = t.status === "ANIMATION_DOING" || t.status === "ANIMATION_REVIEW";
-
-            const duration = t.duration || 0;
-            const involvedIds = new Set<string>();
+        weeklySurpluses.forEach(ws => {
+            const userId = ws.userId;
+            const sData: any[] = (ws.surplusData as any[]) || [];
             
-            // 🚀 LOGIC PHÂN TẦNG (WATERFALL): Khâu sau đè khâu trước
-            // 1. Nằm ở khâu EDIT: Trạng thái Done/Edit Hoặc đã nộp Audio/Rough/Video
-            if (isDone || isEditPhase || hasVideo || hasRough || hasAudio) {
-                if (t.editorId) involvedIds.add(t.editorId);
-                t.coEditorUsers.forEach((u: any) => involvedIds.add(u.id));
-            }
-            // 2. Nằm ở khâu ANIMATION: Trạng thái Anim Hoặc có link Anim
-            else if (isAnimPhase || hasAnim) {
-                if (t.animatorId) involvedIds.add(t.animatorId);
-                t.coAnimatorUsers.forEach((u: any) => involvedIds.add(u.id));
-            }
-            // 3. Nằm ở khâu CONTENT: Chỉ mới có Kịch bản / Bố cục
-            else if (hasScript) {
-                if (t.contentId) involvedIds.add(t.contentId);
-                t.coContentUsers.forEach((u: any) => involvedIds.add(u.id));
-            }
-            
-            // Bơm vào kết quả của nhân sự tương ứng
-            involvedIds.forEach(id => {
-                if (!userSurplusDetails[id]) userSurplusDetails[id] = {};
-                userSurplusDetails[id][duration] = (userSurplusDetails[id][duration] || 0) + 1;
+            userRawSurplusData[userId] = sData;
 
-                if (!userSurplusList[id]) userSurplusList[id] = [];
-                userSurplusList[id].push({
-                    id: t.id,
-                    title: t.title,
-                    duration: duration,
-                    channelId: t.channelId, 
-                    channelName: t.channel?.name || "Chưa phân kênh",
-                    channelAvatar: t.channel?.avatarUrl || null 
-                });
+            if (!userSurplusDetails[userId]) userSurplusDetails[userId] = {};
+            if (!userSurplusList[userId]) userSurplusList[userId] = [];
+
+            sData.forEach((item: any) => {
+                const duration = Number(item.duration) || 0;
+                const count = Number(item.count) || 0;
+                const jobCategory = item.jobCategory || "EDITOR";
+                const channelNameInput = (item.channelName || "").trim().toLowerCase();
+                
+                // Móc kênh tự động từ Text sang UI
+                const matchedChannel = allChannels.find(c => c.name.toLowerCase() === channelNameInput);
+                const channelId = matchedChannel ? matchedChannel.id : null;
+                const channelName = matchedChannel ? matchedChannel.name : (item.channelName || "Kênh chung");
+                const channelAvatar = matchedChannel ? matchedChannel.avatarUrl : null;
+
+                userSurplusDetails[userId][duration] = (userSurplusDetails[userId][duration] || 0) + count;
+
+                // Push số bài dư vào Mảng ảo để thuật toán Vẽ Sơ đồ của Frontend tự đếm
+                for (let i = 0; i < count; i++) {
+                    userSurplusList[userId].push({
+                        id: `surplus_${Math.random()}`,
+                        title: `Bài dư (${jobCategory})`,
+                        duration: duration,
+                        channelId: channelId, 
+                        channelName: channelName,
+                        channelAvatar: channelAvatar,
+                        jobCategory: jobCategory
+                    });
+                }
             });
         });
 
-        // =========================================================
-        // 3. MAP DATA ĐỂ TRẢ VỀ CHO SƠ ĐỒ
-        // =========================================================
+        // 4. MAP DATA TRẢ VỀ FRONTEND
         const formattedUsers = users.map(user => {
             const userKpi = kpiList.find(k => k.userId === user.id);
-
             const sData = userSurplusDetails[user.id] || {};
             const surplusDetails = Object.entries(sData)
                 .map(([dur, count]) => ({ duration: Number(dur), count: count as number }))
@@ -187,9 +145,11 @@ export async function GET(req: Request) {
                 channelMemberships: user.channelMemberships,
                 surplusDetails: surplusDetails, 
                 surplusTaskList: userSurplusList[user.id] || [], 
+                rawSurplusData: userRawSurplusData[user.id] || [], // Truyền Data thật sang Drawer
                 currentWeekStats: {
                     target: userKpi?.targetValue || 0,
-                    actual: userKpi?.actualValue || 0
+                    actual: userKpi?.actualValue || 0,
+                    targetDetails: userKpi?.targetDetails || []
                 }
             };
         });

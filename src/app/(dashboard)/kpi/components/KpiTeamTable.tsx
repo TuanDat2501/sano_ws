@@ -114,15 +114,20 @@ const TargetSettingModal = ({ isOpen, onClose, user, onSave }: any) => {
     const [details, setDetails] = useState<any[]>([]);
     const [channels, setChannels] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [note, setNote] = useState(user?.note || "");
+    const [note, setNote] = useState("");
 
-    useEffect(() => { setMounted(true); }, []);
-
+    // Khi bật Modal, tách Note thủ công khỏi Lịch sử hệ thống (nếu dữ liệu cũ dính vào nhau)
     useEffect(() => {
         if (isOpen && user) {
             setGeneralTarget(user.targetValue || 0);
             setMode(user.targetDetails?.length > 0 ? 'CHI_TIET' : 'CHUNG');
-            setNote(user.note || ""); 
+            
+            let manualNote = (user.note || "").trim();
+            const logRegex = /\[\d{2}:\d{2}\s\d{2}-\d{2}/;
+            if (logRegex.test(manualNote)) {
+                manualNote = manualNote.substring(0, manualNote.search(logRegex)).trim();
+            }
+            setNote(manualNote); 
             
             if (user.targetDetails?.length > 0) {
                 setDetails(user.targetDetails.map((d: any, idx: number) => ({ ...d, id: Date.now() + idx })));
@@ -137,6 +142,7 @@ const TargetSettingModal = ({ isOpen, onClose, user, onSave }: any) => {
         }
     }, [isOpen, user]);
 
+    useEffect(() => { setMounted(true); }, []);
     if (!isOpen || !mounted || !user) return null;
 
     const handleAddRow = () => {
@@ -317,14 +323,14 @@ const TargetSettingModal = ({ isOpen, onClose, user, onSave }: any) => {
                             )}
                         </div>
 
-                        <div className="bg-amber-50/50 border border-amber-100 rounded-2xl p-4 shadow-sm">
+                        <div className="bg-amber-50/50 border border-amber-100 rounded-2xl p-4 shadow-sm flex flex-col">
                             <label className="text-xs font-black text-amber-800 flex items-center gap-1.5 mb-2">
-                                <FileText size={14} className="text-amber-500" /> Lý do / Ghi chú sửa đổi
+                                <FileText size={14} className="text-amber-500" /> Lý do / Ghi chú (Chỉ người dùng nhập)
                             </label>
                             <textarea 
-                                rows={2}
-                                placeholder="Ví dụ: Giảm target từ 10 xuống 8 do bạn N.T.A xin nghỉ ốm 2 ngày..."
-                                className="w-full bg-white border border-amber-200 rounded-xl p-3 text-sm font-medium text-slate-700 outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10 resize-none transition-all"
+                                rows={3}
+                                placeholder="Ghi chú thêm (nếu cần)..."
+                                className="w-full bg-white border border-amber-200 rounded-xl p-3 text-sm font-medium text-slate-700 outline-none focus:border-amber-500 focus:ring-4 focus:ring-amber-500/10 resize-y min-h-[80px] transition-all custom-scrollbar"
                                 value={note}
                                 onChange={(e) => setNote(e.target.value)}
                             />
@@ -345,7 +351,6 @@ const TargetSettingModal = ({ isOpen, onClose, user, onSave }: any) => {
 
     return createPortal(modalContent, document.body);
 };
-
 
 export default function KpiTeamTable({
     kpiList,
@@ -371,7 +376,6 @@ export default function KpiTeamTable({
     const [isWeekLocked, setIsWeekLocked] = useState(false);
     const [isLocking, setIsLocking] = useState(false);
 
-    // 🚀 ĐÃ THÊM: Kiểm tra cờ xem Cả tháng
     const isWholeMonth = week === 0;
 
     useEffect(() => {
@@ -461,6 +465,27 @@ export default function KpiTeamTable({
     if (isLoading) return <div className="h-full flex items-center justify-center bg-slate-50/50"><Loader2 className="w-8 h-8 text-blue-500 animate-spin" /></div>;
     if (!kpiList || kpiList.length === 0) return <div className="h-full flex flex-col items-center justify-center bg-slate-50/50"><AlertCircle className="w-12 h-12 text-slate-300" /></div>;
 
+    // 🚀 HÀM TÁCH VÀ LỌC DỮ LIỆU CŨ THÀNH 2 PHẦN: NOTE VS LATEST LOG
+    const processLogs = (note: string, history: string) => {
+        let manualNote = (note || "").trim();
+        let historyStr = (history || "").trim();
+        const logRegex = /\[\d{2}:\d{2}\s\d{2}-\d{2}/;
+        
+        if (logRegex.test(manualNote)) {
+            const firstIndex = manualNote.search(logRegex);
+            if (!historyStr) historyStr = manualNote.substring(firstIndex);
+            manualNote = manualNote.substring(0, firstIndex).trim();
+        }
+
+        let latestLog = "";
+        if (historyStr) {
+            const blocks = historyStr.split(/(?=\[\d{2}:\d{2}\s\d{2}-\d{2})/);
+            latestLog = blocks.pop()?.trim() || "";
+        }
+
+        return { manualNote, latestLog };
+    };
+
     return (
         <>
             <div className="w-full h-full flex flex-col bg-white">
@@ -494,7 +519,6 @@ export default function KpiTeamTable({
                                 <th className="border border-slate-200 p-3 w-[100px] text-center">Team</th>
                                 <th className="border border-slate-200 p-3 w-[100px] text-center">Vai trò</th>
                                 
-                                {/* 🚀 XỬ LÝ ẨN/HIỆN CỘT THEO VIEW */}
                                 {isWholeMonth ? (
                                     <>
                                         <th className="border border-slate-200 p-3 w-[90px] text-center text-blue-700 bg-blue-50/50">Target Tháng</th>
@@ -511,7 +535,7 @@ export default function KpiTeamTable({
                                         <th className="border border-slate-200 p-3 w-[120px] text-center text-blue-700 bg-blue-50/50">Chỉ tiêu (Target)</th>
                                         <th className="border border-slate-200 p-3 w-[120px] text-center text-emerald-700 bg-emerald-50/50">Đã làm (Actual)</th>
                                         <th className="border border-slate-200 p-3 w-[100px] text-center text-purple-700 bg-purple-50/50">Tiến độ (%)</th>
-                                        <th className="border border-slate-200 p-3 w-[200px] text-center">Ghi chú sửa đổi</th>
+                                        <th className="border border-slate-200 p-3 w-[250px] text-center">Lịch sử & Ghi chú sửa đổi</th>
                                     </>
                                 )}
                                 
@@ -528,6 +552,9 @@ export default function KpiTeamTable({
 
                                 const isLockedStatus = user.isLocked;
                                 const isCellBlocked = isLockedStatus && !isAdminOrHR;
+                                
+                                // 🚀 ÁP DỤNG HÀM XỬ LÝ LỌC RÁC
+                                const { manualNote, latestLog } = processLogs(user.note, user.historyLog);
 
                                 return (
                                     <tr key={user.userId} className="transition-colors group odd:bg-white even:bg-slate-50/80 hover:bg-blue-50/40 cursor-pointer" onClick={() => onRowClick(user.userId)}>
@@ -541,7 +568,6 @@ export default function KpiTeamTable({
                                         <td className="border border-slate-200 p-3 text-center align-middle bg-inherit"><span className="text-[10px] font-black uppercase tracking-widest text-slate-500 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200 shadow-sm">{user.teamName}</span></td>
                                         <td className="border border-slate-200 p-3 text-center align-middle bg-inherit"><span className="text-[10px] font-bold text-slate-600 bg-white border border-slate-200 px-2 py-1 rounded shadow-sm">{user.role}</span></td>
 
-                                        {/* 🚀 XỬ LÝ ẨN/HIỆN BODY DATA THEO VIEW */}
                                         {isWholeMonth ? (
                                             <>
                                                 <td className="border border-slate-200 p-3 text-center align-middle bg-inherit">
@@ -603,14 +629,28 @@ export default function KpiTeamTable({
                                                 <td className="border border-slate-200 p-3 text-center align-middle bg-inherit"><span className={`inline-flex items-center justify-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-black border shadow-sm w-[70px] ${percentColor}`}><TrendingUp size={12} /> {user.percent}%</span></td>
                                                 
                                                 <td className="border border-slate-200 p-3 text-[11px] md:text-xs font-medium text-slate-500 align-middle bg-inherit">
-                                                    <div className="flex flex-col gap-1.5 text-center md:text-left items-center md:items-start">
+                                                    <div className="flex flex-col gap-1.5 text-center md:text-left items-center md:items-start w-full">
                                                         {user.oldTargetValue !== null && user.oldTargetValue !== user.targetValue && (
                                                             <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-200 w-fit inline-flex items-center gap-1 shadow-sm">
-                                                                Chỉ tiêu cũ: <span className="line-through opacity-70">{user.oldTargetValue}</span>
+                                                                Tổng Target Cũ: <span className="line-through opacity-70">{user.oldTargetValue}</span>
                                                             </span>
                                                         )}
-                                                        <div className="line-clamp-3 whitespace-pre-wrap leading-snug text-center md:text-left" title={user.note}>
-                                                            {user.note ? user.note : <span className="italic text-slate-300">Không có ghi chú</span>}
+                                                        <div className="w-full max-h-[100px] overflow-y-auto custom-scrollbar pr-2 whitespace-pre-wrap leading-snug text-left text-[11px] bg-amber-50/30 p-2 rounded-lg border border-amber-100/50">
+                                                            {manualNote && <div className="font-bold text-slate-700">{manualNote}</div>}
+                                                            
+                                                            {/* 🚀 CHỈ RENDER LOG CUỐI CÙNG (latestLog) */}
+                                                            {isLockedStatus && latestLog && (
+                                                                <div className={`text-slate-500 ${manualNote ? 'mt-2 pt-2 border-t border-amber-200/50' : ''}`}>
+                                                                    <span className="italic text-[10px]">Lịch sử sửa đổi (Mới nhất):</span>
+                                                                    <div className="mt-1 opacity-90 font-medium text-blue-700/80 bg-blue-50/50 p-1.5 rounded border border-blue-100/50">
+                                                                        {latestLog}
+                                                                    </div>
+                                                                </div>
+                                                            )}
+
+                                                            {!manualNote && (!isLockedStatus || !latestLog) && (
+                                                                <span className="italic text-slate-300 text-center block">Không có ghi chú.</span>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 </td>

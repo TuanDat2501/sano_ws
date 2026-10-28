@@ -114,7 +114,7 @@ export default function KanbanBoard() {
   const canReject = userRole === 'ADMIN' || userRole === 'LEADER' || userRole === 'BAN_GIAM_DOC';
   const canCreateTask = ["ADMIN", "BAN_GIAM_DOC", "LEADER"].includes(userRole);
   const canFilterTeam = ["ADMIN", "BAN_GIAM_DOC", "KE_TOAN"].includes(userRole); // Quyền Lọc Team
-
+  const canSurplus = ["ADMIN", "BAN_GIAM_DOC", "LEADER","HR"].includes(userRole);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
   const ITEMS_PER_PAGE = 8;
@@ -931,7 +931,7 @@ export default function KanbanBoard() {
                 {canCreateTask && (
                     <button onClick={() => handleSwitchTab('backlog')} className={`flex-1 xl:flex-none px-4 py-1.5 rounded-lg font-bold text-xs transition-all whitespace-nowrap ${viewMode === 'backlog' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'}`}>Kho Ý Tưởng</button>
                 )}
-                {canCreateTask && (
+                {canSurplus && (
                     <button onClick={() => handleSwitchTab('surplus')} className={`flex-1 xl:flex-none px-4 py-1.5 rounded-lg font-bold text-xs transition-all whitespace-nowrap ${viewMode === 'surplus' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'}`}>Bài Dư</button>
                 )}
             </div>
