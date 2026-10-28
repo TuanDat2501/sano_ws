@@ -444,7 +444,7 @@ export default function OrgChartPage() {
                                     });
                                 });
         
-                                const roleOrder = ['CONTENT', 'EDITOR', 'ANIMATOR'];
+                                const roleOrder = ['EDITOR', 'ANIMATOR', 'CONTENT'];
                                 const sortedRoles = Object.keys(roleGroups).sort((a, b) => {
                                     const rankA = roleOrder.indexOf(a);
                                     const rankB = roleOrder.indexOf(b);

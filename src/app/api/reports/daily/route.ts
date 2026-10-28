@@ -80,7 +80,6 @@ export async function GET(request: Request) {
         // 3. Xử lý và phân cụm dữ liệu theo Từng User -> Từng Ngày
         const reportData = productionUsers.map(user => {
             const userLogs = dailyLogs.filter(log => log.userId === user.id);
-            // 🚀 BỔ SUNG: Khai báo thêm taskId trong object lưu trữ
             const dailyReports: Record<string, { hasReported: boolean, links: { name: string, url: string, channelName: string, taskId: string }[] }> = {};
             
             userLogs.forEach(log => {
@@ -105,16 +104,25 @@ export async function GET(request: Request) {
                     let linkName = "";
                     let linkUrl:any = "";
 
-                    if (detail.includes("Kịch Bản")) { linkName = `[Kịch bản] ${t.title}`; linkUrl = t.scriptLink; }
-                    else if (detail.includes("Text ENG")) { linkName = `[Text ENG] ${t.title}`; linkUrl = t.englishScriptLink; }
+                    // KIỂM TRA THEO TỪ KHÓA TRONG DETAILS TRƯỚC
+                    if (detail.includes("Text ENG")) { linkName = `[Text ENG] ${t.title}`; linkUrl = t.englishScriptLink; }
                     else if (detail.includes("Audio")) { linkName = `[Audio] ${t.title}`; linkUrl = t.audioLink; }
                     else if (detail.includes("Bố Cục")) { linkName = `[Bố cục] ${t.title}`; linkUrl = t.storyboardLink; }
                     else if (detail.includes("Thumb") || detail.includes("Thumbnail")) { linkName = `[Thumb] ${t.title}`; linkUrl = t.thumbnailLink; }
-                    else if (detail.includes("Video Render")) { linkName = `[Video] ${t.title}`; linkUrl = t.videoLink; }
-                    else if (detail.includes("Dựng Chính") || detail.includes("Project")) { linkName = `[PRJ Chính] ${t.title}`; linkUrl = t.linkProject; }
                     else if (detail.includes("PRJ Thô")) { linkName = `[PRJ Thô] ${t.title}`; linkUrl = t.roughProjectLink; }
+                    else if (detail.includes("Dựng Chính") || detail.includes("Project")) { linkName = `[PRJ Chính] ${t.title}`; linkUrl = t.linkProject; }
                     else if (detail.includes("Chuyển Động")) { linkName = `[Chuyển động] ${t.title}`; linkUrl = t.animationLink; }
+                    else if (detail.includes("Video Render")) { linkName = `[Video] ${t.title}`; linkUrl = t.videoLink; }
                     else if (detail.includes("Đã Đăng")) { linkName = `[Đã đăng] ${t.title}`; linkUrl = t.publishLink; }
+                    else if (detail.includes("Kịch Bản")) { linkName = `[Kịch bản] ${t.title}`; linkUrl = t.scriptLink; }
+                    
+                    // 🚀 NẾU KHÔNG CÓ TỪ KHÓA NÀO, LẤY THEO TRƯỜNG JOBCATEGORY ĐỂ LÀM MỐC
+                    else if (log.jobCategory === 'CONTENT') { linkName = `[Kịch bản] ${t.title}`; linkUrl = t.scriptLink || t.storyboardLink || t.videoLink; }
+                    else if (log.jobCategory === 'EDIT') { linkName = `[Video] ${t.title}`; linkUrl = t.videoLink || t.roughProjectLink || t.audioLink; }
+                    else if (log.jobCategory === 'ANIMATION') { linkName = `[Chuyển động] ${t.title}`; linkUrl = t.animationLink || t.videoLink; }
+                    else if (log.jobCategory === 'PUBLISH') { linkName = `[Đã đăng] ${t.title}`; linkUrl = t.publishLink || t.thumbnailLink; }
+                    
+                    // CÁC TRƯỜNG HỢP CÒN LẠI
                     else if (detail.includes("trạng thái") || detail.includes("ghi chú")) { linkName = `[Ghi chú] ${t.title}`; linkUrl = `/tasks?taskId=${t.id}`; }
                     else if (detail.includes("Nguồn")) { linkName = `[Nguồn] ${t.title}`; linkUrl = t.linkContent; }
                     else { linkName = `[Cập nhật] ${t.title}`; linkUrl = `/tasks?taskId=${t.id}`; } 
@@ -123,7 +131,6 @@ export async function GET(request: Request) {
                         linkUrl = `/tasks?taskId=${t.id}`;
                     }
 
-                    // 🚀 LƯU THÊM ID CỦA TASK
                     dailyReports[dateKey].links.push({ name: linkName, url: linkUrl, channelName, taskId: t.id });
                 } else {
                     let linkName = "";
@@ -135,7 +142,6 @@ export async function GET(request: Request) {
 
                     if (linkName) {
                         if (!linkUrl || linkUrl.trim() === "") linkUrl = `/tasks?taskId=${t.id}`;
-                        // 🚀 LƯU THÊM ID CỦA TASK
                         dailyReports[dateKey].links.push({ name: linkName, url: linkUrl, channelName, taskId: t.id });
                     }
                 }

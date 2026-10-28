@@ -25,7 +25,7 @@ const getBgColor = (role: string) => {
     if (r === 'KÊNH') return 'bg-[#7ae2e2]'; // Xanh ngọc (Cyan)
     if (r.includes('PUBLISH') || r.includes('MANAGER') || r.includes('QUẢN LÝ') || r.includes('QUAN_LY')) return 'bg-[#fae14f]'; // Vàng
     if (r.includes('EDIT')) return 'bg-[#eed7f8]'; // Tím nhạt
-    if (r.includes('CONTENT')) return 'bg-[#d6f2d6]'; // Xanh lá nhạt
+    if (r.includes('CONTENT')) return 'bg-[#fbf9b9]'; // Xanh lá nhạt
     if (r.includes('ANIMAT')) return 'bg-[#ffe4b5]'; // Cam đào
     if (r === 'LEADER') return 'bg-[#facc15]'; 
     if (r === 'SƠ ĐỒ TỔ CHỨC') return 'bg-[#fca5a5]';
@@ -42,7 +42,7 @@ export default function CustomNode({ data }: { data: any }) {
     if (data.isGroup) {
         const roleName = translateRole(data.role);
         return (
-            <div className={`relative px-4 py-3 rounded-xl border border-slate-800 shadow-sm w-[220px] md:w-[240px] ${bgColor} font-['Times_New_Roman',_serif] font-bold text-center`}>
+            <div className={`relative px-4 py-3 rounded-xl border border-slate-800 shadow-sm w-[220px] md:w-[240px] ${bgColor} font-bold text-center`}>
                 <Handle type="target" position={targetPos} className="!w-0 !h-0 !border-0 !bg-transparent opacity-0" />
                 
                 <div className="text-[15px] md:text-[16px] text-black leading-tight mb-2">
@@ -98,7 +98,7 @@ export default function CustomNode({ data }: { data: any }) {
     const surplusDetails = data.surplusDetails || [];
 
     return (
-        <div className={`relative px-4 py-3 rounded-xl border border-slate-800 shadow-sm w-[220px] md:w-[240px] ${bgColor} font-['Times_New_Roman',_serif] font-bold text-center`}>
+        <div className={`relative px-4 py-3 rounded-xl border border-slate-800 shadow-sm w-[220px] md:w-[240px] ${bgColor} font-bold text-center`}>
             <Handle type="target" position={targetPos} className="!w-0 !h-0 !border-0 !bg-transparent opacity-0" />
             
             {roleName && data.role !== 'Kênh' && (
