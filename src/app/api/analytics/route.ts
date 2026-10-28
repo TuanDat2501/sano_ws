@@ -314,6 +314,3 @@ export async function GET(req: Request) {
         return NextResponse.json({ error: "Server Error" }, { status: 500 });
     }
 }
-```<ElicitationsGroup>
-  <Elicitation>Hệ thống có cần báo lỗi hay ghi log rõ ràng nếu như thời gian Tùy chỉnh người dùng nhập bị ngược (Ví dụ: Ngày Bắt Đầu lại lớn hơn Ngày Kết Thúc) không sếp?</Elicitation>
-</ElicitationsGroup>
