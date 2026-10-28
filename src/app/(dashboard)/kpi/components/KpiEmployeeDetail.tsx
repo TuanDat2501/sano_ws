@@ -1,13 +1,13 @@
 "use client";
 
-import { Clock, CheckCircle, Tv, Target, LayoutList, RefreshCw, XCircle, ExternalLink } from "lucide-react";
+import { Clock, CheckCircle, Tv, Target, LayoutList, RefreshCw, XCircle, ExternalLink, Briefcase } from "lucide-react";
 import { getProgressColor, InlineLoading } from "../utils";
 
 export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi: any, isLoading: boolean }) {
     
     const displayLogs = activeKpi?.logs?.filter((log: any) => log.isCounted) || [];
 
-    // 🚀 HÀM PHỤ TRỢ: Lấy tên nhãn Báo Cáo chi tiết và tô màu chuyên nghiệp
+    // Lấy tên nhãn Báo Cáo chi tiết và tô màu chuyên nghiệp
     const getReportBadge = (log: any) => {
         let badgeText = "BÁO CÁO TỔNG";
         let badgeColor = "bg-slate-50 text-slate-600 border-slate-200";
@@ -57,24 +57,42 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
         
         return { text: badgeText, color: badgeColor };
     };
+
+    // Hàm lấy nhãn Khâu (Job Category) cho phần Giao KPI
+    // Hàm lấy nhãn Khâu (Job Category) cho phần Giao KPI
+    const getJobCategoryBadge = (categoryStr: string) => {
+        switch (categoryStr) {
+            case 'CONTENT': 
+                return { text: "✍️ KỊCH BẢN", color: "text-orange-700 bg-orange-100 border-orange-200" }; // Sửa ở đây
+            case 'EDIT': 
+            case 'EDITOR': 
+                return { text: "🎬 DỰNG VIDEO", color: "text-blue-700 bg-blue-100 border-blue-200" }; // Sửa ở đây
+            case 'ANIMATION': 
+            case 'ANIMATOR': 
+                return { text: "✨ CHUYỂN ĐỘNG", color: "text-purple-700 bg-purple-100 border-purple-200" }; // Sửa ở đây
+            case 'PUBLISH': 
+            case 'PUBLISHER': 
+                return { text: "🚀 QUẢN LÝ KÊNH", color: "text-rose-700 bg-rose-100 border-rose-200" }; // Sửa ở đây
+            default:
+                return { text: "CHUNG", color: "text-slate-700 bg-slate-100 border-slate-200" };
+        }
+    };
+
     const cleanAndExtractUrl = (rawLink: string | null) => {
         if (!rawLink || typeof rawLink !== 'string') return null;
         
-        // Nếu chuỗi chứa định dạng kiểu "[Tên]: https://...", dùng Regex tìm đoạn bắt đầu bằng http/https
         const urlMatch = rawLink.match(/(https?:\/\/[^\s]+)/g);
         if (urlMatch && urlMatch.length > 0) {
-            // Lấy URL đầu tiên tìm thấy và loại bỏ các ký tự thừa ở cuối nếu có
             return urlMatch[0].replace(/[\])},;.]+$/, '');
         }
 
-        // Nếu bản thân nó đã là link chuẩn
         if (rawLink.startsWith('http://') || rawLink.startsWith('https://')) {
             return rawLink.trim();
         }
 
         return null;
     };
-    // 🚀 HÀM LẤY ĐÚNG LINK URL TƯƠNG ƯNG VỚI KHÂU CÔNG VIỆC CỦA LOG ĐÓ
+
     const getLogTaskUrl = (log: any) => {
         const task = log.task;
         if (!task) return null;
@@ -147,36 +165,39 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                             {activeKpi.targetDetails.map((detail: any, idx: number) => {
                                 const channelTargetMins = detail.targetCount * detail.duration;
                                 const percent = channelTargetMins > 0 ? Math.round(((detail.actualMinutes || 0) / channelTargetMins) * 100) : 0;
+                                const jobBadge = getJobCategoryBadge(detail.jobCategory || detail.job);
                                 
                                 return (
-                                    <div key={idx} className={`p-3 rounded-xl border ${detail.isRework ? 'bg-rose-50/40 border-rose-100' : 'bg-slate-50 border-slate-100'}`}>
-                                        <div className="flex justify-between items-start mb-2.5">
-                                            <div>
-                                                {detail.isRework ? (
-                                                    <p className="font-bold text-rose-800 text-sm flex items-center gap-1.5">
-                                                        <RefreshCw size={14} className="text-rose-500" /> {detail.channelName}
-                                                        <span className="text-[9px] bg-rose-100 text-rose-600 px-1.5 py-0.5 rounded border border-rose-200 uppercase tracking-widest ml-0.5 shadow-sm">Sửa lại</span>
-                                                    </p>
-                                                ) : (
-                                                    <p className="font-bold text-slate-800 text-sm flex items-center gap-1.5">
-                                                        <Tv size={14} className="text-slate-400" /> {detail.channelName}
-                                                    </p>
-                                                )}
-                                                
-                                                <p className={`text-[10px] font-bold mt-1.5 uppercase tracking-wide flex items-center gap-1 ${detail.isRework ? 'text-rose-500' : 'text-slate-500'}`}>
-                                                    <Clock size={10} /> Yêu cầu: {detail.duration} Phút
-                                                </p>
+                                    <div key={idx} className={`p-4 rounded-xl border ${detail.isRework ? 'bg-rose-50/40 border-rose-100' : 'bg-slate-50 border-slate-100'}`}>
+                                        
+                                        {/* Row 1: Kênh & Số lượng */}
+                                        <div className="flex justify-between items-center mb-2 gap-2">
+                                            <div className="font-black text-slate-800 text-sm flex items-center gap-1.5 flex-wrap">
+                                                {detail.isRework ? <RefreshCw size={14} className="text-rose-500" /> : <Tv size={14} className="text-slate-400" />}
+                                                <span>{detail.channelName || "Kênh chung"}</span>
+                                                {detail.isRework && <span className="text-[9px] bg-rose-100 text-rose-600 px-1.5 py-0.5 rounded border border-rose-200 uppercase tracking-widest shadow-sm">Sửa lại</span>}
                                             </div>
-                                            
-                                            <div className="text-right flex flex-col items-end">
-                                                <span className={`text-xs font-black px-2 py-0.5 rounded-md border block w-fit ${detail.isRework ? 'text-rose-700 bg-rose-100 border-rose-200' : 'text-blue-600 bg-blue-50 border-blue-100'}`}>
-                                                    {detail.actualCount} / {detail.targetCount}
-                                                </span>
-                                                <p className="text-[10px] font-black text-slate-500 mt-1.5 uppercase tracking-wide">
-                                                    {detail.actualMinutes || 0} / {channelTargetMins} Phút
-                                                </p>
-                                            </div>
+                                            <span className={`text-xs font-black px-2.5 py-0.5 rounded-md border block w-fit shrink-0 shadow-sm ${detail.isRework ? 'text-rose-700 bg-rose-100 border-rose-200' : 'text-blue-600 bg-blue-50 border-blue-100'}`}>
+                                                {detail.actualCount} / {detail.targetCount}
+                                            </span>
                                         </div>
+
+                                        {/* Row 2: Khâu (Job) & Số phút */}
+                                        <div className="flex justify-between items-center mb-2.5 gap-2">
+                                            {detail.jobCategory || detail.job ? (
+                                                <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded border shadow-sm ${jobBadge.color}`}>
+                                                    {jobBadge.text}
+                                                </span>
+                                            ) : <div/>}
+                                            <p className="text-[11px] font-black text-slate-600 uppercase tracking-wide">
+                                                {detail.actualMinutes || 0} / {channelTargetMins} Phút
+                                            </p>
+                                        </div>
+                                        
+                                        {/* Row 3: Yêu cầu & Thanh tiến độ */}
+                                        <p className={`text-[10px] font-bold mb-2 uppercase tracking-wide flex items-center gap-1 ${detail.isRework ? 'text-rose-500' : 'text-slate-500'}`}>
+                                            <Clock size={12} /> Yêu cầu: {detail.duration} Phút
+                                        </p>
                                         <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
                                             <div 
                                                 className={`h-full rounded-full transition-all duration-700 ${getProgressColor(percent).split(' ')[0]}`} 
@@ -205,7 +226,6 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                                 <span className="text-[10px] font-bold text-slate-400 italic hidden md:inline-block">Dữ liệu được cập nhật dựa trên Log báo cáo</span>
                             </div>
 
-                            {/* View cho Mobile */}
                             <div className="block md:hidden overflow-y-auto p-3 space-y-3 custom-scrollbar bg-slate-50/30 flex-1 min-h-0">
                                 {displayLogs.length === 0 ? (
                                     <p className="text-center text-slate-400 py-10 text-sm font-medium">Chưa có công việc hợp lệ.</p>
@@ -261,7 +281,6 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                                 )}
                             </div>
 
-                            {/* View cho PC */}
                             <div className="hidden md:block flex-1 min-h-0 overflow-auto custom-scrollbar bg-white">
                                 <table className="w-full text-left text-sm text-slate-600 min-w-[750px] relative">
                                     <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[11px] sticky top-0 z-10 shadow-[0_1px_2px_rgba(0,0,0,0.02)] border-b border-slate-200">
