@@ -232,7 +232,7 @@ export async function GET(req: Request) {
             return { id: p.id, name: p.name, supervisor: p.supervisor?.fullName || "Chưa gán", status: p.status, progress: total > 0 ? Math.round((done / total) * 100) : 0, totalTasks: total, doneTasks: done };
         }).sort((a, b) => b.progress - a.progress);
 
-        // 🚀 ĐÃ FIX: Tính tổng sản lượng video dựa trên Luồng dữ liệu Doanh Thu
+        // 🚀 ĐÃ FIX: Chỉ đếm Sản lượng khi Video thực sự được duyệt (Kéo sang DONE) hoặc Đã đăng kênh
         const isDoneLog = (l: any) => 
             l.action === "PUBLISH_VIDEO" || 
             (l.action === "UPDATE_STATUS" && l.details?.includes("sang [DONE]"));
