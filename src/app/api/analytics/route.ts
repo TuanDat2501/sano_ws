@@ -233,7 +233,10 @@ export async function GET(req: Request) {
         }).sort((a, b) => b.progress - a.progress);
 
         // 🚀 ĐÃ FIX: Tính tổng sản lượng video dựa trên Luồng dữ liệu Doanh Thu
-        const isDoneLog = (l: any) => ["SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK"].includes(l.action) || (l.action === "UPDATE_STATUS" && l.details?.includes("sang [DONE]"));
+        const isDoneLog = (l: any) => 
+            l.action === "PUBLISH_VIDEO" || 
+            (l.action === "UPDATE_STATUS" && l.details?.includes("sang [DONE]"));
+            
         let totalOutput = new Set(taskLogsRevenuePeriod.filter(isDoneLog).map((l: any) => l.taskId)).size;
 
         const statusMapVi: any = { BACKLOG: "Kho Ý Tưởng", TODO: "Cần Làm", DOING: "Đang Làm", REVIEW: "Chờ Duyệt", DONE: "Hoàn Thành" };
