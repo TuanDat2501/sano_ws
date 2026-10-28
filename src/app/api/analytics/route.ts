@@ -83,7 +83,7 @@ export async function GET(req: Request) {
             teams, users, allChannels,
             revenuesPeriod,
             taskLogsPeriod, kpisPeriod, evaluationsPeriod, projects, taskStatusCounts,
-            taskLogsRevenuePeriod // 🚀 BỔ SUNG LOGIC LẤY LOG THEO THỜI GIAN DOANH THU
+            taskLogsRevenuePeriod
         ] = await Promise.all([
             prisma.team.findMany({ select: { id: true, name: true } }),
             prisma.user.findMany({
@@ -93,7 +93,15 @@ export async function GET(req: Request) {
                     channelMemberships: { select: { channelId: true, roleOnChannel: true } }
                 }
             }),
-            prisma.channel.findMany({ where: teamFilter, include: { team: { select: { name: true } } } }),
+            
+            // 🚀 ĐÃ FIX: Bổ sung điều kiện chỉ lấy Kênh còn hoạt động (Loại bỏ BAY_KENH và DUNG_HOAT_DONG)
+            prisma.channel.findMany({ 
+                where: { 
+                    ...teamFilter,
+                    status: { notIn: ["BAY_KENH", "DUNG_HOAT_DONG"] }
+                }, 
+                include: { team: { select: { name: true } } } 
+            }),
 
             prisma.dailyRevenue.findMany({
                 where: { date: { gte: startDate, lte: endDate }, channel: teamFilter },
@@ -121,7 +129,6 @@ export async function GET(req: Request) {
             }),
             prisma.task.groupBy({ by: ['status'], where: teamFilter, _count: { id: true } }),
             
-            // 🚀 QUERY MỚI: Chỉ lấy log công việc nằm trong khoảng Ngày của bảng Doanh thu
             prisma.taskLog.findMany({
                 where: {
                     createdAt: { gte: startDate, lte: endDate },
@@ -232,11 +239,7 @@ export async function GET(req: Request) {
             return { id: p.id, name: p.name, supervisor: p.supervisor?.fullName || "Chưa gán", status: p.status, progress: total > 0 ? Math.round((done / total) * 100) : 0, totalTasks: total, doneTasks: done };
         }).sort((a, b) => b.progress - a.progress);
 
-        // 🚀 ĐÃ FIX: Chỉ đếm Sản lượng khi Video thực sự được duyệt (Kéo sang DONE) hoặc Đã đăng kênh
-        const isDoneLog = (l: any) => 
-            l.action === "PUBLISH_VIDEO" || 
-            (l.action === "UPDATE_STATUS" && l.details?.includes("sang [DONE]"));
-            
+        const isDoneLog = (l: any) => l.action === "PUBLISH_VIDEO" || (l.action === "UPDATE_STATUS" && l.details?.includes("sang [DONE]"));
         let totalOutput = new Set(taskLogsRevenuePeriod.filter(isDoneLog).map((l: any) => l.taskId)).size;
 
         const statusMapVi: any = { BACKLOG: "Kho Ý Tưởng", TODO: "Cần Làm", DOING: "Đang Làm", REVIEW: "Chờ Duyệt", DONE: "Hoàn Thành" };
