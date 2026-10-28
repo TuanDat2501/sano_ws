@@ -28,6 +28,129 @@ function getWeekDateRangeByMonth(year: number, month: number, weekNumber: number
     return { start: startOfWeek, end: endOfWeek };
 }
 
+// 🚀 BỔ SUNG: Hàm tính KPI tiêu chuẩn (Gắn JobCategory, quy đổi phút)
+const calculateKpiForUser = (userLogs: any[], targetValue: number, targetDetailsRaw: any) => {
+    const validUserLogs: any[] = [];
+    
+    userLogs.forEach(log => {
+        const actionStr = String(log.action || "").toUpperCase();
+        if (actionStr === "DAILY_REPORT") {
+            validUserLogs.push(log);
+        }
+    });
+
+    const uniqueTasks = new Map<string, any>();
+    
+    validUserLogs.forEach(log => {
+        if (!log.task) return;
+
+        let jobCategory = log.jobCategory;
+
+        if (!jobCategory) {
+            const combinedText = String(log.details || "").toLowerCase();
+            if (combinedText.includes("gán thủ công")) jobCategory = "MANUAL";
+            else if (combinedText.includes("kịch bản") || combinedText.includes("bố cục")) jobCategory = "CONTENT";
+            else if (combinedText.includes("prj thô") || combinedText.includes("link project") || combinedText.includes("audio") || combinedText.includes("âm thanh") || combinedText.includes("video render")) jobCategory = "EDIT";
+            else if (combinedText.includes("chuyển động")) jobCategory = "ANIMATION";
+            else if (combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) jobCategory = "PUBLISH";
+            else jobCategory = "GENERAL";
+        }
+
+        if (jobCategory && jobCategory !== 'GENERAL') {
+            const uniqueKey = jobCategory === 'MANUAL' ? `${log.id}_MANUAL` : `${log.taskId}_${jobCategory}`; 
+            if (!uniqueTasks.has(uniqueKey)) {
+                uniqueTasks.set(uniqueKey, log.task);
+            }
+        }
+    });
+
+    let targetDetails: any[] = [];
+    try { if (targetDetailsRaw) targetDetails = typeof targetDetailsRaw === 'string' ? JSON.parse(targetDetailsRaw) : targetDetailsRaw; } catch(e) {}
+
+    let percent = 0;
+    let actualCount = uniqueTasks.size;
+
+    if (targetDetails && targetDetails.length > 0) {
+        let totalTargetMinutes = 0;
+        let cappedActualMinutesForPercent = 0;
+        
+        const bucketTaskCount: Record<string, number> = {};
+
+        uniqueTasks.forEach((task, uniqueKey) => {
+            const jobCategory = uniqueKey.split('_').pop() || 'CONTENT'; 
+            const isReworkBucket = (jobCategory === 'PUBLISH') ? false : task.isRework;
+
+            const key = `${task.channel?.id || 'no_channel'}_${jobCategory}_${isReworkBucket ? 'rework' : 'new'}`;
+            bucketTaskCount[key] = (bucketTaskCount[key] || 0) + 1; 
+        });
+
+        const specificTargets: Record<string, any[]> = {};
+        const anyTargets: Record<string, any[]> = {};
+
+        targetDetails.forEach(t => {
+            t.actualCount = 0; 
+            t.actualMinutes = 0;
+
+            const targetJob = t.jobCategory || 'CONTENT';
+
+            if (t.channelId) {
+                const key = `${t.channelId}_${targetJob}_${t.isRework ? 'rework' : 'new'}`;
+                if (!specificTargets[key]) specificTargets[key] = [];
+                specificTargets[key].push(t);
+            } else {
+                const key = `${targetJob}_${t.isRework ? 'rework' : 'new'}`;
+                if (!anyTargets[key]) anyTargets[key] = [];
+                anyTargets[key].push(t);
+            }
+        });
+
+        const distributeToTargets = (targets: any[], tasksLeft: number) => {
+            let assignedMinsTotal = 0;
+            targets.forEach((t, index) => {
+                const tDuration = Number(t.duration) || 0;
+                const tMins = Number(t.targetCount) * tDuration;
+                totalTargetMinutes += tMins;
+
+                let assignedTasks = 0;
+                if (index === targets.length - 1) {
+                    assignedTasks = tasksLeft;
+                } else {
+                    assignedTasks = Math.min(tasksLeft, Number(t.targetCount));
+                }
+                tasksLeft -= assignedTasks;
+                
+                const calculatedMins = assignedTasks * tDuration;
+                assignedMinsTotal += calculatedMins;
+            });
+            return { tasksLeft, assignedMinsTotal };
+        };
+
+        Object.keys(specificTargets).forEach(key => {
+            const res = distributeToTargets(specificTargets[key], bucketTaskCount[key] || 0);
+            cappedActualMinutesForPercent += res.assignedMinsTotal;
+            bucketTaskCount[key] = 0;
+        });
+
+        Object.keys(anyTargets).forEach(reworkKey => {
+            let remainingTasks = 0;
+            Object.keys(bucketTaskCount).forEach(bKey => {
+                if (bKey.endsWith(`_${reworkKey}`)) {
+                    remainingTasks += bucketTaskCount[bKey];
+                    bucketTaskCount[bKey] = 0;
+                }
+            });
+            const res = distributeToTargets(anyTargets[reworkKey], remainingTasks);
+            cappedActualMinutesForPercent += res.assignedMinsTotal;
+        });
+
+        percent = totalTargetMinutes > 0 ? Math.round((cappedActualMinutesForPercent / totalTargetMinutes) * 100) : 0;
+    } else {
+        percent = targetValue > 0 ? Math.round((actualCount / targetValue) * 100) : 0;
+    }
+
+    return { percent, actualCount };
+};
+
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
@@ -93,8 +216,6 @@ export async function GET(req: Request) {
                     channelMemberships: { select: { channelId: true, roleOnChannel: true } }
                 }
             }),
-            
-            // 🚀 ĐÃ FIX: Bổ sung điều kiện chỉ lấy Kênh còn hoạt động (Loại bỏ BAY_KENH và DUNG_HOAT_DONG)
             prisma.channel.findMany({ 
                 where: { 
                     ...teamFilter,
@@ -115,7 +236,7 @@ export async function GET(req: Request) {
                 },
                 include: {
                     user: { select: { role: true } },
-                    task: { select: { channelId: true } }
+                    task: { select: { channelId: true, isRework: true } }
                 }
             }),
             prisma.weeklyKPI.findMany({ where: kpiWhere }),
@@ -248,53 +369,49 @@ export async function GET(req: Request) {
         taskStatusCounts.forEach((t: any) => { if (rawFunnel[t.status] !== undefined) rawFunnel[t.status] = t._count.id; });
         const taskFunnel = funnelOrder.map(status => ({ name: statusMapVi[status], value: rawFunnel[status] }));
 
-        // KHỐI LOGIC MỚI CHO BẢNG THỐNG KÊ NHÂN SỰ
+        // 🚀 ĐÃ FIX: Tính toán phần trăm KPI với thuật toán tính thời lượng
         const hrGrid = users
             .filter(u => u.isActive)
             .map(u => {
-                const target = kpisPeriod.filter(k => k.userId === u.id).reduce((sum, k) => sum + k.targetValue, 0);
+                const userKpis = kpisPeriod.filter(k => k.userId === u.id);
+                const userLogs = taskLogsPeriod.filter((l: any) => l.userId === u.id);
 
-                const rawUserLogs = taskLogsPeriod.filter((l: any) => l.userId === u.id);
+                let combinedTargetValue = 0;
+                let combinedTargetDetails: any[] = [];
 
-                const validUserLogs: any[] = [];
-                rawUserLogs.forEach((log: any) => {
-                    const actionStr = String(log.action || "").toUpperCase();
-                    if (actionStr === "DAILY_REPORT") {
-                        validUserLogs.push(log);
+                userKpis.forEach(k => {
+                    combinedTargetValue += (k.targetValue || 0);
+                    if (k.targetDetails) {
+                        try {
+                            const parsed = typeof k.targetDetails === 'string' ? JSON.parse(k.targetDetails) : k.targetDetails;
+                            if (Array.isArray(parsed)) {
+                                parsed.forEach(p => {
+                                    const existing = combinedTargetDetails.find(c => 
+                                        c.channelId === p.channelId && 
+                                        c.jobCategory === p.jobCategory && 
+                                        c.isRework === p.isRework
+                                    );
+                                    if (existing) {
+                                        existing.targetCount += Number(p.targetCount || 0);
+                                    } else {
+                                        combinedTargetDetails.push({...p});
+                                    }
+                                });
+                            }
+                        } catch(e) {}
                     }
                 });
 
-                const uniqueTasks = new Set();
-
-                validUserLogs.forEach((log: any) => {
-                    if (!log.taskId) return;
-
-                    let jobCategory = log.jobCategory;
-
-                    if (!jobCategory) {
-                        const combinedText = String(log.details || "").toLowerCase();
-                        if (combinedText.includes("gán thủ công")) jobCategory = "MANUAL";
-                        else if (combinedText.includes("kịch bản") || combinedText.includes("bố cục")) jobCategory = "CONTENT";
-                        else if (combinedText.includes("prj thô") || combinedText.includes("link project") || combinedText.includes("audio") || combinedText.includes("âm thanh") || combinedText.includes("video render")) jobCategory = "EDIT";
-                        else if (combinedText.includes("chuyển động")) jobCategory = "ANIMATION";
-                        else if (combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) jobCategory = "PUBLISH";
-                        else jobCategory = "GENERAL";
-                    }
-
-                    if (jobCategory && jobCategory !== 'GENERAL') {
-                        uniqueTasks.add(`${log.taskId}_${jobCategory}`);
-                    }
-                });
-
-                const output = uniqueTasks.size;
+                // Chạy hàm tính toán chuẩn xác
+                const kpiResult = calculateKpiForUser(userLogs, combinedTargetValue, combinedTargetDetails);
 
                 return {
                     id: u.id,
                     name: u.fullName,
                     role: u.role,
-                    target: target,
-                    output: output,
-                    kpi: target > 0 ? Math.round((output / target) * 100) : 0,
+                    target: combinedTargetValue,
+                    output: kpiResult.actualCount,
+                    kpi: kpiResult.percent,
                     avgScore: userScoreMap[u.id] ? (userScoreMap[u.id].total / userScoreMap[u.id].count).toFixed(1) : "-",
                     status: u.isActive ? "Active" : "Nghỉ việc"
                 };
