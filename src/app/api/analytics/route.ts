@@ -3,7 +3,6 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-// 🚀 ĐƯA HÀM TÍNH TUẦN CHUẨN ISO TỪ BÊN KPI SANG
 function getWeekDateRangeByMonth(year: number, month: number, weekNumber: number) {
     const firstDayOfMonth = new Date(year, month - 1, 1);
     const dayOfWeek = firstDayOfMonth.getDay();
@@ -52,7 +51,7 @@ export async function GET(req: Request) {
 
         const { searchParams } = new URL(req.url);
 
-        // TẦNG 1: THAM SỐ NGÀY CHO DOANH THU KÊNH
+        // TẦNG 1: THAM SỐ NGÀY CHO DOANH THU & SẢN LƯỢNG TỔNG
         const startParam = searchParams.get("start");
         const endParam = searchParams.get("end");
         const endDate = endParam ? new Date(endParam) : new Date();
@@ -69,7 +68,6 @@ export async function GET(req: Request) {
         let kpiStartDate = new Date(kpiYear, kpiMonth - 1, 1);
         let kpiEndDate = new Date(kpiYear, kpiMonth, 0, 23, 59, 59);
 
-        // 🚀 GỌI HÀM getWeekDateRangeByMonth ĐỂ ĐỒNG BỘ 100% TIMELINE VỚI MÀN KPI
         if (kpiWeek > 0) {
             const { start, end } = getWeekDateRangeByMonth(kpiYear, kpiMonth, kpiWeek);
             kpiStartDate = start;
@@ -84,7 +82,8 @@ export async function GET(req: Request) {
         const [
             teams, users, allChannels,
             revenuesPeriod,
-            taskLogsPeriod, kpisPeriod, evaluationsPeriod, projects, taskStatusCounts
+            taskLogsPeriod, kpisPeriod, evaluationsPeriod, projects, taskStatusCounts,
+            taskLogsRevenuePeriod // 🚀 BỔ SUNG LOGIC LẤY LOG THEO THỜI GIAN DOANH THU
         ] = await Promise.all([
             prisma.team.findMany({ select: { id: true, name: true } }),
             prisma.user.findMany({
@@ -120,7 +119,16 @@ export async function GET(req: Request) {
                 where: teamFilter,
                 include: { tasks: { select: { status: true } }, supervisor: { select: { fullName: true } } }
             }),
-            prisma.task.groupBy({ by: ['status'], where: teamFilter, _count: { id: true } })
+            prisma.task.groupBy({ by: ['status'], where: teamFilter, _count: { id: true } }),
+            
+            // 🚀 QUERY MỚI: Chỉ lấy log công việc nằm trong khoảng Ngày của bảng Doanh thu
+            prisma.taskLog.findMany({
+                where: {
+                    createdAt: { gte: startDate, lte: endDate },
+                    user: { ...teamFilter, role: { notIn: ["ADMIN", "BAN_GIAM_DOC", "HR", "KE_TOAN"] } }
+                },
+                select: { taskId: true, action: true, details: true }
+            })
         ]);
 
         let totalRevenue = 0;
@@ -132,6 +140,7 @@ export async function GET(req: Request) {
         const channelViewsByDay: any = {};
         const activeChannels = new Set();
         const dailyOverallTrend: any = {};
+        
         revenuesPeriod.forEach((r: any) => {
             totalRevenue += r.amount;
             totalViews += r.views;
@@ -223,9 +232,9 @@ export async function GET(req: Request) {
             return { id: p.id, name: p.name, supervisor: p.supervisor?.fullName || "Chưa gán", status: p.status, progress: total > 0 ? Math.round((done / total) * 100) : 0, totalTasks: total, doneTasks: done };
         }).sort((a, b) => b.progress - a.progress);
 
-        // ĐỊNH NGHĨA LẠI isDoneLog để tính Output Toàn Hệ Thống (Mục Thống Kê Tổng)
+        // 🚀 ĐÃ FIX: Tính tổng sản lượng video dựa trên Luồng dữ liệu Doanh Thu
         const isDoneLog = (l: any) => ["SUBMIT_SCRIPT", "SUBMIT_VIDEO", "PUBLISH_VIDEO", "COMPLETE_TASK"].includes(l.action) || (l.action === "UPDATE_STATUS" && l.details?.includes("sang [DONE]"));
-        let totalOutput = new Set(taskLogsPeriod.filter(isDoneLog).map((l: any) => l.taskId)).size;
+        let totalOutput = new Set(taskLogsRevenuePeriod.filter(isDoneLog).map((l: any) => l.taskId)).size;
 
         const statusMapVi: any = { BACKLOG: "Kho Ý Tưởng", TODO: "Cần Làm", DOING: "Đang Làm", REVIEW: "Chờ Duyệt", DONE: "Hoàn Thành" };
         const funnelOrder = ["BACKLOG", "TODO", "DOING", "REVIEW", "DONE"];
@@ -233,7 +242,7 @@ export async function GET(req: Request) {
         taskStatusCounts.forEach((t: any) => { if (rawFunnel[t.status] !== undefined) rawFunnel[t.status] = t._count.id; });
         const taskFunnel = funnelOrder.map(status => ({ name: statusMapVi[status], value: rawFunnel[status] }));
 
-        // 🚀 KHỐI LOGIC MỚI CHO BẢNG THỐNG KÊ NHÂN SỰ
+        // KHỐI LOGIC MỚI CHO BẢNG THỐNG KÊ NHÂN SỰ
         const hrGrid = users
             .filter(u => u.isActive)
             .map(u => {
@@ -254,7 +263,6 @@ export async function GET(req: Request) {
                 validUserLogs.forEach((log: any) => {
                     if (!log.taskId) return;
 
-                    // 🚀 BẮT TRỰC TIẾP NHÃN CATEGORY, CỰC KỲ GỌN NHẸ
                     let jobCategory = log.jobCategory;
 
                     if (!jobCategory) {
@@ -268,7 +276,6 @@ export async function GET(req: Request) {
                     }
 
                     if (jobCategory && jobCategory !== 'GENERAL') {
-                        // ID TASK + RỔ NHIỆM VỤ ĐỂ GHI NHẬN KIÊM NHIỆM
                         uniqueTasks.add(`${log.taskId}_${jobCategory}`);
                     }
                 });
@@ -307,3 +314,6 @@ export async function GET(req: Request) {
         return NextResponse.json({ error: "Server Error" }, { status: 500 });
     }
 }
+```<ElicitationsGroup>
+  <Elicitation>Hệ thống có cần báo lỗi hay ghi log rõ ràng nếu như thời gian Tùy chỉnh người dùng nhập bị ngược (Ví dụ: Ngày Bắt Đầu lại lớn hơn Ngày Kết Thúc) không sếp?</Elicitation>
+</ElicitationsGroup>
