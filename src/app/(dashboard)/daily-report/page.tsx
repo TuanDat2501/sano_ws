@@ -30,16 +30,13 @@ const getValidUrl = (value: string | null | undefined): string => {
     const raw = value?.trim();
     if (!raw) return "#";
 
-    // Giữ nguyên đường dẫn nội bộ
     if (raw.startsWith("/") && !raw.startsWith("//")) {
         return raw;
     }
 
-    // Trích xuất URL từ chuỗi có tên nhân sự
     const match = raw.match(/https?:\/\/[^\s<>"']+/i);
     if (match) return match[0];
 
-    // Hỗ trợ domain không có https://
     if (/^[\w-]+(?:\.[\w-]+)+(?:[/:?#][^\s]*)?$/i.test(raw)) {
         return `https://${raw}`;
     }
@@ -73,25 +70,22 @@ export default function DailyReportPage() {
     }, []);
 
     useEffect(() => {
-        // 🚀 ĐÃ SỬA: Phải đợi load xong data thì bảng mới đủ độ dài để cuộn
         if (isLoading) return;
 
         const todayObj = new Date();
         todayObj.setHours(12, 0, 0, 0);
         
-        // Xử lý múi giờ để tránh lệch ngày
         const offset = todayObj.getTimezoneOffset() * 60000;
         const todayKey = new Date(todayObj.getTime() - offset).toISOString().split('T')[0];
 
         const todayElem = document.getElementById(`day-col-${todayKey}`);
         if (todayElem && scrollContainerRef.current) {
             setTimeout(() => {
-                // Trừ đi 300px để cột ngày hiện tại nằm ở vị trí dễ nhìn (không bị sát mép trái)
                 const scrollLeft = todayElem.offsetLeft - 300; 
                 scrollContainerRef.current?.scrollTo({ left: Math.max(0, scrollLeft), behavior: 'smooth' });
-            }, 100); // Delay 100ms đợi DOM vẽ xong Grid
+            }, 100); 
         }
-    }, [tableDays, isLoading]);`    `
+    }, [tableDays, isLoading]);
 
     useEffect(() => {
         if (status === "loading") return;
@@ -213,9 +207,8 @@ export default function DailyReportPage() {
                     const dateKey = day.toISOString().split('T')[0];
                     const dayData = user.dailyReports?.[dateKey];
                     
-                    // 🚀 CẬP NHẬT EXCEL: Đếm số lượng TASK duy nhất
-                    const uniqueTaskCount = dayData?.links ? new Set(dayData.links.map((l: any) => l.taskId)).size : 0;
-                    const countToExport = uniqueTaskCount > 0 ? uniqueTaskCount : (dayData?.hasReported ? 1 : 0);
+                    // 🚀 ĐÃ SỬA: Lấy chiều dài của mảng links thay vì đếm taskId (Set)
+                    const countToExport = dayData?.links ? dayData.links.length : (dayData?.hasReported ? 1 : 0);
                     
                     rowData[`d_${dateKey}`] = dayData?.hasReported ? countToExport : '-';
                 });
@@ -428,9 +421,8 @@ export default function DailyReportPage() {
                                                 const dayData = user.dailyReports?.[dateKey]; 
                                                 const hasReported = dayData?.hasReported;
                                                 
-                                                // 🚀 LOGIC MỚI: Đếm số lượng TASK duy nhất thay vì đếm mảng link
-                                                const uniqueTaskCount = dayData?.links ? new Set(dayData.links.map((l: any) => l.taskId)).size : 0;
-                                                const countToDisplay = uniqueTaskCount > 0 ? uniqueTaskCount : (hasReported ? 1 : 0);
+                                                // 🚀 ĐÃ SỬA: Lấy độ dài (length) của mảng link thay vì Set()
+                                                const countToDisplay = dayData?.links ? dayData.links.length : (hasReported ? 1 : 0);
 
                                                 return (
                                                     <td 
