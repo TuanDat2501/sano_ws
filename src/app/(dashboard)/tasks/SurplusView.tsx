@@ -61,7 +61,7 @@ export default function SurplusView() {
     const [selectedWeek, setSelectedWeek] = useState(currentInfo.week);
 
     const [currentPage, setCurrentPage] = useState(1);
-    const itemsPerPage = 7;
+    const itemsPerPage = 10;
 
     const availableWeeks = getAvailableWeeks(selectedYear, selectedMonth);
     const hasUnsavedChanges = JSON.stringify(surplusData) !== JSON.stringify(originalData);
@@ -288,7 +288,7 @@ export default function SurplusView() {
                 </div>
             )}
 
-            <div className="flex-1 overflow-auto custom-scrollbar bg-white h-[calc(100vh-240px)] min-h-[450px]">
+            <div className="w-full overflow-y-auto custom-scrollbar bg-white max-h-[calc(100vh-280px)] min-h-[300px]">
                 <table className="w-full text-left text-xs text-slate-700 border-collapse min-w-max">
                     <thead className="bg-slate-100 text-[10px] uppercase font-black text-slate-500 sticky top-0 z-30 shadow-[0_1px_2px_rgba(0,0,0,0.05)] border-b border-slate-200">
                         <tr>

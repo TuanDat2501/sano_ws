@@ -109,8 +109,6 @@ const CopyTargetModal = ({ isOpen, onClose, onConfirm, currentMonth, currentYear
 // ========================================================
 const TargetSettingModal = ({ isOpen, onClose, user, onSave }: any) => {
     const [mounted, setMounted] = useState(false);
-    const [mode, setMode] = useState<'CHUNG' | 'CHI_TIET'>(user?.targetDetails?.length > 0 ? 'CHI_TIET' : 'CHUNG');
-    const [generalTarget, setGeneralTarget] = useState<number | string>(user?.targetValue || 0);
     const [details, setDetails] = useState<any[]>([]);
     const [channels, setChannels] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -119,9 +117,6 @@ const TargetSettingModal = ({ isOpen, onClose, user, onSave }: any) => {
     // Khi bật Modal, tách Note thủ công khỏi Lịch sử hệ thống (nếu dữ liệu cũ dính vào nhau)
     useEffect(() => {
         if (isOpen && user) {
-            setGeneralTarget(user.targetValue || 0);
-            setMode(user.targetDetails?.length > 0 ? 'CHI_TIET' : 'CHUNG');
-            
             let manualNote = (user.note || "").trim();
             const logRegex = /\[\d{2}:\d{2}\s\d{2}-\d{2}/;
             if (logRegex.test(manualNote)) {
@@ -168,14 +163,10 @@ const TargetSettingModal = ({ isOpen, onClose, user, onSave }: any) => {
     };
 
     const handleSave = () => {
-        if (mode === 'CHUNG') {
-            const num = Number(generalTarget);
-            onSave(user.userId, isNaN(num) ? 0 : num, [], note); 
-        } else {
-            const cleanDetails = details.filter(d => Number(d.targetCount) > 0);
-            const total = cleanDetails.reduce((sum, d) => sum + Number(d.targetCount), 0);
-            onSave(user.userId, total, cleanDetails, note); 
-        }
+        // 🚀 LUÔN LUÔN LƯU DƯỚI DẠNG CHI TIẾT
+        const cleanDetails = details.filter(d => Number(d.targetCount) > 0);
+        const total = cleanDetails.reduce((sum, d) => sum + Number(d.targetCount), 0);
+        onSave(user.userId, total, cleanDetails, note); 
         onClose();
     };
 
@@ -202,125 +193,96 @@ const TargetSettingModal = ({ isOpen, onClose, user, onSave }: any) => {
                     </div>
 
                     <div className="flex-1 overflow-y-auto p-6 bg-white custom-scrollbar flex flex-col gap-6">
-                        
                         <div>
-                            <div className="flex p-1 bg-slate-100 rounded-xl mb-4 w-fit border border-slate-200 shadow-inner">
-                                <button 
-                                    onClick={() => setMode('CHUNG')} 
-                                    className={`px-5 py-2 rounded-lg text-sm font-black transition-all ${mode === 'CHUNG' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
-                                >
-                                    Giao Nhanh (Tổng)
-                                </button>
-                                <button 
-                                    onClick={() => setMode('CHI_TIET')} 
-                                    className={`px-5 py-2 rounded-lg text-sm font-black transition-all ${mode === 'CHI_TIET' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
-                                >
-                                    Giao Chi Tiết
-                                </button>
-                            </div>
+                            <div className="animate-fade-in flex flex-col gap-4">
+                                {isLoading ? (
+                                    <div className="py-10 flex justify-center"><Loader2 className="animate-spin text-blue-500" /></div>
+                                ) : (
+                                    <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm overflow-x-auto">
+                                        <table className="w-full text-left bg-white min-w-[700px]">
+                                            <thead className="bg-slate-100 border-b border-slate-200 text-[10px] font-black uppercase text-slate-500 tracking-widest">
+                                                <tr>
+                                                    <th className="p-3">Thuộc Kênh</th>
+                                                    <th className="p-3 w-[120px] text-center">Khâu (Job)</th>
+                                                    <th className="p-3 w-[100px] text-center">Phút</th>
+                                                    <th className="p-3 w-[140px] text-center">Loại Bài</th>
+                                                    <th className="p-3 w-[100px] text-center">Số lượng</th>
+                                                    <th className="p-3 w-[50px] text-center"></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100">
+                                                {details.map((d, index) => (
+                                                    <tr key={d.id} className="hover:bg-slate-50 transition-colors">
+                                                        <td className="p-2">
+                                                            <select 
+                                                                className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs font-bold text-slate-700 outline-none focus:border-blue-500 cursor-pointer"
+                                                                value={d.channelId}
+                                                                onChange={e => handleChangeRow(d.id, 'channelId', e.target.value)}
+                                                            >
+                                                                <option value="" disabled>-- Chọn Kênh --</option>
+                                                                {channels.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                                            </select>
+                                                        </td>
+                                                        
+                                                        <td className="p-2">
+                                                            <select 
+                                                                className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs font-bold text-indigo-700 outline-none focus:border-indigo-500 cursor-pointer"
+                                                                value={d.jobCategory || 'CONTENT'}
+                                                                onChange={e => handleChangeRow(d.id, 'jobCategory', e.target.value)}
+                                                            >
+                                                                <option value="CONTENT">✍️ Content</option>
+                                                                <option value="EDIT">🎬 Editor</option>
+                                                                <option value="ANIMATION">✨ Animation</option>
+                                                                <option value="PUBLISH">🚀 Publish</option>
+                                                            </select>
+                                                        </td>
 
-                            {mode === 'CHUNG' ? (
-                                <div className="bg-blue-50/50 border border-blue-100 p-6 rounded-2xl animate-fade-in flex flex-col items-center justify-center py-8">
-                                    <label className="text-sm font-black text-blue-800 uppercase tracking-widest mb-4">Tổng số lượng Bài / Tuần</label>
-                                    <input 
-                                        type="number" min="0"
-                                        className="w-32 text-center text-3xl font-black text-blue-600 bg-white border-2 border-blue-200 rounded-2xl py-3 shadow-inner focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 outline-none transition-all"
-                                        value={generalTarget}
-                                        onChange={e => setGeneralTarget(e.target.value)}
-                                        autoFocus
-                                    />
-                                </div>
-                            ) : (
-                                <div className="animate-fade-in flex flex-col gap-4">
-                                    {isLoading ? (
-                                        <div className="py-10 flex justify-center"><Loader2 className="animate-spin text-blue-500" /></div>
-                                    ) : (
-                                        <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm overflow-x-auto">
-                                            <table className="w-full text-left bg-white min-w-[700px]">
-                                                <thead className="bg-slate-100 border-b border-slate-200 text-[10px] font-black uppercase text-slate-500 tracking-widest">
-                                                    <tr>
-                                                        <th className="p-3">Thuộc Kênh</th>
-                                                        <th className="p-3 w-[120px] text-center">Khâu (Job)</th>
-                                                        <th className="p-3 w-[100px] text-center">Phút</th>
-                                                        <th className="p-3 w-[140px] text-center">Loại Bài</th>
-                                                        <th className="p-3 w-[100px] text-center">Số lượng</th>
-                                                        <th className="p-3 w-[50px] text-center"></th>
+                                                        <td className="p-2">
+                                                            <input 
+                                                                type="number" min="0" 
+                                                                className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs font-black text-center text-amber-600 outline-none focus:border-blue-500"
+                                                                value={d.duration}
+                                                                onChange={e => handleChangeRow(d.id, 'duration', Number(e.target.value))}
+                                                            />
+                                                        </td>
+                                                        <td className="p-2">
+                                                            <select 
+                                                                className={`w-full border rounded-lg p-2 text-xs font-black outline-none focus:border-blue-500 cursor-pointer ${d.isRework ? 'bg-rose-50 border-rose-200 text-rose-600' : 'bg-emerald-50 border-emerald-200 text-emerald-600'}`}
+                                                                value={d.isRework ? "true" : "false"}
+                                                                onChange={e => handleChangeRow(d.id, 'isRework', e.target.value === "true")}
+                                                            >
+                                                                <option value="false">✨ BÀI MỚI</option>
+                                                                <option value="true">♻️ BÀI CŨ (Sửa)</option>
+                                                            </select>
+                                                        </td>
+                                                        <td className="p-2">
+                                                            <input 
+                                                                type="number" min="1" 
+                                                                className="w-full bg-white border-2 border-blue-200 rounded-lg p-2 text-sm font-black text-center text-blue-600 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                                                                value={d.targetCount}
+                                                                onChange={e => handleChangeRow(d.id, 'targetCount', Number(e.target.value))}
+                                                            />
+                                                        </td>
+                                                        <td className="p-2 text-center">
+                                                            <button onClick={() => handleRemoveRow(d.id)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                                                                <Trash2 size={16} />
+                                                            </button>
+                                                        </td>
                                                     </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-slate-100">
-                                                    {details.map((d, index) => (
-                                                        <tr key={d.id} className="hover:bg-slate-50 transition-colors">
-                                                            <td className="p-2">
-                                                                <select 
-                                                                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs font-bold text-slate-700 outline-none focus:border-blue-500"
-                                                                    value={d.channelId}
-                                                                    onChange={e => handleChangeRow(d.id, 'channelId', e.target.value)}
-                                                                >
-                                                                    <option value="">-- Dùng Chung --</option>
-                                                                    {channels.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                                                                </select>
-                                                            </td>
-                                                            
-                                                            <td className="p-2">
-                                                                <select 
-                                                                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs font-bold text-indigo-700 outline-none focus:border-indigo-500"
-                                                                    value={d.jobCategory || 'CONTENT'}
-                                                                    onChange={e => handleChangeRow(d.id, 'jobCategory', e.target.value)}
-                                                                >
-                                                                    <option value="CONTENT">✍️ Content</option>
-                                                                    <option value="EDIT">🎬 Editor</option>
-                                                                    <option value="ANIMATION">✨ Animation</option>
-                                                                    <option value="PUBLISH">🚀 Publish</option>
-                                                                </select>
-                                                            </td>
-
-                                                            <td className="p-2">
-                                                                <input 
-                                                                    type="number" min="0" 
-                                                                    className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs font-black text-center text-amber-600 outline-none focus:border-blue-500"
-                                                                    value={d.duration}
-                                                                    onChange={e => handleChangeRow(d.id, 'duration', Number(e.target.value))}
-                                                                />
-                                                            </td>
-                                                            <td className="p-2">
-                                                                <select 
-                                                                    className={`w-full border rounded-lg p-2 text-xs font-black outline-none focus:border-blue-500 ${d.isRework ? 'bg-rose-50 border-rose-200 text-rose-600' : 'bg-emerald-50 border-emerald-200 text-emerald-600'}`}
-                                                                    value={d.isRework ? "true" : "false"}
-                                                                    onChange={e => handleChangeRow(d.id, 'isRework', e.target.value === "true")}
-                                                                >
-                                                                    <option value="false">✨ BÀI MỚI</option>
-                                                                    <option value="true">♻️ BÀI CŨ (Sửa)</option>
-                                                                </select>
-                                                            </td>
-                                                            <td className="p-2">
-                                                                <input 
-                                                                    type="number" min="1" 
-                                                                    className="w-full bg-white border-2 border-blue-200 rounded-lg p-2 text-sm font-black text-center text-blue-600 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                                                                    value={d.targetCount}
-                                                                    onChange={e => handleChangeRow(d.id, 'targetCount', Number(e.target.value))}
-                                                                />
-                                                            </td>
-                                                            <td className="p-2 text-center">
-                                                                <button onClick={() => handleRemoveRow(d.id)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors">
-                                                                    <Trash2 size={16} />
-                                                                </button>
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                            <div className="p-3 bg-slate-50 flex items-center justify-between border-t border-slate-200">
-                                                <button onClick={handleAddRow} className="text-xs font-bold text-blue-600 bg-blue-100/50 hover:bg-blue-100 px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors">
-                                                    <Plus size={14} /> Thêm dòng
-                                                </button>
-                                                <div className="text-sm font-bold text-slate-600 flex items-center gap-2">
-                                                    Tổng quy đổi: <span className="text-lg font-black text-blue-600 bg-blue-100 px-3 py-0.5 rounded-lg border border-blue-200">{totalDetailCount}</span>
-                                                </div>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                        <div className="p-3 bg-slate-50 flex items-center justify-between border-t border-slate-200">
+                                            <button onClick={handleAddRow} className="text-xs font-bold text-blue-600 bg-blue-100/50 hover:bg-blue-100 px-3 py-1.5 rounded-lg flex items-center gap-1 transition-colors">
+                                                <Plus size={14} /> Thêm dòng
+                                            </button>
+                                            <div className="text-sm font-bold text-slate-600 flex items-center gap-2">
+                                                Tổng quy đổi: <span className="text-lg font-black text-blue-600 bg-blue-100 px-3 py-0.5 rounded-lg border border-blue-200">{totalDetailCount}</span>
                                             </div>
                                         </div>
-                                    )}
-                                </div>
-                            )}
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
                         <div className="bg-amber-50/50 border border-amber-100 rounded-2xl p-4 shadow-sm flex flex-col">
