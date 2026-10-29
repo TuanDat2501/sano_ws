@@ -288,7 +288,7 @@ export default function SurplusView() {
                 </div>
             )}
 
-            <div className="w-full overflow-y-auto custom-scrollbar bg-white max-h-[calc(100vh-280px)] min-h-[300px]">
+            <div className="w-full overflow-y-auto custom-scrollbar bg-white max-h-[500px] min-h-[500px]">
                 <table className="w-full text-left text-xs text-slate-700 border-collapse min-w-max">
                     <thead className="bg-slate-100 text-[10px] uppercase font-black text-slate-500 sticky top-0 z-30 shadow-[0_1px_2px_rgba(0,0,0,0.05)] border-b border-slate-200">
                         <tr>
