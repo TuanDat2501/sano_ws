@@ -1,5 +1,5 @@
-import { X, UserCircle2, Briefcase, Target, Tv, Layers, Clock, Users, Plus, Trash2, Save, Loader2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { X, UserCircle2, Briefcase, Target, Tv, Layers, Users, Plus, Trash2, Save, Loader2 } from "lucide-react";
+import { useEffect, useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useToast } from "@/app/component/ToastProvider";
 
@@ -29,11 +29,14 @@ export default function OrgNodeDrawer({
     const [mounted, setMounted] = useState(false);
     
     const [currentNodeId, setCurrentNodeId] = useState<string | null>(null);
-    const [selectedUserInGroup, setSelectedUserInGroup] = useState<any>(null);
     const [activeTab, setActiveTab] = useState<"info" | "surplus">("info");
     
-    const [allSurplusData, setAllSurplusData] = useState<any[]>([]); 
+    // Lưu trữ toàn bộ bài dư của Kênh (để trộn lại khi lưu)
+    const [allChannelSurplus, setAllChannelSurplus] = useState<any[]>([]); 
+    // Dữ liệu bài dư hiển thị trên form (Đã được lọc theo Khâu)
     const [surplusForms, setSurplusForms] = useState<any[]>([]);
+    
+    const [currentChannelId, setCurrentChannelId] = useState<string | null>(null);
     
     const [isSavingSurplus, setIsSavingSurplus] = useState(false);
     const [isLoadingSurplus, setIsLoadingSurplus] = useState(false);
@@ -46,75 +49,74 @@ export default function OrgNodeDrawer({
         if (nodeData?.nodeId !== currentNodeId) {
             setCurrentNodeId(nodeData?.nodeId || null);
             setActiveTab("info"); 
-            if (nodeData?.isGroup && nodeData.users?.length > 0) {
-                setSelectedUserInGroup(nodeData.users[0]);
-            } else {
-                setSelectedUserInGroup(null);
-            }
-        } else {
-            if (nodeData?.isGroup && nodeData.users?.length > 0) {
-                if (selectedUserInGroup) {
-                    const updatedUser = nodeData.users.find((u: any) => u.id === selectedUserInGroup.id);
-                    setSelectedUserInGroup(updatedUser || nodeData.users[0]);
-                }
-            }
         }
     }, [nodeData, isOpen, currentNodeId]);
-
-    const activeData = nodeData?.isGroup ? (selectedUserInGroup ? {
-            ...selectedUserInGroup, label: selectedUserInGroup.fullName, role: nodeData.role, fullUserObj: selectedUserInGroup.fullUserObj
-        } : null) : nodeData;
-
-    const activeUserId = activeData?.id || activeData?.fullUserObj?.id;
-    const activeUserRole = activeData?.role;
     
-    const fallbackChannelName = activeData?.targetDetails?.[0]?.channelName || "";
-    const defaultChannelName = nodeData?.resolvedChannelName || activeData?.channelName || fallbackChannelName || "";
+    const fallbackChannelName = nodeData?.isGroup 
+        ? nodeData?.users?.[0]?.targetDetails?.[0]?.channelName || ""
+        : nodeData?.targetDetails?.[0]?.channelName || "";
+
+    const defaultChannelName = nodeData?.resolvedChannelName || nodeData?.channelName || fallbackChannelName || "";
+
+    // LỌC CHÍNH XÁC KHÂU CÔNG VIỆC CỦA NODE HIỆN TẠI
+    const validJobCategories = useMemo(() => {
+        if (!nodeData?.role) return ["CONTENT"];
+        const str = String(nodeData.role).toUpperCase();
+        const valid: string[] = [];
+        if (str.includes('CONTENT')) valid.push('CONTENT');
+        if (str.includes('EDITOR') || str.includes('EDIT')) valid.push('EDITOR');
+        if (str.includes('CHUYỂN ĐỘNG') || str.includes('ANIMAT') || str.includes('ANIMATION')) valid.push('ANIMATOR');
+        if (str.includes('QUẢN LÝ KÊNH') || str.includes('PUBLISH') || str.includes('LEADER')) valid.push('PUBLISHER');
+        return valid.length > 0 ? valid : ["CONTENT"];
+    }, [nodeData?.role]);
 
     useEffect(() => {
-        if (activeTab === "surplus" && activeUserId) {
+        if (activeTab === "surplus" && defaultChannelName) {
             setIsLoadingSurplus(true);
-            fetch(`/api/org-chart/surplus?userId=${activeUserId}&year=${year}&month=${month}&week=${week}`)
+            fetch(`/api/surplus/channel?year=${year}&month=${month}&week=${week}`)
                 .then(res => res.json())
                 .then(resData => {
-                    const rawData = resData.data || [];
-                    setAllSurplusData(rawData); 
+                    const allChannels = resData.data || []; 
+                    const channelData = allChannels.find((c: any) => 
+                        c.channelName?.trim().toLowerCase() === defaultChannelName.trim().toLowerCase()
+                    );
 
-                    let currentChannelData = rawData;
-                    if (defaultChannelName) {
-                        currentChannelData = rawData.filter((r: any) => 
-                            r.channelName?.trim().toLowerCase() === defaultChannelName.trim().toLowerCase()
+                    if (channelData) {
+                        setCurrentChannelId(channelData.channelId);
+                        const channelDetails = channelData.details || [];
+                        setAllChannelSurplus(channelDetails); 
+
+                        // CHỈ LẤY NHỮNG DÒNG BÀI DƯ THUỘC VỀ NODE NÀY
+                        const nodeSpecificDetails = channelDetails.filter((d: any) => 
+                            validJobCategories.includes(String(d.jobCategory).toUpperCase())
                         );
-                    }
 
-                    if (currentChannelData.length > 0) {
-                        setSurplusForms(currentChannelData.map((r: any) => ({ 
-                            ...r, 
-                            channelName: r.channelName || defaultChannelName, 
-                            id: Math.random().toString(36).substr(2, 9) 
-                        })));
+                        if (nodeSpecificDetails.length > 0) {
+                            setSurplusForms(nodeSpecificDetails.map((r: any) => ({ ...r, id: Math.random().toString(36).substr(2, 9) })));
+                        } else {
+                            setSurplusForms([{ id: "1", jobCategory: validJobCategories[0], duration: 10, count: 1 }]);
+                        }
                     } else {
-                        setSurplusForms([{ id: "1", channelName: defaultChannelName, jobCategory: activeUserRole || "EDITOR", duration: 10, count: 1 }]);
+                        setCurrentChannelId(null);
+                        setAllChannelSurplus([]);
+                        setSurplusForms([{ id: "1", jobCategory: validJobCategories[0], duration: 10, count: 1 }]);
                     }
                     setIsLoadingSurplus(false);
                 })
                 .catch(err => {
                     console.error("Lỗi lấy dữ liệu bài dư:", err);
-                    setSurplusForms([{ id: "1", channelName: defaultChannelName, jobCategory: activeUserRole || "EDITOR", duration: 10, count: 1 }]);
+                    setSurplusForms([{ id: "1", jobCategory: validJobCategories[0], duration: 10, count: 1 }]);
                     setIsLoadingSurplus(false);
                 });
         }
-    }, [activeTab, activeUserId, year, month, week, defaultChannelName, activeUserRole]);
+    }, [activeTab, defaultChannelName, year, month, week, validJobCategories]);
 
     if (!nodeData) return null;
-
-    const targetDetails = activeData?.targetDetails || []; 
 
     const handleAddSurplusRow = () => {
         setSurplusForms([...surplusForms, { 
             id: Math.random().toString(36).substr(2, 9), 
-            channelName: defaultChannelName, 
-            jobCategory: activeUserRole || "EDITOR", 
+            jobCategory: validJobCategories[0], 
             duration: 10, count: 1 
         }]);
     };
@@ -127,41 +129,42 @@ export default function OrgNodeDrawer({
         setSurplusForms(surplusForms.map(f => f.id === id ? { ...f, [field]: value } : f));
     };
 
+    // LƯU VÀO API (GỘP KHÂU ĐANG SỬA VỚI KHÂU BỊ ẨN)
     const handleSaveSurplus = async () => {
-        if (!activeUserId) return;
+        if (!currentChannelId) {
+            showToast("error", "Kênh này không còn hoạt động hoặc không xác định!");
+            return;
+        }
         setIsSavingSurplus(true);
         try {
-            let otherChannelData: any[] = [];
-            if (defaultChannelName) {
-                otherChannelData = allSurplusData.filter((r: any) => 
-                    r.channelName?.trim().toLowerCase() !== defaultChannelName.trim().toLowerCase()
-                );
-            }
+            // Tách những dữ liệu bài dư của các khâu KHÁC ra để không bị ghi đè mất
+            const otherRolesSurplus = allChannelSurplus.filter(d => 
+                !validJobCategories.includes(String(d.jobCategory).toUpperCase())
+            );
 
-            const currentFormsPayload = surplusForms.map(f => ({
-                channelName: f.channelName,
-                jobCategory: f.jobCategory,
-                duration: Number(f.duration) || 0,
-                count: Number(f.count) || 0
-            }));
+            // Dữ liệu khâu hiện tại mà người dùng vừa sửa trên form
+            const finalNodeDetails = surplusForms
+                .filter(f => f.count > 0)
+                .map(f => ({
+                    jobCategory: f.jobCategory,
+                    duration: Number(f.duration) || 0,
+                    count: Number(f.count) || 0
+                }));
 
-            const finalPayload = [...otherChannelData, ...currentFormsPayload];
+            // Trộn lại thành payload hoàn chỉnh của toàn bộ Kênh
+            const payload = [{
+                channelId: currentChannelId,
+                details: [...otherRolesSurplus, ...finalNodeDetails]
+            }];
 
-            const res = await fetch('/api/org-chart/surplus', {
+            const res = await fetch('/api/surplus/channel', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    userId: activeUserId, 
-                    year: year, 
-                    month: month, 
-                    week: week, 
-                    surplusData: finalPayload 
-                })
+                body: JSON.stringify({ year, month, week, surplusData: payload })
             });
 
             if (res.ok) {
-                showToast("success", "Đã lưu số liệu bài dư thành công!");
-                setAllSurplusData(finalPayload); 
+                showToast("success", `Đã lưu số liệu bài dư thành công!`);
                 if (onRefresh) onRefresh(); 
             } else {
                 showToast("error", "Lỗi khi lưu bài dư.");
@@ -172,6 +175,64 @@ export default function OrgNodeDrawer({
             setIsSavingSurplus(false);
         }
     };
+
+    // 🚀 HÀM RENDER KHỐI THÔNG TIN CÓ TÍCH HỢP AVATAR URL
+    const renderUserInfo = (targets: any[], label: string, teamName: string, avatarUrl: string | null, idx: number) => (
+        <div key={idx} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-5 last:mb-0 animate-fade-in">
+            {/* Header: Hồ sơ nhân sự */}
+            <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-3">
+                {avatarUrl ? (
+                    <img src={avatarUrl} alt={label} className="w-10 h-10 rounded-full object-cover border border-slate-200 shadow-sm shrink-0" />
+                ) : (
+                    <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-black shrink-0 border border-indigo-200 shadow-sm">
+                        {label ? label.charAt(0).toUpperCase() : <UserCircle2 size={20} strokeWidth={2.5} />}
+                    </div>
+                )}
+                
+                <div>
+                    <h3 className="font-black text-slate-800 text-sm md:text-base leading-tight">{label}</h3>
+                    <p className="text-[11px] font-bold text-slate-500 flex items-center gap-1.5 mt-0.5">
+                        <Briefcase size={12} className="text-slate-400" /> {teamName}
+                    </p>
+                </div>
+            </div>
+
+            {/* Body: Chỉ tiêu KPI */}
+            <div className="p-4 bg-white">
+                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                    <Target size={14} className="text-blue-500" /> Chỉ tiêu KPI tuần
+                </h4>
+                {targets.length > 0 ? (
+                    <div className="flex flex-col gap-2.5">
+                        {targets.map((td: any, i: number) => (
+                            <div key={i} className="flex justify-between items-center bg-slate-50 border border-slate-100 rounded-xl p-3 hover:border-blue-200 transition-colors group">
+                                <div>
+                                    <p className="text-xs font-bold text-slate-800 flex items-center gap-1.5 group-hover:text-blue-700 transition-colors">
+                                        <Tv size={13} className="text-blue-500" /> {td.channelName || "Kênh chung"}
+                                    </p>
+                                    <p className="text-[10px] text-slate-500 font-medium mt-1.5 uppercase flex items-center gap-1">
+                                        Khâu: <span className="font-bold text-slate-700 bg-white px-1.5 py-0.5 rounded border border-slate-200 shadow-sm">{translateRole(td.jobCategory)}</span>
+                                    </p>
+                                </div>
+                                <div className="flex flex-col items-end gap-1.5">
+                                    <span className="text-xs font-black text-blue-700 bg-blue-100 px-2 py-0.5 rounded-md shadow-sm border border-blue-200">
+                                        {td.actualCount || 0} / {td.targetCount} bài
+                                    </span>
+                                    <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded">
+                                        {td.duration} Phút
+                                    </span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="text-center p-4 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                        <p className="text-xs text-slate-400 font-medium italic">Chưa có chỉ tiêu KPI.</p>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
     
     const drawerContent = (
         <>
@@ -182,8 +243,8 @@ export default function OrgNodeDrawer({
                 <div className="p-4 md:p-6 border-b border-slate-100 flex justify-between items-start bg-slate-50/50 shrink-0">
                     <div className="flex gap-3 md:gap-4 items-center">
                         {!nodeData.isSystemNode && !nodeData.isGroup && (
-                            nodeData.avatar ? (
-                                <img src={nodeData.avatar} alt="avatar" className="w-12 h-12 md:w-14 md:h-14 rounded-full object-cover border-2 border-white shadow-md shrink-0" />
+                            nodeData.fullUserObj?.avatarUrl ? (
+                                <img src={nodeData.fullUserObj.avatarUrl} alt="avatar" className="w-12 h-12 md:w-14 md:h-14 rounded-full object-cover border-2 border-white shadow-md shrink-0" />
                             ) : (
                                 <div className={`w-12 h-12 md:w-14 md:h-14 rounded-full flex items-center justify-center font-black text-white text-lg md:text-xl border-2 border-white shadow-md shrink-0 ${nodeData.role === 'Kênh' ? 'bg-teal-500' : 'bg-slate-200 text-slate-500'}`}>
                                     {nodeData.role === 'Kênh' ? <Tv size={24} /> : (nodeData.label ? nodeData.label.charAt(0).toUpperCase() : 'U')}
@@ -209,69 +270,40 @@ export default function OrgNodeDrawer({
                     </button>
                 </div>
 
-                {nodeData.isGroup && nodeData.users && (
-                    <div className="px-4 py-3 bg-slate-100 flex gap-2 overflow-x-auto shrink-0 custom-scrollbar">
-                        {nodeData.users.map((u: any, idx: number) => {
-                            const isSelected = selectedUserInGroup?.id === u.id;
-                            return (
-                                <button key={idx} onClick={() => { setSelectedUserInGroup(u); setActiveTab("info"); }} className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all shadow-sm ${isSelected ? 'bg-slate-900 text-white shadow' : 'bg-white text-slate-600 hover:bg-slate-200'}`}>
-                                    {u.fullName}
-                                </button>
-                            );
-                        })}
-                    </div>
-                )}
-
-                {activeData && (
-                    <div className="flex border-b border-slate-200 shrink-0 px-4 md:px-6 mt-2">
-                        <button onClick={() => setActiveTab("info")} className={`pb-3 px-4 font-bold text-sm transition-colors border-b-2 ${activeTab === "info" ? "border-red-500 text-red-600" : "border-transparent text-slate-500 hover:text-slate-700"}`}>
-                            Tổng Quan KPI
-                        </button>
+                <div className="flex border-b border-slate-200 shrink-0 px-4 md:px-6 mt-2">
+                    <button onClick={() => setActiveTab("info")} className={`pb-3 px-4 font-bold text-sm transition-colors border-b-2 ${activeTab === "info" ? "border-red-500 text-red-600" : "border-transparent text-slate-500 hover:text-slate-700"}`}>
+                        Tổng Quan KPI
+                    </button>
+                    {defaultChannelName && (
                         <button onClick={() => setActiveTab("surplus")} className={`pb-3 px-4 font-bold text-sm transition-colors border-b-2 flex items-center gap-1.5 ${activeTab === "surplus" ? "border-orange-500 text-orange-600" : "border-transparent text-slate-500 hover:text-slate-700"}`}>
                             Quản Lý Bài Dư
                         </button>
-                    </div>
-                )}
+                    )}
+                </div>
 
                 <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-slate-50 custom-scrollbar">
-                    {activeTab === "info" && activeData && (
-                        <div className="space-y-4 md:space-y-5 animate-fade-in">
-                            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-2">
-                                <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-2 mb-2">Hồ sơ nhân sự</h3>
-                                <div className="flex items-center gap-3 text-sm font-medium text-slate-600">
-                                    <UserCircle2 size={16} className="text-slate-400" /> 
-                                    Họ tên: <span className="font-bold text-slate-900">{activeData.label}</span>
-                                </div>
-                                <div className="flex items-center gap-3 text-sm font-medium text-slate-600">
-                                    <Briefcase size={16} className="text-slate-400" /> 
-                                    {/* 🚀 ĐÃ SỬA: Lấy teamName từ mọi cấp độ trả về của Data */}
-                                    Thuộc team: <span className="font-bold text-slate-900">{activeData.fullUserObj?.teamName || activeData.fullUserObj?.team?.name || activeData.teamName || "Độc lập"}</span>
-                                </div>
-                            </div>
-
-                            <div className="bg-blue-50/40 p-4 rounded-xl border border-blue-100 space-y-3">
-                                <h3 className="text-[10px] font-black text-blue-500 uppercase tracking-widest flex items-center gap-1.5"><Target size={14} /> Chỉ tiêu KPI tuần này</h3>
-                                {targetDetails.length > 0 ? (
-                                    <div className="space-y-2">
-                                        {targetDetails.map((td: any, idx: number) => (
-                                            <div key={idx} className="bg-white p-3 rounded-lg border border-blue-100 flex justify-between items-center shadow-sm">
-                                                <div>
-                                                    <p className="text-xs font-bold text-slate-800 flex items-center gap-1.5"><Tv size={12} className="text-blue-500" /> {td.channelName || "Kênh chung"}</p>
-                                                    <p className="text-[10px] text-slate-500 font-medium mt-1 uppercase">Khâu: <span className="font-bold text-slate-700">{translateRole(td.jobCategory)}</span></p>
-                                                </div>
-                                                <div className="flex flex-col items-end gap-1">
-                                                    <span className="text-xs font-black text-blue-700 bg-blue-100 px-2 py-0.5 rounded-md">{td.actualCount || 0} / {td.targetCount} bài</span>
-                                                    <span className="text-[10px] font-bold text-slate-400">{td.duration} Phút</span>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : <p className="text-xs text-slate-400 italic">Chưa có chỉ tiêu KPI.</p>}
-                            </div>
+                    {/* HIỂN THỊ KPI CHO TẤT CẢ CÁC THÀNH VIÊN TRONG NODE THEO KHUNG MỚI */}
+                    {activeTab === "info" && nodeData && (
+                        <div className="animate-fade-in">
+                            {nodeData.isGroup ? (
+                                nodeData.users.map((u: any, idx: number) => {
+                                    const teamName = u.fullUserObj?.teamName || u.fullUserObj?.team?.name || u.teamName || "Độc lập";
+                                    const avatar = u.fullUserObj?.avatarUrl || null;
+                                    return renderUserInfo(u.targetDetails || [], u.fullName, teamName, avatar, idx);
+                                })
+                            ) : (
+                                renderUserInfo(
+                                    nodeData.targetDetails || [], 
+                                    nodeData.label, 
+                                    nodeData.fullUserObj?.teamName || nodeData.fullUserObj?.team?.name || nodeData.teamName || "Độc lập", 
+                                    nodeData.fullUserObj?.avatarUrl || null,
+                                    0
+                                )
+                            )}
                         </div>
                     )}
 
-                    {activeTab === "surplus" && activeData && (
+                    {activeTab === "surplus" && nodeData && (
                         <div className="animate-fade-in flex flex-col h-full">
                             <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm flex flex-col relative min-h-[300px]">
                                 
@@ -283,41 +315,41 @@ export default function OrgNodeDrawer({
                                 )}
 
                                 <div className="bg-orange-50 px-4 py-3 border-b border-orange-100 flex justify-between items-center shrink-0">
-                                    <h3 className="text-xs font-black text-orange-700 uppercase tracking-widest flex items-center gap-1.5"><Layers size={14} /> Khai báo Bài Dư Tuần</h3>
-                                    <span className="bg-orange-600 text-white px-2 py-0.5 rounded text-[10px] font-bold">Tổng: {surplusForms.reduce((sum, f) => sum + (Number(f.count)||0), 0)} bài</span>
+                                    <h3 className="text-xs font-black text-orange-700 uppercase tracking-widest flex items-center gap-1.5"><Layers size={14} /> Bài Dư Của Node ({translateRole(nodeData.role)})</h3>
+                                    <span className="bg-orange-600 text-white px-2 py-0.5 rounded text-[10px] font-bold shadow-sm">{defaultChannelName}</span>
                                 </div>
                                 
                                 <div className="p-2 space-y-2 bg-slate-50/50 flex-1 overflow-y-auto">
-                                    <div className="hidden sm:grid grid-cols-[2fr_1.5fr_1fr_1fr_auto] gap-2 px-3 py-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                        <div>Kênh</div><div>Khâu</div><div>Phút</div><div>SL</div><div className="w-8"></div>
+                                    <div className="hidden sm:grid grid-cols-[1.5fr_1fr_1fr_auto] gap-2 px-3 py-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                        <div>Khâu Công Việc</div><div>Số Phút</div><div>Số Lượng</div><div className="w-8"></div>
                                     </div>
 
                                     {surplusForms.map((form) => (
-                                        <div key={form.id} className="bg-white p-3 sm:p-2 sm:px-3 rounded-lg border border-slate-200 shadow-sm grid grid-cols-2 sm:grid-cols-[2fr_1.5fr_1fr_1fr_auto] gap-3 sm:gap-2 items-end sm:items-center">
+                                        <div key={form.id} className="bg-white p-3 sm:p-2 sm:px-3 rounded-lg border border-slate-200 shadow-sm grid grid-cols-2 sm:grid-cols-[1.5fr_1fr_1fr_auto] gap-3 sm:gap-2 items-end sm:items-center">
                                             
                                             <div className="col-span-2 sm:col-span-1">
-                                                <label className="sm:hidden text-[10px] font-bold text-slate-400 uppercase mb-1 block">Kênh</label>
-                                                <input type="text" placeholder="Tên kênh..." value={form.channelName} onChange={(e) => handleUpdateSurplus(form.id, 'channelName', e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-md px-2 py-1.5 text-xs font-bold text-slate-700 outline-none focus:border-orange-400 transition-colors" />
-                                            </div>
-
-                                            <div>
                                                 <label className="sm:hidden text-[10px] font-bold text-slate-400 uppercase mb-1 block">Khâu</label>
-                                                <select value={form.jobCategory} onChange={(e) => handleUpdateSurplus(form.id, 'jobCategory', e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-md px-2 py-1.5 text-xs font-bold text-slate-700 outline-none focus:border-orange-400 transition-colors">
-                                                    <option value="CONTENT">Content</option>
-                                                    <option value="EDITOR">Editor</option>
-                                                    <option value="ANIMATOR">Chuyển động</option>
-                                                    <option value="PUBLISHER">Quản lý kênh</option>
+                                                {/* CHỈ RENDER CÁC KHÂU HỢP LỆ VỚI NODE NÀY */}
+                                                <select 
+                                                    value={form.jobCategory} 
+                                                    onChange={(e) => handleUpdateSurplus(form.id, 'jobCategory', e.target.value)} 
+                                                    className="w-full bg-slate-50 border border-slate-200 rounded-md px-2 py-1.5 text-xs font-bold text-slate-700 outline-none focus:border-orange-400 transition-colors cursor-pointer appearance-none text-center"
+                                                >
+                                                    {validJobCategories.includes("CONTENT") && <option value="CONTENT">✍️ Content</option>}
+                                                    {validJobCategories.includes("EDITOR") && <option value="EDITOR">🎬 Editor</option>}
+                                                    {validJobCategories.includes("ANIMATOR") && <option value="ANIMATOR">✨ Chuyển động</option>}
+                                                    {validJobCategories.includes("PUBLISHER") && <option value="PUBLISHER">🚀 Quản lý kênh</option>}
                                                 </select>
                                             </div>
 
                                             <div>
                                                 <label className="sm:hidden text-[10px] font-bold text-slate-400 uppercase mb-1 block">Phút</label>
-                                                <input type="number" min="0" value={form.duration} onChange={(e) => handleUpdateSurplus(form.id, 'duration', Number(e.target.value))} className="w-full bg-slate-50 border border-slate-200 rounded-md px-2 py-1.5 text-xs font-bold text-slate-700 text-center outline-none focus:border-orange-400 transition-colors" />
+                                                <input type="number" min="0" value={form.duration} onChange={(e) => handleUpdateSurplus(form.id, 'duration', Number(e.target.value))} className="w-full bg-slate-50 border border-slate-200 rounded-md px-2 py-1.5 text-xs font-black text-amber-600 text-center outline-none focus:border-orange-400 transition-colors" />
                                             </div>
 
                                             <div>
                                                 <label className="sm:hidden text-[10px] font-bold text-slate-400 uppercase mb-1 block">SL</label>
-                                                <input type="number" min="1" value={form.count} onChange={(e) => handleUpdateSurplus(form.id, 'count', Number(e.target.value))} className="w-full bg-orange-50 border border-orange-200 text-orange-700 rounded-md px-2 py-1.5 text-xs font-bold text-center outline-none focus:border-orange-400 transition-colors" />
+                                                <input type="number" min="1" value={form.count} onChange={(e) => handleUpdateSurplus(form.id, 'count', Number(e.target.value))} className="w-full bg-orange-50 border border-orange-200 text-orange-700 rounded-md px-2 py-1.5 text-xs font-black text-center outline-none focus:border-orange-400 transition-colors" />
                                             </div>
 
                                             <button onClick={() => handleRemoveSurplusRow(form.id)} className="col-span-2 sm:col-span-1 p-2 bg-rose-50 text-rose-500 hover:bg-rose-500 hover:text-white rounded-md transition-colors flex items-center justify-center h-[30px] w-full sm:w-8">
@@ -336,11 +368,11 @@ export default function OrgNodeDrawer({
 
                             <button 
                                 onClick={handleSaveSurplus}
-                                disabled={isSavingSurplus || isLoadingSurplus}
+                                disabled={isSavingSurplus || isLoadingSurplus || !currentChannelId}
                                 className="w-full py-3 mt-4 bg-orange-600 hover:bg-orange-700 text-white font-black text-sm rounded-xl flex items-center justify-center gap-2 shadow-md transition-all active:scale-95 disabled:opacity-50"
                             >
                                 {isSavingSurplus ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                                Lưu Dữ Liệu Bài Dư
+                                Cập Nhật Sơ Đồ
                             </button>
                         </div>
                     )}

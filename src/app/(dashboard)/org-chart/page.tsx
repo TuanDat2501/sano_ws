@@ -5,10 +5,12 @@ import { Network, Loader2, Save, CalendarDays, AlertCircle } from "lucide-react"
 import ReactFlow, { Background, Controls, MiniMap, addEdge, useNodesState, useEdgesState } from "reactflow";
 import "reactflow/dist/style.css";
 import dagre from "dagre";
-import CustomNode from "./CustomNode";
+
 import { useToast } from "@/app/component/ToastProvider";
-import OrgNodeDrawer from "./OrgNodeDrawer";
+
 import PermissionGuard from "@/app/component/PermissionGuard";
+import CustomNode from "./CustomNode";
+import OrgNodeDrawer from "./OrgNodeDrawer";
 
 const nodeTypes = {
     custom: CustomNode,
@@ -36,13 +38,10 @@ const getAvailableWeeks = (year: number, month: number) => {
     const totalDays = new Date(year, month, 0, 12, 0, 0).getDate();
     const firstDayOfMonth = new Date(year, month - 1, 1, 12, 0, 0);
     const startDayOfWeek = firstDayOfMonth.getDay();
-
     const diffToSunday = startDayOfWeek === 0 ? 0 : 7 - startDayOfWeek;
     const firstSunday = 1 + diffToSunday;
-
     const remainingDays = totalDays - firstSunday;
     const totalWeeks = 1 + Math.ceil(remainingDays / 7);
-
     return Array.from({ length: totalWeeks }, (_, i) => i + 1);
 };
 
@@ -59,7 +58,6 @@ const getCurrentWeekInfo = () => {
 
     const firstDayOfMonth = new Date(year, month - 1, 1, 12, 0, 0);
     const startDayOfWeek = firstDayOfMonth.getDay();
-
     const diffToSunday = startDayOfWeek === 0 ? 0 : 7 - startDayOfWeek;
     const firstSunday = 1 + diffToSunday;
 
@@ -75,7 +73,6 @@ const getWeekDateRange = (year: number, month: number, weekNumber: number) => {
     const totalDays = new Date(year, month, 0, 12, 0, 0).getDate();
     const firstDayOfMonth = new Date(year, month - 1, 1, 12, 0, 0);
     const startDayOfWeek = firstDayOfMonth.getDay();
-
     const diffToSunday = startDayOfWeek === 0 ? 0 : 7 - startDayOfWeek;
     const firstSunday = 1 + diffToSunday;
 
@@ -201,6 +198,7 @@ export default function OrgChartPage() {
                 setIsUnsavedWarning(false);
                 setIsViewingSaved(false);
                 
+                // 🚀 LẤY DỮ LIỆU ĐỒNG BỘ: Users, Channels, và Bảng Bài Dư Kênh Mới
                 Promise.all([
                     fetch("/api/teams").then(res => res.ok ? res.json() : []),
                     fetch("/api/departments").then(res => res.ok ? res.json() : []),
@@ -212,28 +210,24 @@ export default function OrgChartPage() {
                     fetch("/api/channels").then(async res => {
                         if (!res.ok) return [];
                         const data = await res.json();
-                        return data.filter((c: any) => c.status !== "DUNG_HOAT_DONG");
-                    })
-                ]).then(async ([teamsData, deptsData, usersData, channelsData]) => {
+                        return data.filter((c: any) => c.status !== "DUNG_HOAT_DONG" && c.status !== "BAY_KENH");
+                    }),
+                    fetch(`/api/surplus/channel?year=${selectedYear}&month=${selectedMonth}&week=${selectedWeek}`).then(res => res.ok ? res.json() : { data: [] })
+                ]).then(async ([teamsData, deptsData, usersData, channelsData, surplusRes]) => {
                     
-                    const surplusPromises = usersData.map((u: any) => 
-                        fetch(`/api/org-chart/surplus?userId=${u.id}&year=${selectedYear}&month=${selectedMonth}&week=${selectedWeek}`)
-                            .then(res => res.json())
-                            .then(resData => ({ userId: u.id, surplusData: resData.data || [] }))
-                            .catch(() => ({ userId: u.id, surplusData: [] }))
-                    );
-                    const surplusResults = await Promise.all(surplusPromises);
-                    const surplusMap = new Map();
-                    surplusResults.forEach((r: any) => surplusMap.set(r.userId, r.surplusData));
+                    const channelSurpluses = surplusRes.data || [];
 
-                    // 🚀 HÀM TIỆN ÍCH GOM NHÓM BÀI DƯ THEO PHÚT
+                    // HÀM TIỆN ÍCH GOM NHÓM BÀI DƯ THEO PHÚT
                     const aggregateSurplus = (surplusArray: any[]) => {
                         const durCount: Record<number, number> = {};
                         (surplusArray || []).forEach((s: any) => {
                             const d = Number(s.duration) || 0;
                             durCount[d] = (durCount[d] || 0) + (Number(s.count) || 0);
                         });
-                        return Object.entries(durCount).map(([dur, count]) => ({ duration: Number(dur), count: count as number })).sort((a, b) => b.duration - a.duration);
+                        return Object.entries(durCount)
+                            .map(([dur, count]) => ({ duration: Number(dur), count: count as number }))
+                            .filter(x => x.count > 0)
+                            .sort((a, b) => b.duration - a.duration);
                     };
 
                     const initialNodes: any[] = [];
@@ -320,15 +314,12 @@ export default function OrgChartPage() {
                             const leaderKPIs = (u.currentWeekStats?.targetDetails || []).filter((td: any) => {
                                 return !td.channelId || td.jobCategory === 'LEADER';
                             });
-        
-                            const leaderSurplus = (surplusMap.get(u.id) || []).filter((s:any) => normalizeGroupRole(s.jobCategory) === 'LEADER');
 
                             initialNodes.push({
                                 id: uId, type: 'custom', position: { x: 0, y: 0 },
                                 data: {
                                     label: u.fullName, role: u.role, 
                                     targetDetails: leaderKPIs, 
-                                    surplusDetails: aggregateSurplus(leaderSurplus), 
                                     fullUserObj: u, targetPosition: 'top'
                                 }
                             });
@@ -346,13 +337,7 @@ export default function OrgChartPage() {
                                 const userChannels = new Set((u.channelMemberships || []).map((uc:any) => uc.channelId));
                                 const kpiChannels = new Set((u.currentWeekStats?.targetDetails || []).map((td:any) => td.channelId).filter(Boolean));
                                 
-                                const userSurplus = surplusMap.get(u.id) || [];
-                                const surplusChannels = new Set(userSurplus.map((s:any) => {
-                                    const foundChan = channelsData.find((ch:any) => ch.name.trim().toLowerCase() === s.channelName?.trim().toLowerCase());
-                                    return foundChan?.id;
-                                }).filter(Boolean));
-                                
-                                const allChannelsForUser = new Set([...userChannels, ...kpiChannels, ...surplusChannels]);
+                                const allChannelsForUser = new Set([...userChannels, ...kpiChannels]);
                                 
                                 let assignedToAtLeastOne = false;
                                 allChannelsForUser.forEach((cId:any) => {
@@ -416,15 +401,6 @@ export default function OrgChartPage() {
                                     userTargets.filter((td:any) => td.channelId === c.id).forEach((td:any) => {
                                         if (td.jobCategory) rolesForUser.add(normalizeGroupRole(td.jobCategory));
                                     });
-        
-                                    const userSurplus = surplusMap.get(u.id) || [];
-                                    const channelSurplusList = userSurplus.filter((s: any) => s.channelName?.trim().toLowerCase() === c.name?.trim().toLowerCase());
-                                    
-                                    if (channelSurplusList.length > 0) {
-                                        channelSurplusList.forEach((s: any) => {
-                                            if (s.jobCategory) rolesForUser.add(normalizeGroupRole(s.jobCategory));
-                                        });
-                                    }
                                     
                                     if (rolesForUser.size === 0) {
                                         rolesForUser.add(normalizeGroupRole(u.role || 'UNKNOWN'));
@@ -445,65 +421,121 @@ export default function OrgChartPage() {
                                 });
         
                                 const roleOrder = ['EDITOR', 'ANIMATOR', 'CONTENT'];
-                                const sortedRoles = Object.keys(roleGroups).sort((a, b) => {
-                                    const rankA = roleOrder.indexOf(a);
-                                    const rankB = roleOrder.indexOf(b);
-                                    return (rankA === -1 ? 99 : rankA) - (rankB === -1 ? 99 : rankB);
-                                });
-        
-                                sortedRoles.forEach(role => {
-                                    const groupUsers = roleGroups[role];
-                                    const uId = `group_${c.id}_${role}`;
-        
-                                    const groupedData = groupUsers.map(u => {
-                                        const userSurplus = surplusMap.get(u.id) || [];
-                                        const filteredSurplus = userSurplus.filter((s: any) => 
-                                            s.channelName?.trim().toLowerCase() === c.name?.trim().toLowerCase() && 
-                                            normalizeGroupRole(s.jobCategory || 'CONTENT') === role
-                                        );
-                                        
-                                        const channelSurplusDetails = aggregateSurplus(filteredSurplus);
-                                        
-                                        const userAllTargets = u.currentWeekStats?.targetDetails || [];
-                                        const filteredTargets = userAllTargets.filter((td: any) => {
-                                            if (td.channelId && td.channelId !== c.id) return false;
-                                            const tdJob = normalizeGroupRole(td.jobCategory || td.job || 'CONTENT');
-                                            return tdJob === role;
-                                        });
-        
-                                        return {
-                                            id: u.id, fullName: u.fullName,
-                                            targetDetails: filteredTargets,
-                                            surplusDetails: channelSurplusDetails, fullUserObj: u
-                                        };
-                                    });
-        
-                                    const finalGroupedData = groupedData.filter(u => u.targetDetails.length > 0 || u.surplusDetails.length > 0 || u.id !== excludeUserId);
-        
-                                    if (finalGroupedData.length > 0) {
-                                        initialNodes.push({
-                                            id: uId, type: 'custom', position: { x: 0, y: 0 },
-                                            data: { isGroup: true, role: role, users: finalGroupedData, channelName: c.name, targetPosition: 'top' }
-                                        });
-                                        initialEdges.push({ id: `e_${lastNodeId}-${uId}`, source: lastNodeId, target: uId, type: 'smoothstep' });
-                                        lastNodeId = uId; 
-                                    }
-                                });
+                            
+                            // 1. Lọc và giữ đúng thứ tự các Khâu có người làm
+                            let activeStages: { roleStr: string, users: any[] }[] = [];
+                            roleOrder.forEach(role => {
+                                if (roleGroups[role] && roleGroups[role].length > 0) {
+                                    activeStages.push({ roleStr: role, users: roleGroups[role] });
+                                }
+                            });
+                            Object.keys(roleGroups).forEach(role => {
+                                if (!roleOrder.includes(role) && roleGroups[role] && roleGroups[role].length > 0) {
+                                    activeStages.push({ roleStr: role, users: roleGroups[role] });
+                                }
+                            });
+
+                            // 2. Thuật toán gộp các khâu giống hệt nhau về mặt nhân sự (VD: Content + Chuyển động)
+                            const mergedStages: { displayRole: string, users: any[], originalRoles: string[] }[] = [];
+                            
+                            const getRoleDisplayName = (r: string) => {
+                                if (r === 'ANIMATOR') return 'Chuyển Động';
+                                if (r === 'CONTENT') return 'Content';
+                                if (r === 'EDITOR') return 'Editor';
+                                return r;
                             };
+
+                            activeStages.forEach(stage => {
+                                if (mergedStages.length === 0) {
+                                    mergedStages.push({ displayRole: getRoleDisplayName(stage.roleStr), users: stage.users, originalRoles: [stage.roleStr] });
+                                } else {
+                                    const lastStage = mergedStages[mergedStages.length - 1];
+                                    
+                                    // Sắp xếp ID để so sánh mảng user có giống hệt nhau không
+                                    const lastUserIds = lastStage.users.map(u => u.id).sort().join(',');
+                                    const currUserIds = stage.users.map(u => u.id).sort().join(',');
+
+                                    if (lastUserIds === currUserIds) {
+                                        // Nếu giống hệt người -> Gộp chung Node
+                                        lastStage.displayRole = `${lastStage.displayRole} + ${getRoleDisplayName(stage.roleStr)}`;
+                                        lastStage.originalRoles.push(stage.roleStr);
+                                    } else {
+                                        // Khác người -> Tách Node mới
+                                        mergedStages.push({ displayRole: getRoleDisplayName(stage.roleStr), users: stage.users, originalRoles: [stage.roleStr] });
+                                    }
+                                }
+                            });
+
+                            // 3. Render các Node (đã gộp hoặc đứng lẻ)
+                            mergedStages.forEach(stage => {
+                                const uId = `group_${c.id}_${stage.originalRoles.join('_')}`;
+
+                                const groupedData = stage.users.map(u => {
+                                    const userAllTargets = u.currentWeekStats?.targetDetails || [];
+                                    
+                                    // 🚀 Gom KPI của TẤT CẢ các khâu bị gộp
+                                    const filteredTargets = userAllTargets.filter((td: any) => {
+                                        if (td.channelId && td.channelId !== c.id) return false;
+                                        const tdJob = normalizeGroupRole(td.jobCategory || td.job || 'CONTENT');
+                                        return stage.originalRoles.includes(tdJob); 
+                                    });
+
+                                    return {
+                                        id: u.id, fullName: u.fullName,
+                                        targetDetails: filteredTargets,
+                                        fullUserObj: u
+                                    };
+                                });
+
+                                const finalGroupedData = groupedData.filter(u => u.targetDetails.length > 0 || u.id !== excludeUserId);
+
+                                // 🚀 Gom số dư của TẤT CẢ các khâu bị gộp
+                                const cSurplus = channelSurpluses.find((s: any) => s.channelId === c.id);
+                                let rawNodeSurplus: any[] = [];
+                                if (cSurplus && cSurplus.details) {
+                                    rawNodeSurplus = cSurplus.details.filter((d: any) => stage.originalRoles.includes(normalizeGroupRole(d.jobCategory)));
+                                }
+                                const nodeSurplusAggregated = aggregateSurplus(rawNodeSurplus);
+
+                                if (finalGroupedData.length > 0 || nodeSurplusAggregated.length > 0) {
+                                    initialNodes.push({
+                                        id: uId, type: 'custom', position: { x: 0, y: 0 },
+                                        data: { 
+                                            isGroup: true, 
+                                            role: stage.displayRole, // Tên đã nối chuỗi (VD: Content + Chuyển Động)
+                                            users: finalGroupedData, 
+                                            channelName: c.name, 
+                                            targetPosition: 'top', 
+                                            nodeSurplus: nodeSurplusAggregated 
+                                        }
+                                    });
+                                    initialEdges.push({ id: `e_${lastNodeId}-${uId}`, source: lastNodeId, target: uId, type: 'smoothstep' });
+                                    lastNodeId = uId; 
+                                }
+                            });
+                        };
         
                             qlkUsers.forEach((qlk, qlkId) => {
                                 const qlkNodeId = `qlk_${qlkId}_team_${parentId}`;
                                 const qlkTargets = qlk.currentWeekStats?.targetDetails || [];
                                 
-                                // 🚀 CHỈ LẤY ĐÚNG BÀI DƯ THUỘC KHÂU PUBLISHER GẮN VÀO NODE QLK
-                                const qlkSurplus = (surplusMap.get(qlk.id) || []).filter((s:any) => normalizeGroupRole(s.jobCategory) === 'PUBLISHER');
+                                // 🚀 ĐỔ SỐ DƯ TỪ BẢNG MỚI CHO QUẢN LÝ KÊNH
+                                const qlkChannelsArr = channelsByQlk.get(qlkId) || [];
+                                let qlkSurplusList: any[] = [];
+                                qlkChannelsArr.forEach((c: any) => {
+                                    const cSurplus = channelSurpluses.find((s: any) => s.channelId === c.id);
+                                    if (cSurplus && cSurplus.details) {
+                                        const pubSurplus = cSurplus.details.filter((d: any) => d.jobCategory === 'PUBLISHER');
+                                        qlkSurplusList = [...qlkSurplusList, ...pubSurplus];
+                                    }
+                                });
                                 
                                 initialNodes.push({
                                     id: qlkNodeId, type: 'custom', position: { x: 0, y: 0 },
                                     data: {
                                         label: qlk.fullName, role: 'PUBLISHER', 
                                         targetDetails: [], 
-                                        surplusDetails: aggregateSurplus(qlkSurplus),
+                                        nodeSurplus: aggregateSurplus(qlkSurplusList),
                                         fullUserObj: qlk, targetPosition: 'top'
                                     }
                                 });
@@ -553,7 +585,6 @@ export default function OrgChartPage() {
                                     data: {
                                         label: u.fullName, role: u.role, 
                                         targetDetails: u.currentWeekStats?.targetDetails || [], 
-                                        surplusDetails: aggregateSurplus(surplusMap.get(u.id) || []), 
                                         fullUserObj: u, targetPosition: 'top'
                                     }
                                 });
@@ -571,7 +602,6 @@ export default function OrgChartPage() {
                                     data: {
                                         label: u.fullName, role: u.role, 
                                         targetDetails: u.currentWeekStats?.targetDetails || [], 
-                                        surplusDetails: aggregateSurplus(surplusMap.get(u.id) || []), 
                                         fullUserObj: u, targetPosition: 'top'
                                     }
                                 });

@@ -544,6 +544,7 @@ model Channel {
   tasks             Task[]
   revenueTargets    ChannelRevenueTarget[]
   legacyInventories LegacyInventory[]
+  weeklySurpluses   WeeklyChannelSurplus[]
 }
 
 model ChannelRevenueTarget {
@@ -680,4 +681,23 @@ model WeeklySurplus {
   updatedAt  DateTime @updatedAt
 
   @@unique([userId, year, month, weekNumber], name: "user_surplus_time_unique")
+}
+
+// BẢNG MỚI: QUẢN LÝ BÀI DƯ THEO KÊNH VÀ KHÂU
+model WeeklyChannelSurplus {
+  id         String   @id @default(uuid())
+  year       Int
+  month      Int
+  weekNumber Int
+  
+  channelId  String
+  channel    Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  // Lưu dưới dạng mảng JSON: [{ jobCategory: "CONTENT", duration: 10, count: 2 }]
+  surplusData Json    
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([channelId, year, month, weekNumber], name: "channel_surplus_time_unique")
 }

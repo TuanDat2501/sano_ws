@@ -22,11 +22,11 @@ const translateRole = (role: string) => {
 
 const getBgColor = (role: string) => {
     const r = String(role).toUpperCase();
-    if (r === 'KÊNH') return 'bg-[#7ae2e2]'; // Xanh ngọc (Cyan)
-    if (r.includes('PUBLISH') || r.includes('MANAGER') || r.includes('QUẢN LÝ') || r.includes('QUAN_LY')) return 'bg-[#fae14f]'; // Vàng
-    if (r.includes('EDIT')) return 'bg-[#eed7f8]'; // Tím nhạt
-    if (r.includes('CONTENT')) return 'bg-[#fbf9b9]'; // Xanh lá nhạt
-    if (r.includes('ANIMAT')) return 'bg-[#ffe4b5]'; // Cam đào
+    if (r === 'KÊNH') return 'bg-[#7ae2e2]'; 
+    if (r.includes('PUBLISH') || r.includes('MANAGER') || r.includes('QUẢN LÝ') || r.includes('QUAN_LY')) return 'bg-[#fae14f]'; 
+    if (r.includes('EDIT')) return 'bg-[#eed7f8]'; 
+    if (r.includes('CONTENT')) return 'bg-[#fbf9b9]'; 
+    if (r.includes('ANIMAT')) return 'bg-[#ffe4b5]'; 
     if (r === 'LEADER') return 'bg-[#facc15]'; 
     if (r === 'SƠ ĐỒ TỔ CHỨC') return 'bg-[#fca5a5]';
     return 'bg-slate-100';
@@ -69,14 +69,20 @@ export default function CustomNode({ data }: { data: any }) {
                                     {str}
                                 </div>
                             ))}
-                            {u.surplusDetails.map((s: any, i: number) => (
-                                <div key={i} className="text-[13px] md:text-[14px] text-red-600 leading-tight">
-                                    Dư: {s.count} bài {s.duration ? s.duration + ' phút' : ''}
-                                </div>
-                            ))}
                         </div>
                     );
                 })}
+
+                {/* 🚀 HIỂN THỊ SỐ DƯ TỔNG CỦA KHÂU TỪ BẢNG KÊNH MỚI */}
+                {data.nodeSurplus && data.nodeSurplus.length > 0 && (
+                    <div className="mt-2 pt-2 border-t border-slate-800/20 flex flex-col items-center justify-center gap-0.5">
+                        {data.nodeSurplus.map((s: any, i: number) => (
+                            <div key={i} className="text-[13px] md:text-[14px] text-red-600 font-black">
+                                Dư: {s.count} bài {s.duration ? s.duration + ' phút' : ''}
+                            </div>
+                        ))}
+                    </div>
+                )}
 
                 <Handle type="source" position={Position.Bottom} className="!w-0 !h-0 !border-0 !bg-transparent opacity-0" />
             </div>
@@ -84,7 +90,7 @@ export default function CustomNode({ data }: { data: any }) {
     }
 
     // ==========================================
-    // 2. NODE ĐƠN LẺ (Kênh, Giám Đốc, Quản lý lẻ)
+    // 2. NODE ĐƠN LẺ
     // ==========================================
     const roleName = translateRole(data.role);
     let kpiStrings: string[] = [];
@@ -95,7 +101,6 @@ export default function CustomNode({ data }: { data: any }) {
              }
          });
     }
-    const surplusDetails = data.surplusDetails || [];
 
     return (
         <div className={`relative px-4 py-3 rounded-xl border border-slate-800 shadow-sm w-[220px] md:w-[240px] ${bgColor} font-bold text-center`}>
@@ -117,11 +122,16 @@ export default function CustomNode({ data }: { data: any }) {
                 </div>
             ))}
 
-            {surplusDetails.map((s: any, idx: number) => (
-                <div key={idx} className="text-[13px] md:text-[14px] text-red-600 leading-tight mt-0.5">
-                    Dư: {s.count} bài {s.duration ? s.duration + ' phút' : ''}
+            {/* HIỂN THỊ BÀI DƯ QUẢN LÝ KÊNH/LEADER */}
+            {data.nodeSurplus && data.nodeSurplus.length > 0 && data.role !== 'Kênh' && data.role !== 'Phòng Ban' && data.role !== 'Team' && data.role !== 'Sơ đồ tổ chức' && (
+                <div className="mt-2 pt-2 border-t border-slate-800/20 flex flex-col items-center justify-center gap-0.5">
+                    {data.nodeSurplus.map((s: any, i: number) => (
+                        <div key={i} className="text-[13px] md:text-[14px] text-red-600 font-black">
+                            Dư: {s.count} bài {s.duration ? s.duration + ' phút' : ''}
+                        </div>
+                    ))}
                 </div>
-            ))}
+            )}
 
             <Handle type="source" position={Position.Bottom} className="!w-0 !h-0 !border-0 !bg-transparent opacity-0" />
         </div>
