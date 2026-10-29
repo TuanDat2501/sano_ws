@@ -92,7 +92,6 @@ export default function SurplusView() {
             if (res.ok) {
                 const data = await res.json();
                 
-                // 🚀 BỔ SUNG: Sắp xếp dữ liệu theo Team, rồi mới đến tên Kênh
                 const sortedData = data.data.sort((a: any, b: any) => {
                     const tA = a.teamName || "ZZZ";
                     const tB = b.teamName || "ZZZ";
@@ -163,9 +162,10 @@ export default function SurplusView() {
                 return;
             }
 
+            // 🚀 ĐÃ SỬA: Lọc bằng (count >= 0) để cho phép nhập giá trị 0
             const finalPayload = changedData.map(c => ({
                 channelId: c.channelId,
-                details: c.details.filter((d: any) => d.count > 0).map((d: any) => ({
+                details: c.details.filter((d: any) => Number(d.count) >= 0).map((d: any) => ({
                     jobCategory: d.jobCategory,
                     duration: Number(d.duration) || 0,
                     count: Number(d.count) || 0
@@ -199,7 +199,6 @@ export default function SurplusView() {
     const totalPages = Math.ceil(surplusData.length / itemsPerPage);
     const paginatedData = surplusData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
-    // 🚀 BỔ SUNG: Tính toán biến gộp cột cho Team trên trang hiện tại
     const teamCountsInPage: Record<string, number> = {};
     paginatedData.forEach(channelRow => {
         const teamName = channelRow.teamName;
@@ -292,7 +291,6 @@ export default function SurplusView() {
                 <table className="w-full text-left text-xs text-slate-700 border-collapse min-w-max">
                     <thead className="bg-slate-100 text-[10px] uppercase font-black text-slate-500 sticky top-0 z-30 shadow-[0_1px_2px_rgba(0,0,0,0.05)] border-b border-slate-200">
                         <tr>
-                            {/* 🚀 ĐÃ SỬA: Bổ sung cột Team đứng đầu, STT, Tên kênh... */}
                             <th className="border border-slate-200 p-2 text-center sticky left-0 bg-slate-200 z-40 w-[100px] shadow-[1px_0_0_0_#e2e8f0]">Team</th>
                             <th className="border border-slate-200 p-2 text-center sticky left-[100px] bg-slate-200 z-40 w-[40px] shadow-[1px_0_0_0_#e2e8f0]">STT</th>
                             <th className="border border-slate-200 p-2 sticky left-[140px] bg-slate-200 z-40 w-[280px] shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)]">Tên Kênh</th>
@@ -325,7 +323,6 @@ export default function SurplusView() {
                                         {detailsCount === 0 ? (
                                             <tr className={`${rowBgClass} hover:bg-slate-100/50 transition-colors group`}>
                                                 
-                                                {/* 🚀 Cột TEAM gom chung */}
                                                 {isFirstChannelOfTeam && (
                                                     <td rowSpan={teamSpanCount} className="border border-slate-200 p-2 text-center align-middle sticky left-0 z-20 bg-slate-50 shadow-[1px_0_0_0_#e2e8f0]">
                                                         <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 bg-white px-2 py-1 rounded border border-slate-200 shadow-sm">{teamName}</span>
@@ -352,7 +349,7 @@ export default function SurplusView() {
                                                 <td colSpan={4} className="border border-slate-200 p-0 align-middle bg-inherit">
                                                     <button 
                                                         onClick={() => handleAddRow(channelRow.channelId)} 
-                                                        className="w-full h-full min-h-[42px] px-3 text-xs font-bold text-slate-500 hover:text-emerald-600 hover:bg-emerald-50/50 transition-colors flex items-center gap-1.5"
+                                                        className="w-full h-full min-h-[42px] px-3 text-xs font-bold text-slate-500 hover:text-emerald-600 hover:bg-emerald-50/50 transition-colors flex items-center justify-center gap-1.5"
                                                     >
                                                         <Plus size={14} strokeWidth={2.5} /> Báo bài dư cho kênh
                                                     </button>
@@ -364,7 +361,6 @@ export default function SurplusView() {
                                                     <tr key={detail.rowId} className={`${rowBgClass} hover:bg-slate-100/50 transition-colors group`}>
                                                         {dIdx === 0 && (
                                                             <>
-                                                                {/* 🚀 Cột TEAM gom chung */}
                                                                 {isFirstChannelOfTeam && (
                                                                     <td rowSpan={teamSpanCount} className="border border-slate-200 p-2 text-center align-top pt-4 sticky left-0 z-20 bg-slate-50 shadow-[1px_0_0_0_#e2e8f0]">
                                                                         <span className="text-[9px] font-black uppercase tracking-widest text-slate-500 bg-white px-2 py-1 rounded border border-slate-200 shadow-sm">{teamName}</span>
@@ -399,7 +395,7 @@ export default function SurplusView() {
                                                                 <option value="CONTENT" className="bg-white">✍️ KỊCH BẢN</option>
                                                                 <option value="EDITOR" className="bg-white">🎬 DỰNG VIDEO</option>
                                                                 <option value="ANIMATION" className="bg-white">✨ CHUYỂN ĐỘNG</option>
-                                                                {/* <option value="PUBLISHER" className="bg-white">🚀 QUẢN LÝ KÊNH</option> */}
+                                                                <option value="PUBLISHER" className="bg-white">🚀 QUẢN LÝ KÊNH</option>
                                                             </select>
                                                         </td>
                                                         <td className="border border-slate-200 p-0 align-top relative bg-inherit group/cell">
@@ -411,8 +407,9 @@ export default function SurplusView() {
                                                             />
                                                         </td>
                                                         <td className="border border-slate-200 p-0 align-top relative bg-inherit group/cell">
+                                                            {/* 🚀 ĐÃ SỬA: min = "0" để cho phép nhập 0 */}
                                                             <input 
-                                                                type="number" min="1" 
+                                                                type="number" min="0" 
                                                                 value={detail.count} 
                                                                 onChange={(e) => handleUpdateRow(channelRow.channelId, detail.rowId, 'count', Number(e.target.value))} 
                                                                 className="w-full h-full min-h-[42px] bg-transparent outline-none px-3 py-2 text-sm font-black text-orange-600 text-center transition-colors focus:bg-emerald-50/50 hover:bg-slate-50/50" 

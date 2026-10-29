@@ -73,7 +73,7 @@ export default function CustomNode({ data }: { data: any }) {
                     );
                 })}
 
-                {/* 🚀 HIỂN THỊ SỐ DƯ TỔNG CỦA KHÂU TỪ BẢNG KÊNH MỚI */}
+                {/* 🚀 ĐÃ SỬA: Bỏ điều kiện count > 0 đi, chỉ cần có data là in ra */}
                 {data.nodeSurplus && data.nodeSurplus.length > 0 && (
                     <div className="mt-2 pt-2 border-t border-slate-800/20 flex flex-col items-center justify-center gap-0.5">
                         {data.nodeSurplus.map((s: any, i: number) => (
@@ -122,7 +122,6 @@ export default function CustomNode({ data }: { data: any }) {
                 </div>
             ))}
 
-            {/* HIỂN THỊ BÀI DƯ QUẢN LÝ KÊNH/LEADER */}
             {data.nodeSurplus && data.nodeSurplus.length > 0 && data.role !== 'Kênh' && data.role !== 'Phòng Ban' && data.role !== 'Team' && data.role !== 'Sơ đồ tổ chức' && (
                 <div className="mt-2 pt-2 border-t border-slate-800/20 flex flex-col items-center justify-center gap-0.5">
                     {data.nodeSurplus.map((s: any, i: number) => (
