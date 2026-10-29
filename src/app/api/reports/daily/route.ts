@@ -48,9 +48,7 @@ export async function GET(request: Request) {
         const dailyLogs = await prisma.taskLog.findMany({
             where: {
                 createdAt: { gte: startDate, lte: endDate },
-                action: {
-                    in: ['UPDATE_LINK', 'SUBMIT_SCRIPT', 'SUBMIT_VIDEO', 'PUBLISH_VIDEO', 'DAILY_REPORT']
-                }
+                action: 'DAILY_REPORT' // 🚀 Chỉ định chính xác 1 action này
             },
             include: {
                 task: {
