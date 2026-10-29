@@ -46,8 +46,8 @@ export async function GET(req: Request) {
                         details = parsed.map((p, idx) => ({
                             rowId: `saved_${channel.id}_${idx}`,
                             jobCategory: p.jobCategory || "CONTENT",
-                            duration: p.duration || 10,
-                            count: p.count || 1
+                            duration: p.duration ?? 10,
+                            count: p.count ?? 1
                         }));
                     }
                 } catch (e) {}
