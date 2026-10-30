@@ -11,6 +11,7 @@ const translateRole = (role: string) => {
         case 'QUẢN LÝ':
         case 'CHANNEL_MANAGER': return 'Quản lý kênh';
         case 'CONTENT': return 'Content';
+        case 'KE_TOAN': return 'Kế toán';
         case 'EDIT':
         case 'EDITOR': return 'Editor';
         case 'ANIMATOR':
