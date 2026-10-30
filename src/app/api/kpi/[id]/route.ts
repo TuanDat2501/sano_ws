@@ -152,16 +152,19 @@ export async function GET(req: Request, context: any) {
         let actualCount = uniqueTasks.size;
 
         if (targetDetails && targetDetails.length > 0) {
+            // 1. Tính tổng số phút mục tiêu (Target)
             targetDetails.forEach(t => {
                 t.actualCount = 0;
                 t.actualMinutes = 0;
                 totalTargetMinutes += (Number(t.targetCount) || 0) * (Number(t.duration) || 0);
             });
 
+            // 2. Quét tất cả các task đã làm
             uniqueTasks.forEach((task, uniqueKey) => {
                 const jobCategory = uniqueKey.split('_').pop() || 'CONTENT'; 
                 const channelId = task.channel?.id;
 
+                // Tìm Target tương ứng để hiển thị số đếm 
                 let matchedTarget = targetDetails.find(t => 
                     (t.channelId === channelId || (!t.channelId && !channelId)) && 
                     (t.jobCategory || 'CONTENT') === jobCategory
@@ -178,16 +181,20 @@ export async function GET(req: Request, context: any) {
                     matchedTarget = targetDetails.find(t => (t.jobCategory || 'CONTENT') === jobCategory);
                 }
 
+                // Lấy thời lượng của bài (ưu tiên thời lượng trong chỉ tiêu, nếu không có thì lấy thời lượng thật của Task)
                 const tDuration = Number(matchedTarget?.duration || task.duration || 0);
 
+                // 🚀 CHỈ ĐẾM SỐ LƯỢNG VÀO "CHỈ TIÊU CHI TIẾT" NẾU CÓ GIAO (Mới hiện lên UI chi tiết)
                 if (matchedTarget) {
                     matchedTarget.actualCount = (matchedTarget.actualCount || 0) + 1;
                     matchedTarget.actualMinutes = (matchedTarget.actualMinutes || 0) + tDuration;
                 }
 
+                // 🚀 BÀI LÀM THÊM (KHÔNG GIAO CHỈ TIÊU) VẪN ĐƯỢC CỘNG PHÚT VÀO TỔNG THỰC TẾ
                 totalActualMinutes += tDuration;
             });
 
+            // 3. Tính % KPI (Tổng tiến độ) = Lấy Tổng Thực Tế / Tổng Mục Tiêu
             percent = totalTargetMinutes > 0 ? Math.round((totalActualMinutes / totalTargetMinutes) * 100) : 0;
         } else {
             percent = targetValue > 0 ? Math.round((actualCount / targetValue) * 100) : 0;
