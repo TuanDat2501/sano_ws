@@ -133,87 +133,63 @@ export async function GET(req: Request) {
 
                 let percent = 0;
                 let totalTargetMinutes = 0;
-                let cappedActualMinutesForPercent = 0;
+                let totalActualMinutes = 0;
                 let actualCount = uniqueTasks.size;
 
-                const bucketTaskCount: Record<string, number> = {};
-
-                uniqueTasks.forEach((task, uniqueKey) => {
-                    const jobCategory = uniqueKey.split('_').pop() || 'CONTENT'; 
-                    const isReworkBucket = (jobCategory === 'PUBLISH') ? false : task.isRework;
-                    const key = `${task.channel?.id || 'no_channel'}_${jobCategory}_${isReworkBucket ? 'rework' : 'new'}`;
-                    bucketTaskCount[key] = (bucketTaskCount[key] || 0) + 1; 
-                });
-
                 if (targetDetails && targetDetails.length > 0) {
-                    const specificTargets: Record<string, any[]> = {};
-                    const anyTargets: Record<string, any[]> = {};
-
+                    // 1. Tính tổng số phút mục tiêu (Target)
                     targetDetails.forEach(t => {
+                        t.actualCount = 0;
                         t.actualMinutes = 0;
-                        t.actualCount = 0; 
-                        const targetJob = t.jobCategory || 'CONTENT';
-                        if (t.channelId) {
-                            const key = `${t.channelId}_${targetJob}_${t.isRework ? 'rework' : 'new'}`;
-                            if (!specificTargets[key]) specificTargets[key] = [];
-                            specificTargets[key].push(t);
-                        } else {
-                            const key = `${targetJob}_${t.isRework ? 'rework' : 'new'}`;
-                            if (!anyTargets[key]) anyTargets[key] = [];
-                            anyTargets[key].push(t);
+                        totalTargetMinutes += (Number(t.targetCount) || 0) * (Number(t.duration) || 0);
+                    });
+
+                    // 2. Quét tất cả các task đã làm (cứ có Log là tính)
+                    uniqueTasks.forEach((task, uniqueKey) => {
+                        const jobCategory = uniqueKey.split('_').pop() || 'CONTENT'; 
+                        const channelId = task.channel?.id;
+
+                        // Tìm Target tương ứng để hiển thị số đếm (Bỏ qua check isRework để gom chung bài mới và bài sửa vào 1 rổ)
+                        let matchedTarget = targetDetails.find(t => 
+                            (t.channelId === channelId || (!t.channelId && !channelId)) && 
+                            (t.jobCategory || 'CONTENT') === jobCategory
+                        );
+
+                        if (!matchedTarget) {
+                            matchedTarget = targetDetails.find(t => 
+                                (!t.channelId || t.channelId === "") &&
+                                (t.jobCategory || 'CONTENT') === jobCategory
+                            );
                         }
+                        
+                        if (!matchedTarget) {
+                            matchedTarget = targetDetails.find(t => (t.jobCategory || 'CONTENT') === jobCategory);
+                        }
+
+                        const tDuration = Number(matchedTarget?.duration || task.duration || 0);
+
+                        if (matchedTarget) {
+                            matchedTarget.actualCount = (matchedTarget.actualCount || 0) + 1;
+                            matchedTarget.actualMinutes = (matchedTarget.actualMinutes || 0) + tDuration;
+                        }
+
+                        // 🚀 CỘNG THẲNG VÀO TỔNG THỰC TẾ (Bất kể là bài gì)
+                        totalActualMinutes += tDuration;
                     });
 
-                    const distributeToTargets = (targets: any[], tasksLeft: number) => {
-                        let assignedMinsTotal = 0;
-                        targets.forEach((t, index) => {
-                            const tDuration = Number(t.duration) || 0; 
-                            const tMins = Number(t.targetCount) * tDuration; 
-                            totalTargetMinutes += tMins;
-
-                            let assignedTasks = index === targets.length - 1 ? tasksLeft : Math.min(tasksLeft, Number(t.targetCount));
-                            tasksLeft -= assignedTasks;
-                            const calculatedMins = assignedTasks * tDuration;
-                            assignedMinsTotal += calculatedMins;
-
-                            t.actualCount = (t.actualCount || 0) + assignedTasks; 
-                            t.actualMinutes = (t.actualMinutes || 0) + calculatedMins; 
-                        });
-                        return { tasksLeft, assignedMinsTotal };
-                    };
-
-                    Object.keys(specificTargets).forEach(key => {
-                        const res = distributeToTargets(specificTargets[key], bucketTaskCount[key] || 0);
-                        cappedActualMinutesForPercent += res.assignedMinsTotal;
-                        bucketTaskCount[key] = 0; 
-                    });
-
-                    Object.keys(anyTargets).forEach(reworkKey => {
-                        let remainingTasks = 0;
-                        Object.keys(bucketTaskCount).forEach(bKey => {
-                            if (bKey.endsWith(`_${reworkKey}`)) { remainingTasks += bucketTaskCount[bKey]; bucketTaskCount[bKey] = 0; }
-                        });
-                        const res = distributeToTargets(anyTargets[reworkKey], remainingTasks);
-                        cappedActualMinutesForPercent += res.assignedMinsTotal;
-                    });
-
-                    percent = totalTargetMinutes > 0 ? Math.round((cappedActualMinutesForPercent / totalTargetMinutes) * 100) : 0;
+                    // 3. Tính % KPI = Lấy Thực Tế chia Mục Tiêu
+                    percent = totalTargetMinutes > 0 ? Math.round((totalActualMinutes / totalTargetMinutes) * 100) : 0;
                 } else {
                     percent = targetValue > 0 ? Math.round((actualCount / targetValue) * 100) : 0;
-                }
-
-                let totalVisualMinutes = 0;
-                if (targetDetails && targetDetails.length > 0) {
-                    targetDetails.forEach(t => totalVisualMinutes += (t.actualMinutes || 0));
                 }
 
                 return {
                     userId: user.id, fullName: user.fullName, role: user.role, teamName: user.team?.name || "Chưa có team", 
                     targetValue, actualValue: actualCount, percent, logs: allUserLogs, 
-                    targetDetails, totalTargetMinutes, totalActualMinutes: totalVisualMinutes, 
+                    targetDetails, totalTargetMinutes, totalActualMinutes, 
                     note: kpiRecord?.note || "", isLocked: kpiRecord?.isLocked || false,
                     oldTargetValue: kpiRecord?.oldTargetValue || null, avatarUrl: user.avatarUrl || null,
-                    cappedActualMinutesForPercent 
+                    cappedActualMinutesForPercent: totalActualMinutes 
                 };
             });
         };
@@ -260,7 +236,7 @@ export async function GET(req: Request) {
 
                 let monthPercent = 0;
                 if (monthTotalTargetMinutes > 0) {
-                    monthPercent = Math.round((monthCappedActualMinutes / monthTotalTargetMinutes) * 100);
+                    monthPercent = Math.round((monthTotalActualMinutes / monthTotalTargetMinutes) * 100);
                 } else if (monthTargetValue > 0) {
                     monthPercent = Math.round((monthActualValue / monthTargetValue) * 100);
                 }

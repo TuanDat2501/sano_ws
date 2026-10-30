@@ -148,95 +148,49 @@ export async function GET(req: Request, context: any) {
 
         let percent = 0;
         let totalTargetMinutes = 0;
-        let cappedActualMinutesForPercent = 0;
+        let totalActualMinutes = 0;
         let actualCount = uniqueTasks.size;
 
-        const bucketTaskCount: Record<string, number> = {};
-
-        uniqueTasks.forEach((task, uniqueKey) => {
-            const jobCategory = uniqueKey.split('_').pop() || 'CONTENT'; 
-            const isReworkBucket = (jobCategory === 'PUBLISH') ? false : task.isRework;
-
-            const key = `${task.channel?.id || 'no_channel'}_${jobCategory}_${isReworkBucket ? 'rework' : 'new'}`;
-            bucketTaskCount[key] = (bucketTaskCount[key] || 0) + 1; 
-        });
-
         if (targetDetails && targetDetails.length > 0) {
-            const specificTargets: Record<string, any[]> = {};
-            const anyTargets: Record<string, any[]> = {};
-
             targetDetails.forEach(t => {
-                t.actualMinutes = 0;
                 t.actualCount = 0;
+                t.actualMinutes = 0;
+                totalTargetMinutes += (Number(t.targetCount) || 0) * (Number(t.duration) || 0);
+            });
 
-                const targetJob = t.jobCategory || 'CONTENT';
+            uniqueTasks.forEach((task, uniqueKey) => {
+                const jobCategory = uniqueKey.split('_').pop() || 'CONTENT'; 
+                const channelId = task.channel?.id;
 
-                if (t.channelId) {
-                    const key = `${t.channelId}_${targetJob}_${t.isRework ? 'rework' : 'new'}`;
-                    if (!specificTargets[key]) specificTargets[key] = [];
-                    specificTargets[key].push(t);
-                } else {
-                    const key = `${targetJob}_${t.isRework ? 'rework' : 'new'}`;
-                    if (!anyTargets[key]) anyTargets[key] = [];
-                    anyTargets[key].push(t);
+                let matchedTarget = targetDetails.find(t => 
+                    (t.channelId === channelId || (!t.channelId && !channelId)) && 
+                    (t.jobCategory || 'CONTENT') === jobCategory
+                );
+
+                if (!matchedTarget) {
+                    matchedTarget = targetDetails.find(t => 
+                        (!t.channelId || t.channelId === "") &&
+                        (t.jobCategory || 'CONTENT') === jobCategory
+                    );
                 }
-            });
-
-            const distributeToTargets = (targets: any[], tasksLeft: number) => {
-                let assignedMinsTotal = 0;
                 
-                targets.forEach((t, index) => {
-                    const tDuration = Number(t.duration) || 0; 
-                    const tMins = Number(t.targetCount) * tDuration; 
-                    totalTargetMinutes += tMins;
+                if (!matchedTarget) {
+                    matchedTarget = targetDetails.find(t => (t.jobCategory || 'CONTENT') === jobCategory);
+                }
 
-                    let assignedTasks = 0;
+                const tDuration = Number(matchedTarget?.duration || task.duration || 0);
 
-                    if (index === targets.length - 1) {
-                        assignedTasks = tasksLeft;
-                    } else {
-                        assignedTasks = Math.min(tasksLeft, Number(t.targetCount));
-                    }
+                if (matchedTarget) {
+                    matchedTarget.actualCount = (matchedTarget.actualCount || 0) + 1;
+                    matchedTarget.actualMinutes = (matchedTarget.actualMinutes || 0) + tDuration;
+                }
 
-                    tasksLeft -= assignedTasks;
-                    
-                    const calculatedMins = assignedTasks * tDuration;
-                    assignedMinsTotal += calculatedMins;
-
-                    t.actualCount = (t.actualCount || 0) + assignedTasks;
-                    t.actualMinutes = (t.actualMinutes || 0) + calculatedMins;
-                });
-                
-                return { tasksLeft, assignedMinsTotal };
-            };
-
-            Object.keys(specificTargets).forEach(key => {
-                const res = distributeToTargets(specificTargets[key], bucketTaskCount[key] || 0);
-                cappedActualMinutesForPercent += res.assignedMinsTotal;
-                bucketTaskCount[key] = 0;
+                totalActualMinutes += tDuration;
             });
 
-            Object.keys(anyTargets).forEach(reworkKey => {
-                let remainingTasks = 0;
-                Object.keys(bucketTaskCount).forEach(bKey => {
-                    if (bKey.endsWith(`_${reworkKey}`)) {
-                        remainingTasks += bucketTaskCount[bKey];
-                        bucketTaskCount[bKey] = 0;
-                    }
-                });
-
-                const res = distributeToTargets(anyTargets[reworkKey], remainingTasks);
-                cappedActualMinutesForPercent += res.assignedMinsTotal;
-            });
-
-            percent = totalTargetMinutes > 0 ? Math.round((cappedActualMinutesForPercent / totalTargetMinutes) * 100) : 0;
+            percent = totalTargetMinutes > 0 ? Math.round((totalActualMinutes / totalTargetMinutes) * 100) : 0;
         } else {
             percent = targetValue > 0 ? Math.round((actualCount / targetValue) * 100) : 0;
-        }
-
-        let totalVisualMinutes = 0;
-        if (targetDetails && targetDetails.length > 0) {
-            targetDetails.forEach(t => totalVisualMinutes += (t.actualMinutes || 0));
         }
 
         return NextResponse.json({
@@ -250,7 +204,7 @@ export async function GET(req: Request, context: any) {
             logs: allUserLogs,
             targetDetails, 
             totalTargetMinutes, 
-            totalActualMinutes: totalVisualMinutes,
+            totalActualMinutes,
             avatarUrl: user.avatarUrl || null
         });
 
