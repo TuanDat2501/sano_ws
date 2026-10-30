@@ -93,6 +93,7 @@ const normalizeGroupRole = (role: string) => {
     const r = String(role).toUpperCase();
     if (r.includes('EDIT')) return 'EDITOR';
     if (r.includes('CONTENT')) return 'CONTENT';
+    if (r.includes('IT')) return 'IT';
     if (r.includes('ANIMAT')) return 'ANIMATOR';
     if (['PUBLISHER', 'PUBLISH', 'CHANNEL_MANAGER', 'QUAN_LY', 'QUẢN LÝ', 'QUẢN LÝ KÊNH'].includes(r)) return 'PUBLISHER';
     return r;
@@ -421,96 +422,49 @@ export default function OrgChartPage() {
                                 });
 
                                 const roleOrder = ['EDITOR', 'ANIMATOR', 'CONTENT'];
-
-                                // 1. Lọc và giữ đúng thứ tự các Khâu có người làm
-                                let activeStages: { roleStr: string, users: any[] }[] = [];
-                                roleOrder.forEach(role => {
-                                    if (roleGroups[role] && roleGroups[role].length > 0) {
-                                        activeStages.push({ roleStr: role, users: roleGroups[role] });
-                                    }
+        
+                                const sortedRoles = Object.keys(roleGroups).sort((a, b) => {
+                                    const rankA = roleOrder.indexOf(a);
+                                    const rankB = roleOrder.indexOf(b);
+                                    return (rankA === -1 ? 99 : rankA) - (rankB === -1 ? 99 : rankB);
                                 });
-                                Object.keys(roleGroups).forEach(role => {
-                                    if (!roleOrder.includes(role) && roleGroups[role] && roleGroups[role].length > 0) {
-                                        activeStages.push({ roleStr: role, users: roleGroups[role] });
-                                    }
-                                });
-
-                                // 2. Thuật toán gộp các khâu giống hệt nhau về mặt nhân sự (VD: Content + Chuyển động)
-                                const mergedStages: { displayRole: string, users: any[], originalRoles: string[] }[] = [];
-
-                                const getRoleDisplayName = (r: string) => {
-                                    if (r === 'ANIMATOR') return 'Chuyển Động';
-                                    if (r === 'CONTENT') return 'Content';
-                                    if (r === 'EDITOR') return 'Editor';
-                                    return r;
-                                };
-
-                                activeStages.forEach(stage => {
-                                    if (mergedStages.length === 0) {
-                                        mergedStages.push({ displayRole: getRoleDisplayName(stage.roleStr), users: stage.users, originalRoles: [stage.roleStr] });
-                                    } else {
-                                        const lastStage = mergedStages[mergedStages.length - 1];
-
-                                        // Sắp xếp ID để so sánh mảng user có giống hệt nhau không
-                                        const lastUserIds = lastStage.users.map(u => u.id).sort().join(',');
-                                        const currUserIds = stage.users.map(u => u.id).sort().join(',');
-
-                                        if (lastUserIds === currUserIds) {
-                                            // Nếu giống hệt người -> Gộp chung Node
-                                            lastStage.displayRole = `${lastStage.displayRole} + ${getRoleDisplayName(stage.roleStr)}`;
-                                            lastStage.originalRoles.push(stage.roleStr);
-                                        } else {
-                                            // Khác người -> Tách Node mới
-                                            mergedStages.push({ displayRole: getRoleDisplayName(stage.roleStr), users: stage.users, originalRoles: [stage.roleStr] });
-                                        }
-                                    }
-                                });
-
-                                // 3. Render các Node (đã gộp hoặc đứng lẻ)
-                                mergedStages.forEach(stage => {
-                                    const uId = `group_${c.id}_${stage.originalRoles.join('_')}`;
-
-                                    const groupedData = stage.users.map(u => {
+        
+                                sortedRoles.forEach(role => {
+                                    const groupUsers = roleGroups[role];
+                                    const uId = `group_${c.id}_${role}`;
+        
+                                    const groupedData = groupUsers.map(u => {
                                         const userAllTargets = u.currentWeekStats?.targetDetails || [];
-
-                                        // 🚀 Gom KPI của TẤT CẢ các khâu bị gộp
                                         const filteredTargets = userAllTargets.filter((td: any) => {
                                             if (td.channelId && td.channelId !== c.id) return false;
                                             const tdJob = normalizeGroupRole(td.jobCategory || td.job || 'CONTENT');
-                                            return stage.originalRoles.includes(tdJob);
+                                            return tdJob === role;
                                         });
-
+        
                                         return {
                                             id: u.id, fullName: u.fullName,
                                             targetDetails: filteredTargets,
                                             fullUserObj: u
                                         };
                                     });
-
+        
                                     const finalGroupedData = groupedData.filter(u => u.targetDetails.length > 0 || u.id !== excludeUserId);
-
-                                    // 🚀 Gom số dư của TẤT CẢ các khâu bị gộp
+        
+                                    // 🚀 ĐỔ SỐ DƯ TỪ BẢNG MỚI VÀO TỪNG NHÓM (KHÔNG GỘP KHÂU NỮA)
                                     const cSurplus = channelSurpluses.find((s: any) => s.channelId === c.id);
                                     let rawNodeSurplus: any[] = [];
                                     if (cSurplus && cSurplus.details) {
-                                        rawNodeSurplus = cSurplus.details.filter((d: any) => stage.originalRoles.includes(normalizeGroupRole(d.jobCategory)));
+                                        rawNodeSurplus = cSurplus.details.filter((d: any) => normalizeGroupRole(d.jobCategory) === role);
                                     }
                                     const nodeSurplusAggregated = aggregateSurplus(rawNodeSurplus);
 
                                     if (finalGroupedData.length > 0 || nodeSurplusAggregated.length > 0) {
                                         initialNodes.push({
                                             id: uId, type: 'custom', position: { x: 0, y: 0 },
-                                            data: {
-                                                isGroup: true,
-                                                role: stage.displayRole, // Tên đã nối chuỗi (VD: Content + Chuyển Động)
-                                                users: finalGroupedData,
-                                                channelName: c.name,
-                                                targetPosition: 'top',
-                                                nodeSurplus: nodeSurplusAggregated
-                                            }
+                                            data: { isGroup: true, role: role, users: finalGroupedData, channelName: c.name, targetPosition: 'top', nodeSurplus: nodeSurplusAggregated }
                                         });
                                         initialEdges.push({ id: `e_${lastNodeId}-${uId}`, source: lastNodeId, target: uId, type: 'smoothstep' });
-                                        lastNodeId = uId;
+                                        lastNodeId = uId; 
                                     }
                                 });
                             };

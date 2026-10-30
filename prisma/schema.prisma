@@ -17,6 +17,7 @@ enum Role {
   HR
   KE_TOAN
   PUBLISHER
+  IT
 }
 
 enum TaskStatus {
