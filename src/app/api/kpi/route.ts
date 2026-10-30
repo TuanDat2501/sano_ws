@@ -145,39 +145,42 @@ export async function GET(req: Request) {
                     });
 
                     // 2. Quét tất cả các task đã làm
-                    uniqueTasks.forEach((task, uniqueKey) => {
-                        const jobCategory = uniqueKey.split('_').pop() || 'CONTENT';
-                        const channelId = task.channel?.id;
+                    // 2. Quét tất cả các task đã làm
+            uniqueTasks.forEach((task, uniqueKey) => {
+                const jobCategory = uniqueKey.split('_').pop() || 'CONTENT'; 
+                const channelId = task.channel?.id;
+                
+                // 🚀 ĐÃ BỔ SUNG: Nhận diện task này là bài mới hay bài sửa
+                const isReworkTask = (jobCategory === 'PUBLISH') ? false : Boolean(task.isRework);
 
-                        // Tìm Target tương ứng để hiển thị số đếm 
-                        let matchedTarget = targetDetails.find(t =>
-                            (t.channelId === channelId || (!t.channelId && !channelId)) &&
-                            (t.jobCategory || 'CONTENT') === jobCategory
-                        );
+                // Tìm Target khớp TUYỆT ĐỐI (Kênh + Khâu + Loại bài Mới/Sửa)
+                let matchedTarget = targetDetails.find(t => 
+                    (t.channelId === channelId || (!t.channelId && !channelId)) && 
+                    (t.jobCategory || 'CONTENT') === jobCategory &&
+                    Boolean(t.isRework) === isReworkTask // Bắt buộc phải cùng loại bài
+                );
 
-                        if (!matchedTarget) {
-                            matchedTarget = targetDetails.find(t =>
-                                (!t.channelId || t.channelId === "") &&
-                                (t.jobCategory || 'CONTENT') === jobCategory
-                            );
-                        }
+                // Nếu không thấy Target cho kênh cụ thể, tìm Target dùng chung (Khâu + Loại bài Mới/Sửa)
+                if (!matchedTarget) {
+                    matchedTarget = targetDetails.find(t => 
+                        (!t.channelId || t.channelId === "") &&
+                        (t.jobCategory || 'CONTENT') === jobCategory &&
+                        Boolean(t.isRework) === isReworkTask // Bắt buộc phải cùng loại bài
+                    );
+                }
 
-                        if (!matchedTarget) {
-                            matchedTarget = targetDetails.find(t => (t.jobCategory || 'CONTENT') === jobCategory);
-                        }
+                // Lấy thời lượng của bài (ưu tiên thời lượng trong chỉ tiêu, nếu không có thì lấy thời lượng thật của Task)
+                const tDuration = Number(matchedTarget?.duration || task.duration || 0);
 
-                        // Lấy thời lượng của bài (ưu tiên thời lượng trong chỉ tiêu, nếu không có thì lấy thời lượng thật của Task)
-                        const tDuration = Number(matchedTarget?.duration || task.duration || 0);
+                // 🚀 CHỈ KHI KHỚP CHÍNH XÁC THÌ MỚI HIỂN THỊ VÀO BẢNG CHỈ TIÊU CHI TIẾT
+                if (matchedTarget) {
+                    matchedTarget.actualCount = (matchedTarget.actualCount || 0) + 1;
+                    matchedTarget.actualMinutes = (matchedTarget.actualMinutes || 0) + tDuration;
+                }
 
-                        // 🚀 CHỈ ĐẾM SỐ LƯỢNG VÀO "CHỈ TIÊU CHI TIẾT" NẾU CÓ GIAO (Mới hiện lên UI chi tiết)
-                        if (matchedTarget) {
-                            matchedTarget.actualCount = (matchedTarget.actualCount || 0) + 1;
-                            matchedTarget.actualMinutes = (matchedTarget.actualMinutes || 0) + tDuration;
-                        }
-
-                        // 🚀 BÀI LÀM THÊM (KHÔNG GIAO CHỈ TIÊU) VẪN ĐƯỢC CỘNG PHÚT VÀO TỔNG THỰC TẾ
-                        totalActualMinutes += tDuration;
-                    });
+                // 🚀 TẤT CẢ CÁC BÀI (kể cả bài sửa không được giao) ĐỀU ĐƯỢC CỘNG VÀO TIẾN ĐỘ TỔNG HỢP
+                totalActualMinutes += tDuration;
+            });
 
                     // 3. Tính % KPI (Tổng tiến độ) = Lấy Tổng Thực Tế / Tổng Mục Tiêu
                     percent = totalTargetMinutes > 0 ? Math.round((totalActualMinutes / totalTargetMinutes) * 100) : 0;
