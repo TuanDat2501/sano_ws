@@ -194,10 +194,15 @@ export async function GET(req: Request) {
 
                         // 🚀 BƯỚC 2: LỌC KPI THÔNG MINH (SMART FILTER CÂN CẢ 2 BÀI GIỐNG NHAU KHÁC PHÚT)
                         const findSmartTarget = (isChannelSpecific: boolean) => {
-                            const baseFilter = (t: any) =>
-                                (isChannelSpecific ? (t.channelId === channelId) : (!t.channelId || t.channelId === "")) &&
-                                (t.jobCategory || 'CONTENT') === jobCategory &&
-                                Boolean(t.isRework) === isReworkTask;
+                            const baseFilter = (t: any) => {
+                                const matchChannel = isChannelSpecific ? (t.channelId === channelId) : (!t.channelId || t.channelId === "");
+                                const matchJob = (t.jobCategory || 'CONTENT') === jobCategory;
+                                
+                                // 🚀 ĐẶC QUYỀN QUẢN LÝ KÊNH: Bỏ qua kiểm tra Mới/Sửa, khớp tất cả
+                                const matchRework = jobCategory === 'PUBLISH' ? true : Boolean(t.isRework) === isReworkTask;
+        
+                                return matchChannel && matchJob && matchRework;
+                            };
 
                             let found = targetDetails.find(t => baseFilter(t) && Number(t.duration) === actualTaskDuration && (t.actualCount || 0) < Number(t.targetCount));
                             if (!found) found = targetDetails.find(t => baseFilter(t) && Number(t.duration) === actualTaskDuration);

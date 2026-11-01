@@ -191,18 +191,21 @@ export async function GET(req: Request, context: any) {
             uniqueTasks.forEach((task, uniqueKey) => {
                 const jobCategory = uniqueKey.split('_').pop() || 'CONTENT';
                 const channelId = task.channel?.id;
-                
-                // Trả lại sự thật cho bài Quản lý kênh (không ép false nữa)
                 const isReworkTask = Boolean(task.isRework);
                 
                 const actualTaskDuration = Number(task.duration) || 0;
 
-                // 🚀 LỌC KPI THÔNG MINH (SMART FILTER CÂN CẢ 2 BÀI GIỐNG NHAU KHÁC PHÚT)
+                // 🚀 LỌC KPI THÔNG MINH (SMART FILTER)
                 const findSmartTarget = (isChannelSpecific: boolean) => {
-                    const baseFilter = (t: any) => 
-                        (isChannelSpecific ? (t.channelId === channelId) : (!t.channelId || t.channelId === "")) &&
-                        (t.jobCategory || 'CONTENT') === jobCategory &&
-                        Boolean(t.isRework) === isReworkTask;
+                    const baseFilter = (t: any) => {
+                        const matchChannel = isChannelSpecific ? (t.channelId === channelId) : (!t.channelId || t.channelId === "");
+                        const matchJob = (t.jobCategory || 'CONTENT') === jobCategory;
+                        
+                        // 🚀 ĐẶC QUYỀN QUẢN LÝ KÊNH: Bỏ qua kiểm tra Mới/Sửa, khớp tất cả
+                        const matchRework = jobCategory === 'PUBLISH' ? true : Boolean(t.isRework) === isReworkTask;
+
+                        return matchChannel && matchJob && matchRework;
+                    };
 
                     let found = targetDetails.find(t => baseFilter(t) && Number(t.duration) === actualTaskDuration && (t.actualCount || 0) < Number(t.targetCount));
                     if (!found) found = targetDetails.find(t => baseFilter(t) && Number(t.duration) === actualTaskDuration);
@@ -220,13 +223,13 @@ export async function GET(req: Request, context: any) {
                 // Lấy thời lượng của bài (ưu tiên thời lượng trong chỉ tiêu, nếu không có thì lấy thời lượng thật của Task)
                 const tDuration = Number(matchedTarget?.duration || actualTaskDuration);
 
-                // CHỈ ĐẾM SỐ LƯỢNG VÀO "CHỈ TIÊU CHI TIẾT" NẾU CÓ GIAO (Mới hiện lên UI chi tiết)
+                // ĐẾM SỐ LƯỢNG VÀO "CHỈ TIÊU CHI TIẾT" NẾU CÓ GIAO
                 if (matchedTarget) {
                     matchedTarget.actualCount = (matchedTarget.actualCount || 0) + 1;
                     matchedTarget.actualMinutes = (matchedTarget.actualMinutes || 0) + tDuration;
                 }
 
-                // BÀI LÀM THÊM (KHÔNG GIAO CHỈ TIÊU) VẪN ĐƯỢC CỘNG PHÚT VÀO TỔNG THỰC TẾ
+                // CỘNG PHÚT VÀO TỔNG THỰC TẾ
                 totalActualMinutes += tDuration;
             });
 
