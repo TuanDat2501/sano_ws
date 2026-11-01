@@ -85,7 +85,8 @@ export async function GET(req: Request) {
                         id: true, action: true, details: true, jobCategory: true, createdAt: true, taskId: true, userId: true,
                         task: {
                             select: {
-                                id: true, title: true, status: true, duration: true, isRework: true, channelId: true,
+                                // 🚀 Lấy cờ isReject lên để lọc rác
+                                id: true, title: true, status: true, duration: true, isRework: true, channelId: true, isReject: true,
                                 scriptLink: true, englishScriptLink: true, storyboardLink: true, audioLink: true, thumbnailLink: true, videoLink: true, publishLink: true, roughProjectLink: true,
                                 channel: { select: { id: true, name: true } }
                             }
@@ -98,9 +99,49 @@ export async function GET(req: Request) {
                 const kpiRecord = allKpis.find(k => k.userId === user.id);
                 const rawUserLogs = allLogs.filter(l => l.userId === user.id);
 
-                const validUserLogs = rawUserLogs.filter(log => String(log.action || "").toUpperCase() === "DAILY_REPORT");
-                const mappedLogs = validUserLogs.map(log => ({ ...log, typeStr: "Báo cáo", isCounted: false }));
+                // ========================================================
+                // 🚀 BƯỚC 1: LỌC BỎ CÁC BÀI BỊ REJECT HOẶC YÊU CẦU LÀM LẠI
+                // ========================================================
+                const rejectedLogs = rawUserLogs.filter(log =>
+                    ["REJECT_TASK", "REJECT_CONTENT", "REJECT_ANIMATION", "REJECT_EDIT"].includes(String(log.action || "").toUpperCase())
+                );
 
+                const rejectedTaskJobs = new Set<string>();
+                rejectedLogs.forEach(rLog => {
+                    let rJobCategory = rLog.jobCategory;
+                    if (!rJobCategory) {
+                        if (rLog.action === "REJECT_CONTENT") rJobCategory = "CONTENT";
+                        else if (rLog.action === "REJECT_ANIMATION") rJobCategory = "ANIMATION";
+                        else if (rLog.action === "REJECT_EDIT") rJobCategory = "EDIT";
+                        else rJobCategory = "GENERAL";
+                    }
+                    rejectedTaskJobs.add(`${rLog.taskId}_${rJobCategory}`);
+                });
+
+                const validUserLogs = rawUserLogs.filter(log => {
+                    if (String(log.action || "").toUpperCase() !== "DAILY_REPORT") return false;
+                    
+                    // Chặn thẳng nếu task đang bị cờ isReject
+                    if (log.task?.isReject) return false;
+
+                    let currentJob = log.jobCategory;
+                    if (!currentJob) {
+                        const txt = String(log.details || "").toLowerCase();
+                        if (txt.includes("gán thủ công")) currentJob = "MANUAL";
+                        else if (txt.includes("kịch bản") || txt.includes("bố cục")) currentJob = "CONTENT";
+                        else if (txt.includes("prj thô") || txt.includes("link project") || txt.includes("audio") || txt.includes("âm thanh") || txt.includes("video render")) currentJob = "EDIT";
+                        else if (txt.includes("chuyển động")) currentJob = "ANIMATION";
+                        else if (txt.includes("đã đăng") || txt.includes("thumbnail")) currentJob = "PUBLISH";
+                        else currentJob = "GENERAL";
+                    }
+
+                    if (rejectedTaskJobs.has(`${log.taskId}_${currentJob}`) || rejectedTaskJobs.has(`${log.taskId}_GENERAL`)) {
+                        return false;
+                    }
+                    return true;
+                });
+
+                const mappedLogs = validUserLogs.map(log => ({ ...log, typeStr: "Báo cáo", isCounted: false }));
                 const uniqueTasks = new Map<string, any>();
 
                 mappedLogs.forEach(log => {
@@ -149,34 +190,23 @@ export async function GET(req: Request) {
                         const jobCategory = uniqueKey.split('_').pop() || 'CONTENT';
                         const channelId = task.channel?.id;
                         const isReworkTask = Boolean(task.isRework);
-
-                        // Lấy thời lượng của bài thực tế để so khớp
                         const actualTaskDuration = Number(task.duration) || 0;
 
-                        // 🚀 LỌC KPI THÔNG MINH (SMART FILTER)
+                        // 🚀 BƯỚC 2: LỌC KPI THÔNG MINH (SMART FILTER CÂN CẢ 2 BÀI GIỐNG NHAU KHÁC PHÚT)
                         const findSmartTarget = (isChannelSpecific: boolean) => {
-                            // Điều kiện cơ bản bắt buộc: Khớp Kênh, Khâu, Loại bài
                             const baseFilter = (t: any) =>
                                 (isChannelSpecific ? (t.channelId === channelId) : (!t.channelId || t.channelId === "")) &&
                                 (t.jobCategory || 'CONTENT') === jobCategory &&
                                 Boolean(t.isRework) === isReworkTask;
 
-                            // Mức 1: Khớp chuẩn 100% (Khớp số phút + Mục tiêu này chưa nộp đủ bài)
                             let found = targetDetails.find(t => baseFilter(t) && Number(t.duration) === actualTaskDuration && (t.actualCount || 0) < Number(t.targetCount));
-
-                            // Mức 2: Khớp ĐÚNG số phút (Dù đã vượt chỉ tiêu số bài, vẫn ưu tiên gom chung vào dòng cùng số phút)
                             if (!found) found = targetDetails.find(t => baseFilter(t) && Number(t.duration) === actualTaskDuration);
-
-                            // Mức 3: Nếu số phút bài nộp không giống cái nào, ưu tiên lấp vào Mục tiêu nào CHƯA HOÀN THÀNH
                             if (!found) found = targetDetails.find(t => baseFilter(t) && (t.actualCount || 0) < Number(t.targetCount));
-
-                            // Mức 4: Vớt dòng đầu tiên khớp điều kiện cơ bản
                             if (!found) found = targetDetails.find(t => baseFilter(t));
 
                             return found;
                         };
 
-                        // Tìm theo kênh đích danh trước, không có mới tìm mục tiêu dùng chung
                         let matchedTarget = findSmartTarget(true);
                         if (!matchedTarget) {
                             matchedTarget = findSmartTarget(false);
@@ -185,13 +215,13 @@ export async function GET(req: Request) {
                         // Lấy thời lượng của bài (ưu tiên thời lượng trong chỉ tiêu, nếu không có thì lấy thời lượng thật của Task)
                         const tDuration = Number(matchedTarget?.duration || actualTaskDuration);
 
-                        // 🚀 CHỈ ĐẾM SỐ LƯỢNG VÀO "CHỈ TIÊU CHI TIẾT" NẾU CÓ GIAO (Mới hiện lên UI chi tiết)
+                        // CHỈ ĐẾM SỐ LƯỢNG VÀO "CHỈ TIÊU CHI TIẾT" NẾU CÓ GIAO (Mới hiện lên UI chi tiết)
                         if (matchedTarget) {
                             matchedTarget.actualCount = (matchedTarget.actualCount || 0) + 1;
                             matchedTarget.actualMinutes = (matchedTarget.actualMinutes || 0) + tDuration;
                         }
 
-                        // 🚀 BÀI LÀM THÊM (KHÔNG GIAO CHỈ TIÊU) VẪN ĐƯỢC CỘNG PHÚT VÀO TỔNG THỰC TẾ
+                        // BÀI LÀM THÊM (KHÔNG GIAO CHỈ TIÊU) VẪN ĐƯỢC CỘNG PHÚT VÀO TỔNG THỰC TẾ
                         totalActualMinutes += tDuration;
                     });
 
@@ -341,7 +371,6 @@ export async function POST(req: Request) {
                 oldTargetToSave = existingKPI.targetValue;
             }
 
-            // 🚀 BẮT ĐẦU LOGIC TRACKING TỰ ĐỘNG SINH GHI CHÚ
             try {
                 const oldDetails = (typeof existingKPI.targetDetails === 'string')
                     ? JSON.parse(existingKPI.targetDetails)
@@ -362,21 +391,18 @@ export async function POST(req: Request) {
                 });
 
                 let changes: string[] = [];
-                // Bóc tách sự thay đổi hoặc thêm mới
                 newMap.forEach((newCount, key) => {
                     const oldCount = oldMap.get(key) || 0;
                     if (newCount !== oldCount) {
                         changes.push(`• ${key}: ${oldCount} ➔ ${newCount} bài`);
                     }
                 });
-                // Bóc tách dữ liệu bị xóa đi (0 bài)
                 oldMap.forEach((oldCount, key) => {
                     if (!newMap.has(key)) {
                         changes.push(`• ${key}: ${oldCount} ➔ 0 bài`);
                     }
                 });
 
-                // Nếu có sự thay đổi, tự động tạo chuỗi Log và nối vào Ghi chú
                 if (changes.length > 0) {
                     const timeStr = new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
                     const editorName = currentUser?.fullName || "Hệ thống";
@@ -387,7 +413,6 @@ export async function POST(req: Request) {
             } catch (e) {
                 console.error("Lỗi track thay đổi KPI", e);
             }
-            // 🚀 KẾT THÚC LOGIC TRACKING
 
             kpiRecord = await prisma.weeklyKPI.update({
                 where: { id: existingKPI.id },
