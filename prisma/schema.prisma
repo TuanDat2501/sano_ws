@@ -263,6 +263,7 @@ model Task {
   creatorId   String
   creator     User    @relation("TaskCreator", fields: [creatorId], references: [id])
   isRework    Boolean @default(false)
+  isReject Boolean @default(false)
   contentId   String?
   contentUser User?   @relation("TaskContent", fields: [contentId], references: [id])
 

@@ -160,40 +160,53 @@ export async function GET(req: Request, context: any) {
             });
 
             // 2. Quét tất cả các task đã làm
-            // 2. Quét tất cả các task đã làm
             uniqueTasks.forEach((task, uniqueKey) => {
-                const jobCategory = uniqueKey.split('_').pop() || 'CONTENT'; 
+                const jobCategory = uniqueKey.split('_').pop() || 'CONTENT';
                 const channelId = task.channel?.id;
+                const isReworkTask = Boolean(task.isRework);
                 
-                // 🚀 ĐÃ BỔ SUNG: Nhận diện task này là bài mới hay bài sửa
-                const isReworkTask = (jobCategory === 'PUBLISH') ? false : Boolean(task.isRework);
+                // Lấy thời lượng của bài thực tế để so khớp
+                const actualTaskDuration = Number(task.duration) || 0;
 
-                // Tìm Target khớp TUYỆT ĐỐI (Kênh + Khâu + Loại bài Mới/Sửa)
-                let matchedTarget = targetDetails.find(t => 
-                    (t.channelId === channelId || (!t.channelId && !channelId)) && 
-                    (t.jobCategory || 'CONTENT') === jobCategory &&
-                    Boolean(t.isRework) === isReworkTask // Bắt buộc phải cùng loại bài
-                );
-
-                // Nếu không thấy Target cho kênh cụ thể, tìm Target dùng chung (Khâu + Loại bài Mới/Sửa)
-                if (!matchedTarget) {
-                    matchedTarget = targetDetails.find(t => 
-                        (!t.channelId || t.channelId === "") &&
+                // 🚀 LỌC KPI THÔNG MINH (SMART FILTER)
+                const findSmartTarget = (isChannelSpecific: boolean) => {
+                    // Điều kiện cơ bản bắt buộc: Khớp Kênh, Khâu, Loại bài
+                    const baseFilter = (t: any) => 
+                        (isChannelSpecific ? (t.channelId === channelId) : (!t.channelId || t.channelId === "")) &&
                         (t.jobCategory || 'CONTENT') === jobCategory &&
-                        Boolean(t.isRework) === isReworkTask // Bắt buộc phải cùng loại bài
-                    );
+                        Boolean(t.isRework) === isReworkTask;
+
+                    // Mức 1: Khớp chuẩn 100% (Khớp số phút + Mục tiêu này chưa nộp đủ bài)
+                    let found = targetDetails.find(t => baseFilter(t) && Number(t.duration) === actualTaskDuration && (t.actualCount || 0) < Number(t.targetCount));
+                    
+                    // Mức 2: Khớp ĐÚNG số phút (Dù đã vượt chỉ tiêu số bài, vẫn ưu tiên gom chung vào dòng cùng số phút)
+                    if (!found) found = targetDetails.find(t => baseFilter(t) && Number(t.duration) === actualTaskDuration);
+                    
+                    // Mức 3: Nếu số phút bài nộp không giống cái nào, ưu tiên lấp vào Mục tiêu nào CHƯA HOÀN THÀNH
+                    if (!found) found = targetDetails.find(t => baseFilter(t) && (t.actualCount || 0) < Number(t.targetCount));
+                    
+                    // Mức 4: Vớt dòng đầu tiên khớp điều kiện cơ bản
+                    if (!found) found = targetDetails.find(t => baseFilter(t));
+                    
+                    return found;
+                };
+
+                // Tìm theo kênh đích danh trước, không có mới tìm mục tiêu dùng chung
+                let matchedTarget = findSmartTarget(true);
+                if (!matchedTarget) {
+                    matchedTarget = findSmartTarget(false);
                 }
 
                 // Lấy thời lượng của bài (ưu tiên thời lượng trong chỉ tiêu, nếu không có thì lấy thời lượng thật của Task)
-                const tDuration = Number(matchedTarget?.duration || task.duration || 0);
+                const tDuration = Number(matchedTarget?.duration || actualTaskDuration);
 
-                // 🚀 CHỈ KHI KHỚP CHÍNH XÁC THÌ MỚI HIỂN THỊ VÀO BẢNG CHỈ TIÊU CHI TIẾT
+                // 🚀 CHỈ ĐẾM SỐ LƯỢNG VÀO "CHỈ TIÊU CHI TIẾT" NẾU CÓ GIAO (Mới hiện lên UI chi tiết)
                 if (matchedTarget) {
                     matchedTarget.actualCount = (matchedTarget.actualCount || 0) + 1;
                     matchedTarget.actualMinutes = (matchedTarget.actualMinutes || 0) + tDuration;
                 }
 
-                // 🚀 TẤT CẢ CÁC BÀI (kể cả bài sửa không được giao) ĐỀU ĐƯỢC CỘNG VÀO TIẾN ĐỘ TỔNG HỢP
+                // 🚀 BÀI LÀM THÊM (KHÔNG GIAO CHỈ TIÊU) VẪN ĐƯỢC CỘNG PHÚT VÀO TỔNG THỰC TẾ
                 totalActualMinutes += tDuration;
             });
 

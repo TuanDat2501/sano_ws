@@ -261,27 +261,29 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                         const isEditField = ['audioLink', 'roughProjectLink', 'linkProject', 'videoLink'].includes(fieldName);
                         const isAnimField = ['animationLink'].includes(fieldName);
                         const isPublishField = ['thumbnailLink', 'publishLink'].includes(fieldName);
-
-                        if (isContentField && isContentAssigned) {
-                            actionType = "DAILY_REPORT";
-                            logCategory = 'CONTENT';
-                        }
-                        else if (isEditField && isEditorAssigned) {
-                            actionType = "DAILY_REPORT";
-                            logCategory = 'EDIT';
-                        }
-                        else if (isAnimField && isAnimatorAssigned) {
-                            actionType = "DAILY_REPORT";
-                            logCategory = 'ANIMATION';
-                        }
-                        else if (isPublishField) {
-                            if (isPublisherAssigned) {
+                        const currentIsReject = rawBody.isReject !== undefined ? Boolean(rawBody.isReject) : oldTask.isReject;
+                        if (!currentIsReject) {
+                            if (isContentField && isContentAssigned) {
                                 actionType = "DAILY_REPORT";
-                                logCategory = 'PUBLISH';
-                            } 
-                            else if (isEditorAssigned && fieldName === 'thumbnailLink') {
+                                logCategory = 'CONTENT';
+                            }
+                            else if (isEditField && isEditorAssigned) {
                                 actionType = "DAILY_REPORT";
                                 logCategory = 'EDIT';
+                            }
+                            else if (isAnimField && isAnimatorAssigned) {
+                                actionType = "DAILY_REPORT";
+                                logCategory = 'ANIMATION';
+                            }
+                            else if (isPublishField) {
+                                if (isPublisherAssigned) {
+                                    actionType = "DAILY_REPORT";
+                                    logCategory = 'PUBLISH';
+                                } 
+                                else if (isEditorAssigned && fieldName === 'thumbnailLink') {
+                                    actionType = "DAILY_REPORT";
+                                    logCategory = 'EDIT';
+                                }
                             }
                         }
                     }
@@ -364,6 +366,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
                     englishScriptLink: body.englishScriptLink !== undefined ? body.englishScriptLink : undefined,
                     thumbnailLink: body.thumbnailLink !== undefined ? body.thumbnailLink : undefined,
                     animationLink: body.animationLink !== undefined ? body.animationLink : undefined,
+                    isReject: rawBody.isReject !== undefined ? Boolean(rawBody.isReject) : undefined,
                     linkProject: body.linkProject !== undefined ? body.linkProject : undefined,
                     roughProjectLink: body.roughProjectLink !== undefined ? body.roughProjectLink : undefined,
                     isRework: reworkFlag,
