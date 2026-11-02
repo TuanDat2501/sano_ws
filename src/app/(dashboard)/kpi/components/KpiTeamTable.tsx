@@ -498,7 +498,7 @@ export default function KpiTeamTable({
                                         <th className="border border-slate-200 p-3 w-[120px] text-center text-emerald-700 bg-emerald-50/50">Đã làm (Actual)</th>
                                         <th className="border border-slate-200 p-3 w-[100px] text-center text-purple-700 bg-purple-50/50">Tiến độ (%)</th>
                                         {/* 🚀 THÊM CỘT NHẬP TAY LÝ DO THIẾU KPI */}
-                                        <th className="border border-slate-200 p-3 w-[180px] text-center text-amber-700 bg-amber-50/50">Lý do thiếu KPI</th>
+                                        <th className="border border-slate-200 p-3 w-[180px] text-center text-amber-700 bg-amber-50/50">Ghi chú</th>
                                         <th className="border border-slate-200 p-3 w-[200px] text-center">Lịch sử sửa đổi</th>
                                     </>
                                 )}
