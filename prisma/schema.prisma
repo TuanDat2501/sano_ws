@@ -555,6 +555,11 @@ model ChannelRevenueTarget {
   month  Int
   target Float  @default(0)
 
+  // 🚀 BỔ SUNG CÁC TRƯỜNG MỚI ĐỂ NHẬP TAY
+  targetViews   Int   @default(0) // Mục tiêu lượt xem
+  actualViews   Int   @default(0) // Tổng View thực tế tự nhập
+  actualRevenue Float @default(0) // Tổng Doanh thu thực tế tự nhập
+
   channelId String
   channel   Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
 

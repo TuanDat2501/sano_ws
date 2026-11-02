@@ -97,7 +97,7 @@ export async function POST(req: Request) {
     }
 }
 
-// 3. LƯU MỤC TIÊU THÁNG (PUT)
+// 3. LƯU MỤC TIÊU VÀ TỔNG THỰC TẾ (PUT)
 export async function PUT(req: Request) {
     try {
         const session = await getServerSession(authOptions);
@@ -107,12 +107,27 @@ export async function PUT(req: Request) {
         const hasPermission = user.permissions?.includes("MENU_REVENUE") || user.role === "ADMIN";
         if (!hasPermission) return NextResponse.json({ error: "Bạn không có quyền!" }, { status: 403 });
 
-        const { channelId, year, month, target } = await req.json();
+        const { channelId, year, month, target, targetViews, actualViews, actualRevenue } = await req.json();
+
+        // Chỉ cập nhật những trường nào được truyền lên
+        const updateData: any = {};
+        if (target !== undefined) updateData.target = Number(target);
+        if (targetViews !== undefined) updateData.targetViews = Number(targetViews);
+        if (actualViews !== undefined) updateData.actualViews = Number(actualViews);
+        if (actualRevenue !== undefined) updateData.actualRevenue = Number(actualRevenue);
 
         const result = await prisma.channelRevenueTarget.upsert({
             where: { channelId_year_month: { channelId, year, month } },
-            update: { target: Number(target) },
-            create: { channelId, year, month, target: Number(target) }
+            update: updateData,
+            create: { 
+                channelId, 
+                year, 
+                month, 
+                target: Number(target || 0),
+                targetViews: Number(targetViews || 0),
+                actualViews: Number(actualViews || 0),
+                actualRevenue: Number(actualRevenue || 0)
+            }
         });
 
         return NextResponse.json({ success: true, result });

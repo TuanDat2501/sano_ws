@@ -39,7 +39,11 @@ export default function RevenueEntryPage() {
 
     const [channels, setChannels] = useState<any[]>([]);
     const [revenueData, setRevenueData] = useState<Record<string, RevenueEntry>>({});
-    const [targets, setTargets] = useState<Record<string, number>>({});
+    
+    // 🚀 CHỈ LƯU TARGET (DOANH THU & VIEW) - DOANH THU THỰC TẾ ĐỂ AUTO TÍNH
+    // SỬA DÒNG NÀY: Thêm actualViews vào
+    const [targets, setTargets] = useState<Record<string, { target: number, targetViews: number, actualViews: number }>>({});
+    
     const [savingCells, setSavingCells] = useState<Record<string, 'saving' | 'saved' | null>>({});
     
     const [focusedCol, setFocusedCol] = useState<number | null>(null);
@@ -87,7 +91,7 @@ export default function RevenueEntryPage() {
                     setChannels(data);
 
                     const initialData: Record<string, RevenueEntry> = {};
-                    const initialTargets: Record<string, number> = {};
+                    const initialTargets: Record<string, any> = {};
 
                     data.forEach(channel => {
                         const revList = channel.revenues || channel.dailyRevenues || [];
@@ -99,8 +103,14 @@ export default function RevenueEntryPage() {
                             };
                         });
                         
+                        // Kéo mục tiêu (Target Revenue & Target Views)
                         if (channel.revenueTargets && channel.revenueTargets.length > 0) {
-                            initialTargets[channel.id] = channel.revenueTargets[0].target;
+                            const t = channel.revenueTargets[0];
+                            initialTargets[channel.id] = {
+                                target: t.target || 0,
+                                targetViews: t.targetViews || 0,
+                                actualViews: t.actualViews || 0 // 🚀 THÊM DÒNG NÀY ĐỂ HỨNG SỐ TỪ DB
+                            };
                         }
                     });
                     setRevenueData(initialData);
@@ -157,14 +167,18 @@ export default function RevenueEntryPage() {
         });
     }, [tableDays, filteredChannels, revenueData]);
 
-    // 🚀 BỔ SUNG: Chỉ cộng tổng Mục tiêu của những kênh ĐÃ BẬT KIẾM TIỀN
     const totalSystemTarget = useMemo(() => {
-        return filteredChannels
-            .reduce((sum, channel) => sum + (targets[channel.id] || 0), 0);
+        return filteredChannels.reduce((sum, channel) => sum + (targets[channel.id]?.target || 0), 0);
     }, [filteredChannels, targets]);
     
+    // TỔNG HỆ THỐNG DOANH THU = TỰ ĐỘNG CỘNG DỒN
     const totalSystemRevenue = useMemo(() => {
         return dailyTotals.reduce((sum, day) => sum + day.revenue, 0);
+    }, [dailyTotals]);
+
+    // TỔNG HỆ THỐNG VIEW = TỰ ĐỘNG CỘNG DỒN HOẶC LẤY TỪ VIEW TỰ NHẬP TUỲ MỤC ĐÍCH (Ở ĐÂY DÙNG VIEW CỘNG DỒN)
+    const totalSystemViews = useMemo(() => {
+        return dailyTotals.reduce((sum, day) => sum + day.views, 0);
     }, [dailyTotals]);
 
     const changeMonth = (offset: number) => {
@@ -173,27 +187,32 @@ export default function RevenueEntryPage() {
         setCurrentMonthDate(newDate);
     };
 
-    const handleTargetBlur = async (channelId: string, value: string) => {
+    // 🚀 LƯU CẬP NHẬT CHUNG CHO CÁC TRƯỜNG TARGET
+    const handleTargetUpdate = async (channelId: string, field: 'target' | 'targetViews' | 'actualViews', value: string) => {
         const numValue = value.trim() === "" ? 0 : parseFloat(value.replace(/,/g, ''));
         if (isNaN(numValue)) return;
         
-        if (targets[channelId] === numValue) return;
+        const currentTargetObj = targets[channelId] || { target: 0, targetViews: 0, actualViews: 0 };
+        if (currentTargetObj[field] === numValue) return;
 
         const year = currentMonthDate.getFullYear();
         const month = currentMonthDate.getMonth() + 1;
 
-        setTargets(prev => ({ ...prev, [channelId]: numValue }));
+        setTargets(prev => ({ 
+            ...prev, 
+            [channelId]: { ...currentTargetObj, [field]: numValue } 
+        }));
 
         try {
             const res = await fetch('/api/revenue', {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ channelId, year, month, target: numValue })
+                body: JSON.stringify({ channelId, year, month, [field]: numValue })
             });
 
             if (!res.ok) throw new Error();
         } catch (error) {
-            showToast("error", "Lỗi lưu Mục tiêu!");
+            showToast("error", "Lỗi lưu dữ liệu!");
         }
     };
 
@@ -261,7 +280,7 @@ export default function RevenueEntryPage() {
             }
 
             const exportRevenueData: Record<string, RevenueEntry> = {};
-            const exportTargets: Record<string, number> = {};
+            const exportTargets: Record<string, any> = {};
 
             data.forEach((channel: any) => {
                 const revList = channel.revenues || channel.dailyRevenues || [];
@@ -274,7 +293,11 @@ export default function RevenueEntryPage() {
                 });
                 
                 if (channel.revenueTargets && channel.revenueTargets.length > 0) {
-                    exportTargets[channel.id] = channel.revenueTargets[0].target;
+                    const t = channel.revenueTargets[0];
+                    exportTargets[channel.id] = {
+                        target: t.target || 0,
+                        targetViews: t.targetViews || 0
+                    };
                 }
             });
 
@@ -305,7 +328,7 @@ export default function RevenueEntryPage() {
             });
             worksheet.columns = cols;
 
-            const row1 = ['STT', 'Team', 'Tên Kênh', 'Mục Tiêu ($)', 'Tổng Kỳ Báo Cáo'];
+            const row1 = ['STT', 'Team', 'Tên Kênh', 'Mục Tiêu ($)', 'Tổng Thực Tế'];
             const row2 = ['', '', '', '', ''];
 
             exportDays.forEach(day => {
@@ -335,6 +358,7 @@ export default function RevenueEntryPage() {
             exportChannels.forEach((ch, idx) => {
                 const teamName = ch.team?.name || "No Team";
                 const currentRow = idx + 3;
+                const tObj = exportTargets[ch.id] || { target: 0, targetViews: 0 };
 
                 let sumViews = 0;
                 let sumRevenue = 0;
@@ -343,7 +367,7 @@ export default function RevenueEntryPage() {
                     stt: idx + 1, 
                     team: teamName, 
                     channel: ch.name,
-                    target: ch.monetization === 'DA_BAT' ? `$${(exportTargets[ch.id] || 0).toLocaleString()}` : 'Chưa BKT'
+                    target: ch.monetization === 'DA_BAT' ? `$${(tObj.target || 0).toLocaleString()}` : 'Chưa BKT'
                 };
                 
                 exportDays.forEach(day => {
@@ -361,6 +385,7 @@ export default function RevenueEntryPage() {
                     rowData[`r_${day.toISOString()}`] = r;
                 });
 
+                // Cột TỔNG lấy số liệu tự động cộng dồn
                 rowData.total = `${sumViews.toLocaleString()} v | $${sumRevenue.toLocaleString()}`;
 
                 worksheet.addRow(rowData);
@@ -584,6 +609,10 @@ export default function RevenueEntryPage() {
                                 const rowSpanCount = teamCounts[teamName];
                                 const rowBgClass = index % 2 === 0 ? "bg-white" : "bg-[#f4f5f7]";
 
+                                const currentTargetObj = targets[channel.id] || { target: 0, targetViews: 0, actualViews: 0 };
+                                const currentTarget = currentTargetObj.target;
+                                
+                                // 🚀 CỘT TỔNG: TỰ ĐỘNG CỘNG DỒN DOANH THU & VIEW TỪ CÁC NGÀY
                                 let channelTotalViews = 0;
                                 let channelTotalRevenue = 0;
                                 tableDays.forEach(day => {
@@ -595,11 +624,9 @@ export default function RevenueEntryPage() {
                                     }
                                 });
 
-                                const currentTarget = targets[channel.id] || 0;
                                 const progressPercent = currentTarget > 0 ? (channelTotalRevenue / currentTarget) * 100 : 0;
-                                
                                 const isTargetReached = currentTarget > 0 && progressPercent >= 100;
-                                // 🚀 BỔ SUNG: Kiểm tra kênh đã bật kiếm tiền chưa
+                                
                                 const isMonetized = channel.monetization === 'DA_BAT';
 
                                 return (
@@ -618,56 +645,45 @@ export default function RevenueEntryPage() {
                                             <p className="font-bold text-xs md:text-sm text-slate-800 line-clamp-2" title={channel.name}>{channel.name}</p>
                                         </td>
 
-                                        {/* 🚀 ĐÃ SỬA: Cột Mục Tiêu khóa đối với kênh Chưa BKT */}
+                                        {/* 🚀 CỘT MỤC TIÊU: CÓ Ô NHẬP TAY TARGET VIEWS (Ô TRÊN CÙNG) */}
                                         <td className={`p-1.5 border-b border-r sticky left-[310px] z-40 transition-colors text-right pr-2 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)] ${isMonetized ? (isTargetReached ? 'border-emerald-200 bg-emerald-50 group-hover:bg-emerald-100 group-focus-within:bg-emerald-100' : 'border-amber-200 bg-amber-50 group-hover:bg-amber-100 group-focus-within:bg-amber-100') : 'bg-slate-50 border-slate-200'}`}>
-                                            <div className="flex flex-col gap-0.5 justify-center h-full">
-                                                <>
-                                                        <div className="relative flex items-center">
-                                                            <span className={`absolute left-1.5 top-1/2 -translate-y-1/2 text-[9px] font-black uppercase select-none pointer-events-none ${isTargetReached ? 'text-emerald-500' : 'text-amber-500'}`}>$</span>
-                                                            <input
-                                                                key={`target_${channel.id}_${currentMonthDate.getFullYear()}_${currentMonthDate.getMonth()}_${currentTarget}`}
-                                                                type="text"
-                                                                inputMode="decimal"
-                                                                placeholder="0"
-                                                                className={`w-full text-right pl-3 pr-1.5 py-0.5 text-xs font-black bg-white/60 border rounded md:rounded-md outline-none transition-all hover:bg-white shadow-sm ${isTargetReached ? 'border-emerald-300/60 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 text-emerald-700' : 'border-amber-300/60 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 text-amber-700'}`}
-                                                                defaultValue={currentTarget > 0 ? currentTarget.toLocaleString('en-US') : ""}
-                                                                onMouseEnter={(e) => handleTargetTooltip(e, channel.name)}
-                                                                onMouseLeave={clearTooltip}
-                                                                onFocus={(e) => handleTargetTooltip(e, channel.name)}
-                                                                onBlur={(e) => {
-                                                                    clearTooltip();
-                                                                    handleTargetBlur(channel.id, e.target.value);
-                                                                }}
-                                                                onChange={(e) => {
-                                                                    let rawValue = e.target.value.replace(/[^\d.]/g, '');
-                                                                    const parts = rawValue.split('.');
-                                                                    if (parts.length > 2) parts.pop();
-                                                                    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-                                                                    e.target.value = parts.join('.');
-                                                                }}
-                                                            />
-                                                        </div>
-                                                        <div className={`text-[8px] font-bold uppercase tracking-wider mt-[1px] ${isTargetReached ? 'text-emerald-600' : 'text-amber-600/80'}`}>
-                                                            {currentTarget > 0 ? `Đạt ${progressPercent.toFixed(1)}%` : '---'}
-                                                        </div>
-                                                    </>
-                                                {/* {isMonetized ? (
+                                            <div className="flex flex-col gap-1 justify-center h-full">
+                                                {/* Ô nhập Target Views */}
+                                                <div className="relative flex items-center mb-1">
+                                                    <Eye className="absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={11} strokeWidth={3} />
+                                                    <input
+                                                        key={`targetViews_${channel.id}_${currentTargetObj.targetViews}`}
+                                                        type="text"
+                                                        inputMode="numeric"
+                                                        placeholder="0"
+                                                        className={`w-full text-right pl-5 pr-1.5 py-0.5 text-[10px] md:text-[11px] font-black bg-white border border-slate-300 rounded outline-none transition-all hover:bg-slate-50 shadow-sm focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20 text-slate-700`}
+                                                        defaultValue={currentTargetObj.targetViews > 0 ? currentTargetObj.targetViews.toLocaleString('en-US') : ""}
+                                                        onBlur={(e) => handleTargetUpdate(channel.id, 'targetViews', e.target.value)}
+                                                        onChange={(e) => {
+                                                            const rawValue = e.target.value.replace(/\D/g, '');
+                                                            e.target.value = rawValue.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+                                                        }}
+                                                    />
+                                                </div>
+
+                                                {/* Ô nhập Target Doanh Thu */}
+                                                {isMonetized ? (
                                                     <>
                                                         <div className="relative flex items-center">
                                                             <span className={`absolute left-1.5 top-1/2 -translate-y-1/2 text-[9px] font-black uppercase select-none pointer-events-none ${isTargetReached ? 'text-emerald-500' : 'text-amber-500'}`}>$</span>
                                                             <input
-                                                                key={`target_${channel.id}_${currentMonthDate.getFullYear()}_${currentMonthDate.getMonth()}_${currentTarget}`}
+                                                                key={`target_${channel.id}_${currentTarget}`}
                                                                 type="text"
                                                                 inputMode="decimal"
                                                                 placeholder="0"
-                                                                className={`w-full text-right pl-3 pr-1.5 py-0.5 text-xs font-black bg-white/60 border rounded md:rounded-md outline-none transition-all hover:bg-white shadow-sm ${isTargetReached ? 'border-emerald-300/60 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 text-emerald-700' : 'border-amber-300/60 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 text-amber-700'}`}
+                                                                className={`w-full text-right pl-3 pr-1.5 py-0.5 text-[10px] md:text-xs font-black bg-white/60 border rounded outline-none transition-all hover:bg-white shadow-sm ${isTargetReached ? 'border-emerald-300/60 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 text-emerald-700' : 'border-amber-300/60 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 text-amber-700'}`}
                                                                 defaultValue={currentTarget > 0 ? currentTarget.toLocaleString('en-US') : ""}
                                                                 onMouseEnter={(e) => handleTargetTooltip(e, channel.name)}
                                                                 onMouseLeave={clearTooltip}
                                                                 onFocus={(e) => handleTargetTooltip(e, channel.name)}
                                                                 onBlur={(e) => {
                                                                     clearTooltip();
-                                                                    handleTargetBlur(channel.id, e.target.value);
+                                                                    handleTargetUpdate(channel.id, 'target', e.target.value);
                                                                 }}
                                                                 onChange={(e) => {
                                                                     let rawValue = e.target.value.replace(/[^\d.]/g, '');
@@ -688,23 +704,43 @@ export default function RevenueEntryPage() {
                                                             Chưa BKT
                                                         </span>
                                                     </div>
-                                                )} */}
+                                                )}
                                             </div>
                                         </td>
 
+                                        {/* 🚀 CỘT TỔNG: Ô NHẬP TAY TARGET VIEW Ở TRÊN - Ở DƯỚI AUTO TÍNH TỔNG DOANH THU */}
                                         <td className="p-1.5 border-b border-r-4 border-emerald-300 sticky left-[430px] z-40 bg-emerald-50 group-hover:bg-emerald-100 group-focus-within:bg-emerald-100 transition-colors text-right pr-2 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.15)]">
-                                            <div className="flex flex-col gap-1 text-right justify-center h-full">
-                                                <span className="text-[10px] md:text-[11px] font-black text-slate-600 flex items-center justify-end gap-1">
-                                                    <Eye size={10} className="text-slate-500" strokeWidth={2.5} />
-                                                    {channelTotalViews.toLocaleString()}
-                                                </span>
+                                            <div className="flex flex-col gap-2 justify-center h-full">
+                                                
+                                                {/* Ô Nhập Target View Mới */}
+                                                <div className="relative flex items-center">
+                                                    <Eye className="absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={11} strokeWidth={3} />
+                                                    <input
+                                                        key={`actualViews_${channel.id}_${currentTargetObj.actualViews}`}
+                                                        type="text"
+                                                        inputMode="numeric"
+                                                        placeholder="0"
+                                                        className="w-full text-right pl-5 pr-1.5 py-0.5 text-[10px] md:text-[11px] font-black bg-white/80 border border-slate-300 rounded outline-none transition-all hover:bg-white shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 text-slate-700"
+                                                        defaultValue={currentTargetObj.actualViews > 0 ? currentTargetObj.actualViews.toLocaleString('en-US') : ""}
+                                                        onBlur={(e) => handleTargetUpdate(channel.id, 'actualViews', e.target.value)}
+                                                        onChange={(e) => {
+                                                            const rawValue = e.target.value.replace(/\D/g, '');
+                                                            e.target.value = rawValue.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+                                                        }}
+                                                    />
+                                                </div>
 
-                                                <span className="text-sm md:text-[15px] font-black text-emerald-700 drop-shadow-sm tracking-tight">
-                                                    ${channelTotalRevenue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
-                                                </span>
+                                                {/* Tổng Doanh Thu Tự Động */}
+                                                <div className="relative flex items-center justify-end">
+                                                    <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[9px] font-black text-emerald-600 uppercase select-none pointer-events-none">$</span>
+                                                    <span className="text-[11px] md:text-[14px] font-black text-emerald-700 drop-shadow-sm pr-1">
+                                                        {channelTotalRevenue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                                                    </span>
+                                                </div>
                                             </div>
                                         </td>
 
+                                        {/* CỘT TỪNG NGÀY TRONG THÁNG */}
                                         {tableDays.map((day, idx) => {
                                             const dateKey = day.toISOString().split('T')[0];
                                             const cellKey = `${channel.id}_${dateKey}`;
@@ -807,6 +843,7 @@ export default function RevenueEntryPage() {
                         {filteredChannels.length > 0 && <tr><td colSpan={5 + tableDays.length} className="h-full border-0 p-0"></td></tr>}
                     </tbody>
 
+                    {/* DÒNG TỔNG CỘNG CUỐI BẢNG */}
                     <tfoot className="sticky bottom-0 z-[60] shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] bg-slate-800">
                         <tr className="text-white font-black">
                             <td colSpan={3} className="p-2 md:p-3 border-r border-slate-700 uppercase tracking-widest text-[10px] md:text-xs sticky left-0 z-[70] bg-slate-800 text-center">
@@ -824,11 +861,12 @@ export default function RevenueEntryPage() {
                                 </div>
                             </td>
 
+                            {/* HIỂN THỊ TỔNG VIEW VÀ TỔNG REVENUE DỰA TRÊN SỐ CỘNG DỒN */}
                             <td className="p-2 border-r-4 border-emerald-500 bg-slate-900 sticky left-[430px] z-[70] text-right pr-2">
                                 <div className="flex flex-col gap-1 text-right justify-center h-full">
                                     <span className="text-[10px] font-bold text-slate-300 flex items-center justify-end gap-1">
                                         <Eye size={10} className="opacity-70" strokeWidth={2.5} />
-                                        {dailyTotals.reduce((sum, day) => sum + day.views, 0).toLocaleString()}
+                                        {totalSystemViews.toLocaleString()}
                                     </span>
                                     <span className="text-xs md:text-sm font-black text-emerald-400 drop-shadow-md tracking-tight">
                                         ${totalSystemRevenue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
