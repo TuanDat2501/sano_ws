@@ -6,6 +6,27 @@ import { createPortal } from "react-dom";
 import { useToast } from "@/app/component/ToastProvider";
 import { useSession } from "next-auth/react"; 
 
+// 🚀 HÀM TÁCH VÀ LỌC DỮ LIỆU: Bóc tách Ghi chú thủ công và Lịch sử hệ thống
+const processLogs = (note: string) => {
+    let manualNote = (note || "").trim();
+    let historyStr = "";
+    const logRegex = /\[\d{2}:\d{2}\s\d{2}-\d{2}/;
+    
+    if (logRegex.test(manualNote)) {
+        const firstIndex = manualNote.search(logRegex);
+        historyStr = manualNote.substring(firstIndex).trim();
+        manualNote = manualNote.substring(0, firstIndex).trim();
+    }
+
+    let latestLog = "";
+    if (historyStr) {
+        const blocks = historyStr.split(/(?=\[\d{2}:\d{2}\s\d{2}-\d{2})/);
+        latestLog = blocks.pop()?.trim() || "";
+    }
+
+    return { manualNote, historyStr, latestLog };
+};
+
 // ========================================================
 // 🚀 COMPONENT MODAL: SAO CHÉP TARGET TỪ TUẦN CŨ SANG TUẦN MỚI
 // ========================================================
@@ -114,14 +135,10 @@ const TargetSettingModal = ({ isOpen, onClose, user, onSave }: any) => {
     const [isLoading, setIsLoading] = useState(true);
     const [note, setNote] = useState("");
 
-    // Khi bật Modal, tách Note thủ công khỏi Lịch sử hệ thống (nếu dữ liệu cũ dính vào nhau)
+    // Tách Note thủ công khỏi Lịch sử hệ thống
     useEffect(() => {
         if (isOpen && user) {
-            let manualNote = (user.note || "").trim();
-            const logRegex = /\[\d{2}:\d{2}\s\d{2}-\d{2}/;
-            if (logRegex.test(manualNote)) {
-                manualNote = manualNote.substring(0, manualNote.search(logRegex)).trim();
-            }
+            const { manualNote } = processLogs(user.note);
             setNote(manualNote); 
             
             if (user.targetDetails?.length > 0) {
@@ -163,10 +180,14 @@ const TargetSettingModal = ({ isOpen, onClose, user, onSave }: any) => {
     };
 
     const handleSave = () => {
-        // 🚀 LUÔN LUÔN LƯU DƯỚI DẠNG CHI TIẾT
         const cleanDetails = details.filter(d => Number(d.targetCount) > 0);
         const total = cleanDetails.reduce((sum, d) => sum + Number(d.targetCount), 0);
-        onSave(user.userId, total, cleanDetails, note); 
+        
+        // 🚀 BẢO LƯU LỊCH SỬ KHI LƯU TỪ MODAL
+        const { historyStr } = processLogs(user.note);
+        const fullNoteToSave = note ? `${note.trim()}\n\n${historyStr}`.trim() : historyStr;
+        
+        onSave(user.userId, total, cleanDetails, fullNoteToSave); 
         onClose();
     };
 
@@ -427,27 +448,6 @@ export default function KpiTeamTable({
     if (isLoading) return <div className="h-full flex items-center justify-center bg-slate-50/50"><Loader2 className="w-8 h-8 text-blue-500 animate-spin" /></div>;
     if (!kpiList || kpiList.length === 0) return <div className="h-full flex flex-col items-center justify-center bg-slate-50/50"><AlertCircle className="w-12 h-12 text-slate-300" /></div>;
 
-    // 🚀 HÀM TÁCH VÀ LỌC DỮ LIỆU CŨ THÀNH 2 PHẦN: NOTE VS LATEST LOG
-    const processLogs = (note: string, history: string) => {
-        let manualNote = (note || "").trim();
-        let historyStr = (history || "").trim();
-        const logRegex = /\[\d{2}:\d{2}\s\d{2}-\d{2}/;
-        
-        if (logRegex.test(manualNote)) {
-            const firstIndex = manualNote.search(logRegex);
-            if (!historyStr) historyStr = manualNote.substring(firstIndex);
-            manualNote = manualNote.substring(0, firstIndex).trim();
-        }
-
-        let latestLog = "";
-        if (historyStr) {
-            const blocks = historyStr.split(/(?=\[\d{2}:\d{2}\s\d{2}-\d{2})/);
-            latestLog = blocks.pop()?.trim() || "";
-        }
-
-        return { manualNote, latestLog };
-    };
-
     return (
         <>
             <div className="w-full h-full flex flex-col bg-white">
@@ -497,7 +497,9 @@ export default function KpiTeamTable({
                                         <th className="border border-slate-200 p-3 w-[120px] text-center text-blue-700 bg-blue-50/50">Chỉ tiêu (Target)</th>
                                         <th className="border border-slate-200 p-3 w-[120px] text-center text-emerald-700 bg-emerald-50/50">Đã làm (Actual)</th>
                                         <th className="border border-slate-200 p-3 w-[100px] text-center text-purple-700 bg-purple-50/50">Tiến độ (%)</th>
-                                        <th className="border border-slate-200 p-3 w-[250px] text-center">Lịch sử & Ghi chú sửa đổi</th>
+                                        {/* 🚀 THÊM CỘT NHẬP TAY LÝ DO THIẾU KPI */}
+                                        <th className="border border-slate-200 p-3 w-[180px] text-center text-amber-700 bg-amber-50/50">Lý do thiếu KPI</th>
+                                        <th className="border border-slate-200 p-3 w-[200px] text-center">Lịch sử sửa đổi</th>
                                     </>
                                 )}
                                 
@@ -515,8 +517,8 @@ export default function KpiTeamTable({
                                 const isLockedStatus = user.isLocked;
                                 const isCellBlocked = isLockedStatus && !isAdminOrHR;
                                 
-                                // 🚀 ÁP DỤNG HÀM XỬ LÝ LỌC RÁC
-                                const { manualNote, latestLog } = processLogs(user.note, user.historyLog);
+                                // 🚀 ÁP DỤNG BỘ LỌC ĐỂ BÓC TÁCH RIÊNG PHẦN GHI CHÚ NHẬP TAY RA KHỎI SYSTEM LOG
+                                const { manualNote, historyStr, latestLog } = processLogs(user.note);
 
                                 return (
                                     <tr key={user.userId} className="transition-colors group odd:bg-white even:bg-slate-50/80 hover:bg-blue-50/40 cursor-pointer" onClick={() => onRowClick(user.userId)}>
@@ -590,28 +592,42 @@ export default function KpiTeamTable({
                                                 <td className="border border-slate-200 p-3 text-center align-middle bg-inherit"><span className="font-black text-[15px] text-emerald-600 drop-shadow-sm">{user.actualValue}</span></td>
                                                 <td className="border border-slate-200 p-3 text-center align-middle bg-inherit"><span className={`inline-flex items-center justify-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-black border shadow-sm w-[70px] ${percentColor}`}><TrendingUp size={12} /> {user.percent}%</span></td>
                                                 
+                                                {/* 🚀 Ô TEXTAREA ĐỂ NHẬP TRỰC TIẾP LÝ DO THIẾU KPI VÀ TỰ ĐỘNG LƯU */}
+                                                <td className="border border-slate-200 p-2 align-middle bg-inherit" onClick={e => e.stopPropagation()}>
+                                                    <textarea
+                                                        className={`w-full bg-amber-50/30 border rounded-lg p-2 text-[11px] font-medium text-slate-700 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 resize-y min-h-[60px] custom-scrollbar transition-colors ${isCellBlocked ? 'border-slate-200 bg-slate-50 cursor-not-allowed opacity-70' : 'border-amber-200'}`}
+                                                        placeholder={isCellBlocked ? "Đã khóa" : "Nhập lý do thiếu KPI..."}
+                                                        defaultValue={manualNote}
+                                                        disabled={isCellBlocked}
+                                                        onBlur={(e) => {
+                                                            const newNote = e.target.value.trim();
+                                                            if (newNote !== manualNote) {
+                                                                // Kết hợp Note mới với Lịch sử hệ thống cũ để không bị ghi đè mất log
+                                                                const fullNoteToSave = newNote ? `${newNote}\n\n${historyStr}`.trim() : historyStr;
+                                                                handleUpdateTarget(user.userId, user.targetValue, user.targetDetails, fullNoteToSave);
+                                                            }
+                                                        }}
+                                                    />
+                                                </td>
+
+                                                {/* 🚀 CỘT LỊCH SỬ CHỈ HIỂN THỊ DỮ LIỆU ĐỌC */}
                                                 <td className="border border-slate-200 p-3 text-[11px] md:text-xs font-medium text-slate-500 align-middle bg-inherit">
                                                     <div className="flex flex-col gap-1.5 text-center md:text-left items-center md:items-start w-full">
                                                         {user.oldTargetValue !== null && user.oldTargetValue !== user.targetValue && (
                                                             <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-200 w-fit inline-flex items-center gap-1 shadow-sm">
-                                                                Tổng Target Cũ: <span className="line-through opacity-70">{user.oldTargetValue}</span>
+                                                                Target Cũ: <span className="line-through opacity-70">{user.oldTargetValue}</span>
                                                             </span>
                                                         )}
-                                                        <div className="w-full max-h-[100px] overflow-y-auto custom-scrollbar pr-2 whitespace-pre-wrap leading-snug text-left text-[11px] bg-amber-50/30 p-2 rounded-lg border border-amber-100/50">
-                                                            {manualNote && <div className="font-bold text-slate-700">{manualNote}</div>}
-                                                            
-                                                            {/* 🚀 CHỈ RENDER LOG CUỐI CÙNG (latestLog) */}
-                                                            {isLockedStatus && latestLog && (
-                                                                <div className={`text-slate-500 ${manualNote ? 'mt-2 pt-2 border-t border-amber-200/50' : ''}`}>
-                                                                    <span className="italic text-[10px]">Lịch sử sửa đổi (Mới nhất):</span>
+                                                        <div className="w-full max-h-[80px] overflow-y-auto custom-scrollbar pr-2 whitespace-pre-wrap leading-snug text-left text-[11px]">
+                                                            {latestLog ? (
+                                                                <div className="text-slate-500">
+                                                                    <span className="italic text-[10px] font-bold">Mới nhất:</span>
                                                                     <div className="mt-1 opacity-90 font-medium text-blue-700/80 bg-blue-50/50 p-1.5 rounded border border-blue-100/50">
                                                                         {latestLog}
                                                                     </div>
                                                                 </div>
-                                                            )}
-
-                                                            {!manualNote && (!isLockedStatus || !latestLog) && (
-                                                                <span className="italic text-slate-300 text-center block">Không có ghi chú.</span>
+                                                            ) : (
+                                                                <span className="italic text-slate-300 block">Chưa có lịch sử.</span>
                                                             )}
                                                         </div>
                                                     </div>
