@@ -15,23 +15,25 @@ import { saveAs } from 'file-saver';
 
 // 🚀 HÀM 1: SINH TEXT TUẦN CHUẨN THEO THÁNG (LỊCH VIỆT NAM: THỨ 2 - CHỦ NHẬT)
 function getWeekData(year: number, month: number, weekNumber: number) {
-    // Ép giờ 12:00:00 trưa để tuyệt đối không bị nhảy ngày do lệch múi giờ
     const totalDays = new Date(year, month, 0, 12, 0, 0).getDate();
     const firstDayOfMonth = new Date(year, month - 1, 1, 12, 0, 0);
-    const startDayOfWeek = firstDayOfMonth.getDay(); // 0 là Chủ Nhật, 1 là Thứ Hai...
+    const startDayOfWeek = firstDayOfMonth.getDay(); 
+    
+    const isFirstDaySunday = startDayOfWeek === 0;
 
-    // Tính khoảng cách từ mùng 1 đến Chủ Nhật đầu tiên
-    const diffToSunday = startDayOfWeek === 0 ? 0 : 7 - startDayOfWeek;
-    const firstSunday = 1 + diffToSunday;
+    // Tuần 1 bắt đầu từ mùng 2 (Thứ 2) nếu mùng 1 là Chủ Nhật
+    let startDay = isFirstDaySunday ? 2 : 1;
+    let endDay = isFirstDaySunday ? 8 : 1 + (7 - startDayOfWeek);
 
-    let startDay = 1;
-    let endDay = firstSunday;
-
-    // Các tuần sau tuần 1 thì cứ tịnh tiến cộng 7 ngày
+    // Tính toán cho các tuần từ tuần 2 trở đi
     if (weekNumber > 1) {
-        startDay = firstSunday + (weekNumber - 2) * 7 + 1;
-        endDay = Math.min(startDay + 6, totalDays); // Ép giới hạn không vượt quá ngày cuối tháng
+        const firstWeekEnd = isFirstDaySunday ? 8 : 1 + (7 - startDayOfWeek);
+        startDay = firstWeekEnd + (weekNumber - 2) * 7 + 1;
+        endDay = startDay + 6;
     }
+
+    // Ép ngày kết thúc không vượt quá ngày cuối tháng
+    endDay = Math.min(endDay, totalDays);
 
     const startOfWeek = new Date(year, month - 1, startDay, 12, 0, 0);
     const endOfWeek = new Date(year, month - 1, endDay, 12, 0, 0);
@@ -47,12 +49,12 @@ function getAvailableWeeks(year: number, month: number) {
     const totalDays = new Date(year, month, 0, 12, 0, 0).getDate();
     const firstDayOfMonth = new Date(year, month - 1, 1, 12, 0, 0);
     const startDayOfWeek = firstDayOfMonth.getDay();
+    
+    const isFirstDaySunday = startDayOfWeek === 0;
+    const firstWeekEnd = isFirstDaySunday ? 8 : 1 + (7 - startDayOfWeek);
 
-    const diffToSunday = startDayOfWeek === 0 ? 0 : 7 - startDayOfWeek;
-    const firstSunday = 1 + diffToSunday;
-
-    const remainingDays = totalDays - firstSunday;
-    const totalWeeks = 1 + Math.ceil(remainingDays / 7);
+    const remainingDays = totalDays - firstWeekEnd;
+    const totalWeeks = 1 + (remainingDays > 0 ? Math.ceil(remainingDays / 7) : 0);
 
     return Array.from({ length: totalWeeks }, (_, i) => i + 1);
 }
@@ -66,19 +68,38 @@ function getCurrentWeekInfo() {
     const utc = localTime + localOffset;
     const vietnamTime = new Date(utc + (3600000 * 7));
 
-    const year = vietnamTime.getFullYear();
-    const month = vietnamTime.getMonth() + 1;
+    let year = vietnamTime.getFullYear();
+    let month = vietnamTime.getMonth() + 1;
     const date = vietnamTime.getDate();
 
     const firstDayOfMonth = new Date(year, month - 1, 1, 12, 0, 0);
     const startDayOfWeek = firstDayOfMonth.getDay();
-
-    const diffToSunday = startDayOfWeek === 0 ? 0 : 7 - startDayOfWeek;
-    const firstSunday = 1 + diffToSunday;
+    
+    const isFirstDaySunday = startDayOfWeek === 0;
+    const firstWeekEnd = isFirstDaySunday ? 8 : 1 + (7 - startDayOfWeek);
 
     let week = 1;
-    if (date > firstSunday) {
-        week = 2 + Math.floor((date - firstSunday - 1) / 7);
+
+    // Xử lý ngoại lệ: Nếu hôm nay đúng là mùng 1 VÀ mùng 1 là Chủ Nhật
+    // => Ngày này thuộc về tuần cuối cùng của tháng trước
+    if (isFirstDaySunday && date === 1) {
+        // Lùi về tháng trước
+        const prevMonthDate = new Date(year, month - 2, 1, 12, 0, 0);
+        year = prevMonthDate.getFullYear();
+        month = prevMonthDate.getMonth() + 1;
+        
+        // Tính số tuần của tháng trước để lấy tuần cuối cùng
+        const prevTotalDays = new Date(year, month, 0, 12, 0, 0).getDate();
+        const prevFirstDayOfWeek = prevMonthDate.getDay();
+        const prevIsFirstDaySunday = prevFirstDayOfWeek === 0;
+        const prevFirstWeekEnd = prevIsFirstDaySunday ? 8 : 1 + (7 - prevFirstDayOfWeek);
+        
+        const remainingDays = prevTotalDays - prevFirstWeekEnd;
+        week = 1 + (remainingDays > 0 ? Math.ceil(remainingDays / 7) : 0);
+    } 
+    // Các ngày bình thường khác trong tháng
+    else if (date > firstWeekEnd) {
+        week = 2 + Math.floor((date - firstWeekEnd - 1) / 7);
     }
 
     return { year, month, week };
