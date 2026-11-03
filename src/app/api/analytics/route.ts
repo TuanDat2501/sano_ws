@@ -3,27 +3,27 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+// 🚀 HÀM ĐÃ ĐƯỢC ĐỒNG BỘ CHUẨN LỊCH VIỆT NAM (T2 - CN) VÀ XỬ LÝ MÙNG 1 LÀ CHỦ NHẬT
 function getWeekDateRangeByMonth(year: number, month: number, weekNumber: number) {
-    const firstDayOfMonth = new Date(year, month - 1, 1);
-    const dayOfWeek = firstDayOfMonth.getDay();
-    const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-    const startOfFirstWeek = new Date(year, month - 1, 1 + diffToMonday);
+    const totalDays = new Date(year, month, 0, 12, 0, 0).getDate();
+    const firstDayOfMonth = new Date(year, month - 1, 1, 12, 0, 0);
+    const startDayOfWeek = firstDayOfMonth.getDay(); 
+    
+    const isFirstDaySunday = startDayOfWeek === 0;
 
-    const thursdayOfFirstWeek = new Date(startOfFirstWeek);
-    thursdayOfFirstWeek.setDate(startOfFirstWeek.getDate() + 3);
+    let startDay = isFirstDaySunday ? 2 : 1;
+    let endDay = isFirstDaySunday ? 8 : 1 + (7 - startDayOfWeek);
 
-    if (thursdayOfFirstWeek.getMonth() !== month - 1) {
-        startOfFirstWeek.setDate(startOfFirstWeek.getDate() + 7);
+    if (weekNumber > 1) {
+        const firstWeekEnd = isFirstDaySunday ? 8 : 1 + (7 - startDayOfWeek);
+        startDay = firstWeekEnd + (weekNumber - 2) * 7 + 1;
+        endDay = startDay + 6;
     }
 
-    const startOfWeek = new Date(startOfFirstWeek);
-    startOfWeek.setDate(startOfFirstWeek.getDate() + (weekNumber - 1) * 7);
+    endDay = Math.min(endDay, totalDays);
 
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(startOfWeek.getDate() + 6);
-
-    startOfWeek.setHours(0, 0, 0, 0);
-    endOfWeek.setHours(23, 59, 59, 999);
+    const startOfWeek = new Date(year, month - 1, startDay, 0, 0, 0, 0);
+    const endOfWeek = new Date(year, month - 1, endDay, 23, 59, 59, 999);
 
     return { start: startOfWeek, end: endOfWeek };
 }
@@ -65,8 +65,12 @@ export async function GET(req: Request) {
         const kpiWeek = parseInt(searchParams.get("kpiW") || "0");
         const teamId = searchParams.get("team") || "ALL";
 
-        let kpiStartDate = new Date(kpiYear, kpiMonth - 1, 1);
-        let kpiEndDate = new Date(kpiYear, kpiMonth, 0, 23, 59, 59);
+        const firstDayOfMonth = new Date(kpiYear, kpiMonth - 1, 1, 12, 0, 0);
+        const isFirstDaySunday = firstDayOfMonth.getDay() === 0;
+        
+        // Nếu kpiWeek = 0 (Lấy cả tháng), nhưng mùng 1 là Chủ Nhật -> Bỏ mùng 1 ra (bắt đầu từ mùng 2)
+        let kpiStartDate = new Date(kpiYear, kpiMonth - 1, isFirstDaySunday ? 2 : 1, 0, 0, 0, 0);
+        let kpiEndDate = new Date(kpiYear, kpiMonth, 0, 23, 59, 59, 999);
 
         if (kpiWeek > 0) {
             const { start, end } = getWeekDateRangeByMonth(kpiYear, kpiMonth, kpiWeek);

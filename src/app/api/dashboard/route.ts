@@ -22,25 +22,59 @@ export async function GET(req: Request) {
         const isLeader = role === "LEADER";
         const isManager = isTopManagement || isLeader;
 
-        const today = new Date();
-        const currentWeekNum = getCurrentWeekNumber(today);
-        const weekRange = getContinuousWeekRange(today.getFullYear(), today.getMonth() + 1, currentWeekNum);
-        const startOfWeek = weekRange.start;
-        startOfWeek.setHours(0, 0, 0, 0);
-        const dayOfWeek = today.getDay();
-        const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-        startOfWeek.setDate(today.getDate() + diffToMonday);
+        // 1. KHỬ MÚI GIỜ SERVER, ÉP CHUẨN GIỜ VIỆT NAM (UTC+7)
+        const now = new Date();
+        const localTime = now.getTime();
+        const localOffset = now.getTimezoneOffset() * 60000;
+        const vietnamTime = new Date(localTime + localOffset + (3600000 * 7));
+
+        let year = vietnamTime.getFullYear();
+        let month = vietnamTime.getMonth() + 1;
+        const date = vietnamTime.getDate();
+
+        const firstDayOfMonth = new Date(year, month - 1, 1, 12, 0, 0);
+        const startDayOfWeek = firstDayOfMonth.getDay();
+        
+        const isFirstDaySunday = startDayOfWeek === 0;
+        const firstWeekEnd = isFirstDaySunday ? 8 : 1 + (7 - startDayOfWeek);
+
+        let currentWeekNum = 1;
+
+        // 2. LOGIC ÉP TUẦN TƯƠNG TỰ BÊN FRONTEND (Mùng 1 Chủ Nhật -> Tính vào tháng trước)
+        if (isFirstDaySunday && date === 1) {
+            const prevMonthDate = new Date(year, month - 2, 1, 12, 0, 0);
+            year = prevMonthDate.getFullYear();
+            month = prevMonthDate.getMonth() + 1;
+            
+            const prevTotalDays = new Date(year, month, 0, 12, 0, 0).getDate();
+            const prevFirstDayOfWeek = prevMonthDate.getDay();
+            const prevIsFirstDaySunday = prevFirstDayOfWeek === 0;
+            const prevFirstWeekEnd = prevIsFirstDaySunday ? 8 : 1 + (7 - prevFirstDayOfWeek);
+            
+            const remainingDays = prevTotalDays - prevFirstWeekEnd;
+            currentWeekNum = 1 + (remainingDays > 0 ? Math.ceil(remainingDays / 7) : 0);
+        } else if (date > firstWeekEnd) {
+            currentWeekNum = 2 + Math.floor((date - firstWeekEnd - 1) / 7);
+        }
+
+        // 3. TÌM NGÀY THỨ 2 CỦA TUẦN HIỆN TẠI (ĐỂ LỌC KPI LOGS)
+        const startOfWeek = new Date(vietnamTime);
+        const currentDay = startOfWeek.getDay();
+        const diffToMonday = currentDay === 0 ? -6 : 1 - currentDay;
+        startOfWeek.setDate(startOfWeek.getDate() + diffToMonday);
         startOfWeek.setHours(0, 0, 0, 0);
 
-        const sevenDaysAgo = new Date(today);
-        sevenDaysAgo.setDate(today.getDate() - 7); 
+        // Lùi 7 ngày chuẩn theo giờ Việt Nam
+        const sevenDaysAgo = new Date(vietnamTime);
+        sevenDaysAgo.setDate(vietnamTime.getDate() - 7); 
         sevenDaysAgo.setHours(0, 0, 0, 0);
 
+        // 4. GENERATE CHART KHÔNG BỊ LỆCH NGÀY
         const generateEmpty7DaysChart = () => {
             const chartTemplate = [];
             for (let i = 6; i >= 0; i--) {
-                const d = new Date(today);
-                d.setDate(today.getDate() - i);
+                const d = new Date(vietnamTime);
+                d.setDate(vietnamTime.getDate() - i);
                 const dateStr = d.toLocaleDateString('vi-VN', {
                     day: '2-digit', month: '2-digit', timeZone: 'Asia/Ho_Chi_Minh'
                 }).replace('/', '-');
@@ -224,18 +258,13 @@ export async function GET(req: Request) {
                 }),
                 prisma.weeklyKPI.findMany({
                     where: {
-                        year: today.getFullYear(),
-                        month: today.getMonth() + 1,
-                        weekNumber: currentWeekNum,
+                        year: year,               // Đã sửa
+                        month: month,             // Đã sửa
+                        weekNumber: currentWeekNum, // Đã sửa
                         ...userCondition
                     },
                     include: { 
-                        user: { 
-                            select: { 
-                                fullName: true, 
-                                role: true
-                            } 
-                        } 
+                        user: { select: { fullName: true, role: true } } 
                     }
                 })
             ]);
@@ -339,9 +368,9 @@ export async function GET(req: Request) {
                 prisma.weeklyKPI.findFirst({
                     where: {
                         userId: userId,
-                        year: today.getFullYear(),
-                        month: today.getMonth() + 1,
-                        weekNumber: currentWeekNum
+                        year: year,               // Đã sửa
+                        month: month,             // Đã sửa
+                        weekNumber: currentWeekNum  // Đã sửa
                     }
                 })
             ]);
