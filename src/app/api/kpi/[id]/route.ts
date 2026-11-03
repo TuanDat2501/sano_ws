@@ -3,24 +3,30 @@ import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
 import { authOptions } from "@/lib/auth";
 
-// 🚀 HÀM TÍNH TUẦN CHUẨN CẮT BIÊN THÁNG (Đồng bộ với Frontend và Analytics)
+// 🚀 HÀM TÍNH TUẦN CHUẨN CẮT BIÊN THÁNG (Đồng bộ tuyệt đối với Lịch Việt Nam: Thứ 2 - Chủ Nhật)
 function getWeekDateRangeByMonth(year: number, month: number, weekNumber: number) {
-    const totalDays = new Date(Date.UTC(year, month, 0, 12, 0, 0)).getUTCDate(); 
-    const firstDayOfMonth = new Date(Date.UTC(year, month - 1, 1, 12, 0, 0)).getUTCDay(); 
+    // Dùng giờ trưa (12:00:00) để lấy đúng số ngày, tránh lệch múi giờ
+    const totalDays = new Date(year, month, 0, 12, 0, 0).getDate();
+    const firstDayOfMonth = new Date(year, month - 1, 1, 12, 0, 0);
+    const startDayOfWeek = firstDayOfMonth.getDay(); 
     
-    const diffToSunday = firstDayOfMonth === 0 ? 0 : 7 - firstDayOfMonth;
-    const firstSunday = 1 + diffToSunday;
+    const isFirstDaySunday = startDayOfWeek === 0;
 
-    let startDay = 1;
-    let endDay = firstSunday;
+    // Nếu mùng 1 là Chủ Nhật -> Tuần 1 bắt đầu từ mùng 2 (Thứ Hai) đến mùng 8 (Chủ Nhật)
+    let startDay = isFirstDaySunday ? 2 : 1;
+    let endDay = isFirstDaySunday ? 8 : 1 + (7 - startDayOfWeek);
 
     if (weekNumber > 1) {
-        startDay = firstSunday + (weekNumber - 2) * 7 + 1;
-        endDay = Math.min(startDay + 6, totalDays); 
+        const firstWeekEnd = isFirstDaySunday ? 8 : 1 + (7 - startDayOfWeek);
+        startDay = firstWeekEnd + (weekNumber - 2) * 7 + 1;
+        endDay = startDay + 6;
     }
 
-    const pad = (num: number) => num.toString().padStart(2, '0');
+    endDay = Math.min(endDay, totalDays);
 
+    const pad = (num: number) => num.toString().padStart(2, '0');
+    
+    // Ép cứng múi giờ Việt Nam (+07:00) cho truy vấn DB
     const startOfWeek = new Date(`${year}-${pad(month)}-${pad(startDay)}T00:00:00+07:00`);
     const endOfWeek = new Date(`${year}-${pad(month)}-${pad(endDay)}T23:59:59.999+07:00`);
 
