@@ -98,32 +98,42 @@ export async function GET(request: Request) {
 
                 const channelName = t.channel?.name || "Chưa chọn kênh";
 
-                if (log.action === 'DAILY_REPORT' || log.action === 'UPDATE_LINK') {
+                const isRejectAction = ['REJECT_TASK', 'REJECT_CONTENT', 'REJECT_ANIMATION', 'REJECT_EDIT'].includes(log.action);
+
+                if (log.action === 'DAILY_REPORT' || log.action === 'UPDATE_LINK' || isRejectAction) {
                     let linkName = "";
                     let linkUrl:any = "";
 
-                    // KIỂM TRA THEO TỪ KHÓA TRONG DETAILS TRƯỚC
-                    if (detail.includes("Text ENG")) { linkName = `[Text ENG] ${t.title}`; linkUrl = t.englishScriptLink; }
-                    else if (detail.includes("Audio")) { linkName = `[Audio] ${t.title}`; linkUrl = t.audioLink; }
-                    else if (detail.includes("Bố Cục")) { linkName = `[Bố cục] ${t.title}`; linkUrl = t.storyboardLink; }
-                    else if (detail.includes("Thumb") || detail.includes("Thumbnail")) { linkName = `[Thumb] ${t.title}`; linkUrl = t.thumbnailLink; }
-                    else if (detail.includes("PRJ Thô")) { linkName = `[PRJ Thô] ${t.title}`; linkUrl = t.roughProjectLink; }
-                    else if (detail.includes("Dựng Chính") || detail.includes("Project")) { linkName = `[PRJ Chính] ${t.title}`; linkUrl = t.linkProject; }
-                    else if (detail.includes("Chuyển Động")) { linkName = `[Chuyển động] ${t.title}`; linkUrl = t.animationLink; }
-                    else if (detail.includes("Video Render")) { linkName = `[Video] ${t.title}`; linkUrl = t.videoLink; }
-                    else if (detail.includes("Đã Đăng")) { linkName = `[Đã đăng] ${t.title}`; linkUrl = t.publishLink; }
-                    else if (detail.includes("Kịch Bản")) { linkName = `[Kịch bản] ${t.title}`; linkUrl = t.scriptLink; }
-                    
-                    // 🚀 NẾU KHÔNG CÓ TỪ KHÓA NÀO, LẤY THEO TRƯỜNG JOBCATEGORY ĐỂ LÀM MỐC
-                    else if (log.jobCategory === 'CONTENT') { linkName = `[Kịch bản] ${t.title}`; linkUrl = t.scriptLink || t.storyboardLink || t.videoLink; }
-                    else if (log.jobCategory === 'EDIT') { linkName = `[Video] ${t.title}`; linkUrl = t.videoLink || t.roughProjectLink || t.audioLink; }
-                    else if (log.jobCategory === 'ANIMATION') { linkName = `[Chuyển động] ${t.title}`; linkUrl = t.animationLink || t.videoLink; }
-                    else if (log.jobCategory === 'PUBLISH') { linkName = `[Đã đăng] ${t.title}`; linkUrl = t.publishLink || t.thumbnailLink; }
-                    
-                    // CÁC TRƯỜNG HỢP CÒN LẠI
-                    else if (detail.includes("trạng thái") || detail.includes("ghi chú")) { linkName = `[Ghi chú] ${t.title}`; linkUrl = `/tasks?taskId=${t.id}`; }
-                    else if (detail.includes("Nguồn")) { linkName = `[Nguồn] ${t.title}`; linkUrl = t.linkContent; }
-                    else { linkName = `[Cập nhật] ${t.title}`; linkUrl = `/tasks?taskId=${t.id}`; } 
+                    // Nếu là hành động Reject, luôn lấy toàn bộ link đang có trong task để trưởng nhóm/nhân sự check
+                    if (isRejectAction) {
+                        linkName = `[Làm lại] ${t.title}`;
+                        linkUrl = t.videoLink || t.roughProjectLink || t.animationLink || t.scriptLink || `/tasks?taskId=${t.id}`;
+                    }
+                    // Nếu là Báo cáo bình thường (Logic cũ)
+                    else {
+                        // KIỂM TRA THEO TỪ KHÓA TRONG DETAILS TRƯỚC
+                        if (detail.includes("Text ENG")) { linkName = `[Text ENG] ${t.title}`; linkUrl = t.englishScriptLink; }
+                        else if (detail.includes("Audio")) { linkName = `[Audio] ${t.title}`; linkUrl = t.audioLink; }
+                        else if (detail.includes("Bố Cục")) { linkName = `[Bố cục] ${t.title}`; linkUrl = t.storyboardLink; }
+                        else if (detail.includes("Thumb") || detail.includes("Thumbnail")) { linkName = `[Thumb] ${t.title}`; linkUrl = t.thumbnailLink; }
+                        else if (detail.includes("PRJ Thô")) { linkName = `[PRJ Thô] ${t.title}`; linkUrl = t.roughProjectLink; }
+                        else if (detail.includes("Dựng Chính") || detail.includes("Project")) { linkName = `[PRJ Chính] ${t.title}`; linkUrl = t.linkProject; }
+                        else if (detail.includes("Chuyển Động")) { linkName = `[Chuyển động] ${t.title}`; linkUrl = t.animationLink; }
+                        else if (detail.includes("Video Render")) { linkName = `[Video] ${t.title}`; linkUrl = t.videoLink; }
+                        else if (detail.includes("Đã Đăng")) { linkName = `[Đã đăng] ${t.title}`; linkUrl = t.publishLink; }
+                        else if (detail.includes("Kịch Bản")) { linkName = `[Kịch bản] ${t.title}`; linkUrl = t.scriptLink; }
+                        
+                        // NẾU KHÔNG CÓ TỪ KHÓA NÀO, LẤY THEO TRƯỜNG JOBCATEGORY ĐỂ LÀM MỐC
+                        else if (log.jobCategory === 'CONTENT') { linkName = `[Kịch bản] ${t.title}`; linkUrl = t.scriptLink || t.storyboardLink || t.videoLink; }
+                        else if (log.jobCategory === 'EDIT') { linkName = `[Video] ${t.title}`; linkUrl = t.videoLink || t.roughProjectLink || t.audioLink; }
+                        else if (log.jobCategory === 'ANIMATION') { linkName = `[Chuyển động] ${t.title}`; linkUrl = t.animationLink || t.videoLink; }
+                        else if (log.jobCategory === 'PUBLISH') { linkName = `[Đã đăng] ${t.title}`; linkUrl = t.publishLink || t.thumbnailLink; }
+                        
+                        // CÁC TRƯỜNG HỢP CÒN LẠI
+                        else if (detail.includes("trạng thái") || detail.includes("ghi chú")) { linkName = `[Ghi chú] ${t.title}`; linkUrl = `/tasks?taskId=${t.id}`; }
+                        else if (detail.includes("Nguồn")) { linkName = `[Nguồn] ${t.title}`; linkUrl = t.linkContent; }
+                        else { linkName = `[Cập nhật] ${t.title}`; linkUrl = `/tasks?taskId=${t.id}`; } 
+                    }
 
                     if (!linkUrl || linkUrl.trim() === "") {
                         linkUrl = `/tasks?taskId=${t.id}`;
@@ -146,8 +156,30 @@ export async function GET(request: Request) {
             });
 
             Object.keys(dailyReports).forEach(dateKey => {
+                // Vẫn lọc trùng link để trả về chi tiết khi click vào xem
                 const uniqueLinks = Array.from(new Set(dailyReports[dateKey].links.map(l => JSON.stringify(l)))).map(l => JSON.parse(l));
                 dailyReports[dateKey].links = uniqueLinks;
+
+                // 🚀 TÍNH TOÁN SỐ LƯỢNG KPI THEO TASK & JOB CATEGORY
+                const kpiCounter = new Set(); 
+                
+                uniqueLinks.forEach((link: any) => {
+                    // Dựa vào linkName để phân loại lại jobCategory tương đối cho báo cáo
+                    let impliedJob = 'GENERAL';
+                    const nameLower = (link.name || "").toLowerCase();
+                    
+                    if (nameLower.includes('kịch bản') || nameLower.includes('bố cục')) impliedJob = 'CONTENT';
+                    else if (nameLower.includes('video') || nameLower.includes('prj') || nameLower.includes('audio') || nameLower.includes('eng')) impliedJob = 'EDIT';
+                    else if (nameLower.includes('chuyển động')) impliedJob = 'ANIMATION';
+                    else if (nameLower.includes('đã đăng') || nameLower.includes('thumb') || nameLower.includes('làm lại')) impliedJob = 'PUBLISH';
+                    
+                    // Ghép taskId và impliedJob thành 1 key duy nhất. 
+                    // Nghĩa là: 1 Task + 1 Khâu = 1 KPI.
+                    kpiCounter.add(`${link.taskId}_${impliedJob}`);
+                });
+
+                // Trả về số lượng đếm được theo chuẩn KPI
+                dailyReports[dateKey].kpiCount = kpiCounter.size; 
             });
 
             return {

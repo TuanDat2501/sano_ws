@@ -373,7 +373,6 @@ export default function KpiDashboard() {
 
             const headers = ['STT', 'TEAM', 'HỌ TÊN NHÂN SỰ', 'CÔNG VIỆC', 'KÊNH PHỤ TRÁCH'];
             for (let i = 0; i < availableWeeks.length; i++) {
-                // Rải Header 5 cột con cho từng tuần
                 headers.push('Khâu (Job)', 'Thời lượng video (phút)', 'KPI được giao/Tuần', 'KPI hoàn thành/Tuần', 'Mức độ hoàn thành');
             }
             const row2 = ws.addRow(headers);
@@ -396,6 +395,9 @@ export default function KpiDashboard() {
             users.forEach((u, uIdx) => {
                 const targetList = Array.from(u.targets.values());
                 if (targetList.length === 0) targetList.push({ channelName: '', jobCategory: 'GENERAL', duration: 0, isRework: false });
+
+                // 🚀 BƯỚC 1 CỦA MERGE: Sắp xếp theo Tên Kênh để gộp ô đẹp mắt
+                targetList.sort((a: any, b: any) => (a.channelName || "").localeCompare(b.channelName || ""));
 
                 const numRows = targetList.length;
 
@@ -440,7 +442,7 @@ export default function KpiDashboard() {
                                 if (detail) {
                                     tMins = detail.duration || 0;
                                     giao = detail.targetCount || 0;
-                                    hoanThanh = detail.actualCount || 0; // Đã đảm bảo có số vì quét chung 1 hàm normalize
+                                    hoanThanh = detail.actualCount || 0;
                                     found = true;
                                 }
                             } else if (tg.channelName === 'Chung' || tg.channelName === '') {
@@ -479,16 +481,33 @@ export default function KpiDashboard() {
                 });
 
                 if (numRows > 1) {
+                    // Gộp cột 1, 3, 4 (STT, HỌ TÊN, CÔNG VIỆC) cho toàn bộ dòng của 1 người
                     ws.mergeCells(startRow, 1, startRow + numRows - 1, 1);
                     ws.mergeCells(startRow, 3, startRow + numRows - 1, 3);
                     ws.mergeCells(startRow, 4, startRow + numRows - 1, 4);
 
+                    // 🚀 BƯỚC 2 CỦA MERGE: TÌM VÀ GỘP CỘT 5 (KÊNH PHỤ TRÁCH) CHO CÁC Ô TRÙNG NHAU
+                    let mergeStart = startRow;
+                    for (let i = 1; i < numRows; i++) {
+                        if (targetList[i].channelName !== targetList[i - 1].channelName) {
+                            if (startRow + i - 1 > mergeStart) {
+                                ws.mergeCells(mergeStart, 5, startRow + i - 1, 5);
+                            }
+                            mergeStart = startRow + i;
+                        }
+                    }
+                    if (startRow + numRows - 1 > mergeStart) {
+                        ws.mergeCells(mergeStart, 5, startRow + numRows - 1, 5);
+                    }
+
+                    // Gộp cột Tổng % (Cột 10, 15, 20...)
                     for (let i = 0; i < availableWeeks.length; i++) {
                         const pCol = 5 + (i * 5) + 5; 
                         ws.mergeCells(startRow, pCol, startRow + numRows - 1, pCol);
                     }
                 }
 
+                // Logic gộp Team
                 if (uIdx === 0) {
                     currentTeamStr = u.teamName;
                     startTeamRow = startRow;

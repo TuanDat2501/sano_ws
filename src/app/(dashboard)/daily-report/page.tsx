@@ -21,7 +21,8 @@ const getBadgeColor = (type: string) => {
     if (t.includes('kịch bản') || t.includes('bố cục')) return 'bg-orange-50 text-orange-600 border-orange-200';
     if (t.includes('video') || t.includes('prj') || t.includes('audio') || t.includes('eng')) return 'bg-blue-50 text-blue-600 border-blue-200';
     if (t.includes('chuyển động')) return 'bg-purple-50 text-purple-600 border-purple-200';
-    if (t.includes('đã đăng') || t.includes('thumb')) return 'bg-rose-50 text-rose-600 border-rose-200';
+    // Dòng 21 file page_4.tsx
+    if (t.includes('đã đăng') || t.includes('thumb') || t.includes('làm lại')) return 'bg-rose-50 text-rose-600 border-rose-200';
     if (t.includes('thủ công')) return 'bg-emerald-50 text-emerald-600 border-emerald-200';
     return 'bg-slate-50 text-slate-600 border-slate-200'; 
 };
@@ -208,7 +209,7 @@ export default function DailyReportPage() {
                     const dayData = user.dailyReports?.[dateKey];
                     
                     // 🚀 ĐÃ SỬA: Lấy chiều dài của mảng links thay vì đếm taskId (Set)
-                    const countToExport = dayData?.links ? dayData.links.length : (dayData?.hasReported ? 1 : 0);
+                    const countToExport = dayData?.kpiCount || (dayData?.hasReported ? 1 : 0);
                     
                     rowData[`d_${dateKey}`] = dayData?.hasReported ? countToExport : '-';
                 });
@@ -422,7 +423,7 @@ export default function DailyReportPage() {
                                                 const hasReported = dayData?.hasReported;
                                                 
                                                 // 🚀 ĐÃ SỬA: Lấy độ dài (length) của mảng link thay vì Set()
-                                                const countToDisplay = dayData?.links ? dayData.links.length : (hasReported ? 1 : 0);
+                                                const countToDisplay = dayData?.kpiCount || (hasReported ? 1 : 0);
 
                                                 return (
                                                     <td 
