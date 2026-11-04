@@ -78,7 +78,8 @@ export async function GET(request: Request) {
         // 3. Xử lý và phân cụm dữ liệu theo Từng User -> Từng Ngày
         const reportData = productionUsers.map(user => {
             const userLogs = dailyLogs.filter(log => log.userId === user.id);
-            const dailyReports: Record<string, { hasReported: boolean, links: { name: string, url: string, channelName: string, taskId: string }[] }> = {};
+            // ĐÃ SỬA: Thêm kpiCount?: number vào định nghĩa kiểu dữ liệu
+            const dailyReports: Record<string, { hasReported: boolean, kpiCount?: number, links: { name: string, url: string, channelName: string, taskId: string }[] }> = {};
             
             userLogs.forEach(log => {
                 const detail = log.details || "";

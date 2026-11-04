@@ -489,7 +489,8 @@ export default function KpiDashboard() {
                     // 🚀 BƯỚC 2 CỦA MERGE: TÌM VÀ GỘP CỘT 5 (KÊNH PHỤ TRÁCH) CHO CÁC Ô TRÙNG NHAU
                     let mergeStart = startRow;
                     for (let i = 1; i < numRows; i++) {
-                        if (targetList[i].channelName !== targetList[i - 1].channelName) {
+                        const currentList = targetList as any[]; // Ép kiểu để báo cho TS biết
+                        if (currentList[i].channelName !== currentList[i - 1].channelName) {
                             if (startRow + i - 1 > mergeStart) {
                                 ws.mergeCells(mergeStart, 5, startRow + i - 1, 5);
                             }
