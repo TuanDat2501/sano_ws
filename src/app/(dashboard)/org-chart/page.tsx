@@ -19,14 +19,24 @@ const nodeTypes = {
 const getLayoutedElements = (nodes: any[], edges: any[], direction = 'TB') => {
     const dagreGraph = new dagre.graphlib.Graph();
     dagreGraph.setDefaultEdgeLabel(() => ({}));
-    const nodeWidth = 260; const nodeHeight = 160;
-    dagreGraph.setGraph({ rankdir: direction, nodesep: 40, ranksep: 60 });
+    
+    // Chiều cao/rộng giả định của node để tính toán toạ độ
+    const nodeWidth = 260; 
+    const nodeHeight = 160; // Bạn cũng có thể giảm số này (vd: 120) nếu các node thực tế ngắn hơn
+    
+    // ĐÃ SỬA: Giảm ranksep (khoảng cách dọc) từ 60 xuống 20 hoặc 30
+    // Nếu muốn các node gần nhau theo chiều ngang hơn, bạn giảm cả nodesep
+    dagreGraph.setGraph({ rankdir: direction, nodesep: 40, ranksep: 25 }); 
+
     nodes.forEach((node) => { dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight }); });
     edges.forEach((edge) => { dagreGraph.setEdge(edge.source, edge.target); });
+    
     dagre.layout(dagreGraph);
+    
     nodes.forEach((node) => {
         const nodeWithPosition = dagreGraph.node(node.id);
-        node.targetPosition = 'top'; node.sourcePosition = 'bottom';
+        node.targetPosition = 'top'; 
+        node.sourcePosition = 'bottom';
         node.position = { x: nodeWithPosition.x - nodeWidth / 2, y: nodeWithPosition.y - nodeHeight / 2 };
         return node;
     });
