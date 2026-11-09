@@ -21,7 +21,7 @@ const getLayoutedElements = (nodes: any[], edges: any[], direction = 'TB') => {
     dagreGraph.setDefaultEdgeLabel(() => ({}));
     
     // Đã chỉnh ranksep lên 30 để có không gian cho dây nối, nodesep là 40
-    dagreGraph.setGraph({ rankdir: direction, nodesep: 40, ranksep: 30 }); 
+    dagreGraph.setGraph({ rankdir: direction, nodesep: 30, ranksep: 10 }); 
 
     nodes.forEach((node) => {
         const nodeWidth = 260; // Giữ nguyên chiều rộng cố định
@@ -82,7 +82,7 @@ const getLayoutedElements = (nodes: any[], edges: any[], direction = 'TB') => {
         }
         
         // Đảm bảo chiều cao tối thiểu để không bị lỗi UI, cộng thêm một chút buffer (20px) cho chắc chắn
-        estimatedHeight = Math.max(estimatedHeight + 20, 80); 
+        estimatedHeight = Math.max(estimatedHeight, 80); 
         // --- KẾT THÚC TÍNH TOÁN ---
 
         // Khai báo cho Dagre kích thước ĐỘNG của từng node
@@ -97,22 +97,127 @@ const getLayoutedElements = (nodes: any[], edges: any[], direction = 'TB') => {
     
     dagre.layout(dagreGraph);
     
+    // 1. Áp dụng tọa độ cơ bản từ thuật toán Dagre
     nodes.forEach((node) => {
         const nodeWithPosition = dagreGraph.node(node.id);
         node.targetPosition = 'top'; 
         node.sourcePosition = 'bottom';
-        // Sử dụng chiều cao đã lưu ở trên để căn chỉnh vị trí y
         node.position = { 
             x: nodeWithPosition.x - node.__estimatedWidth / 2, 
             y: nodeWithPosition.y - node.__estimatedHeight / 2 
         };
+    });
+
+    // --- 2. ÁP DỤNG TỌA ĐỘ CƠ BẢN VÀ HẬU XỬ LÝ (VUỐT LINE) ---
+    const nodeMap = new Map();
+    nodes.forEach((node) => {
+        const nodeWithPosition = dagreGraph.node(node.id);
+        node.targetPosition = 'top'; 
+        node.sourcePosition = 'bottom';
+        node.position = { 
+            x: nodeWithPosition.x - node.__estimatedWidth / 2, 
+            y: nodeWithPosition.y - node.__estimatedHeight / 2 
+        };
+        nodeMap.set(node.id, node);
+    });
+
+    // 2A. Bước 1: Kéo dãn/thu gọn trục Y (Top-Down) và Ép thẳng trục X cho các khâu dưới Kênh
+    const snapChildrenToParentY = (parentId: string) => {
+        const parentNode = nodeMap.get(parentId);
+        if (!parentNode) return;
+
+        const childEdges = edges.filter(e => e.source === parentId);
         
-        // Dọn dẹp các property tạm thời
+        childEdges.forEach(edge => {
+            const childNode = nodeMap.get(edge.target);
+            if (childNode) {
+                
+                let currentGap = 25; 
+                if (childNode.data.role === 'Kênh' || childNode.id.startsWith('channel_')) {
+                    currentGap = 40; 
+                } else if (childNode.data.isGroup || childNode.id.startsWith('group_')) {
+                    currentGap = 15; 
+                }
+                
+                // Kéo Y sát lại
+                childNode.position.y = parentNode.position.y + parentNode.__estimatedHeight + currentGap;
+                
+                // Căn thẳng X (Chỉ cho các khâu dưới Kênh)
+                if (parentNode.data.role === 'Kênh' || parentNode.data.isGroup || parentNode.id.startsWith('group_')) {
+                    childNode.position.x = parentNode.position.x + (parentNode.__estimatedWidth - childNode.__estimatedWidth) / 2;
+                }
+
+                snapChildrenToParentY(childNode.id);
+            }
+        });
+    };
+
+    // Bắt đầu vuốt Y từ các cấp cao nhất (Team -> Leader -> QLK -> Kênh)
+    // LƯU Ý QUAN TRỌNG: Để đảm bảo vuốt từ trên xuống, ta gọi từ Team/Sơ đồ
+    nodes.filter(n => n.data.role === 'Team' || n.data.role === 'Sơ đồ tổ chức').forEach(rootNode => {
+        snapChildrenToParentY(rootNode.id);
+    });
+    
+    // Vuốt cho các nhánh lẻ tẻ (nếu có)
+    nodes.filter(n => n.id.startsWith('user_unassigned_')).forEach(uNode => {
+         snapChildrenToParentY(uNode.id); 
+    });
+
+
+    // 2B. BƯỚC 2 (RULE MỚI): CĂN GIỮA TRỤC X CHO NODE CHA DỰA TRÊN NODE CON (Bottom-Up)
+    // Chúng ta cần tìm xem node cha nào đang có nhiều nhánh con rẽ ra (như QLK, Leader, Team)
+    // Và đặt nó vào điểm chính giữa của các node con đó.
+
+    const centerParentXBasedOnChildren = (parentId: string) => {
+        const parentNode = nodeMap.get(parentId);
+        if (!parentNode) return;
+
+        const childEdges = edges.filter(e => e.source === parentId);
+        if (childEdges.length === 0) return; // Không có con thì bỏ qua
+
+        // Phải gọi đệ quy cho các con căn giữa trước (bottom-up)
+        childEdges.forEach(edge => centerParentXBasedOnChildren(edge.target));
+
+        // Nếu node cha này là "Kênh" hoặc các Khâu bên dưới, thì nó đã được ép thẳng hàng (bước 2A) rồi, bỏ qua
+        if (parentNode.data.role === 'Kênh' || parentNode.data.isGroup || parentNode.id.startsWith('group_')) {
+            return;
+        }
+
+        // TÍNH TRUNG BÌNH CỘNG TRỤC X CỦA CÁC NODE CON
+        let minChildX = Infinity;
+        let maxChildX = -Infinity;
+        let maxChildWidth = 0;
+
+        childEdges.forEach(edge => {
+            const childNode = nodeMap.get(edge.target);
+            if (childNode) {
+                if (childNode.position.x < minChildX) minChildX = childNode.position.x;
+                if (childNode.position.x > maxChildX) {
+                    maxChildX = childNode.position.x;
+                    maxChildWidth = childNode.__estimatedWidth;
+                }
+            }
+        });
+
+        // Điểm chính giữa của toàn bộ khối con
+        const childrenCenter = (minChildX + maxChildX + maxChildWidth) / 2;
+        
+        // Đặt X của cha vào điểm chính giữa đó
+        parentNode.position.x = childrenCenter - (parentNode.__estimatedWidth / 2);
+    };
+
+    // Bắt đầu quá trình căn giữa X ngược từ trên cùng (nó sẽ tự động đi xuống tận cùng rồi tính ngược lên)
+    nodes.filter(n => n.data.role === 'Sơ đồ tổ chức' || n.data.role === 'Team').forEach(rootNode => {
+        centerParentXBasedOnChildren(rootNode.id);
+    });
+    // ==========================================
+
+    // 3. Dọn dẹp dữ liệu tạm
+    nodes.forEach(node => {
         delete node.__estimatedWidth;
         delete node.__estimatedHeight;
-        
-        return node;
     });
+
     return { nodes, edges };
 };
 
@@ -360,7 +465,7 @@ export default function OrgChartPage() {
                                 fullUserObj: user, targetPosition: 'top'
                             }
                         });
-                        initialEdges.push({ id: `e_${rootId}-${userNodeId}`, source: rootId, target: userNodeId, type: 'smoothstep', animated: true });
+                        initialEdges.push({ id: `e_${rootId}-${userNodeId}`, source: rootId, target: userNodeId, type: 'straight', animated: true });
                     });
 
                     deptsData.filter((d: any) => !bgdDeptIds.includes(d.id)).forEach((dept: any) => {
@@ -369,7 +474,7 @@ export default function OrgChartPage() {
                             id: deptNodeId, type: 'custom', position: { x: 0, y: 0 },
                             data: { label: dept.name, role: "Phòng Ban", isSystemNode: true, desc: dept.description, targetPosition: 'top' }
                         });
-                        initialEdges.push({ id: `e_${rootId}-${deptNodeId}`, source: rootId, target: deptNodeId, type: 'smoothstep' });
+                        initialEdges.push({ id: `e_${rootId}-${deptNodeId}`, source: rootId, target: deptNodeId, type: 'straight' });
                     });
 
                     teamsData.filter((t: any) => !bgdTeamIds.includes(t.id)).forEach((team: any) => {
@@ -379,15 +484,15 @@ export default function OrgChartPage() {
                             id: teamNodeId, type: 'custom', position: { x: 0, y: 0 },
                             data: { label: team.name, role: "Team", isSystemNode: true, desc: team.description, targetPosition: 'top' }
                         });
-                        initialEdges.push({ id: `e_${parentId}-${teamNodeId}`, source: parentId, target: teamNodeId, type: 'smoothstep' });
+                        initialEdges.push({ id: `e_${parentId}-${teamNodeId}`, source: parentId, target: teamNodeId, type: 'straight' });
                     });
 
                     const noTeamId = "no_team";
-                    initialNodes.push({
+                    /* initialNodes.push({
                         id: noTeamId, type: 'custom', position: { x: 0, y: 0 },
                         data: { label: "Chưa phân bổ (No Team)", role: "Phòng Ban", isSystemNode: true, desc: "Nhân sự & Kênh chưa được gắn vào Team cụ thể.", targetPosition: 'top' }
-                    });
-                    initialEdges.push({ id: `e_${rootId}-${noTeamId}`, source: rootId, target: noTeamId, type: 'smoothstep', animated: true });
+                    }); */
+                    initialEdges.push({ id: `e_${rootId}-${noTeamId}`, source: rootId, target: noTeamId, type: 'straight', animated: true });
 
                     const groupedUsers: Record<string, any[]> = {};
                     const groupedChannels: Record<string, any[]> = {};
@@ -428,7 +533,7 @@ export default function OrgChartPage() {
                                     fullUserObj: u, targetPosition: 'top'
                                 }
                             });
-                            initialEdges.push({ id: `e_${lastLeaderId}-${uId}`, source: lastLeaderId, target: uId, type: 'smoothstep' });
+                            initialEdges.push({ id: `e_${lastLeaderId}-${uId}`, source: lastLeaderId, target: uId, type: 'straight' });
                             lastLeaderId = uId;
                         });
 
@@ -567,7 +672,7 @@ export default function OrgChartPage() {
                                             id: uId, type: 'custom', position: { x: 0, y: 0 },
                                             data: { isGroup: true, role: role, users: finalGroupedData, channelName: c.name, targetPosition: 'top', nodeSurplus: nodeSurplusAggregated }
                                         });
-                                        initialEdges.push({ id: `e_${lastNodeId}-${uId}`, source: lastNodeId, target: uId, type: 'smoothstep' });
+                                        initialEdges.push({ id: `e_${lastNodeId}-${uId}`, source: lastNodeId, target: uId, type: 'straight' });
                                         lastNodeId = uId; 
                                     }
                                 });
@@ -597,7 +702,7 @@ export default function OrgChartPage() {
                                         fullUserObj: qlk, targetPosition: 'top'
                                     }
                                 });
-                                initialEdges.push({ id: `e_${lastLeaderId}-${qlkNodeId}`, source: lastLeaderId, target: qlkNodeId, type: 'smoothstep' });
+                                initialEdges.push({ id: `e_${lastLeaderId}-${qlkNodeId}`, source: lastLeaderId, target: qlkNodeId, type: 'straight' });
 
                                 const qlkChannels = channelsByQlk.get(qlkId) || [];
                                 qlkChannels.forEach(c => {
@@ -615,7 +720,7 @@ export default function OrgChartPage() {
                                             isSystemNode: false, fullChannelObj: c, targetPosition: 'top'
                                         }
                                     });
-                                    initialEdges.push({ id: `e_${qlkNodeId}-${cId}`, source: qlkNodeId, target: cId, type: 'smoothstep' });
+                                    initialEdges.push({ id: `e_${qlkNodeId}-${cId}`, source: qlkNodeId, target: cId, type: 'straight' });
 
                                     processChannelMembers(c, cId, qlkId);
                                 });
@@ -630,7 +735,7 @@ export default function OrgChartPage() {
                                         isSystemNode: false, fullChannelObj: c, targetPosition: 'top'
                                     }
                                 });
-                                initialEdges.push({ id: `e_${lastLeaderId}-${cId}`, source: lastLeaderId, target: cId, type: 'smoothstep' });
+                                initialEdges.push({ id: `e_${lastLeaderId}-${cId}`, source: lastLeaderId, target: cId, type: 'straight' });
 
                                 processChannelMembers(c, cId, null);
                             });
@@ -646,7 +751,7 @@ export default function OrgChartPage() {
                                         fullUserObj: u, targetPosition: 'top'
                                     }
                                 });
-                                initialEdges.push({ id: `e_${lastUnassignedId}-${uId}`, source: lastUnassignedId, target: uId, type: 'smoothstep' });
+                                initialEdges.push({ id: `e_${lastUnassignedId}-${uId}`, source: lastUnassignedId, target: uId, type: 'straight' });
                                 lastUnassignedId = uId;
                             });
 
@@ -663,7 +768,7 @@ export default function OrgChartPage() {
                                         fullUserObj: u, targetPosition: 'top'
                                     }
                                 });
-                                initialEdges.push({ id: `e_${lastNodeId}-${uId}`, source: lastNodeId, target: uId, type: 'smoothstep' });
+                                initialEdges.push({ id: `e_${lastNodeId}-${uId}`, source: lastNodeId, target: uId, type: 'straight' });
                                 lastNodeId = uId;
                             });
                         }
