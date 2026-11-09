@@ -9,33 +9,59 @@ function getAvailableWeeks(year: number, month: number) {
     const totalDays = new Date(year, month, 0, 12, 0, 0).getDate();
     const firstDayOfMonth = new Date(year, month - 1, 1, 12, 0, 0);
     const startDayOfWeek = firstDayOfMonth.getDay();
-    const diffToSunday = startDayOfWeek === 0 ? 0 : 7 - startDayOfWeek;
-    const firstSunday = 1 + diffToSunday;
-    const remainingDays = totalDays - firstSunday;
-    const totalWeeks = 1 + Math.ceil(remainingDays / 7);
+    
+    // Nếu mùng 1 là Chủ Nhật (0) thì tuần 1 kết thúc vào mùng 8, ngược lại tính bình thường
+    const isFirstDaySunday = startDayOfWeek === 0;
+    const firstWeekEnd = isFirstDaySunday ? 8 : 1 + (7 - startDayOfWeek);
+
+    const remainingDays = totalDays - firstWeekEnd;
+    const totalWeeks = 1 + (remainingDays > 0 ? Math.ceil(remainingDays / 7) : 0);
+
     return Array.from({ length: totalWeeks }, (_, i) => i + 1);
 }
 
 function getCurrentWeekInfo() {
     const today = new Date();
+    // Khử múi giờ của Server, ép cứng về múi giờ Việt Nam (UTC+7)
     const localTime = today.getTime();
     const localOffset = today.getTimezoneOffset() * 60000;
     const utc = localTime + localOffset;
     const vietnamTime = new Date(utc + (3600000 * 7));
 
-    const year = vietnamTime.getFullYear();
-    const month = vietnamTime.getMonth() + 1;
+    let year = vietnamTime.getFullYear();
+    let month = vietnamTime.getMonth() + 1;
     const date = vietnamTime.getDate();
 
     const firstDayOfMonth = new Date(year, month - 1, 1, 12, 0, 0);
     const startDayOfWeek = firstDayOfMonth.getDay();
-    const diffToSunday = startDayOfWeek === 0 ? 0 : 7 - startDayOfWeek;
-    const firstSunday = 1 + diffToSunday;
+    
+    const isFirstDaySunday = startDayOfWeek === 0;
+    const firstWeekEnd = isFirstDaySunday ? 8 : 1 + (7 - startDayOfWeek);
 
     let week = 1;
-    if (date > firstSunday) {
-        week = 2 + Math.floor((date - firstSunday - 1) / 7);
+
+    // Xử lý ngoại lệ: Nếu hôm nay đúng là mùng 1 VÀ mùng 1 là Chủ Nhật
+    // => Ngày này bị đẩy lùi về tuần cuối cùng của tháng trước
+    if (isFirstDaySunday && date === 1) {
+        // Lùi về tháng trước
+        const prevMonthDate = new Date(year, month - 2, 1, 12, 0, 0);
+        year = prevMonthDate.getFullYear();
+        month = prevMonthDate.getMonth() + 1;
+        
+        // Tính số tuần của tháng trước để lấy tuần cuối cùng
+        const prevTotalDays = new Date(year, month, 0, 12, 0, 0).getDate();
+        const prevFirstDayOfWeek = prevMonthDate.getDay();
+        const prevIsFirstDaySunday = prevFirstDayOfWeek === 0;
+        const prevFirstWeekEnd = prevIsFirstDaySunday ? 8 : 1 + (7 - prevFirstDayOfWeek);
+        
+        const remainingDays = prevTotalDays - prevFirstWeekEnd;
+        week = 1 + (remainingDays > 0 ? Math.ceil(remainingDays / 7) : 0);
+    } 
+    // Các ngày bình thường khác trong tháng
+    else if (date > firstWeekEnd) {
+        week = 2 + Math.floor((date - firstWeekEnd - 1) / 7);
     }
+
     return { year, month, week };
 }
 
