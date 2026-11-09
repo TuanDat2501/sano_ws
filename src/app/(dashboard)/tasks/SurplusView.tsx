@@ -111,8 +111,12 @@ export default function SurplusView() {
     };
 
     useEffect(() => {
-        if (currentUser) fetchSurplus();
-    }, [selectedTeam, selectedYear, selectedMonth, selectedWeek, currentUser]);
+        // 🚀 ĐÃ SỬA: Chỉ check currentUser?.id thay vì toàn bộ object currentUser
+        if (currentUser?.id) {
+            fetchSurplus();
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedTeam, selectedYear, selectedMonth, selectedWeek, currentUser?.id]);
 
     const handleAddRow = (channelId: string) => {
         setSurplusData(prev => prev.map(c => {
