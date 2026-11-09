@@ -596,9 +596,9 @@ export default function KpiTeamTable({
                                                 <td className="border border-slate-200 p-2 align-middle bg-inherit" onClick={e => e.stopPropagation()}>
                                                     <textarea
                                                         className={`w-full bg-amber-50/30 border rounded-lg p-2 text-[11px] font-medium text-slate-700 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 resize-y min-h-[60px] custom-scrollbar transition-colors ${isCellBlocked ? 'border-slate-200 bg-slate-50 cursor-not-allowed opacity-70' : 'border-amber-200'}`}
-                                                        placeholder={isCellBlocked ? "Đã khóa" : "Nhập lý do thiếu KPI..."}
+                                                        placeholder={"Nhập lý do thiếu KPI..."}
                                                         defaultValue={manualNote}
-                                                        disabled={isCellBlocked}
+                        
                                                         onBlur={(e) => {
                                                             const newNote = e.target.value.trim();
                                                             if (newNote !== manualNote) {
