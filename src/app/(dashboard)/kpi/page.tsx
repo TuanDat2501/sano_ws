@@ -356,9 +356,27 @@ export default function KpiDashboard() {
             });
 
             users.sort((a, b) => {
+                // 1. Ưu tiên xếp theo Team trước
                 const teamA = a.teamName || "ZZZ";
                 const teamB = b.teamName || "ZZZ";
                 if (teamA !== teamB) return teamA.localeCompare(teamB);
+
+                // 2. Lấy Kênh chính của nhân sự (kênh đầu tiên hoặc kênh chung)
+                const getPrimaryChannel = (userTargets: Map<string, any>) => {
+                    const targetsArray = Array.from(userTargets.values());
+                    if (targetsArray.length === 0) return "Chung";
+                    // Ưu tiên xếp những kênh cụ thể trước
+                    const firstSpecificChannel = targetsArray.find(t => t.channelName && t.channelName !== 'Chung');
+                    return firstSpecificChannel ? firstSpecificChannel.channelName : "Chung";
+                };
+
+                const channelA = getPrimaryChannel(a.targets);
+                const channelB = getPrimaryChannel(b.targets);
+
+                // 3. Xếp theo Tên Kênh
+                if (channelA !== channelB) return channelA.localeCompare(channelB);
+
+                // 4. Nếu cùng Team, cùng Kênh thì xếp theo Tên Nhân Sự
                 return a.fullName.localeCompare(b.fullName);
             });
 
