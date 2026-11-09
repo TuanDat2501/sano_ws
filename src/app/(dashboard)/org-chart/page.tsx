@@ -26,7 +26,7 @@ const getLayoutedElements = (nodes: any[], edges: any[], direction = 'TB') => {
     
     // ĐÃ SỬA: Giảm ranksep (khoảng cách dọc) từ 60 xuống 20 hoặc 30
     // Nếu muốn các node gần nhau theo chiều ngang hơn, bạn giảm cả nodesep
-    dagreGraph.setGraph({ rankdir: direction, nodesep: 40, ranksep: 25 }); 
+    dagreGraph.setGraph({ rankdir: direction, nodesep: 40, ranksep: 10 }); 
 
     nodes.forEach((node) => { dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight }); });
     edges.forEach((edge) => { dagreGraph.setEdge(edge.source, edge.target); });
