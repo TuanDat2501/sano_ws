@@ -245,6 +245,7 @@ export default function KpiDashboard() {
     const handleExportExcelThang = async () => {
         setIsExporting(true);
         try {
+            // 1. Hàm chuẩn hóa Tên Khâu
             const normalizeJob = (role: string) => {
                 if (!role) return 'CONTENT';
                 const r = String(role).toUpperCase();
@@ -255,7 +256,7 @@ export default function KpiDashboard() {
                 return 'GENERAL';
             };
 
-            // 🚀 Hàm phân tách Khâu (Job) từ Logs 
+            // 2. Hàm phân tách Khâu từ Logs
             const getLogJobCategory = (log: any) => {
                 if (log.jobCategory) return normalizeJob(log.jobCategory);
                 const text = String(log.details || "").toLowerCase();
@@ -293,13 +294,14 @@ export default function KpiDashboard() {
                     const uData = userMap.get(userKpi.userId);
                     uData.weeks[w] = userKpi;
 
-                    // 1. Quét KPI GIAO TỪ LEADER
+                    // 🚀 QUÉT 1: LẤY CÁC CHỈ TIÊU ĐƯỢC GIAO TỪ LEADER
                     if (userKpi.targetDetails && userKpi.targetDetails.length > 0) {
                         userKpi.targetDetails.forEach((td: any) => {
                             const safeDuration = Number(td.duration) || 0;
-                            const safeRework = Boolean(td.isRework);
-                            const safeChannelName = td.channelName || "Khác";
+                            // Publish mặc định gom vào Mới (false) để tránh tách dòng
                             const safeJobCategory = normalizeJob(td.jobCategory || td.job || "GENERAL");
+                            const safeRework = safeJobCategory === 'PUBLISH' ? false : Boolean(td.isRework);
+                            const safeChannelName = td.channelName || "Khác";
 
                             const tKey = `${safeChannelName}_${safeJobCategory}_${safeDuration}_${safeRework}`;
                             if (!uData.targets.has(tKey)) {
@@ -313,14 +315,15 @@ export default function KpiDashboard() {
                         });
                     }
                     
-                    // 2. Quét TRỰC TIẾP TỪ LOGS THỰC TẾ (Lấy cả bài Giao lẫn Làm ngoài)
+                    // 🚀 QUÉT 2: LẤY TỪ LOGS THỰC TẾ (Để vớt các bài làm ngoài KPI)
                     if (userKpi.logs && userKpi.logs.length > 0) {
                         userKpi.logs.forEach((log: any) => {
                             if (log.isCounted && log.task) {
                                 const safeDuration = Number(log.task.duration) || 0;
-                                const safeRework = Boolean(log.task.isRework);
-                                const safeChannelName = log.task.channel?.name || "Khác";
                                 const safeJobCategory = getLogJobCategory(log);
+                                // Publish luôn gom chung Mới/Cũ
+                                const safeRework = safeJobCategory === 'PUBLISH' ? false : Boolean(log.task.isRework);
+                                const safeChannelName = log.task.channel?.name || "Khác";
 
                                 const tKey = `${safeChannelName}_${safeJobCategory}_${safeDuration}_${safeRework}`;
                                 if (!uData.targets.has(tKey)) {
@@ -334,16 +337,6 @@ export default function KpiDashboard() {
                             }
                         });
                     }
-                    
-                    // Fallback người không có cả target lẫn logs
-                    if ((!userKpi.targetDetails || userKpi.targetDetails.length === 0) && (!userKpi.logs || userKpi.logs.length === 0)) {
-                        if (userKpi.targetValue > 0 || userKpi.actualValue > 0) {
-                            const tKey = `Chung_GENERAL_0_false`;
-                            if (!uData.targets.has(tKey)) {
-                                uData.targets.set(tKey, { channelName: "Chung", jobCategory: "GENERAL", duration: 0, isRework: false });
-                            }
-                        }
-                    }
                 });
             });
 
@@ -355,6 +348,13 @@ export default function KpiDashboard() {
                 return;
             }
 
+            // Xử lý fallback cho người không có Target và Logs
+            users.forEach(u => {
+                if (u.targets.size === 0) {
+                    u.targets.set('Chung_GENERAL_0_false', { channelName: 'Chung', jobCategory: 'GENERAL', duration: 0, isRework: false });
+                }
+            });
+
             users.sort((a, b) => {
                 const teamA = a.teamName || "ZZZ";
                 const teamB = b.teamName || "ZZZ";
@@ -365,7 +365,7 @@ export default function KpiDashboard() {
             const workbook = new ExcelJS.Workbook();
             const ws = workbook.addWorksheet(`KPI_Thang_${selectedMonth}`);
 
-            // Cấu trúc 5 Cột / Tuần
+            // Cấu trúc 5 Cột cố định & 5 Cột / Tuần
             const cols = [
                 { width: 5 },  // 1. STT
                 { width: 15 }, // 2. TEAM
@@ -432,9 +432,8 @@ export default function KpiDashboard() {
 
             users.forEach((u, uIdx) => {
                 const targetList = Array.from(u.targets.values());
-                if (targetList.length === 0) targetList.push({ channelName: '', jobCategory: 'GENERAL', duration: 0, isRework: false });
-
                 targetList.sort((a: any, b: any) => (a.channelName || "").localeCompare(b.channelName || ""));
+
                 const numRows = targetList.length;
 
                 targetList.forEach((tg: any, tIdx: number) => {
@@ -451,6 +450,7 @@ export default function KpiDashboard() {
 
                     rowData.push(tg.channelName || "Chung");
 
+                    // 🚀 RẢI DỮ LIỆU ĐÃ MAP, LẤY ĐÚNG SỐ HOÀN THÀNH TỪ LOGS THỰC TẾ
                     for (let i = 0; i < availableWeeks.length; i++) {
                         const w = availableWeeks[i];
                         const weekKpi = u.weeks[w];
@@ -476,14 +476,14 @@ export default function KpiDashboard() {
                                         (d.channelName || "Khác") === tg.channelName &&
                                         normalizeJob(d.jobCategory || d.job || "GENERAL") === tg.jobCategory &&
                                         Number(d.duration) === Number(tg.duration) &&
-                                        Boolean(d.isRework) === Boolean(tg.isRework)
+                                        (tg.jobCategory === 'PUBLISH' ? true : Boolean(d.isRework) === Boolean(tg.isRework))
                                     );
                                     if (detail) {
                                         giao = detail.targetCount || 0;
                                     }
                                 }
 
-                                // 🚀 ĐẾM TRỰC TIẾP SỐ KPI ĐÃ LÀM TỪ LOGS (KHÔNG CẮT XÉN)
+                                // 🚀 ĐẾM TRỰC TIẾP SỐ KPI ĐÃ LÀM TỪ LOGS (Cộng dồn chuẩn xác)
                                 if (weekKpi.logs && weekKpi.logs.length > 0) {
                                     let actualCount = 0;
                                     weekKpi.logs.forEach((log: any) => {
@@ -491,11 +491,9 @@ export default function KpiDashboard() {
                                             const lDur = Number(log.task.duration) || 0;
                                             const lChan = log.task.channel?.name || "Khác";
                                             const lJob = getLogJobCategory(log);
-                                            
-                                            // Đặc quyền với Quản lý Kênh (Publish): Khác Rework vẫn được cộng
-                                            const matchRework = lJob === 'PUBLISH' ? true : Boolean(log.task.isRework) === tg.isRework;
+                                            const lRew = lJob === 'PUBLISH' ? false : Boolean(log.task.isRework);
 
-                                            if (lDur === tg.duration && matchRework && lChan === tg.channelName && lJob === tg.jobCategory) {
+                                            if (lDur === tg.duration && lRew === tg.isRework && lChan === tg.channelName && lJob === tg.jobCategory) {
                                                 actualCount++;
                                             }
                                         }
@@ -549,6 +547,7 @@ export default function KpiDashboard() {
                         ws.mergeCells(mergeStart, 5, startRow + numRows - 1, 5);
                     }
 
+                    // Gộp cột Tổng %
                     for (let i = 0; i < availableWeeks.length; i++) {
                         const pCol = 5 + (i * 5) + 5; 
                         ws.mergeCells(startRow, pCol, startRow + numRows - 1, pCol);
