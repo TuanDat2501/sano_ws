@@ -20,15 +20,79 @@ const getLayoutedElements = (nodes: any[], edges: any[], direction = 'TB') => {
     const dagreGraph = new dagre.graphlib.Graph();
     dagreGraph.setDefaultEdgeLabel(() => ({}));
     
-    // Chiều cao/rộng giả định của node để tính toán toạ độ
-    const nodeWidth = 260; 
-    const nodeHeight = 160; // Bạn cũng có thể giảm số này (vd: 120) nếu các node thực tế ngắn hơn
-    
-    // ĐÃ SỬA: Giảm ranksep (khoảng cách dọc) từ 60 xuống 20 hoặc 30
-    // Nếu muốn các node gần nhau theo chiều ngang hơn, bạn giảm cả nodesep
-    dagreGraph.setGraph({ rankdir: direction, nodesep: 40, ranksep: 10 }); 
+    // Đã chỉnh ranksep lên 30 để có không gian cho dây nối, nodesep là 40
+    dagreGraph.setGraph({ rankdir: direction, nodesep: 40, ranksep: 30 }); 
 
-    nodes.forEach((node) => { dagreGraph.setNode(node.id, { width: nodeWidth, height: nodeHeight }); });
+    nodes.forEach((node) => {
+        const nodeWidth = 260; // Giữ nguyên chiều rộng cố định
+        let estimatedHeight = 0;
+
+        // --- BẮT ĐẦU TÍNH TOÁN CHIỀU CAO ƯỚC LƯỢNG ---
+        if (node.data.isGroup) {
+            // 1. Node Nhóm (Nhiều nhân sự)
+            estimatedHeight += 40; // Padding top/bottom + Tên Role (Tiêu đề)
+            
+            if (node.data.users && node.data.users.length > 0) {
+                node.data.users.forEach((u: any) => {
+                    estimatedHeight += 24; // Chiều cao cơ bản cho tên nhân sự
+                    
+                    // Tính số dòng KPI của nhân sự này
+                    if (u.targetDetails && u.targetDetails.length > 0) {
+                        u.targetDetails.forEach((td: any) => {
+                            if (td.targetCount > 0) {
+                                estimatedHeight += 20; // Chiều cao mỗi dòng KPI
+                            }
+                        });
+                    }
+                });
+            }
+
+            // Tính phần hiển thị Bài Dư
+            if (node.data.nodeSurplus && node.data.nodeSurplus.length > 0) {
+                estimatedHeight += 16; // Đường viền border-t + padding
+                estimatedHeight += (node.data.nodeSurplus.length * 20); // Mỗi dòng dư
+            }
+
+        } else {
+            // 2. Node Đơn lẻ (Kênh, Giám đốc, v.v.)
+            estimatedHeight += 40; // Padding cơ bản
+
+            if (node.data.role && node.data.role !== 'Kênh') {
+                estimatedHeight += 24; // Tên Role
+            }
+            
+            estimatedHeight += 24; // Tên (Label)
+
+            // Tính số dòng KPI
+            if (node.data.targetDetails && node.data.targetDetails.length > 0) {
+                node.data.targetDetails.forEach((td: any) => {
+                    if (td.targetCount > 0) {
+                        estimatedHeight += 20;
+                    }
+                });
+            }
+
+            // Tính số dòng Dư (Nếu không phải các node hệ thống)
+            const role = node.data.role;
+            if (node.data.nodeSurplus && node.data.nodeSurplus.length > 0 && 
+                role !== 'Kênh' && role !== 'Phòng Ban' && role !== 'Team' && role !== 'Sơ đồ tổ chức') {
+                estimatedHeight += 16;
+                estimatedHeight += (node.data.nodeSurplus.length * 20);
+            }
+        }
+        
+        // Đảm bảo chiều cao tối thiểu để không bị lỗi UI, cộng thêm một chút buffer (20px) cho chắc chắn
+        estimatedHeight = Math.max(estimatedHeight + 20, 80); 
+        // --- KẾT THÚC TÍNH TOÁN ---
+
+        // Khai báo cho Dagre kích thước ĐỘNG của từng node
+        dagreGraph.setNode(node.id, { width: nodeWidth, height: estimatedHeight }); 
+        
+        // Lưu lại kích thước đã tính vào node object để dùng ở bước sau
+        node.__estimatedWidth = nodeWidth;
+        node.__estimatedHeight = estimatedHeight;
+    });
+
     edges.forEach((edge) => { dagreGraph.setEdge(edge.source, edge.target); });
     
     dagre.layout(dagreGraph);
@@ -37,7 +101,16 @@ const getLayoutedElements = (nodes: any[], edges: any[], direction = 'TB') => {
         const nodeWithPosition = dagreGraph.node(node.id);
         node.targetPosition = 'top'; 
         node.sourcePosition = 'bottom';
-        node.position = { x: nodeWithPosition.x - nodeWidth / 2, y: nodeWithPosition.y - nodeHeight / 2 };
+        // Sử dụng chiều cao đã lưu ở trên để căn chỉnh vị trí y
+        node.position = { 
+            x: nodeWithPosition.x - node.__estimatedWidth / 2, 
+            y: nodeWithPosition.y - node.__estimatedHeight / 2 
+        };
+        
+        // Dọn dẹp các property tạm thời
+        delete node.__estimatedWidth;
+        delete node.__estimatedHeight;
+        
         return node;
     });
     return { nodes, edges };
