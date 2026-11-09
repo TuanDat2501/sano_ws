@@ -245,7 +245,6 @@ export default function KpiDashboard() {
     const handleExportExcelThang = async () => {
         setIsExporting(true);
         try {
-            // 🚀 1. HÀM CHUẨN HÓA ĐỂ ĐẢM BẢO TÍNH ĐÚNG ACTUAL KHỚP 100% VỚI WEB
             const normalizeJob = (role: string) => {
                 if (!role) return 'CONTENT';
                 const r = String(role).toUpperCase();
@@ -326,7 +325,7 @@ export default function KpiDashboard() {
             const workbook = new ExcelJS.Workbook();
             const ws = workbook.addWorksheet(`KPI_Thang_${selectedMonth}`);
 
-            // 🚀 2. TẠO CẤU TRÚC 5 CỘT CỐ ĐỊNH & (5 CỘT x SỐ TUẦN)
+            // 🚀 BƯỚC 1: TRẢ LẠI 5 CỘT CHO MỖI TUẦN NHƯ CŨ
             const cols = [
                 { width: 5 },  // 1. STT
                 { width: 15 }, // 2. TEAM
@@ -337,8 +336,8 @@ export default function KpiDashboard() {
             for (let i = 1; i <= availableWeeks.length; i++) {
                 cols.push({ width: 15 }); // 6. Khâu (Job)
                 cols.push({ width: 12 }); // 7. Phút
-                cols.push({ width: 12 }); // 8. Giao
-                cols.push({ width: 12 }); // 9. Hoàn thành
+                cols.push({ width: 12 }); // 8. KPI Giao
+                cols.push({ width: 12 }); // 9. KPI Hoàn thành (Lấy toàn bộ)
                 cols.push({ width: 12 }); // 10. %
             }
             ws.columns = cols;
@@ -396,7 +395,6 @@ export default function KpiDashboard() {
                 const targetList = Array.from(u.targets.values());
                 if (targetList.length === 0) targetList.push({ channelName: '', jobCategory: 'GENERAL', duration: 0, isRework: false });
 
-                // 🚀 BƯỚC 1 CỦA MERGE: Sắp xếp theo Tên Kênh để gộp ô đẹp mắt
                 targetList.sort((a: any, b: any) => (a.channelName || "").localeCompare(b.channelName || ""));
 
                 const numRows = targetList.length;
@@ -415,7 +413,7 @@ export default function KpiDashboard() {
 
                     rowData.push(tg.channelName || "Chung");
 
-                    // 🚀 3. RẢI DỮ LIỆU ĐÃ MAP CHUẨN XÁC VÀO TỪNG TUẦN
+                    // 🚀 BƯỚC 2: RẢI DỮ LIỆU ĐÃ MAP, LẤY ĐÚNG SỐ HOÀN THÀNH KHÔNG CẮT XÉN
                     for (let i = 0; i < availableWeeks.length; i++) {
                         const w = availableWeeks[i];
                         const weekKpi = u.weeks[w];
@@ -439,10 +437,12 @@ export default function KpiDashboard() {
                                     Number(d.duration) === Number(tg.duration) &&
                                     Boolean(d.isRework) === Boolean(tg.isRework)
                                 );
+                                
                                 if (detail) {
                                     tMins = detail.duration || 0;
                                     giao = detail.targetCount || 0;
-                                    hoanThanh = detail.actualCount || 0;
+                                    // Bê nguyên số lượng actualCount thực tế ra đây
+                                    hoanThanh = detail.actualCount || 0; 
                                     found = true;
                                 }
                             } else if (tg.channelName === 'Chung' || tg.channelName === '') {
@@ -481,15 +481,13 @@ export default function KpiDashboard() {
                 });
 
                 if (numRows > 1) {
-                    // Gộp cột 1, 3, 4 (STT, HỌ TÊN, CÔNG VIỆC) cho toàn bộ dòng của 1 người
                     ws.mergeCells(startRow, 1, startRow + numRows - 1, 1);
                     ws.mergeCells(startRow, 3, startRow + numRows - 1, 3);
                     ws.mergeCells(startRow, 4, startRow + numRows - 1, 4);
 
-                    // 🚀 BƯỚC 2 CỦA MERGE: TÌM VÀ GỘP CỘT 5 (KÊNH PHỤ TRÁCH) CHO CÁC Ô TRÙNG NHAU
                     let mergeStart = startRow;
                     for (let i = 1; i < numRows; i++) {
-                        const currentList = targetList as any[]; // Ép kiểu để báo cho TS biết
+                        const currentList = targetList as any[];
                         if (currentList[i].channelName !== currentList[i - 1].channelName) {
                             if (startRow + i - 1 > mergeStart) {
                                 ws.mergeCells(mergeStart, 5, startRow + i - 1, 5);
@@ -508,7 +506,6 @@ export default function KpiDashboard() {
                     }
                 }
 
-                // Logic gộp Team
                 if (uIdx === 0) {
                     currentTeamStr = u.teamName;
                     startTeamRow = startRow;
