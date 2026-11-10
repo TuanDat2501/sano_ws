@@ -591,7 +591,7 @@ export default function KpiDashboard() {
 
                             if (isKhongLam) {
                                 // Tô Hồng nếu Không Làm
-                                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2DCDB' } };
+                                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF58E2B' } };
                                 if (cell.value === 0) cell.value = ''; 
                             } else {
                                 // 🚀 TÔ ĐỎ PHẦN TRĂM NẾU < 100%
