@@ -17,8 +17,8 @@ import { saveAs } from 'file-saver';
 function getWeekData(year: number, month: number, weekNumber: number) {
     const totalDays = new Date(year, month, 0, 12, 0, 0).getDate();
     const firstDayOfMonth = new Date(year, month - 1, 1, 12, 0, 0);
-    const startDayOfWeek = firstDayOfMonth.getDay(); 
-    
+    const startDayOfWeek = firstDayOfMonth.getDay();
+
     const isFirstDaySunday = startDayOfWeek === 0;
 
     // Tuần 1 bắt đầu từ mùng 2 (Thứ 2) nếu mùng 1 là Chủ Nhật
@@ -49,7 +49,7 @@ function getAvailableWeeks(year: number, month: number) {
     const totalDays = new Date(year, month, 0, 12, 0, 0).getDate();
     const firstDayOfMonth = new Date(year, month - 1, 1, 12, 0, 0);
     const startDayOfWeek = firstDayOfMonth.getDay();
-    
+
     const isFirstDaySunday = startDayOfWeek === 0;
     const firstWeekEnd = isFirstDaySunday ? 8 : 1 + (7 - startDayOfWeek);
 
@@ -74,7 +74,7 @@ function getCurrentWeekInfo() {
 
     const firstDayOfMonth = new Date(year, month - 1, 1, 12, 0, 0);
     const startDayOfWeek = firstDayOfMonth.getDay();
-    
+
     const isFirstDaySunday = startDayOfWeek === 0;
     const firstWeekEnd = isFirstDaySunday ? 8 : 1 + (7 - startDayOfWeek);
 
@@ -87,16 +87,16 @@ function getCurrentWeekInfo() {
         const prevMonthDate = new Date(year, month - 2, 1, 12, 0, 0);
         year = prevMonthDate.getFullYear();
         month = prevMonthDate.getMonth() + 1;
-        
+
         // Tính số tuần của tháng trước để lấy tuần cuối cùng
         const prevTotalDays = new Date(year, month, 0, 12, 0, 0).getDate();
         const prevFirstDayOfWeek = prevMonthDate.getDay();
         const prevIsFirstDaySunday = prevFirstDayOfWeek === 0;
         const prevFirstWeekEnd = prevIsFirstDaySunday ? 8 : 1 + (7 - prevFirstDayOfWeek);
-        
+
         const remainingDays = prevTotalDays - prevFirstWeekEnd;
         week = 1 + (remainingDays > 0 ? Math.ceil(remainingDays / 7) : 0);
-    } 
+    }
     // Các ngày bình thường khác trong tháng
     else if (date > firstWeekEnd) {
         week = 2 + Math.floor((date - firstWeekEnd - 1) / 7);
@@ -323,7 +323,7 @@ export default function KpiDashboard() {
                             }
                         });
                     }
-                    
+
                     if (userKpi.logs && userKpi.logs.length > 0) {
                         userKpi.logs.forEach((log: any) => {
                             if (log.isCounted && log.task) {
@@ -390,7 +390,7 @@ export default function KpiDashboard() {
             noteRow.getCell(2).alignment = { vertical: 'middle', horizontal: 'center' };
             noteRow.getCell(3).font = { name: 'Times New Roman', size: 12, bold: true, color: { argb: 'FFFF0000' } };
             noteRow.getCell(3).alignment = { vertical: 'middle', horizontal: 'left' };
-            ws.mergeCells('C1:E1'); 
+            ws.mergeCells('C1:E1');
 
             // Cấu trúc Cột Cố Định + Cột Tuần (weeksToExport) + 1 CỘT GHI CHÚ
             const cols = [
@@ -413,7 +413,7 @@ export default function KpiDashboard() {
             // Dòng Title THÁNG
             const row2 = ws.addRow([]);
             row2.height = 40;
-            ws.mergeCells('A2:E2'); 
+            ws.mergeCells('A2:E2');
             const titleCell = ws.getCell('A2');
             titleCell.value = `THÁNG ${selectedMonth}`;
             titleCell.font = { name: 'Times New Roman', size: 18, bold: true, color: { argb: 'FFFF0000' } };
@@ -452,7 +452,7 @@ export default function KpiDashboard() {
                 headers.push('Thời lượng video (phút)', 'KPI được giao/Tuần', 'KPI hoàn thành/Tuần', 'Mức độ hoàn thành', 'Khâu (Job) *'); // (*) Lưu ý thứ tự ở đây có thể Sếp cần chỉnh theo ý muốn
             }
             headers.push(''); // Cột Ghi Chú để trống dòng 3
-            
+
             const row3 = ws.addRow(headers);
             row3.height = 45;
             row3.eachCell((cell, colNum) => {
@@ -553,7 +553,8 @@ export default function KpiDashboard() {
                         }
 
                         // Thứ tự các cột đẩy vào phải khớp với Header ở trên (Mặc định: Khâu, Phút, Giao, HT, %)
-                        rowData.push(jobLabel, tMins, giao, hoanThanh, percentStr);
+                        // Đẩy vào đúng thứ tự: Phút, Giao, Hoàn thành, %, Khâu
+                        rowData.push(tMins, giao, hoanThanh, percentStr, jobLabel);
                     }
 
                     // Đẩy dữ liệu Ghi chú vào Cột cuối cùng (Chỉ đẩy 1 lần cho dòng đầu tiên của nhân sự)
@@ -573,28 +574,29 @@ export default function KpiDashboard() {
                         if (colNum === finalColIndex) {
                             cell.alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
                             cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFFF' } };
-                        } 
+                        }
                         // 2. Nếu là các CỘT DỮ LIỆU TUẦN
                         else if (colNum > 5 && colNum < finalColIndex) {
                             const weekIndex = Math.floor((colNum - 6) / 5);
                             const weekColIndex = (colNum - 6) % 5; // 0: Khâu, 1: Phút, 2: Giao, 3: HT, 4: %
-                            
+
                             // Lấy giá trị Giao và Hoàn Thành của dòng hiện tại để xét điều kiện
-                            const colGiao = 6 + (weekIndex * 5) + 2; 
+                            const colGiao = 6 + (weekIndex * 5) + 2;
                             const colHoanThanh = 6 + (weekIndex * 5) + 3;
                             const valGiao = r.getCell(colGiao).value;
                             const valHoanThanh = r.getCell(colHoanThanh).value;
 
                             const isKhongLam = (!valGiao || valGiao === 0) && (!valHoanThanh || valHoanThanh === 0);
-                            const isPercentCol = weekColIndex === 4; // Check xem có phải là cột % hay không
+                            const isPercentCol = weekColIndex === 3;// Check xem có phải là cột % hay không
 
                             // 🚀 XỬ LÝ MÀU NỀN
                             // Chỉ tô nền Hồng cho cột Khâu, Phút, Giao, Hoàn Thành. BỎ QUA CỘT %
                             if (isKhongLam && !isPercentCol) {
-                                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2DCDB' } }; 
-                                // Ẩn số 0 đi cho sạch (Chỉ ẩn ở cột Giao và Hoàn thành)
-                                if (cell.value === 0 && (weekColIndex === 2 || weekColIndex === 3)) cell.value = ''; 
-                            } else {
+                                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2DCDB' } };
+                                // Ẩn số 0 đi cho sạch (Chỉ ẩn ở cột Giao và Hoàn thành: index 1 và 2)
+                                if (cell.value === 0 && (weekColIndex === 1 || weekColIndex === 2)) cell.value = '';
+                            }
+                            else {
                                 // Nếu có làm hoặc là cột %, tô màu xanh xen kẽ theo nhân sự
                                 if (uIdx % 2 === 0) {
                                     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2EFDA' } };
@@ -610,11 +612,11 @@ export default function KpiDashboard() {
                                     const numValue = parseFloat(valPercentStr.replace('%', ''));
                                     if (!isNaN(numValue) && numValue < 100) {
                                         // Tô chữ Đỏ Tươi nếu tiến độ < 100%
-                                        cell.font = { name: 'Times New Roman', size: 11, bold: true, color: { argb: 'FFFF0000' } }; 
+                                        cell.font = { name: 'Times New Roman', size: 11, bold: true, color: { argb: 'FFFF0000' } };
                                     }
                                 }
                             }
-                        } 
+                        }
                         // 3. Nếu là 5 CỘT THÔNG TIN CỐ ĐỊNH ĐẦU TIÊN
                         else {
                             if (uIdx % 2 === 0) {
@@ -648,7 +650,7 @@ export default function KpiDashboard() {
                     }
 
                     for (let i = 0; i < weeksToExport.length; i++) {
-                        const pCol = 5 + (i * 5) + 5; 
+                        const pCol = 5 + (i * 5) + 5;
                         ws.mergeCells(startRow, pCol, startRow + numRows - 1, pCol);
                     }
                 }
