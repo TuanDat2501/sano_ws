@@ -245,7 +245,6 @@ export default function KpiDashboard() {
     const handleExportExcelThang = async () => {
         setIsExporting(true);
         try {
-            // 1. Hàm chuẩn hóa Tên Khâu
             const normalizeJob = (role: string) => {
                 if (!role) return 'CONTENT';
                 const r = String(role).toUpperCase();
@@ -256,7 +255,6 @@ export default function KpiDashboard() {
                 return 'GENERAL';
             };
 
-            // 2. Hàm phân tách Khâu từ Logs
             const getLogJobCategory = (log: any) => {
                 if (log.jobCategory) return normalizeJob(log.jobCategory);
                 const text = String(log.details || "").toLowerCase();
@@ -268,7 +266,15 @@ export default function KpiDashboard() {
                 return "GENERAL";
             };
 
-            const weekPromises = availableWeeks.map(w =>
+            // 🚀 BƯỚC 1: CẮT MẢNG TUẦN ĐẾN TUẦN HIỆN TẠI NẾU ĐANG XEM THÁNG HIỆN TẠI
+            const currentRealInfo = getCurrentWeekInfo();
+            let weeksToExport = [...availableWeeks];
+            // Chỉ cắt gọn nếu người dùng đang xuất Báo cáo của đúng Tháng & Năm hiện tại
+            if (selectedYear === currentRealInfo.year && selectedMonth === currentRealInfo.month) {
+                weeksToExport = weeksToExport.filter(w => w <= currentRealInfo.week);
+            }
+
+            const weekPromises = weeksToExport.map(w =>
                 fetch(`/api/kpi?teamId=${queryTeamId}&year=${selectedYear}&month=${selectedMonth}&week=${w}`).then(res => res.json())
             );
             const weeksData = await Promise.all(weekPromises);
@@ -276,7 +282,7 @@ export default function KpiDashboard() {
             const userMap = new Map();
 
             weeksData.forEach((weekRes, index) => {
-                const w = availableWeeks[index];
+                const w = weeksToExport[index];
                 const list = weekRes.kpiList || [];
 
                 list.forEach((userKpi: any) => {
@@ -287,18 +293,21 @@ export default function KpiDashboard() {
                             role: userKpi.role,
                             teamName: userKpi.teamName || "Chưa có team",
                             weeks: {},
-                            targets: new Map()
+                            targets: new Map(),
+                            userNote: "" // Biến chuẩn bị lưu nội dung vào Cột Ghi Chú
                         });
                     }
 
                     const uData = userMap.get(userKpi.userId);
                     uData.weeks[w] = userKpi;
+                    // Lấy đại ghi chú của tuần cuối cùng đang có
+                    if (userKpi.note && userKpi.note.trim() !== "") {
+                        uData.userNote = userKpi.note;
+                    }
 
-                    // 🚀 QUÉT 1: LẤY CÁC CHỈ TIÊU ĐƯỢC GIAO TỪ LEADER
                     if (userKpi.targetDetails && userKpi.targetDetails.length > 0) {
                         userKpi.targetDetails.forEach((td: any) => {
                             const safeDuration = Number(td.duration) || 0;
-                            // Publish mặc định gom vào Mới (false) để tránh tách dòng
                             const safeJobCategory = normalizeJob(td.jobCategory || td.job || "GENERAL");
                             const safeRework = safeJobCategory === 'PUBLISH' ? false : Boolean(td.isRework);
                             const safeChannelName = td.channelName || "Khác";
@@ -315,13 +324,11 @@ export default function KpiDashboard() {
                         });
                     }
                     
-                    // 🚀 QUÉT 2: LẤY TỪ LOGS THỰC TẾ (Để vớt các bài làm ngoài KPI)
                     if (userKpi.logs && userKpi.logs.length > 0) {
                         userKpi.logs.forEach((log: any) => {
                             if (log.isCounted && log.task) {
                                 const safeDuration = Number(log.task.duration) || 0;
                                 const safeJobCategory = getLogJobCategory(log);
-                                // Publish luôn gom chung Mới/Cũ
                                 const safeRework = safeJobCategory === 'PUBLISH' ? false : Boolean(log.task.isRework);
                                 const safeChannelName = log.task.channel?.name || "Khác";
 
@@ -343,12 +350,11 @@ export default function KpiDashboard() {
             const users = Array.from(userMap.values());
 
             if (users.length === 0) {
-                showToast("error", "Không có dữ liệu trong tháng này.");
+                showToast("error", "Không có dữ liệu để xuất.");
                 setIsExporting(false);
                 return;
             }
 
-            // Xử lý fallback cho người không có Target và Logs
             users.forEach(u => {
                 if (u.targets.size === 0) {
                     u.targets.set('Chung_GENERAL_0_false', { channelName: 'Chung', jobCategory: 'GENERAL', duration: 0, isRework: false });
@@ -356,16 +362,13 @@ export default function KpiDashboard() {
             });
 
             users.sort((a, b) => {
-                // 1. Ưu tiên xếp theo Team trước
                 const teamA = a.teamName || "ZZZ";
                 const teamB = b.teamName || "ZZZ";
                 if (teamA !== teamB) return teamA.localeCompare(teamB);
 
-                // 2. Lấy Kênh chính của nhân sự (kênh đầu tiên hoặc kênh chung)
                 const getPrimaryChannel = (userTargets: Map<string, any>) => {
                     const targetsArray = Array.from(userTargets.values());
                     if (targetsArray.length === 0) return "Chung";
-                    // Ưu tiên xếp những kênh cụ thể trước
                     const firstSpecificChannel = targetsArray.find(t => t.channelName && t.channelName !== 'Chung');
                     return firstSpecificChannel ? firstSpecificChannel.channelName : "Chung";
                 };
@@ -373,17 +376,23 @@ export default function KpiDashboard() {
                 const channelA = getPrimaryChannel(a.targets);
                 const channelB = getPrimaryChannel(b.targets);
 
-                // 3. Xếp theo Tên Kênh
                 if (channelA !== channelB) return channelA.localeCompare(channelB);
-
-                // 4. Nếu cùng Team, cùng Kênh thì xếp theo Tên Nhân Sự
                 return a.fullName.localeCompare(b.fullName);
             });
 
             const workbook = new ExcelJS.Workbook();
             const ws = workbook.addWorksheet(`KPI_Thang_${selectedMonth}`);
 
-            // Cấu trúc 5 Cột cố định & 5 Cột / Tuần
+            // 🚀 BƯỚC 2: THIẾT LẬP DÒNG GHI CHÚ TRÊN CÙNG
+            const noteRow = ws.addRow(['', 'Ghi chú:', 'Màu đậm là không làm']);
+            noteRow.height = 25;
+            noteRow.getCell(2).font = { name: 'Times New Roman', size: 12, bold: true, color: { argb: 'FFFF0000' } };
+            noteRow.getCell(2).alignment = { vertical: 'middle', horizontal: 'center' };
+            noteRow.getCell(3).font = { name: 'Times New Roman', size: 12, bold: true, color: { argb: 'FFFF0000' } };
+            noteRow.getCell(3).alignment = { vertical: 'middle', horizontal: 'left' };
+            ws.mergeCells('C1:E1'); 
+
+            // Cấu trúc Cột Cố Định + Cột Tuần (weeksToExport) + 1 CỘT GHI CHÚ
             const cols = [
                 { width: 5 },  // 1. STT
                 { width: 15 }, // 2. TEAM
@@ -391,31 +400,34 @@ export default function KpiDashboard() {
                 { width: 15 }, // 4. CÔNG VIỆC
                 { width: 22 }, // 5. KÊNH
             ];
-            for (let i = 1; i <= availableWeeks.length; i++) {
+            for (let i = 1; i <= weeksToExport.length; i++) {
                 cols.push({ width: 15 }); // 6. Khâu (Job)
                 cols.push({ width: 12 }); // 7. Phút
                 cols.push({ width: 12 }); // 8. KPI Giao
                 cols.push({ width: 12 }); // 9. KPI Hoàn thành
                 cols.push({ width: 12 }); // 10. %
             }
+            cols.push({ width: 35 }); // 🚀 Bổ sung CỘT GHI CHÚ Ở CUỐI
             ws.columns = cols;
 
-            const row1 = ws.addRow([]);
-            row1.height = 40;
-            ws.mergeCells('A1:E1'); 
-            const titleCell = ws.getCell('A1');
+            // Dòng Title THÁNG
+            const row2 = ws.addRow([]);
+            row2.height = 40;
+            ws.mergeCells('A2:E2'); 
+            const titleCell = ws.getCell('A2');
             titleCell.value = `THÁNG ${selectedMonth}`;
             titleCell.font = { name: 'Times New Roman', size: 18, bold: true, color: { argb: 'FFFF0000' } };
             titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF00FFFF' } };
             titleCell.alignment = { vertical: 'middle', horizontal: 'center' };
 
-            for (let i = 0; i < availableWeeks.length; i++) {
-                const w = availableWeeks[i];
+            // Gộp và in chữ cho từng tuần
+            for (let i = 0; i < weeksToExport.length; i++) {
+                const w = weeksToExport[i];
                 const startCol = 5 + (i * 5) + 1;
                 const endCol = startCol + 4;
 
-                ws.mergeCells(1, startCol, 1, endCol);
-                const weekCell = ws.getCell(1, startCol);
+                ws.mergeCells(2, startCol, 2, endCol);
+                const weekCell = ws.getCell(2, startCol);
 
                 const { start: sd, end: ed } = getWeekData(selectedYear, selectedMonth, w);
                 const pad = (num: number) => num.toString().padStart(2, '0');
@@ -427,26 +439,40 @@ export default function KpiDashboard() {
                 weekCell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
             }
 
+            // Xử lý tiêu đề cột cuối (Ghi Chú)
+            const finalColIndex = 5 + (weeksToExport.length * 5) + 1;
+            const noteHeaderCell = ws.getCell(2, finalColIndex);
+            noteHeaderCell.value = "Ghi chú";
+            noteHeaderCell.font = { name: 'Times New Roman', size: 10, bold: true, color: { argb: 'FFFF0000' } }; // Chữ đỏ như hình
+            noteHeaderCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF00FFFF' } };
+            noteHeaderCell.alignment = { vertical: 'middle', horizontal: 'center' };
+
             const headers = ['STT', 'TEAM', 'HỌ TÊN NHÂN SỰ', 'CÔNG VIỆC', 'KÊNH PHỤ TRÁCH'];
-            for (let i = 0; i < availableWeeks.length; i++) {
-                headers.push('Khâu (Job)', 'Thời lượng video (phút)', 'KPI được giao/Tuần', 'KPI hoàn thành/Tuần', 'Mức độ hoàn thành');
+            for (let i = 0; i < weeksToExport.length; i++) {
+                headers.push('Thời lượng video (phút)', 'KPI được giao/Tuần', 'KPI hoàn thành/Tuần', 'Mức độ hoàn thành', 'Khâu (Job) *'); // (*) Lưu ý thứ tự ở đây có thể Sếp cần chỉnh theo ý muốn
             }
-            const row2 = ws.addRow(headers);
-            row2.height = 45;
-            row2.eachCell((cell) => {
-                cell.font = { name: 'Times New Roman', size: 10, bold: true };
-                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF00FFFF' } };
-                cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+            headers.push(''); // Cột Ghi Chú để trống dòng 3
+            
+            const row3 = ws.addRow(headers);
+            row3.height = 45;
+            row3.eachCell((cell, colNum) => {
+                // Xử lý Border và Text cho dòng Header 3
+                if (colNum < finalColIndex) {
+                    cell.font = { name: 'Times New Roman', size: 10, bold: true };
+                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF00FFFF' } };
+                    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+                }
                 cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
             });
 
-            for (let i = 1; i <= 5 + (availableWeeks.length * 5); i++) {
-                ws.getCell(1, i).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+            // Viền Header Dòng 2
+            for (let i = 1; i <= finalColIndex; i++) {
+                ws.getCell(2, i).border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
             }
 
-            let startRow = 3;
+            let startRow = 4;
             let currentTeamStr = "";
-            let startTeamRow = 3;
+            let startTeamRow = 4;
 
             users.forEach((u, uIdx) => {
                 const targetList = Array.from(u.targets.values());
@@ -468,9 +494,8 @@ export default function KpiDashboard() {
 
                     rowData.push(tg.channelName || "Chung");
 
-                    // 🚀 RẢI DỮ LIỆU ĐÃ MAP, LẤY ĐÚNG SỐ HOÀN THÀNH TỪ LOGS THỰC TẾ
-                    for (let i = 0; i < availableWeeks.length; i++) {
-                        const w = availableWeeks[i];
+                    for (let i = 0; i < weeksToExport.length; i++) {
+                        const w = weeksToExport[i];
                         const weekKpi = u.weeks[w];
 
                         let jobLabel = "-";
@@ -488,7 +513,6 @@ export default function KpiDashboard() {
                                 giao = weekKpi.targetValue || 0;
                                 hoanThanh = weekKpi.actualValue || 0;
                             } else {
-                                // Lấy KPI giao
                                 if (weekKpi.targetDetails && weekKpi.targetDetails.length > 0) {
                                     const detail = weekKpi.targetDetails.find((d: any) =>
                                         (d.channelName || "Khác") === tg.channelName &&
@@ -501,7 +525,6 @@ export default function KpiDashboard() {
                                     }
                                 }
 
-                                // 🚀 ĐẾM TRỰC TIẾP SỐ KPI ĐÃ LÀM TỪ LOGS (Cộng dồn chuẩn xác)
                                 if (weekKpi.logs && weekKpi.logs.length > 0) {
                                     let actualCount = 0;
                                     weekKpi.logs.forEach((log: any) => {
@@ -529,19 +552,69 @@ export default function KpiDashboard() {
                             if (tg.isRework && tg.jobCategory !== 'PUBLISH') jobLabel += " (Sửa)";
                         }
 
+                        // Thứ tự các cột đẩy vào phải khớp với Header ở trên (Mặc định: Khâu, Phút, Giao, HT, %)
                         rowData.push(jobLabel, tMins, giao, hoanThanh, percentStr);
                     }
 
+                    // Đẩy dữ liệu Ghi chú vào Cột cuối cùng (Chỉ đẩy 1 lần cho dòng đầu tiên của nhân sự)
+                    if (tIdx === 0) {
+                        rowData.push(u.userNote || "");
+                    } else {
+                        rowData.push("");
+                    }
+
                     const r = ws.addRow(rowData);
-                    r.eachCell((cell) => {
+                    r.eachCell((cell, colNum) => {
                         cell.font = { name: 'Times New Roman', size: 11 };
                         cell.alignment = { vertical: 'middle', horizontal: 'center' };
                         cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
 
-                        if (uIdx % 2 === 0) {
-                            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2EFDA' } };
+                        // 🚀 XỬ LÝ TÔ MÀU CHO CỘT GHI CHÚ HOẶC CỘT DỮ LIỆU
+                        if (colNum === finalColIndex) {
+                            // Cột cuối (Ghi chú): Canh lề trái và bọc chữ (wrapText)
+                            cell.alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
+                            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFFF' } };
+                        } else if (colNum > 5 && colNum < finalColIndex) {
+                            // Cột Dữ Liệu
+                            const weekIndex = Math.floor((colNum - 6) / 5);
+                            
+                            // Xác định cột Giao & Cột Hoàn thành theo thứ tự mảng đẩy vào (Cột 8 & 9)
+                            const colGiao = 6 + (weekIndex * 5) + 2; 
+                            const colHoanThanh = 6 + (weekIndex * 5) + 3;
+                            const colPercent = 6 + (weekIndex * 5) + 4; // Cột 10
+
+                            const valGiao = r.getCell(colGiao).value;
+                            const valHoanThanh = r.getCell(colHoanThanh).value;
+                            const valPercentStr = r.getCell(colPercent).value; // Có dạng "86%"
+
+                            const isKhongLam = (!valGiao || valGiao === 0) && (!valHoanThanh || valHoanThanh === 0);
+
+                            if (isKhongLam) {
+                                // Tô Hồng nếu Không Làm
+                                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2DCDB' } };
+                                if (cell.value === 0) cell.value = ''; 
+                            } else {
+                                // 🚀 TÔ ĐỎ PHẦN TRĂM NẾU < 100%
+                                if (colNum === colPercent && typeof valPercentStr === 'string' && valPercentStr.includes('%')) {
+                                    const numValue = parseFloat(valPercentStr.replace('%', ''));
+                                    if (!isNaN(numValue) && numValue < 100) {
+                                        cell.font = { name: 'Times New Roman', size: 11, bold: true, color: { argb: 'FFFF0000' } }; // Đỏ
+                                    }
+                                }
+
+                                if (uIdx % 2 === 0) {
+                                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2EFDA' } };
+                                } else {
+                                    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9E1F2' } };
+                                }
+                            }
                         } else {
-                            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9E1F2' } };
+                            // Cột Thông Tin Cố Định Đầu Tiên
+                            if (uIdx % 2 === 0) {
+                                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2EFDA' } };
+                            } else {
+                                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9E1F2' } };
+                            }
                         }
                     });
                 });
@@ -550,6 +623,8 @@ export default function KpiDashboard() {
                     ws.mergeCells(startRow, 1, startRow + numRows - 1, 1);
                     ws.mergeCells(startRow, 3, startRow + numRows - 1, 3);
                     ws.mergeCells(startRow, 4, startRow + numRows - 1, 4);
+                    // 🚀 BƯỚC 3: GỘP Ô CHO CỘT GHI CHÚ CUỐI CÙNG THEO TỪNG NHÂN SỰ
+                    ws.mergeCells(startRow, finalColIndex, startRow + numRows - 1, finalColIndex);
 
                     let mergeStart = startRow;
                     for (let i = 1; i < numRows; i++) {
@@ -565,8 +640,7 @@ export default function KpiDashboard() {
                         ws.mergeCells(mergeStart, 5, startRow + numRows - 1, 5);
                     }
 
-                    // Gộp cột Tổng %
-                    for (let i = 0; i < availableWeeks.length; i++) {
+                    for (let i = 0; i < weeksToExport.length; i++) {
                         const pCol = 5 + (i * 5) + 5; 
                         ws.mergeCells(startRow, pCol, startRow + numRows - 1, pCol);
                     }
@@ -592,7 +666,10 @@ export default function KpiDashboard() {
                 }
             });
 
-            ws.views = [{ state: 'frozen', xSplit: 5, ySplit: 2 }];
+            // Set Title Row 2 height to auto match the multi-line content
+            ws.getRow(2).height = 40;
+            // Freeze Cột 5 (Kênh) & Dòng 3 (Header Cột)
+            ws.views = [{ state: 'frozen', xSplit: 5, ySplit: 3 }];
 
             const buffer = await workbook.xlsx.writeBuffer();
             saveAs(new Blob([buffer]), `KPI_Thang_${selectedMonth}_${selectedYear}.xlsx`);
