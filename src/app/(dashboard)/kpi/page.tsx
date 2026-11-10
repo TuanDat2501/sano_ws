@@ -569,49 +569,54 @@ export default function KpiDashboard() {
                         cell.alignment = { vertical: 'middle', horizontal: 'center' };
                         cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
 
-                        // 🚀 XỬ LÝ TÔ MÀU CHO CỘT GHI CHÚ HOẶC CỘT DỮ LIỆU
+                        // 1. Nếu là CỘT GHI CHÚ CUỐI CÙNG
                         if (colNum === finalColIndex) {
-                            // Cột cuối (Ghi chú): Canh lề trái và bọc chữ (wrapText)
                             cell.alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
                             cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFFF' } };
-                        } else if (colNum > 5 && colNum < finalColIndex) {
-                            // Cột Dữ Liệu
+                        } 
+                        // 2. Nếu là các CỘT DỮ LIỆU TUẦN
+                        else if (colNum > 5 && colNum < finalColIndex) {
                             const weekIndex = Math.floor((colNum - 6) / 5);
+                            const weekColIndex = (colNum - 6) % 5; // 0: Khâu, 1: Phút, 2: Giao, 3: HT, 4: %
                             
-                            // Xác định cột Giao & Cột Hoàn thành theo đúng thứ tự mảng đẩy vào
-                            // Thứ tự đẩy vào mảng rowData: Khâu(1), Phút(2), Giao(3), HT(4), %(5)
-                            const colGiao = 6 + (weekIndex * 5) + 2; // Cột 8, 13,...
-                            const colHoanThanh = 6 + (weekIndex * 5) + 3; // Cột 9, 14,...
-                            const colPercent = 6 + (weekIndex * 5) + 4; // Cột 10, 15,...
-
+                            // Lấy giá trị Giao và Hoàn Thành của dòng hiện tại để xét điều kiện
+                            const colGiao = 6 + (weekIndex * 5) + 2; 
+                            const colHoanThanh = 6 + (weekIndex * 5) + 3;
                             const valGiao = r.getCell(colGiao).value;
                             const valHoanThanh = r.getCell(colHoanThanh).value;
-                            const valPercentStr = r.getCell(colPercent).value; 
 
                             const isKhongLam = (!valGiao || valGiao === 0) && (!valHoanThanh || valHoanThanh === 0);
+                            const isPercentCol = weekColIndex === 4; // Check xem có phải là cột % hay không
 
-                            if (isKhongLam) {
-                                // Tô Hồng nếu Không Làm
-                                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2DCDB' } };
-                                if (cell.value === 0) cell.value = ''; 
+                            // 🚀 XỬ LÝ MÀU NỀN
+                            // Chỉ tô nền Hồng cho cột Khâu, Phút, Giao, Hoàn Thành. BỎ QUA CỘT %
+                            if (isKhongLam && !isPercentCol) {
+                                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2DCDB' } }; 
+                                // Ẩn số 0 đi cho sạch (Chỉ ẩn ở cột Giao và Hoàn thành)
+                                if (cell.value === 0 && (weekColIndex === 2 || weekColIndex === 3)) cell.value = ''; 
                             } else {
-                                // TÔ ĐỎ PHẦN TRĂM NẾU < 100%
-                                if (colNum === colPercent && typeof valPercentStr === 'string' && valPercentStr.includes('%')) {
-                                    const numValue = parseFloat(valPercentStr.replace('%', ''));
-                                    if (!isNaN(numValue) && numValue < 100) {
-                                        cell.font = { name: 'Times New Roman', size: 11, bold: true, color: { argb: 'FFFF0000' } }; // Đỏ
-                                    }
-                                }
-
-                                // 🚀 ĐÃ SỬA: SỬA LỖI TÔ MÀU CAM BẰNG CÁCH DÙNG MÀU XANH NHẠT
+                                // Nếu có làm hoặc là cột %, tô màu xanh xen kẽ theo nhân sự
                                 if (uIdx % 2 === 0) {
                                     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2EFDA' } };
                                 } else {
                                     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9E1F2' } };
                                 }
                             }
-                        } else {
-                            // Cột Thông Tin Cố Định Đầu Tiên
+
+                            // 🚀 XỬ LÝ MÀU CHỮ CHO RIÊNG CỘT %
+                            if (isPercentCol) {
+                                const valPercentStr = cell.value;
+                                if (typeof valPercentStr === 'string' && valPercentStr.includes('%')) {
+                                    const numValue = parseFloat(valPercentStr.replace('%', ''));
+                                    if (!isNaN(numValue) && numValue < 100) {
+                                        // Tô chữ Đỏ Tươi nếu tiến độ < 100%
+                                        cell.font = { name: 'Times New Roman', size: 11, bold: true, color: { argb: 'FFFF0000' } }; 
+                                    }
+                                }
+                            }
+                        } 
+                        // 3. Nếu là 5 CỘT THÔNG TIN CỐ ĐỊNH ĐẦU TIÊN
+                        else {
                             if (uIdx % 2 === 0) {
                                 cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2EFDA' } };
                             } else {
