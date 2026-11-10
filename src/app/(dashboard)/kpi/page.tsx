@@ -578,23 +578,24 @@ export default function KpiDashboard() {
                             // Cột Dữ Liệu
                             const weekIndex = Math.floor((colNum - 6) / 5);
                             
-                            // Xác định cột Giao & Cột Hoàn thành theo thứ tự mảng đẩy vào (Cột 8 & 9)
-                            const colGiao = 6 + (weekIndex * 5) + 2; 
-                            const colHoanThanh = 6 + (weekIndex * 5) + 3;
-                            const colPercent = 6 + (weekIndex * 5) + 4; // Cột 10
+                            // Xác định cột Giao & Cột Hoàn thành theo đúng thứ tự mảng đẩy vào
+                            // Thứ tự đẩy vào mảng rowData: Khâu(1), Phút(2), Giao(3), HT(4), %(5)
+                            const colGiao = 6 + (weekIndex * 5) + 2; // Cột 8, 13,...
+                            const colHoanThanh = 6 + (weekIndex * 5) + 3; // Cột 9, 14,...
+                            const colPercent = 6 + (weekIndex * 5) + 4; // Cột 10, 15,...
 
                             const valGiao = r.getCell(colGiao).value;
                             const valHoanThanh = r.getCell(colHoanThanh).value;
-                            const valPercentStr = r.getCell(colPercent).value; // Có dạng "86%"
+                            const valPercentStr = r.getCell(colPercent).value; 
 
                             const isKhongLam = (!valGiao || valGiao === 0) && (!valHoanThanh || valHoanThanh === 0);
 
                             if (isKhongLam) {
                                 // Tô Hồng nếu Không Làm
-                                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF58E2B' } };
+                                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2DCDB' } };
                                 if (cell.value === 0) cell.value = ''; 
                             } else {
-                                // 🚀 TÔ ĐỎ PHẦN TRĂM NẾU < 100%
+                                // TÔ ĐỎ PHẦN TRĂM NẾU < 100%
                                 if (colNum === colPercent && typeof valPercentStr === 'string' && valPercentStr.includes('%')) {
                                     const numValue = parseFloat(valPercentStr.replace('%', ''));
                                     if (!isNaN(numValue) && numValue < 100) {
@@ -602,6 +603,7 @@ export default function KpiDashboard() {
                                     }
                                 }
 
+                                // 🚀 ĐÃ SỬA: SỬA LỖI TÔ MÀU CAM BẰNG CÁCH DÙNG MÀU XANH NHẠT
                                 if (uIdx % 2 === 0) {
                                     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2EFDA' } };
                                 } else {
