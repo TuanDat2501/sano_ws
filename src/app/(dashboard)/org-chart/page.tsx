@@ -308,6 +308,70 @@ const normalizeGroupRole = (role: string) => {
     return r;
 };
 
+// Đồng bộ dữ liệu bài dư mới nhất vào các node của bản chụp lịch sử.
+// Không thay đổi vị trí, cạnh nối, nhân sự hoặc KPI trong snapshot.
+const normalizeSurplusRole = (value: any): string => {
+    const role = String(value || "").trim().toUpperCase();
+    if (role === "EDIT" || role === "EDITOR") return "EDITOR";
+    if (role === "ANIMATION" || role === "ANIMATOR") return "ANIMATOR";
+    if (["PUBLISH", "PUBLISHER", "CHANNEL_MANAGER", "QUAN_LY", "QUẢN LÝ KÊNH"].includes(role)) return "PUBLISHER";
+    return role;
+};
+
+const sumSurplusByDuration = (rows: any[]) => {
+    const counts = new Map<number, number>();
+    rows.forEach(row => {
+        const duration = Number(row.duration) || 0;
+        counts.set(duration, (counts.get(duration) || 0) + (Number(row.count) || 0));
+    });
+    return [...counts.entries()]
+        .map(([duration, count]) => ({ duration, count }))
+        .sort((a, b) => b.duration - a.duration);
+};
+
+const updateSnapshotSurplus = (savedNodes: any[], savedEdges: any[], surplusChannels: any[]) => {
+    const byChannel = new Map<string, any[]>();
+    surplusChannels.forEach((channel: any) => {
+        byChannel.set(String(channel.channelId), Array.isArray(channel.details) ? channel.details : []);
+    });
+
+    const childrenBySource = new Map<string, string[]>();
+    savedEdges.forEach((edge: any) => {
+        const children = childrenBySource.get(edge.source) || [];
+        children.push(edge.target);
+        childrenBySource.set(edge.source, children);
+    });
+
+    return savedNodes.map((node: any) => {
+        let details: any[] | null = null;
+        const role = normalizeSurplusRole(node.data?.role);
+
+        if (node.data?.isGroup && node.id.startsWith('group_')) {
+            // Node ID được tạo theo mẫu group_${channelId}_${role}.
+            const suffix = `_${node.data.role}`;
+            const channelId = node.id.endsWith(suffix)
+                ? node.id.slice('group_'.length, -suffix.length)
+                : null;
+            if (channelId && byChannel.has(channelId)) {
+                details = (byChannel.get(channelId) || []).filter((d: any) => normalizeSurplusRole(d.jobCategory) === role);
+            }
+        } else if (node.id.startsWith('qlk_') && role === 'PUBLISHER') {
+            // Bài dư QLK = bài dư PUBLISHER của tất cả kênh trực thuộc node QLK.
+            const childIds = childrenBySource.get(node.id) || [];
+            details = childIds
+                .filter(id => id.startsWith('channel_'))
+                .flatMap(id => byChannel.get(id.slice('channel_'.length)) || [])
+                .filter((d: any) => normalizeSurplusRole(d.jobCategory) === 'PUBLISHER');
+        }
+
+        if (details === null) return node;
+        return {
+            ...node,
+            data: { ...node.data, nodeSurplus: sumSurplusByDuration(details) }
+        };
+    });
+};
+
 export default function OrgChartPage() {
     const { showToast } = useToast();
     const [loading, setLoading] = useState(true);
@@ -397,11 +461,29 @@ export default function OrgChartPage() {
                 }
 
                 if (!isCurrent && hasSavedData && !forceLiveGenerate) {
-                    setNodes(savedRes.data.chartData.nodes);
-                    setEdges(savedRes.data.chartData.edges);
-                    setIsViewingSaved(true);
-                    setIsUnsavedWarning(false);
-                    setLoading(false);
+                    // Giữ snapshot cũ, chỉ lấy bài dư MỚI NHẤT từ WeeklyChannelSurplus.
+                    fetch(`/api/surplus/channel?year=${selectedYear}&month=${selectedMonth}&week=${selectedWeek}&includeInactive=1`, { cache: 'no-store' })
+                        .then(async res => {
+                            if (!res.ok) throw new Error('Không tải được bài dư của tuần');
+                            return res.json();
+                        })
+                        .then(surplusRes => {
+                            const savedNodes = savedRes.data.chartData.nodes || [];
+                            const savedEdges = savedRes.data.chartData.edges || [];
+                            setNodes(updateSnapshotSurplus(savedNodes, savedEdges, surplusRes.data || []));
+                            setEdges(savedEdges);
+                            setIsViewingSaved(true);
+                            setIsUnsavedWarning(false);
+                        })
+                        .catch(err => {
+                            console.error('Lỗi cập nhật bài dư trên snapshot:', err);
+                            showToast('error', 'Không lấy được bài dư mới nhất, đang hiển thị bản lưu cũ.');
+                            setNodes(savedRes.data.chartData.nodes || []);
+                            setEdges(savedRes.data.chartData.edges || []);
+                            setIsViewingSaved(true);
+                            setIsUnsavedWarning(false);
+                        })
+                        .finally(() => setLoading(false));
                     return;
                 }
 
@@ -916,6 +998,17 @@ export default function OrgChartPage() {
                             </span>
                         )}
 
+                        {!isUnsavedWarning && (
+                            <button
+                                onClick={() => fetchOrgChartData(false)}
+                                disabled={loading || isSaving}
+                                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 h-[34px] rounded-lg font-bold text-xs disabled:opacity-50"
+                                title="Đọc lại bài dư mới nhất từ WeeklyChannelSurplus; không lưu hoặc dựng lại snapshot tuần cũ"
+                            >
+                                Cập nhật bài dư
+                            </button>
+                        )}
+
                         <button
                             onClick={() => {
                                 if (isUnsavedWarning) {
@@ -984,7 +1077,7 @@ export default function OrgChartPage() {
                     year={selectedYear}
                     month={selectedMonth}
                     week={selectedWeek}
-                    onRefresh={() => fetchOrgChartData(true, true)}
+                    onRefresh={() => fetchOrgChartData(false)}
                 />
             </div>
         </PermissionGuard>

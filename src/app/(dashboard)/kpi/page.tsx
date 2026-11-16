@@ -359,22 +359,18 @@ export default function KpiDashboard() {
                 }
             });
 
-            // Sắp xếp nhân sự theo Team và mức độ liên quan giữa các kênh.
-            // Nhân sự làm chung kênh được ưu tiên xếp gần nhau.
-            const getUserChannels = (user: any): Set<string> => {
-                return new Set<string>(
-                    Array.from(user.targets.values() as Iterable<any>)
-                        .map((t: any) => String(t.channelName || "").trim())
-                        .filter((name: string) =>
-                            name !== "" && name !== "Chung" && name !== "Khác"
-                        )
-                );
-            };
+            // SẮP XẾP THEO CỤM KÊNH TRONG TỪNG TEAM.
+            // Không chỉ so sánh người đứng trước: tối ưu khoảng cách của TẤT CẢ
+            // nhân sự cùng kênh. Kênh chỉ có 2 người được ưu tiên đứng sát nhau.
+            const normalizeChannelName = (value: unknown): string =>
+                String(value || "").trim().replace(/\s+/g, " ").toLocaleLowerCase("vi");
 
-            const countSharedChannels = (a: any, b: any): number => {
-                const channelsA = getUserChannels(a);
-                const channelsB = getUserChannels(b);
-                return [...channelsA].filter(channel => channelsB.has(channel)).length;
+            const getUserChannels = (user: any): Set<string> => {
+                const names = Array.from(user.targets.values() as Iterable<any>)
+                    .map((target: any) => normalizeChannelName(target.channelName));
+                return new Set(names.filter(name =>
+                    name !== "" && name !== "chung" && name !== "khác"
+                ));
             };
 
             const teamMap = new Map<string, any[]>();
@@ -388,58 +384,149 @@ export default function KpiDashboard() {
             const sortedTeams = [...teamMap.keys()].sort((a, b) => a.localeCompare(b, "vi"));
 
             sortedTeams.forEach(teamName => {
-                const remaining = [...teamMap.get(teamName)!];
-                const channelFrequency = new Map<string, number>();
-
-                remaining.forEach(user => {
-                    getUserChannels(user).forEach(channel => {
-                        channelFrequency.set(channel, (channelFrequency.get(channel) || 0) + 1);
-                    });
-                });
-
-                const getConnectionScore = (user: any): number =>
-                    [...getUserChannels(user)].reduce(
-                        (sum, channel) => sum + (channelFrequency.get(channel) || 0),
-                        0
-                    );
-
-                const teamSorted: any[] = [];
-                while (remaining.length > 0) {
-                    let bestIndex = 0;
-                    let bestScore = -1;
-
-                    remaining.forEach((candidate, index) => {
-                        const score = teamSorted.length > 0
-                            ? countSharedChannels(teamSorted[teamSorted.length - 1], candidate)
-                            : getConnectionScore(candidate);
-
-                        if (score > bestScore) {
-                            bestScore = score;
-                            bestIndex = index;
-                        } else if (score === bestScore) {
-                            const currentBest = remaining[bestIndex];
-                            const candidateConnection = getConnectionScore(candidate);
-                            const bestConnection = getConnectionScore(currentBest);
-
-                            if (
-                                candidateConnection > bestConnection ||
-                                (candidateConnection === bestConnection &&
-                                    String(candidate.fullName || "").localeCompare(
-                                        String(currentBest.fullName || ""), "vi"
-                                    ) < 0)
-                            ) {
-                                bestIndex = index;
-                            }
-                        }
-                    });
-
-                    teamSorted.push(remaining.splice(bestIndex, 1)[0]);
+                const teamUsers = [...teamMap.get(teamName)!].sort((a, b) =>
+                    String(a.fullName || "").localeCompare(String(b.fullName || ""), "vi")
+                );
+                const n = teamUsers.length;
+                if (n <= 1) {
+                    sortedUsers.push(...teamUsers);
+                    return;
                 }
 
-                sortedUsers.push(...teamSorted);
+                // channel -> chỉ số nhân sự cùng phụ trách (không tính kênh trùng trên 1 người).
+                const channelMembers = new Map<string, number[]>();
+                teamUsers.forEach((user, userIndex) => {
+                    getUserChannels(user).forEach(channel => {
+                        if (!channelMembers.has(channel)) channelMembers.set(channel, []);
+                        channelMembers.get(channel)!.push(userIndex);
+                    });
+                });
+                const groups = [...channelMembers.values()].filter(members => members.length > 1);
+                const userChannelCount = teamUsers.map(user => getUserChannels(user).size);
+
+                // Ma trận số kênh chung để ưu tiên các vị trí kề nhau.
+                const shared = Array.from({ length: n }, () => Array<number>(n).fill(0));
+                groups.forEach(members => {
+                    for (let i = 0; i < members.length; i++) {
+                        for (let j = i + 1; j < members.length; j++) {
+                            shared[members[i]][members[j]]++;
+                            shared[members[j]][members[i]]++;
+                        }
+                    }
+                });
+
+                // Điểm PHẠT nhỏ là tốt: các thành viên của một kênh càng
+                // nằm liên tiếp thì khoảng trống giữa họ càng ít.
+                // Đặc biệt kênh chỉ có 2 người: cách nhau 1 vị trí là tốt nhất.
+                const evaluate = (order: number[]): number => {
+                    const positions = Array<number>(n).fill(0);
+                    order.forEach((id, position) => { positions[id] = position; });
+                    let penalty = 0;
+
+                    groups.forEach(members => {
+                        const positionList = members.map(id => positions[id]);
+                        const minPos = Math.min(...positionList);
+                        const maxPos = Math.max(...positionList);
+                        const emptySlots = maxPos - minPos + 1 - members.length;
+                        const weight = members.length === 2 ? 100 : members.length === 3 ? 25 : 10;
+                        penalty += emptySlots * weight;
+                    });
+
+                    // Ưu tiên phụ: tăng số cặp nhân sự liền kề cùng kênh.
+                    for (let i = 1; i < order.length; i++) {
+                        penalty -= shared[order[i - 1]][order[i]] * 2;
+                    }
+                    return penalty;
+                };
+
+                // Cải thiện toàn bộ trật tự: thử đưa 1 người sang vị trí khác,
+                // hoán đổi 2 người, và đảo 1 đoạn. Chấp nhận khi điểm tốt lên.
+                const optimize = (seed: number[]): number[] => {
+                    let order = [...seed];
+                    let best = evaluate(order);
+                    const maxPasses = 12;
+
+                    for (let pass = 0; pass < maxPasses; pass++) {
+                        let nextOrder: number[] | null = null;
+                        let nextScore = best;
+                        const accept = (candidate: number[]) => {
+                            const score = evaluate(candidate);
+                            if (score < nextScore - 0.0001) {
+                                nextScore = score;
+                                nextOrder = candidate;
+                            }
+                        };
+
+                        for (let from = 0; from < n; from++) {
+                            for (let to = 0; to < n; to++) {
+                                if (from === to) continue;
+                                const candidate = [...order];
+                                const [moved] = candidate.splice(from, 1);
+                                candidate.splice(to, 0, moved);
+                                accept(candidate);
+                            }
+                        }
+                        for (let i = 0; i < n; i++) {
+                            for (let j = i + 1; j < n; j++) {
+                                const swapped = [...order];
+                                [swapped[i], swapped[j]] = [swapped[j], swapped[i]];
+                                accept(swapped);
+                                if (j > i + 1) {
+                                    const reversed = [
+                                        ...order.slice(0, i),
+                                        ...order.slice(i, j + 1).reverse(),
+                                        ...order.slice(j + 1)
+                                    ];
+                                    accept(reversed);
+                                }
+                            }
+                        }
+                        if (!nextOrder) break;
+                        order = nextOrder;
+                        best = nextScore;
+                    }
+                    return order;
+                };
+
+                // Nhiều điểm bắt đầu giúp tránh mắc kẹt ở kết quả tham lam cục bộ.
+                const defaultOrder = Array.from({ length: n }, (_, i) => i);
+                const seeds: number[][] = [defaultOrder, [...defaultOrder].reverse()];
+                const connections = defaultOrder.map(i =>
+                    groups.reduce((score, members) =>
+                        score + (members.includes(i) ? members.length - 1 : 0), 0)
+                );
+                seeds.push([...defaultOrder].sort((a, b) =>
+                    connections[b] - connections[a] || userChannelCount[b] - userChannelCount[a] || a - b
+                ));
+
+                // Ưu tiên thử bắt đầu từ các kênh có thành viên liên kết chéo.
+                const rankedGroups = [...groups].sort((a, b) =>
+                    a.length - b.length ||
+                    b.reduce((sum, id) => sum + connections[id], 0) -
+                    a.reduce((sum, id) => sum + connections[id], 0)
+                );
+                rankedGroups.slice(0, 12).forEach(members => {
+                    const groupSet = new Set(members);
+                    const prefix = [...members].sort((a, b) => connections[b] - connections[a] || a - b);
+                    const rest = defaultOrder.filter(id => !groupSet.has(id));
+                    seeds.push([...prefix, ...rest]);
+                });
+
+                let bestOrder = defaultOrder;
+                let bestScore = Number.POSITIVE_INFINITY;
+                seeds.forEach(seed => {
+                    const candidate = optimize(seed);
+                    const score = evaluate(candidate);
+                    if (score < bestScore) {
+                        bestScore = score;
+                        bestOrder = candidate;
+                    }
+                });
+
+                sortedUsers.push(...bestOrder.map(index => teamUsers[index]));
             });
 
-            // Giữ nguyên tham chiếu/mảng users cho phần dựng Excel bên dưới.
+            // Không thay đổi phần tạo bảng, KPI hay mergeCells phía dưới.
             users.splice(0, users.length, ...sortedUsers);
 
             const workbook = new ExcelJS.Workbook();

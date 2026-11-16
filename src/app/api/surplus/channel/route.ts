@@ -1,3 +1,5 @@
+// api/surplus/channel/route.ts
+
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getServerSession } from "next-auth";
@@ -15,13 +17,14 @@ export async function GET(req: Request) {
         const month = parseInt(searchParams.get("month") || "0");
         const week = parseInt(searchParams.get("week") || "0");
         const teamId = searchParams.get("teamId") || "ALL";
+        const includeInactive = searchParams.get("includeInactive") === "1";
 
         if (!year || !month || !week) return NextResponse.json({ error: "Thiếu tham số thời gian" }, { status: 400 });
 
         // 🚀 CHỈ LẤY KÊNH CÒN HOẠT ĐỘNG
-        const channelWhere: any = {
-            status: { notIn: ["BAY_KENH", "DUNG_HOAT_DONG"] }
-        };
+        const channelWhere: any = includeInactive
+            ? {}
+            : { status: { notIn: ["BAY_KENH", "DUNG_HOAT_DONG"] } };
         if (teamId !== "ALL") channelWhere.teamId = teamId;
 
         const [channels, surpluses] = await Promise.all([
