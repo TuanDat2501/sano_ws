@@ -1,6 +1,6 @@
 "use client";
 
-import { X, Link as LinkIcon, CheckCircle2, Loader2, MessageSquare, Send, ClipboardCheck, Clock, Tag, Tv, Video, Trash2, Key, Layers, ImageIcon, Pencil, RefreshCw, SquarePen, RotateCcw, Lock, Unlock, CalendarCheck } from "lucide-react";
+import { X, Link as LinkIcon, CheckCircle2, Loader2, MessageSquare, Send, ClipboardCheck, Clock, Tag, Tv, Video, Trash2, Key, Layers, ImageIcon, Pencil, RefreshCw, SquarePen, RotateCcw, Lock, Unlock, CalendarCheck,AlertCircle  } from "lucide-react";
 import { useEffect, useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 import EvaluationPanel from "./EvaluationPanel";
@@ -68,7 +68,8 @@ export default function TaskDetailDrawer({
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [rejectPriority, setRejectPriority] = useState("HIGH");
-
+  const [showNoKpiWarning, setShowNoKpiWarning] = useState(false);
+  const [pendingKpiSave, setPendingKpiSave] = useState<{fieldKey: string, finalValue: string, reason: string} | null>(null);
   const [localPublishDate, setLocalPublishDate] = useState("");
   const [isDateFocused, setIsDateFocused] = useState(false);
 
@@ -156,6 +157,52 @@ export default function TaskDetailDrawer({
   const publisherUsersList = selectedTask.publisherUser ? [selectedTask.publisherUser] : [];
   const isManager = ["ADMIN", "BAN_GIAM_DOC", "LEADER", "HR", "KE_TOAN"].includes(userRole);
 
+  // 🚀 HÀM 1: THỰC THI LƯU DATA XUỐNG SERVER (Tách ra từ hàm handleAutoSave cũ)
+  const executeSave = async (fieldKey: string, finalValue: string) => {
+    setSavingField(fieldKey);
+    setTaskLinks({ ...taskLinks, [fieldKey]: finalValue });
+
+    try {
+      const payloadValue = finalValue === "" ? null : finalValue;
+
+      const res = await fetch(`/api/tasks/${selectedTask.id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+            [fieldKey]: payloadValue,
+            [`base_${fieldKey}`]: selectedTask[fieldKey] || "" 
+        })
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        const mergedValue = data.task[fieldKey] || "";
+        selectedTask[fieldKey] = mergedValue;
+        setTaskLinks((prev: any) => ({ ...prev, [fieldKey]: mergedValue }));
+
+        if (data.task?.publishDate) {
+          selectedTask.publishDate = data.task.publishDate;
+          setLocalPublishDate(new Date(data.task.publishDate).toISOString().split('T')[0]);
+        }
+
+        setEditingFields(prev => ({ ...prev, [fieldKey]: false }));
+        setSavingField(null);
+        setSavedField(fieldKey);
+        setTimeout(() => setSavedField(null), 2500);
+        if (onRefreshBoard) onRefreshBoard();
+      } else {
+        setSavingField(null);
+        showToast("error", data.error || "Có lỗi xảy ra khi lưu thông tin!");
+        setEditingFields(prev => ({ ...prev, [fieldKey]: true }));
+      }
+    } catch (error) {
+      setSavingField(null);
+      showToast("error", "Lỗi kết nối tới Server!");
+      setEditingFields(prev => ({ ...prev, [fieldKey]: true }));
+    }
+  };
+
+  // 🚀 HÀM 2: HÀM AUTO SAVE MỚI (Có chặn kiểm tra KPI trước khi chạy executeSave)
   const handleAutoSave = async (fieldKey: string, newValue: string) => {
     let finalValue = newValue;
     if (newValue && typeof newValue === 'string' && newValue.trim() !== '') {
@@ -182,51 +229,58 @@ export default function TaskDetailDrawer({
       return;
     }
 
-    setSavingField(fieldKey);
-    setTaskLinks({ ...taskLinks, [fieldKey]: finalValue });
+    // 💡 CHECK KPI: Chỉ kiểm tra khi NỘP/SỬA CÁC TRƯỜNG LINK
+    const linkFields = ['scriptLink', 'audioLink', 'storyboardLink', 'animationLink', 'roughProjectLink', 'thumbnailLink', 'videoLink', 'linkProject', 'publishLink'];
+    
+    if (!linkFields.includes(fieldKey) || finalValue === "") {
+        executeSave(fieldKey, finalValue);
+        return;
+    }
 
-    try {
-      const payloadValue = finalValue === "" ? null : finalValue;
+    const isContentField = ['scriptLink', 'storyboardLink'].includes(fieldKey);
+    const isEditField = ['audioLink', 'roughProjectLink', 'linkProject', 'videoLink'].includes(fieldKey);
+    const isAnimField = ['animationLink'].includes(fieldKey);
+    const isPublishField = ['thumbnailLink', 'publishLink'].includes(fieldKey);
 
-      const res = await fetch(`/api/tasks/${selectedTask.id}`, {
-        method: "PATCH", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-            [fieldKey]: payloadValue,
-            // 🚀 BỔ SUNG: Gửi thêm giá trị gốc để Backend đối chiếu 3-Way Merge
-            [`base_${fieldKey}`]: selectedTask[fieldKey] || "" 
-        })
-      });
+    const isContentAssigned = selectedTask.contentId === sessionUserId || selectedTask.coContentUsers?.some((u: any) => u.id === sessionUserId);
+    const isEditorAssigned = selectedTask.editorId === sessionUserId || selectedTask.coEditorUsers?.some((u: any) => u.id === sessionUserId);
+    const isAnimatorAssigned = selectedTask.animatorId === sessionUserId || selectedTask.coAnimatorUsers?.some((u: any) => u.id === sessionUserId);
+    const isPublisherAssigned = selectedTask.publisherId === sessionUserId;
 
-      const data = await res.json();
+    // 🚀 BÓC TÁCH LÝ DO TỪ CHỐI KPI RÕ RÀNG
+    let willEarnKpi = true;
+    let warningReason = "";
 
-      if (res.ok) {
-        // 🚀 CẬP NHẬT THEO GIÁ TRỊ BACKEND TRẢ VỀ (Đã được trộn nếu có người khác sửa cùng lúc)
-        const mergedValue = data.task[fieldKey] || "";
-        selectedTask[fieldKey] = mergedValue;
-        
-        // Buộc UI render lại nếu Backend có nối thêm link của người khác vào
-        setTaskLinks((prev: any) => ({ ...prev, [fieldKey]: mergedValue }));
-
-        if (data.task?.publishDate) {
-          selectedTask.publishDate = data.task.publishDate;
-          setLocalPublishDate(new Date(data.task.publishDate).toISOString().split('T')[0]);
+    if (selectedTask.isReject) {
+        // Trường hợp 1: Task đang bị Reject
+        willEarnKpi = false;
+        warningReason = "Task này đang ở trạng thái Yêu cầu sửa lại (Reject) nên thao tác này không làm phát sinh KPI mới.";
+    } else {
+        // Trường hợp 2: Kiểm tra xem có đúng chuyên môn được gán không
+        let hasRole = false;
+        if (isContentField && isContentAssigned) hasRole = true;
+        else if (isEditField && isEditorAssigned) hasRole = true;
+        else if (isAnimField && isAnimatorAssigned) hasRole = true;
+        else if (isPublishField) {
+            if (isPublisherAssigned) hasRole = true;
+            else if (isEditorAssigned && fieldKey === 'thumbnailLink') hasRole = true;
         }
 
-        setEditingFields(prev => ({ ...prev, [fieldKey]: false }));
-        setSavingField(null);
-        setSavedField(fieldKey);
-        setTimeout(() => setSavedField(null), 2500);
-        if (onRefreshBoard) onRefreshBoard();
-      } else {
-        setSavingField(null);
-        showToast("error", data.error || "Có lỗi xảy ra khi lưu thông tin!");
-        setEditingFields(prev => ({ ...prev, [fieldKey]: true }));
-      }
-    } catch (error) {
-      setSavingField(null);
-      showToast("error", "Lỗi kết nối tới Server!");
-      setEditingFields(prev => ({ ...prev, [fieldKey]: true }));
+        if (!hasRole) {
+            willEarnKpi = false;
+            warningReason = "Bạn chưa được Leader phân công phụ trách khâu công việc này.";
+        }
     }
+
+    if (!willEarnKpi) {
+        // Gắn lý do vào State và mở Popup
+        setPendingKpiSave({ fieldKey, finalValue, reason: warningReason });
+        setShowNoKpiWarning(true);
+        return; 
+    }
+
+    // Pass hết thì lưu bình thường
+    executeSave(fieldKey, finalValue);
   };
 
   const handleDeleteClick = async () => {
@@ -368,7 +422,47 @@ export default function TaskDetailDrawer({
           </div>
         </div>
       )}
+      {/* 🚀 GIAO DIỆN POPUP CẢNH BÁO KPI */}
+      {showNoKpiWarning && pendingKpiSave && (
+        <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-[2px] z-[999999] flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-[24px] shadow-2xl w-full max-w-[420px] p-6 flex flex-col gap-4 animate-scale-in border border-slate-100">
+            <h3 className="font-black text-xl text-slate-800 flex items-center gap-2">
+              <AlertCircle className="text-amber-500 w-6 h-6" /> Cảnh báo tính KPI
+            </h3>
+            
+            {/* ĐÃ SỬA: Hiển thị đúng 1 lý do chính xác */}
+            <p className="text-[13px] font-medium text-slate-600 leading-relaxed">
+              <strong>LÝ DO:</strong> {pendingKpiSave.reason}
+              <br/><br/>
+              Nếu tiếp tục nộp link, hệ thống sẽ ghi nhận công việc nhưng <strong>KHÔNG cộng điểm KPI</strong>. Bạn có chắc chắn muốn nộp?
+            </p>
 
+            <div className="flex items-center justify-end gap-3 mt-2">
+              <button
+                onClick={() => {
+                  setShowNoKpiWarning(false);
+                  setPendingKpiSave(null);
+                }}
+                className="px-4 py-2.5 rounded-xl text-sm font-bold text-slate-500 hover:bg-slate-100 transition-all"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                onClick={() => {
+                  setShowNoKpiWarning(false);
+                  if (pendingKpiSave) {
+                      executeSave(pendingKpiSave.fieldKey, pendingKpiSave.finalValue);
+                      setPendingKpiSave(null);
+                  }
+                }}
+                className="px-5 py-2.5 rounded-xl text-sm font-bold bg-amber-500 text-white hover:bg-amber-600 transition-all active:scale-95 flex items-center gap-2 shadow-md shadow-amber-500/20"
+              >
+                <CheckCircle2 size={16} /> Vẫn nộp link
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className={`fixed top-0 right-0 h-full w-full md:w-[1000px] md:max-w-[95vw] bg-white shadow-2xl z-[99999] transform transition-transform duration-300 flex flex-col ${isOpen ? "translate-x-0" : "translate-x-full"}`}>
 
         <div className="px-4 py-3 border-b border-slate-100 flex flex-col gap-2.5 shrink-0 bg-white z-10 relative">
