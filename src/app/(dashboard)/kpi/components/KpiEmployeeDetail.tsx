@@ -5,7 +5,13 @@ import { getProgressColor, InlineLoading } from "../utils";
 
 export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi: any, isLoading: boolean }) {
     
+    // Chỉ lấy các báo cáo đã được API xác nhận hợp lệ, không đếm log trùng.
     const displayLogs = activeKpi?.logs?.filter((log: any) => log.isCounted) || [];
+    // API là nguồn duy nhất phân bổ KPI chi tiết; FE chỉ hiển thị, không tính lại phân loại.
+    const totalActualMinutes = Number(activeKpi?.totalActualMinutes) || 0;
+    const totalTargetMinutes = Number(activeKpi?.totalTargetMinutes) || 0;
+    const unmatchedActualMinutes = Number(activeKpi?.unmatchedActualMinutes) || 0;
+    const unmatchedActualCount = Number(activeKpi?.unmatchedActualCount) || 0;
 
     // Lấy tên nhãn Báo Cáo chi tiết và tô màu chuyên nghiệp
     const getReportBadge = (log: any) => {
@@ -140,11 +146,12 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                                 <p className="text-slate-500 font-bold text-xs md:text-sm flex justify-center gap-1.5 items-center">
                                     Số Lượng Bài: <span className="text-slate-900 font-black">{activeKpi.actualValue} <span className="text-slate-400 font-medium text-xs">/ {activeKpi.targetValue}</span></span>
                                 </p>
-                                {(activeKpi.totalTargetMinutes > 0 || activeKpi.totalActualMinutes > 0) && (
-                                    <div className="inline-flex flex-col items-center mt-1">
+                                {(totalTargetMinutes > 0 || totalActualMinutes > 0) && (
+                                    <div className="inline-flex flex-col items-center mt-1 gap-1">
                                         <p className="text-[11px] md:text-xs font-black text-blue-700 bg-blue-50 py-1.5 px-3 rounded-lg border border-blue-100">
-                                            Khối lượng (Phút): {activeKpi.totalActualMinutes || 0} / {activeKpi.targetValue > 0 ? activeKpi.totalTargetMinutes : '---'}
+                                            Khối lượng (Phút): {totalActualMinutes} / {totalTargetMinutes > 0 ? totalTargetMinutes : '---'}
                                         </p>
+                                        <span className="text-[10px] text-slate-400 font-medium">Phút thực tế lấy từ các sản phẩm đã nộp hợp lệ</span>
                                     </div>
                                 )}
                             </div>
@@ -163,8 +170,9 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                     ) : (
                         <div className="space-y-4">
                             {activeKpi.targetDetails.map((detail: any, idx: number) => {
-                                const channelTargetMins = detail.targetCount * detail.duration;
-                                const percent = channelTargetMins > 0 ? Math.round(((detail.actualMinutes || 0) / channelTargetMins) * 100) : 0;
+                                const channelTargetMins = (Number(detail.targetCount) || 0) * (Number(detail.duration) || 0);
+                                const actualDetailMinutes = Number(detail.actualMinutes) || 0;
+                                const percent = channelTargetMins > 0 ? Math.round((actualDetailMinutes / channelTargetMins) * 100) : 0;
                                 const jobBadge = getJobCategoryBadge(detail.jobCategory || detail.job);
                                 
                                 return (
@@ -190,7 +198,7 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                                                 </span>
                                             ) : <div/>}
                                             <p className="text-[11px] font-black text-slate-600 uppercase tracking-wide">
-                                                {detail.actualMinutes || 0} / {channelTargetMins} Phút
+                                                {actualDetailMinutes} / {channelTargetMins} Phút
                                             </p>
                                         </div>
                                         
@@ -207,6 +215,15 @@ export default function KpiEmployeeDetail({ activeKpi, isLoading }: { activeKpi:
                                     </div>
                                 );
                             })}
+                            {unmatchedActualCount > 0 && (
+                                <div className="p-4 rounded-xl border border-amber-200 bg-amber-50/60">
+                                    <div className="flex justify-between items-center gap-2">
+                                        <span className="text-xs font-black text-amber-800">Sản phẩm ngoài chỉ tiêu chi tiết</span>
+                                        <span className="text-xs font-black text-amber-800">{unmatchedActualCount} bài · {unmatchedActualMinutes} phút</span>
+                                    </div>
+                                    <p className="text-[10px] text-amber-700 mt-1">Đã tính vào tổng phút thực tế nhưng chưa có dòng chỉ tiêu phù hợp.</p>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>

@@ -359,24 +359,88 @@ export default function KpiDashboard() {
                 }
             });
 
-            users.sort((a, b) => {
-                const teamA = a.teamName || "ZZZ";
-                const teamB = b.teamName || "ZZZ";
-                if (teamA !== teamB) return teamA.localeCompare(teamB);
+            // Sắp xếp nhân sự theo Team và mức độ liên quan giữa các kênh.
+            // Nhân sự làm chung kênh được ưu tiên xếp gần nhau.
+            const getUserChannels = (user: any): Set<string> => {
+                return new Set<string>(
+                    Array.from(user.targets.values() as Iterable<any>)
+                        .map((t: any) => String(t.channelName || "").trim())
+                        .filter((name: string) =>
+                            name !== "" && name !== "Chung" && name !== "Khác"
+                        )
+                );
+            };
 
-                const getPrimaryChannel = (userTargets: Map<string, any>) => {
-                    const targetsArray = Array.from(userTargets.values());
-                    if (targetsArray.length === 0) return "Chung";
-                    const firstSpecificChannel = targetsArray.find(t => t.channelName && t.channelName !== 'Chung');
-                    return firstSpecificChannel ? firstSpecificChannel.channelName : "Chung";
-                };
+            const countSharedChannels = (a: any, b: any): number => {
+                const channelsA = getUserChannels(a);
+                const channelsB = getUserChannels(b);
+                return [...channelsA].filter(channel => channelsB.has(channel)).length;
+            };
 
-                const channelA = getPrimaryChannel(a.targets);
-                const channelB = getPrimaryChannel(b.targets);
-
-                if (channelA !== channelB) return channelA.localeCompare(channelB);
-                return a.fullName.localeCompare(b.fullName);
+            const teamMap = new Map<string, any[]>();
+            users.forEach((user: any) => {
+                const teamName = user.teamName || "Chưa có team";
+                if (!teamMap.has(teamName)) teamMap.set(teamName, []);
+                teamMap.get(teamName)!.push(user);
             });
+
+            const sortedUsers: any[] = [];
+            const sortedTeams = [...teamMap.keys()].sort((a, b) => a.localeCompare(b, "vi"));
+
+            sortedTeams.forEach(teamName => {
+                const remaining = [...teamMap.get(teamName)!];
+                const channelFrequency = new Map<string, number>();
+
+                remaining.forEach(user => {
+                    getUserChannels(user).forEach(channel => {
+                        channelFrequency.set(channel, (channelFrequency.get(channel) || 0) + 1);
+                    });
+                });
+
+                const getConnectionScore = (user: any): number =>
+                    [...getUserChannels(user)].reduce(
+                        (sum, channel) => sum + (channelFrequency.get(channel) || 0),
+                        0
+                    );
+
+                const teamSorted: any[] = [];
+                while (remaining.length > 0) {
+                    let bestIndex = 0;
+                    let bestScore = -1;
+
+                    remaining.forEach((candidate, index) => {
+                        const score = teamSorted.length > 0
+                            ? countSharedChannels(teamSorted[teamSorted.length - 1], candidate)
+                            : getConnectionScore(candidate);
+
+                        if (score > bestScore) {
+                            bestScore = score;
+                            bestIndex = index;
+                        } else if (score === bestScore) {
+                            const currentBest = remaining[bestIndex];
+                            const candidateConnection = getConnectionScore(candidate);
+                            const bestConnection = getConnectionScore(currentBest);
+
+                            if (
+                                candidateConnection > bestConnection ||
+                                (candidateConnection === bestConnection &&
+                                    String(candidate.fullName || "").localeCompare(
+                                        String(currentBest.fullName || ""), "vi"
+                                    ) < 0)
+                            ) {
+                                bestIndex = index;
+                            }
+                        }
+                    });
+
+                    teamSorted.push(remaining.splice(bestIndex, 1)[0]);
+                }
+
+                sortedUsers.push(...teamSorted);
+            });
+
+            // Giữ nguyên tham chiếu/mảng users cho phần dựng Excel bên dưới.
+            users.splice(0, users.length, ...sortedUsers);
 
             const workbook = new ExcelJS.Workbook();
             const ws = workbook.addWorksheet(`KPI_Thang_${selectedMonth}`);

@@ -223,17 +223,19 @@ export async function GET(req: Request) {
                             matchedTarget = findSmartTarget(false);
                         }
 
-                        // Lấy thời lượng của bài (ưu tiên thời lượng trong chỉ tiêu, nếu không có thì lấy thời lượng thật của Task)
-                        const tDuration = Number(matchedTarget?.duration || actualTaskDuration);
+                        // Thời lượng thực tế luôn lấy từ sản phẩm đã nộp (task.duration).
+                        // target.duration chỉ là thời lượng tiêu chuẩn để tính số phút được giao.
+                        // Smart Filter ở trên vẫn xác định đúng dòng chỉ tiêu theo kênh/khâu/mới-sửa.
+                        const realDuration = Math.max(0, actualTaskDuration);
 
-                        // CHỈ ĐẾM SỐ LƯỢNG VÀO "CHỈ TIÊU CHI TIẾT" NẾU CÓ GIAO (Mới hiện lên UI chi tiết)
                         if (matchedTarget) {
                             matchedTarget.actualCount = (matchedTarget.actualCount || 0) + 1;
-                            matchedTarget.actualMinutes = (matchedTarget.actualMinutes || 0) + tDuration;
+                            // Cộng đúng phút thực tế vào từng nhóm chỉ tiêu chi tiết.
+                            matchedTarget.actualMinutes = (matchedTarget.actualMinutes || 0) + realDuration;
                         }
 
-                        // BÀI LÀM THÊM (KHÔNG GIAO CHỈ TIÊU) VẪN ĐƯỢC CỘNG PHÚT VÀO TỔNG THỰC TẾ
-                        totalActualMinutes += tDuration;
+                        // Bao gồm cả sản phẩm làm thêm không có chỉ tiêu tương ứng.
+                        totalActualMinutes += realDuration;
                     });
 
                     // 3. Tính % KPI (Tổng tiến độ) = Lấy Tổng Thực Tế / Tổng Mục Tiêu
