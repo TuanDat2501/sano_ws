@@ -5,7 +5,8 @@ import { X, CheckCircle, XOctagon, Loader2, UserCheck, Trash2, FileText, Clock }
 import { useToast } from "@/app/component/ToastProvider";
 import { createPortal } from "react-dom";
 
-export default function RequestDetailDrawer({ isOpen, onClose, requestId, currentUserId, onRefresh }: any) {
+// 🚀 ĐÃ THÊM prop `userRole` VÀO ĐỂ NHẬN DIỆN QUYỀN HR/ADMIN
+export default function RequestDetailDrawer({ isOpen, onClose, requestId, currentUserId, userRole, onRefresh,currentUser }: any) {
     const { showToast } = useToast();
     const [request, setRequest] = useState<any>(null);
     const [isFetching, setIsFetching] = useState(false);
@@ -49,6 +50,16 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
     const isRequester = request?.requesterId === currentUserId;
     const canCancel = isRequester && ["PENDING_1", "PENDING_2"].includes(request?.status);
 
+    // 🚀 BỔ SUNG QUYỀN HỦY ĐƠN CỦA QUẢN TRỊ / NHÂN SỰ
+    const isLeader = userRole === "LEADER" && currentUser?.isTeamLeader === true;
+
+    const isManagerOrHR = ["ADMIN", "HR", "BAN_GIAM_DOC"].includes(userRole) || isLeader;
+    // Cho phép HR Hủy đơn kể cả khi đã duyệt xong (APPROVED) hoặc đang PENDING
+    const canAdminCancel = isManagerOrHR && ["APPROVED", "PENDING_1", "PENDING_2"].includes(request?.status);
+
+    // Kiểm tra xem có cần show ô nhập comment không (Người duyệt hoặc HR Hủy đơn đều cần)
+    const showCommentBox = isMyTurnToApprove || canAdminCancel;
+
     const renderStatusBadge = (status: string) => {
         switch (status) {
             case "PENDING_1": return <span className="bg-amber-100 text-amber-700 px-2.5 py-1 rounded-md text-[10px] md:text-xs font-black tracking-wide">CHỜ DUYỆT CẤP 1</span>;
@@ -63,7 +74,7 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
     const renderRequestType = (type: string) => {
         switch (type) {
             case "NGHI_PHEP": return "Xin nghỉ phép";
-            case "NGHI_CHE_DO": return "Xin nghỉ chế độ"; // <-- Mới thêm
+            case "NGHI_CHE_DO": return "Xin nghỉ chế độ";
             case "DI_MUON_VE_SOM": return "Đi muộn / Về sớm";
             case "LAM_REMOTE": return "Làm Remote (Từ xa)";
             case "MUA_SAM": return "Mua sắm / Cấp thiết bị";
@@ -88,10 +99,18 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
         }
     };
 
-    const handleAction = async (action: 'APPROVE' | 'REJECT') => {
-        if (action === 'REJECT' && !comment.trim()) {
-            showToast("error", "Vui lòng nhập lý do từ chối!");
+    // 🚀 BỔ SUNG ACTION: ADMIN_CANCEL
+    const handleAction = async (action: 'APPROVE' | 'REJECT' | 'ADMIN_CANCEL') => {
+        // Bắt buộc nhập lý do nếu Từ chối hoặc Admin Hủy đơn
+        if ((action === 'REJECT' || action === 'ADMIN_CANCEL') && !comment.trim()) {
+            showToast("error", `Vui lòng nhập lý do ${action === 'REJECT' ? 'từ chối' : 'hủy đơn'}!`);
             return;
+        }
+
+        if (action === 'ADMIN_CANCEL') {
+            if (!window.confirm("Có chắc chắn muốn HỦY đơn này của nhân sự? Hành động này sẽ thông báo cho nhân sự biết.")) {
+                return;
+            }
         }
 
         setIsSubmitting(true);
@@ -102,7 +121,7 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
             });
 
             if (res.ok) {
-                showToast("success", `Đã ${action === 'APPROVE' ? 'duyệt' : 'từ chối'} đơn thành công!`);
+                showToast("success", `Đã ${action === 'APPROVE' ? 'duyệt' : action === 'REJECT' ? 'từ chối' : 'hủy'} đơn thành công!`);
                 onRefresh();
                 onClose();
             } else {
@@ -167,7 +186,6 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
             let workingDays = 0;
             let currentDate = new Date(start);
 
-            // Vòng lặp đếm ngày làm việc giống CreateRequestModal
             while (currentDate <= end) {
                 if (currentDate.getDay() !== 0) {
                     workingDays++;
@@ -203,7 +221,6 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
                         </div>
                     ) : request ? (
                         <div className="space-y-5 md:space-y-6">
-                            {/* BLOCK 1: THÔNG TIN CƠ BẢN */}
                             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                                 <div className="flex flex-col sm:flex-row divide-y sm:divide-y-0 sm:divide-x divide-slate-200">
                                     <div className="p-4 flex-1">
@@ -240,7 +257,6 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
                                 </div>
                             </div>
 
-                            {/* BLOCK 2: NỘI DUNG CHI TIẾT */}
                             <div>
                                 <h3 className="text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider ml-1">Nội dung chi tiết</h3>
                                 <div className="bg-white p-4 md:p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
@@ -265,9 +281,9 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
                                                 )}
                                                 {leaveType && (
                                                     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border 
-                                                        ${leaveType === 'PAID' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
-                                                        : leaveType === 'UNPAID' ? 'bg-orange-50 text-orange-700 border-orange-200' 
-                                                        : 'bg-indigo-50 text-indigo-700 border-indigo-200'}`}
+                                                        ${leaveType === 'PAID' ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                                            : leaveType === 'UNPAID' ? 'bg-orange-50 text-orange-700 border-orange-200'
+                                                                : 'bg-indigo-50 text-indigo-700 border-indigo-200'}`}
                                                     >
                                                         {renderLeaveTypeLabel(leaveType)}
                                                     </span>
@@ -281,7 +297,7 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
                                             <p className="text-sm text-slate-900 font-black flex items-center gap-2">
                                                 {new Date(targetDate).toLocaleDateString('vi-VN')}
                                                 {time && <span className="text-red-600 bg-red-50 border border-red-100 px-2 py-0.5 rounded-md text-[11px]"><Clock size={12} className="inline mr-1 mb-0.5" />{time}</span>}
-                                
+
                                                 {timeSlot && request?.type !== "DI_MUON_VE_SOM" && (
                                                     <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border bg-purple-50 text-purple-700 border-purple-200">
                                                         <Clock size={12} /> {timeSlot === 'FULL_DAY' ? 'Cả ngày' : timeSlot === 'MORNING' ? 'Nửa buổi sáng' : 'Nửa buổi chiều'}
@@ -321,39 +337,39 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
                                 </div>
                             </div>
 
-                            {/* BLOCK 3: LỊCH SỬ PHÊ DUYỆT / Ý KIẾN CHỈ ĐẠO */}
                             {request.logs && request.logs.length > 0 && (
                                 <div>
-                                    <h3 className="text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider ml-1">Lịch sử phê duyệt / Lời phê</h3>
+                                    <h3 className="text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider ml-1">Lịch sử phê duyệt </h3>
                                     <div className="bg-white p-4 md:p-5 rounded-xl border border-slate-200 shadow-sm">
                                         <div className="space-y-4">
                                             {request.logs.map((log: any, index: number) => (
                                                 <div key={log.id} className="flex gap-3 relative">
                                                     <div className="flex flex-col items-center">
-                                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm z-10 ${log.action === 'REJECTED' ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-sm z-10 ${['REJECTED', 'CANCELLED'].includes(log.action) ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
                                                             }`}>
-                                                            {log.action === 'REJECTED' ? <XOctagon size={16} /> : <CheckCircle size={16} />}
+                                                            {['REJECTED', 'CANCELLED'].includes(log.action) ? <XOctagon size={16} /> : <CheckCircle size={16} />}
                                                         </div>
                                                         {index < request.logs.length - 1 && <div className="absolute top-8 bottom-[-16px] left-4 w-px bg-slate-200"></div>}
                                                     </div>
                                                     <div className="pb-2 flex-1">
                                                         <p className="text-sm font-bold text-slate-900 flex items-center flex-wrap gap-2">
-                                                            {log.approver?.fullName}
+                                                            {log.approver?.fullName || "Hệ thống"}
                                                             <span className="text-[10px] text-slate-400 font-medium bg-slate-100 px-2 py-0.5 rounded-full">
                                                                 {new Date(log.createdAt).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' })}
                                                             </span>
                                                         </p>
                                                         <p className="text-[11px] font-black mt-1 uppercase tracking-wide opacity-80"
-                                                            style={{ color: log.action === 'REJECTED' ? '#dc2626' : '#059669' }}>
+                                                            style={{ color: ['REJECTED', 'CANCELLED'].includes(log.action) ? '#dc2626' : '#059669' }}>
                                                             {log.action === 'APPROVED_LEVEL_1' && "Đã duyệt (Cấp 1)"}
                                                             {log.action === 'APPROVED_LEVEL_2' && "Đã chốt duyệt (Cấp 2)"}
                                                             {log.action === 'REJECTED' && "Đã từ chối"}
+                                                            {log.action === 'CANCELLED' && "Đã hủy đơn"}
                                                         </p>
 
                                                         {log.comment && (
                                                             <div className="mt-2 bg-slate-50 p-3 rounded-xl border border-slate-100 text-sm text-slate-700 font-medium relative italic shadow-inner">
                                                                 <div className="absolute -top-1.5 left-4 w-3 h-3 bg-slate-50 border-t border-l border-slate-100 rotate-45"></div>
-                                                                <span className="text-slate-400 mr-1 font-bold">↳ Lời phê:</span> "{log.comment}"
+                                                                <span className="text-slate-400 mr-1 font-bold">↳ Lý do:</span> "{log.comment}"
                                                             </div>
                                                         )}
                                                     </div>
@@ -372,19 +388,30 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
                     )}
                 </div>
 
-                {!isFetching && request && (isMyTurnToApprove || canCancel) && (
+                {/* 🚀 VÙNG CHỨA CÁC NÚT DUYỆT VÀ HỦY ĐƠN */}
+                {!isFetching && request && (isMyTurnToApprove || canCancel || canAdminCancel) && (
                     <div className="shrink-0 p-4 md:p-6 bg-white border-t border-slate-200 shadow-[0_-10px_20px_-10px_rgba(0,0,0,0.05)]">
-                        {isMyTurnToApprove && (
+
+                        {/* Hiện ô nhập Ghi chú nếu là Người Duyệt hoặc là Hành động Hủy của Admin */}
+                        {showCommentBox && (
                             <>
-                                <label className="block text-xs font-bold text-slate-700 mb-2">Lời phê / Phản hồi (Bắt buộc nếu từ chối) <span className="text-red-500">*</span></label>
+                                <label className="block text-xs font-bold text-slate-700 mb-2">
+                                    Lời phê / Ý kiến / <span className="text-red-500">Lý do hủy đơn *</span>
+                                </label>
                                 <textarea
                                     rows={2}
                                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm outline-none focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 mb-4 resize-none transition-all"
-                                    placeholder="Nhập ý kiến chỉ đạo vào đây..."
+                                    placeholder={isMyTurnToApprove ? "Nhập ý kiến chỉ đạo (Bắt buộc nếu từ chối)..." : "Nhập lý do hủy đơn này..."}
                                     value={comment}
                                     onChange={(e) => setComment(e.target.value)}
                                 />
-                                <div className="flex gap-3">
+                            </>
+                        )}
+
+                        <div className="flex gap-3">
+                            {/* Nút dành cho Sếp/Trưởng nhóm đang duyệt đơn */}
+                            {isMyTurnToApprove && (
+                                <>
                                     <button
                                         onClick={() => handleAction('REJECT')} disabled={isSubmitting}
                                         className="flex-1 flex justify-center items-center gap-2 bg-white border border-red-200 text-red-600 py-3 rounded-xl text-sm font-black hover:bg-red-50 transition-colors active:scale-95"
@@ -398,17 +425,29 @@ export default function RequestDetailDrawer({ isOpen, onClose, requestId, curren
                                         {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle size={18} />}
                                         Phê duyệt
                                     </button>
-                                </div>
-                            </>
-                        )}
+                                </>
+                            )}
 
-                        {canCancel && !isMyTurnToApprove && (
+                            {/* 🚀 Nút ĐẶC QUYỀN dành riêng cho Nhân sự / Admin hủy đơn */}
+                            {canAdminCancel && !isMyTurnToApprove && (
+                                <button
+                                    onClick={() => handleAction('ADMIN_CANCEL')} disabled={isSubmitting}
+                                    className="flex-1 flex justify-center items-center gap-2 bg-white border border-red-200 text-red-600 py-3 rounded-xl text-sm font-black hover:bg-red-50 hover:bg-red-50 transition-colors active:scale-95"
+                                >
+                                    {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : <XOctagon size={18} />}
+                                    Hủy đơn này
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Nút Hủy đơn cho người tự làm đơn (Khi đơn đang chờ duyệt) */}
+                        {canCancel && !isMyTurnToApprove && !canAdminCancel && (
                             <button
                                 onClick={handleCancelRequest} disabled={isSubmitting}
                                 className="w-full flex justify-center items-center gap-2 bg-white border border-slate-200 text-slate-700 py-3 rounded-xl text-sm font-black hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors active:scale-95"
                             >
                                 {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={18} />}
-                                Hủy đề xuất này
+                                Rút / Hủy đề xuất này
                             </button>
                         )}
                     </div>

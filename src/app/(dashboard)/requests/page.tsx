@@ -15,7 +15,7 @@ const REQUEST_TYPES_CONFIG = [
     { id: "NGHI_PHEP", label: "Xin nghỉ phép", category: "HR", allowedRoles: ["ALL"] },
     { id: "DI_MUON_VE_SOM", label: "Đi muộn / Về sớm", category: "HR", allowedRoles: ["ALL"] },
     { id: "LAM_REMOTE", label: "Xin làm Remote", category: "HR", allowedRoles: ["ALL"] },
-    
+
     { id: "MUA_SAM", label: "Đề xuất Mua sắm", category: "ADMIN", allowedRoles: ["ADMIN", "BAN_GIAM_DOC", "LEADER", "CHANNEL_MANAGER"] },
     { id: "TAM_UNG", label: "Xin Tạm ứng", category: "ADMIN", allowedRoles: ["ADMIN", "BAN_GIAM_DOC", "LEADER", "CHANNEL_MANAGER"] },
     { id: "THANH_TOAN", label: "Đề nghị Thanh toán", category: "ADMIN", allowedRoles: ["ADMIN", "BAN_GIAM_DOC", "CHANNEL_MANAGER"] },
@@ -37,17 +37,17 @@ export default function RequestsPage() {
 
     const isTeamLeader = currentUser?.isTeamLeader || userRole === "LEADER";
 
-    const canViewAll = currentUser?.permissions?.includes("DEPARTMENT_LEADER") || 
-                       currentUser?.permissions?.includes("MENU_TEAMS") || 
-                       ["ADMIN", "BAN_GIAM_DOC", "HR"].includes(userRole) || 
-                       isTeamLeader;
-    
-    const isApprover = currentUser?.permissions?.includes("ACTION_APPROVE_REQUEST") || currentUser?.permissions?.includes("DEPARTMENT_LEADER") || ["ADMIN", "BAN_GIAM_DOC", "LEADER", "CHANNEL_MANAGER", "HR"].includes(userRole); 
+    const canViewAll = currentUser?.permissions?.includes("DEPARTMENT_LEADER") ||
+        currentUser?.permissions?.includes("MENU_TEAMS") ||
+        ["ADMIN", "BAN_GIAM_DOC", "HR"].includes(userRole) ||
+        isTeamLeader;
+
+    const isApprover = currentUser?.permissions?.includes("ACTION_APPROVE_REQUEST") || currentUser?.permissions?.includes("DEPARTMENT_LEADER") || ["ADMIN", "BAN_GIAM_DOC", "LEADER", "CHANNEL_MANAGER", "HR"].includes(userRole);
 
     const [activeTab, setActiveTab] = useState<'ALL_REQUESTS' | 'MY_REQUESTS' | 'NEED_APPROVAL'>(
         (tabParam as 'ALL_REQUESTS' | 'MY_REQUESTS' | 'NEED_APPROVAL') || 'MY_REQUESTS'
     );
-    
+
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
 
@@ -61,7 +61,7 @@ export default function RequestsPage() {
 
     const [dbTeams, setDbTeams] = useState<any[]>([]);
     const [dbUsers, setDbUsers] = useState<any[]>([]);
-    
+
     const [searchTerm, setSearchTerm] = useState("");
     const [debouncedSearch, setDebouncedSearch] = useState("");
     const [filterType, setFilterType] = useState("");
@@ -109,7 +109,7 @@ export default function RequestsPage() {
             }
         }
     }, [idParam, requests]);
-    
+
     useEffect(() => {
         if (idParam) {
             setIsDetailModalOpen(true);
@@ -125,7 +125,7 @@ export default function RequestsPage() {
         }, 500);
         return () => clearTimeout(timer);
     }, [searchTerm]);
-    
+
     useEffect(() => {
         setCurrentPage(1);
     }, [filterType, filterStatus, filterTeamId, filterUserId, activeTab]);
@@ -150,11 +150,11 @@ export default function RequestsPage() {
     // 🚀 LẤY DANH SÁCH TEAM VÀ USER CHO DROPDOWN (Đã sửa logic trả về)
     useEffect(() => {
         fetch("/api/teams").then(res => res.json()).then((data: any) => { if (Array.isArray(data)) setDbTeams(data); });
-        
+
         fetch("/api/users?limit=1000") // Lấy tối đa để dropown không bị thiếu
             .then(res => res.json())
-            .then((data: any) => { 
-                if (data.users && Array.isArray(data.users)) setDbUsers(data.users); 
+            .then((data: any) => {
+                if (data.users && Array.isArray(data.users)) setDbUsers(data.users);
             }).catch(err => console.log("Lỗi tải users: ", err));
     }, []);
 
@@ -208,7 +208,7 @@ export default function RequestsPage() {
 
             exportData.forEach((req: any) => {
                 const content = req.contentData || {};
-                
+
                 let calculatedDays = "";
                 if (req.startDate && req.endDate) {
                     const start = new Date(req.startDate);
@@ -236,12 +236,12 @@ export default function RequestsPage() {
                     leaveType: leaveTypeLabel,
                     startDate: req.startDate ? new Date(req.startDate).toLocaleDateString('vi-VN') : "",
                     endDate: req.endDate ? new Date(req.endDate).toLocaleDateString('vi-VN') : "",
-                    numDays: calculatedDays ? Number(calculatedDays) : "", 
+                    numDays: calculatedDays ? Number(calculatedDays) : "",
                     targetDate: req.targetDate ? new Date(req.targetDate).toLocaleDateString('vi-VN') : "",
                     time: content.time || "",
                     itemName: req.itemName || "",
                     reason: req.reason || "",
-                    amount: req.amount ? req.amount : "", 
+                    amount: req.amount ? req.amount : "",
                     approver1: req.firstApprover?.fullName || "---",
                     approver2: req.secondApprover?.fullName || "---",
                 });
@@ -249,7 +249,7 @@ export default function RequestsPage() {
 
             const headerRow = worksheet.getRow(1);
             headerRow.font = { bold: true, color: { argb: 'FFFFFF' } };
-            headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDC2626' } }; 
+            headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDC2626' } };
             headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
             headerRow.height = 25;
 
@@ -260,10 +260,10 @@ export default function RequestsPage() {
                         bottom: { style: 'thin' }, right: { style: 'thin' }
                     };
                     if (rowNumber > 1) {
-                        cell.alignment = { 
-                            vertical: 'middle', 
-                            horizontal: (colNumber === 10 || colNumber === 15) ? 'right' : 'left', 
-                            wrapText: colNumber === 14 
+                        cell.alignment = {
+                            vertical: 'middle',
+                            horizontal: (colNumber === 10 || colNumber === 15) ? 'right' : 'left',
+                            wrapText: colNumber === 14
                         };
                     }
                 });
@@ -291,7 +291,7 @@ export default function RequestsPage() {
                         <h1 className="text-xl md:text-2xl font-black text-slate-900">Quản lý Đơn từ & Đề xuất</h1>
                         <p className="text-slate-500 text-xs md:text-sm font-medium mt-1">Phê duyệt, theo dõi tiến độ các loại giấy tờ nội bộ</p>
                     </div>
-                    
+
                     <div className="flex items-center gap-2 w-full md:w-auto">
                         <button
                             onClick={handleExportExcel}
@@ -301,7 +301,7 @@ export default function RequestsPage() {
                             {isExporting ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} className="md:w-5 md:h-5" />}
                             <span className="hidden sm:block">Xuất Excel</span>
                         </button>
-                        
+
                         <button
                             onClick={() => setIsCreateModalOpen(true)}
                             className="flex-[2] md:flex-none flex items-center justify-center gap-2 bg-red-600 text-white px-5 py-2.5 md:py-3 rounded-xl font-bold hover:bg-red-700 transition-all shadow-md shadow-red-600/20 active:scale-95 text-sm md:text-base"
@@ -312,7 +312,7 @@ export default function RequestsPage() {
                 </div>
 
                 <div className="flex flex-col xl:flex-row xl:items-end justify-between border-b border-slate-200 mb-4 md:mb-6 gap-3">
-                    
+
                     <div className="flex items-center gap-4 md:gap-6 overflow-x-auto custom-scrollbar-thin shrink-0 pb-1">
                         {canViewAll && (
                             <button
@@ -342,14 +342,14 @@ export default function RequestsPage() {
                     </div>
 
                     <div className="grid grid-cols-2 md:flex md:flex-row items-center gap-2 w-full xl:w-auto pb-2 sm:pb-3">
-                        
+
                         {activeTab !== 'MY_REQUESTS' && (!isTeamLeader || canViewAll) && (
                             <select
                                 className="w-full md:w-[150px] px-3 py-1.5 md:py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs md:text-sm focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 text-slate-700 font-medium"
                                 value={filterTeamId}
                                 onChange={(e) => {
                                     setFilterTeamId(e.target.value);
-                                    setFilterUserId(""); 
+                                    setFilterUserId("");
                                 }}
                             >
                                 <option value="">Tất cả Team</option>
@@ -366,8 +366,8 @@ export default function RequestsPage() {
                                 <option value="">Tất cả nhân sự</option>
                                 {dbUsers
                                     .filter(u => {
-                                        if (filterTeamId) return u.teamId === filterTeamId; 
-                                        if (isTeamLeader && !canViewAll) return u.teamId === currentUser?.teamId; 
+                                        if (filterTeamId) return u.teamId === filterTeamId;
+                                        if (isTeamLeader && !canViewAll) return u.teamId === currentUser?.teamId;
                                         return true;
                                     })
                                     .map(u => <option key={u.id} value={u.id}>{u.fullName}</option>)
@@ -436,6 +436,7 @@ export default function RequestsPage() {
                                         <th className="px-4 md:px-6 py-3 md:py-4">Người tạo</th>
                                         <th className="px-4 md:px-6 py-3 md:py-4">Phòng ban</th>
                                         <th className="px-4 md:px-6 py-3 md:py-4">Trạng thái</th>
+                                        <th className="px-4 md:px-6 py-3 md:py-4">Lý do</th>
                                         <th className="px-4 md:px-6 py-3 md:py-4">Thời gian tạo</th>
                                         <th className="px-4 md:px-6 py-3 md:py-4 text-center">Thao tác</th>
                                     </tr>
@@ -450,6 +451,9 @@ export default function RequestsPage() {
                                             <td className="px-4 md:px-6 py-3 md:py-4 font-medium truncate max-w-[120px]">{req.requester?.fullName}</td>
                                             <td className="px-4 md:px-6 py-3 md:py-4 text-slate-500 truncate max-w-[100px]">{req.team?.name || "---"}</td>
                                             <td className="px-4 md:px-6 py-3 md:py-4">{renderStatusBadge(req.status)}</td>
+                                            <td className="px-4 md:px-6 py-3 md:py-4 text-slate-700 max-w-[200px] truncate" title={req.reason || req.contentData?.reason || "---"}>
+                                                {req.reason || req.contentData?.reason || "---"}
+                                            </td>
                                             <td className="px-4 md:px-6 py-3 md:py-4 text-slate-500 whitespace-nowrap">
                                                 {new Date(req.createdAt).toLocaleDateString('vi-VN')}
                                             </td>
@@ -471,9 +475,9 @@ export default function RequestsPage() {
                             </table>
                         </div>
                     )}
-                    
+
                     {!isLoading && requests.length > 0 && (
-                        <Pagination 
+                        <Pagination
                             currentPage={currentPage}
                             totalPages={totalPages}
                             totalItems={totalCount}
@@ -489,7 +493,7 @@ export default function RequestsPage() {
                     onClose={() => setIsCreateModalOpen(false)}
                     allowedTypes={allowedRequestTypes}
                     teams={dbTeams}
-                    onRefresh={fetchRequests} 
+                    onRefresh={fetchRequests}
                 />
 
                 <RequestDetailModal
@@ -503,6 +507,8 @@ export default function RequestsPage() {
                     requestId={idParam}
                     currentUserId={currentUser?.id}
                     onRefresh={fetchRequests}
+                    userRole={userRole}
+                    currentUser={session?.user}
                 />
             </div>
         </Suspense>

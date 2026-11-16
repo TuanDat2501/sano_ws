@@ -58,6 +58,7 @@ enum ApprovalAction {
   APPROVED_LEVEL_1
   APPROVED_LEVEL_2
   REJECTED
+  CANCELLED
 }
 
 enum RoomType {

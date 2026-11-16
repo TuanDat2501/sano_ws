@@ -1,112 +1,122 @@
-// /api/requests/[id]/action/route.ts
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
+import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
     try {
-        const resolvedParams = await params;
-        const requestId = resolvedParams.id;
-
         const session = await getServerSession(authOptions);
-        if (!session?.user) return NextResponse.json({ error: "Chưa đăng nhập" }, { status: 401 });
+        const currentUser = session?.user as any;
         
-        const userId = (session.user as any).id;
-
-        const body = await req.json();
-        const { action, comment } = body; 
-
-        // Validate chặt chẽ: Từ chối thì bắt buộc phải có lý do (không được chỉ nhập khoảng trắng)
-        if (!action || (action === 'REJECT' && (!comment || !comment.trim()))) {
-            return NextResponse.json({ error: "Thiếu hành động hoặc lý do từ chối" }, { status: 400 });
+        if (!currentUser) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        const request = await prisma.request.findUnique({ 
-            where: { id: requestId },
-            select: { id: true, status: true, type: true, requesterId: true, firstApproverId: true, secondApproverId: true }
+        // Await params để lấy ID trong Next.js 15+
+        const resolvedParams = await params;
+        const requestId = resolvedParams.id;
+        const { action, comment } = await req.json();
+
+        if (!requestId || !action) {
+            return NextResponse.json({ error: "Thiếu dữ liệu bắt buộc" }, { status: 400 });
+        }
+
+        // 1. Lấy thông tin đơn hiện tại
+        const existingRequest = await prisma.request.findUnique({
+            where: { id: requestId }
         });
-        
-        if (!request) return NextResponse.json({ error: "Không tìm thấy đơn" }, { status: 404 });
 
-        let nextStatus = request.status;
-        let actionLog = "";
-        const notificationQueries = [];
+        if (!existingRequest) {
+            return NextResponse.json({ error: "Không tìm thấy đề xuất" }, { status: 404 });
+        }
 
-        // Thông báo cho người làm đơn
-        notificationQueries.push(
-            prisma.notification.create({
-                data: {
-                    title: action === 'APPROVE' ? "Đơn đã được duyệt" : "Đơn bị từ chối",
-                    message: action === 'APPROVE' 
-                        ? `Đơn ${request.type} của bạn đã được phê duyệt.` 
-                        : `Đơn của bạn đã bị từ chối với lý do: ${comment}`,
-                    type: action === 'APPROVE' ? "success" : "error",
-                    userId: request.requesterId,
-                    requestId: request.id
-                }
-            })
-        );
-        
-        if (action === "REJECT") {
-            if (request.firstApproverId !== userId && request.secondApproverId !== userId) {
-                return NextResponse.json({ error: "Bạn không có quyền từ chối đơn này" }, { status: 403 });
-            }
-            nextStatus = "REJECTED";
-            actionLog = "REJECTED";
-        } else if (action === "APPROVE") {
-            if (request.status === "PENDING_1" && request.firstApproverId === userId) {
-                nextStatus = request.secondApproverId ? "PENDING_2" : "APPROVED";
-                actionLog = "APPROVED_LEVEL_1";
+        // 2. Xác định quyền của người đang thao tác
+        const isFirstApprover = existingRequest.firstApproverId === currentUser.id;
+        const isSecondApprover = existingRequest.secondApproverId === currentUser.id;
+        const isLeader = currentUser.role === "LEADER" && currentUser.isTeamLeader === true;
+        const isManagerOrHR = ["ADMIN", "HR", "BAN_GIAM_DOC"].includes(currentUser.role) || currentUser.permissions?.includes("ACTION_MANAGE_REQUESTS") || isLeader;
 
-                if (request.secondApproverId) {
-                    notificationQueries.push(
-                        prisma.notification.create({
-                            data: {
-                                title: "Đơn từ mới chờ chốt hạ",
-                                message: `Quản lý cấp 1 vừa duyệt một đề xuất ${request.type}, đang chờ bạn phê duyệt cuối cùng.`,
-                                type: "info",
-                                userId: request.secondApproverId,
-                                requestId: request.id
-                            }
-                        })
-                    );
-                }
-            } 
-            else if (request.status === "PENDING_2" && request.secondApproverId === userId) {
-                nextStatus = "APPROVED";
-                actionLog = "APPROVED_LEVEL_2";
+        let newStatus = existingRequest.status;
+        let logAction = "";
+
+        // ==========================================
+        // 3. XỬ LÝ THEO TỪNG HÀNH ĐỘNG (ACTION)
+        // ==========================================
+        if (action === "APPROVE") {
+            if (existingRequest.status === "PENDING_1" && isFirstApprover) {
+                // Nếu duyệt Cấp 1, kiểm tra xem có Cấp 2 không. Có thì chuyển PENDING_2, không thì chốt APPROVED
+                newStatus = existingRequest.secondApproverId ? "PENDING_2" : "APPROVED";
+                logAction = "APPROVED_LEVEL_1";
+            } else if (existingRequest.status === "PENDING_2" && isSecondApprover) {
+                // Nếu duyệt Cấp 2 thì chốt luôn APPROVED
+                newStatus = "APPROVED";
+                logAction = "APPROVED_LEVEL_2";
             } else {
-                return NextResponse.json({ error: "Đơn không ở trạng thái chờ bạn duyệt" }, { status: 403 });
+                return NextResponse.json({ error: "Bạn không có quyền duyệt đề xuất này ở bước hiện tại" }, { status: 403 });
             }
-        } else {
+        } 
+        
+        else if (action === "REJECT") {
+            if (!comment || comment.trim() === "") {
+                return NextResponse.json({ error: "Vui lòng nhập lý do từ chối" }, { status: 400 });
+            }
+
+            if ((existingRequest.status === "PENDING_1" && isFirstApprover) || 
+                (existingRequest.status === "PENDING_2" && isSecondApprover)) {
+                newStatus = "REJECTED";
+                logAction = "REJECTED";
+            } else {
+                return NextResponse.json({ error: "Bạn không có quyền từ chối đề xuất này" }, { status: 403 });
+            }
+        } 
+        
+        // 🚀 LUỒNG MỚI: ADMIN HOẶC HR HỦY ĐƠN VÌ LÝ DO BẤT KỲ
+        else if (action === "ADMIN_CANCEL") {
+            if (!isManagerOrHR) {
+                return NextResponse.json({ error: "Bạn không có quyền Hủy đơn của người khác" }, { status: 403 });
+            }
+            if (!comment || comment.trim() === "") {
+                return NextResponse.json({ error: "Vui lòng nhập lý do hủy đơn!" }, { status: 400 });
+            }
+
+            newStatus = "CANCELLED";
+            logAction = "CANCELLED";
+        } 
+        
+        else {
             return NextResponse.json({ error: "Hành động không hợp lệ" }, { status: 400 });
         }
 
-        // 🚀 CẬP NHẬT DATABASE BẰNG TRANSACTION ĐỂ LƯU LỜI PHÊ VÀO BẢNG APPROVAL LOG
-        await prisma.$transaction([
-            prisma.request.update({
+        // ==========================================
+        // 4. LƯU VÀO DATABASE THÔNG QUA TRANSACTION
+        // ==========================================
+        const updatedRequest = await prisma.$transaction(async (tx) => {
+            // Cập nhật trạng thái đơn
+            const reqUpdate = await tx.request.update({
                 where: { id: requestId },
-                data: { status: nextStatus }
-            }),
-            prisma.approvalLog.create({
+                data: { status: newStatus }
+            });
+
+            // 🚀 BẮT LỖI TẠI ĐÂY: Phải là tx.approvalLog.create (vì trong schema của sếp tên model là ApprovalLog chứ KHÔNG PHẢI RequestLog)
+            // Sếp nhìn lại đoạn schema sếp gửi xem: model ApprovalLog { ... }
+            await tx.approvalLog.create({
                 data: {
-                    action: actionLog as any,
-                    comment: comment?.trim() || null, // 🚀 LƯU LỜI PHÊ VÀO ĐÂY
-                    requestId: requestId,
-                    approverId: userId
+                    requestId,
+                    approverId: currentUser.id,
+                    action: logAction as any,
+                    comment: comment?.trim() || null,
                 }
-            }),
-            ...notificationQueries
-        ]);
-        // 🚀TODO (RT-01): Bắn trigger Pusher (WebSockets) ở đây để App/Web nảy chuông ngay lập tức!
-        // VD: await pusher.trigger(`user-${request.requesterId}`, 'new-notification', { message: '...' });
-        return NextResponse.json({ message: "Xử lý thành công", status: nextStatus });
+            });
+
+            return reqUpdate;
+        });
+
+        return NextResponse.json({ message: "Xử lý thành công", data: updatedRequest }, { status: 200 });
 
     } catch (error) {
-        console.error("❌ Lỗi API Action:", error);
-        return NextResponse.json({ error: "Lỗi Server" }, { status: 500 });
+        console.error("LỖI XỬ LÝ ACTION ĐƠN TỪ:", error);
+        return NextResponse.json({ error: "Lỗi Server khi xử lý đề xuất" }, { status: 500 });
     }
 }
