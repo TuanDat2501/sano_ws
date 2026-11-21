@@ -34,7 +34,7 @@ export async function GET(req: Request) {
 
         const firstDayOfMonth = new Date(year, month - 1, 1, 12, 0, 0);
         const startDayOfWeek = firstDayOfMonth.getDay();
-        
+
         const isFirstDaySunday = startDayOfWeek === 0;
         const firstWeekEnd = isFirstDaySunday ? 8 : 1 + (7 - startDayOfWeek);
 
@@ -45,12 +45,12 @@ export async function GET(req: Request) {
             const prevMonthDate = new Date(year, month - 2, 1, 12, 0, 0);
             year = prevMonthDate.getFullYear();
             month = prevMonthDate.getMonth() + 1;
-            
+
             const prevTotalDays = new Date(year, month, 0, 12, 0, 0).getDate();
             const prevFirstDayOfWeek = prevMonthDate.getDay();
             const prevIsFirstDaySunday = prevFirstDayOfWeek === 0;
             const prevFirstWeekEnd = prevIsFirstDaySunday ? 8 : 1 + (7 - prevFirstDayOfWeek);
-            
+
             const remainingDays = prevTotalDays - prevFirstWeekEnd;
             currentWeekNum = 1 + (remainingDays > 0 ? Math.ceil(remainingDays / 7) : 0);
         } else if (date > firstWeekEnd) {
@@ -66,7 +66,7 @@ export async function GET(req: Request) {
 
         // Lùi 7 ngày chuẩn theo giờ Việt Nam
         const sevenDaysAgo = new Date(vietnamTime);
-        sevenDaysAgo.setDate(vietnamTime.getDate() - 7); 
+        sevenDaysAgo.setDate(vietnamTime.getDate() - 7);
         sevenDaysAgo.setHours(0, 0, 0, 0);
 
         // 4. GENERATE CHART KHÔNG BỊ LỆCH NGÀY
@@ -78,29 +78,57 @@ export async function GET(req: Request) {
                 const dateStr = d.toLocaleDateString('vi-VN', {
                     day: '2-digit', month: '2-digit', timeZone: 'Asia/Ho_Chi_Minh'
                 }).replace('/', '-');
-                chartTemplate.push({ date: dateStr, done: 0 }); 
+                chartTemplate.push({ date: dateStr, done: 0 });
             }
             return chartTemplate;
         };
 
-        // 🚀 HÀM TÍNH TOÁN KPI ĐÃ ĐƯỢC ĐỒNG BỘ LOGIC KHOÁN SỐ PHÚT
+        // 🚀 HÀM TÍNH TOÁN KPI ĐỒNG BỘ 100% VỚI /api/kpi
         const calculateKpiForUser = (userLogs: any[], targetValue: number, targetDetailsRaw: any) => {
-            const validUserLogs: any[] = [];
-            
-            userLogs.forEach(log => {
-                const actionStr = String(log.action || "").toUpperCase();
-                if (actionStr === "DAILY_REPORT") {
-                    validUserLogs.push(log);
+            // 1. Lọc bỏ các bài bị Reject
+            const rejectedLogs = userLogs.filter(log =>
+                ["REJECT_TASK", "REJECT_CONTENT", "REJECT_ANIMATION", "REJECT_EDIT"].includes(String(log.action || "").toUpperCase())
+            );
+
+            const rejectedTaskJobs = new Set<string>();
+            rejectedLogs.forEach(rLog => {
+                let rJobCategory = rLog.jobCategory;
+                if (!rJobCategory) {
+                    if (rLog.action === "REJECT_CONTENT") rJobCategory = "CONTENT";
+                    else if (rLog.action === "REJECT_ANIMATION") rJobCategory = "ANIMATION";
+                    else if (rLog.action === "REJECT_EDIT") rJobCategory = "EDIT";
+                    else rJobCategory = "GENERAL";
                 }
+                rejectedTaskJobs.add(`${rLog.taskId}_${rJobCategory}`);
+            });
+
+            const validUserLogs = userLogs.filter(log => {
+                if (String(log.action || "").toUpperCase() !== "DAILY_REPORT") return false;
+                if (log.task?.isReject) return false;
+
+                let currentJob = log.jobCategory;
+                if (!currentJob) {
+                    const txt = String(log.details || "").toLowerCase();
+                    if (txt.includes("gán thủ công")) currentJob = "MANUAL";
+                    else if (txt.includes("kịch bản") || txt.includes("bố cục")) currentJob = "CONTENT";
+                    else if (txt.includes("prj thô") || txt.includes("link project") || txt.includes("audio") || txt.includes("âm thanh") || txt.includes("video render")) currentJob = "EDIT";
+                    else if (txt.includes("chuyển động")) currentJob = "ANIMATION";
+                    else if (txt.includes("đã đăng") || txt.includes("thumbnail")) currentJob = "PUBLISH";
+                    else currentJob = "GENERAL";
+                }
+
+                if (rejectedTaskJobs.has(`${log.taskId}_${currentJob}`) || rejectedTaskJobs.has(`${log.taskId}_GENERAL`)) {
+                    return false;
+                }
+                return true;
             });
 
             const uniqueTasks = new Map<string, any>();
-            
+
             validUserLogs.forEach(log => {
                 if (!log.task) return;
 
                 let jobCategory = log.jobCategory;
-
                 if (!jobCategory) {
                     const combinedText = String(log.details || "").toLowerCase();
                     if (combinedText.includes("gán thủ công")) jobCategory = "MANUAL";
@@ -110,104 +138,69 @@ export async function GET(req: Request) {
                     else if (combinedText.includes("đã đăng") || combinedText.includes("thumbnail")) jobCategory = "PUBLISH";
                     else jobCategory = "GENERAL";
                 }
-                
-                log.isCounted = false; 
+
+                log.isCounted = false;
 
                 if (jobCategory && jobCategory !== 'GENERAL') {
-                    const uniqueKey = jobCategory === 'MANUAL' ? `${log.id}_MANUAL` : `${log.taskId}_${jobCategory}`; 
+                    const uniqueKey = jobCategory === 'MANUAL' ? `${log.id}_MANUAL` : `${log.taskId}_${jobCategory}`;
                     if (!uniqueTasks.has(uniqueKey)) {
                         uniqueTasks.set(uniqueKey, log.task);
-                        log.isCounted = true; 
+                        log.isCounted = true;
                     }
                 }
             });
 
             let targetDetails: any[] = [];
-            try { if (targetDetailsRaw) targetDetails = typeof targetDetailsRaw === 'string' ? JSON.parse(targetDetailsRaw) : targetDetailsRaw; } catch(e) {}
+            try {
+                if (targetDetailsRaw) targetDetails = typeof targetDetailsRaw === 'string' ? JSON.parse(targetDetailsRaw) : targetDetailsRaw;
+            } catch (e) {}
 
             let percent = 0;
+            let totalTargetMinutes = 0;
+            let totalActualMinutes = 0;
             let actualCount = uniqueTasks.size;
 
             if (targetDetails && targetDetails.length > 0) {
-                let totalTargetMinutes = 0;
-                let cappedActualMinutesForPercent = 0; // Đổi biến tương tự kpi route
-                
-                const bucketTaskCount: Record<string, number> = {};
+                targetDetails.forEach(t => {
+                    t.actualCount = 0;
+                    t.actualMinutes = 0;
+                    totalTargetMinutes += (Number(t.targetCount) || 0) * (Number(t.duration) || 0);
+                });
 
                 uniqueTasks.forEach((task, uniqueKey) => {
-                    const jobCategory = uniqueKey.split('_').pop() || 'CONTENT'; 
-                    const isReworkBucket = (jobCategory === 'PUBLISH') ? false : task.isRework;
+                    const jobCategory = uniqueKey.split('_').pop() || 'CONTENT';
+                    const channelId = task.channel?.id;
+                    const isReworkTask = Boolean(task.isRework);
+                    const actualTaskDuration = Number(task.duration) || 0;
 
-                    const key = `${task.channel?.id || 'no_channel'}_${jobCategory}_${isReworkBucket ? 'rework' : 'new'}`;
-                    bucketTaskCount[key] = (bucketTaskCount[key] || 0) + 1; 
-                });
+                    const findSmartTarget = (isChannelSpecific: boolean) => {
+                        const baseFilter = (t: any) => {
+                            const matchChannel = isChannelSpecific ? (t.channelId === channelId) : (!t.channelId || t.channelId === "");
+                            const matchJob = (t.jobCategory || 'CONTENT') === jobCategory;
+                            const matchRework = jobCategory === 'PUBLISH' ? true : Boolean(t.isRework) === isReworkTask;
+                            return matchChannel && matchJob && matchRework;
+                        };
 
-                const specificTargets: Record<string, any[]> = {};
-                const anyTargets: Record<string, any[]> = {};
+                        let found = targetDetails.find(t => baseFilter(t) && Number(t.duration) === actualTaskDuration && (t.actualCount || 0) < Number(t.targetCount));
+                        if (!found) found = targetDetails.find(t => baseFilter(t) && Number(t.duration) === actualTaskDuration);
+                        if (!found) found = targetDetails.find(t => baseFilter(t) && (t.actualCount || 0) < Number(t.targetCount));
+                        if (!found) found = targetDetails.find(t => baseFilter(t));
+                        return found;
+                    };
 
-                targetDetails.forEach(t => {
-                    t.actualCount = 0; 
-                    t.actualMinutes = 0;
+                    let matchedTarget = findSmartTarget(true) || findSmartTarget(false);
+                    const realDuration = Math.max(0, actualTaskDuration);
 
-                    const targetJob = t.jobCategory || 'CONTENT';
-
-                    if (t.channelId) {
-                        const key = `${t.channelId}_${targetJob}_${t.isRework ? 'rework' : 'new'}`;
-                        if (!specificTargets[key]) specificTargets[key] = [];
-                        specificTargets[key].push(t);
-                    } else {
-                        const key = `${targetJob}_${t.isRework ? 'rework' : 'new'}`;
-                        if (!anyTargets[key]) anyTargets[key] = [];
-                        anyTargets[key].push(t);
+                    if (matchedTarget) {
+                        matchedTarget.actualCount = (matchedTarget.actualCount || 0) + 1;
+                        matchedTarget.actualMinutes = (matchedTarget.actualMinutes || 0) + realDuration;
                     }
+
+                    // Cộng cả sản phẩm làm thêm ngoài chỉ tiêu giống /api/kpi
+                    totalActualMinutes += realDuration;
                 });
 
-                // 🚀 RÓT SỐ LƯỢNG VÀ NHÂN VỚI ĐƠN GIÁ CỦA TARGET
-                const distributeToTargets = (targets: any[], tasksLeft: number) => {
-                    let assignedMinsTotal = 0;
-                    targets.forEach((t, index) => {
-                        const tDuration = Number(t.duration) || 0;
-                        const tMins = Number(t.targetCount) * tDuration;
-                        totalTargetMinutes += tMins;
-
-                        let assignedTasks = 0;
-
-                        if (index === targets.length - 1) {
-                            assignedTasks = tasksLeft;
-                        } else {
-                            assignedTasks = Math.min(tasksLeft, Number(t.targetCount));
-                        }
-
-                        tasksLeft -= assignedTasks;
-                        
-                        const calculatedMins = assignedTasks * tDuration;
-                        assignedMinsTotal += calculatedMins;
-
-                        t.actualCount = (t.actualCount || 0) + assignedTasks;
-                        t.actualMinutes = (t.actualMinutes || 0) + calculatedMins;
-                    });
-                    return { tasksLeft, assignedMinsTotal };
-                };
-
-                Object.keys(specificTargets).forEach(key => {
-                    const res = distributeToTargets(specificTargets[key], bucketTaskCount[key] || 0);
-                    cappedActualMinutesForPercent += res.assignedMinsTotal;
-                    bucketTaskCount[key] = 0;
-                });
-
-                Object.keys(anyTargets).forEach(reworkKey => {
-                    let remainingTasks = 0;
-                    Object.keys(bucketTaskCount).forEach(bKey => {
-                        if (bKey.endsWith(`_${reworkKey}`)) {
-                            remainingTasks += bucketTaskCount[bKey];
-                            bucketTaskCount[bKey] = 0;
-                        }
-                    });
-                    const res = distributeToTargets(anyTargets[reworkKey], remainingTasks);
-                    cappedActualMinutesForPercent += res.assignedMinsTotal;
-                });
-
-                percent = totalTargetMinutes > 0 ? Math.round((cappedActualMinutesForPercent / totalTargetMinutes) * 100) : 0;
+                percent = totalTargetMinutes > 0 ? Math.round((totalActualMinutes / totalTargetMinutes) * 100) : 0;
             } else {
                 percent = targetValue > 0 ? Math.round((actualCount / targetValue) * 100) : 0;
             }
@@ -225,7 +218,7 @@ export async function GET(req: Request) {
                 teamUserIds = teamUsers.map(u => u.id);
             }
             const taskFilter = isTopManagement ? {} : {
-                teamId: teamId 
+                teamId: teamId
             };
 
             const userCondition = isTopManagement ? {} : { userId: { in: teamUserIds } };
@@ -253,24 +246,29 @@ export async function GET(req: Request) {
                     select: {
                         id: true, action: true, details: true, jobCategory: true, createdAt: true, taskId: true, userId: true,
                         user: { select: { fullName: true } },
-                        task: { select: { id: true, title: true, duration: true, channelId: true, isRework: true, channel: { select: { id: true } } } }
+                        task: {
+                            select: {
+                                id: true, title: true, duration: true, channelId: true, isRework: true, isReject: true,
+                                channel: { select: { id: true } }
+                            }
+                        }
                     }
                 }),
                 prisma.weeklyKPI.findMany({
                     where: {
-                        year: year,               // Đã sửa
-                        month: month,             // Đã sửa
-                        weekNumber: currentWeekNum, // Đã sửa
+                        year: year,
+                        month: month,
+                        weekNumber: currentWeekNum,
                         ...userCondition
                     },
-                    include: { 
-                        user: { select: { fullName: true, role: true } } 
+                    include: {
+                        user: { select: { fullName: true, role: true } }
                     }
                 })
             ]);
-            
+
             const validLogs7Days: any[] = [];
-            managerLogs7DaysRaw.forEach((log: any) => { 
+            managerLogs7DaysRaw.forEach((log: any) => {
                 const actionStr = String(log.action || "").toUpperCase();
                 if (actionStr === "DAILY_REPORT") {
                     validLogs7Days.push(log);
@@ -278,14 +276,15 @@ export async function GET(req: Request) {
             });
 
             const logsThisWeek = validLogs7Days.filter(log => new Date(log.createdAt) >= startOfWeek);
+            const rawLogsThisWeek = managerLogs7DaysRaw.filter((log: any) => new Date(log.createdAt) >= startOfWeek);
 
             let sumPercent = 0;
             let validKpiUsers = 0;
 
             kpiRecords.forEach((k: any) => {
-                const userLogs = logsThisWeek.filter(log => log.userId === k.userId);
+                const userLogs = rawLogsThisWeek.filter((log: any) => log.userId === k.userId);
                 const kpiRes = calculateKpiForUser(userLogs, k.targetValue || 0, k.targetDetails);
-                
+
                 if (k.targetValue > 0 || (kpiRes.targetDetails && kpiRes.targetDetails.length > 0)) {
                     sumPercent += kpiRes.percent;
                     validKpiUsers++;
@@ -362,15 +361,20 @@ export async function GET(req: Request) {
                     orderBy: { createdAt: 'desc' },
                     select: {
                         id: true, action: true, details: true, jobCategory: true, createdAt: true, taskId: true, userId: true,
-                        task: { select: { id: true, title: true, duration: true, channelId: true, isRework: true, channel: { select: { id: true } } } }
+                        task: {
+                            select: {
+                                id: true, title: true, duration: true, channelId: true, isRework: true, isReject: true,
+                                channel: { select: { id: true } }
+                            }
+                        }
                     }
                 }),
                 prisma.weeklyKPI.findFirst({
                     where: {
                         userId: userId,
-                        year: year,               // Đã sửa
-                        month: month,             // Đã sửa
-                        weekNumber: currentWeekNum  // Đã sửa
+                        year: year,
+                        month: month,
+                        weekNumber: currentWeekNum
                     }
                 })
             ]);
@@ -383,9 +387,8 @@ export async function GET(req: Request) {
                 }
             });
 
-            const logsThisWeek = validLogs7Days.filter(log => new Date(log.createdAt) >= startOfWeek);
-
-            const kpiRes = calculateKpiForUser(logsThisWeek, myKpiThisWeek?.targetValue || 0, myKpiThisWeek?.targetDetails);
+            const rawLogsThisWeek = myLogs7DaysRaw.filter(log => new Date(log.createdAt) >= startOfWeek);
+            const kpiRes = calculateKpiForUser(rawLogsThisWeek, myKpiThisWeek?.targetValue || 0, myKpiThisWeek?.targetDetails);
 
             const uniqueTasksAllTime = new Set();
             myLogsAllTimeRaw.forEach((log: any) => {
@@ -404,7 +407,7 @@ export async function GET(req: Request) {
 
             const chartDataArray = generateEmpty7DaysChart();
             validLogs7Days.forEach(log => {
-                 const dateStr = new Date(log.createdAt).toLocaleDateString('vi-VN', {
+                const dateStr = new Date(log.createdAt).toLocaleDateString('vi-VN', {
                     day: '2-digit', month: '2-digit', timeZone: 'Asia/Ho_Chi_Minh'
                 }).replace('/', '-');
 
@@ -422,12 +425,12 @@ export async function GET(req: Request) {
                 role: "EMPLOYEE",
                 dbRole: role,
                 stats: {
-                    pendingTasks: myActiveTasks, 
+                    pendingTasks: myActiveTasks,
                     lifetimeLogs: uniqueTasksAllTime.size,
                     kpiPercent: kpiRes.percent,
                     targetThisWeek: myKpiThisWeek?.targetValue || 0,
                     actualThisWeek: kpiRes.actualCount,
-                    targetDetails: kpiRes.targetDetails 
+                    targetDetails: kpiRes.targetDetails
                 },
                 recentLogs: mappedRecentLogs,
                 chartData: chartDataArray
