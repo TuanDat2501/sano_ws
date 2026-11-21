@@ -21,7 +21,7 @@ export default function AnalyticsPage() {
     const { showToast } = useToast();
     const { hasPermission, loading: permLoading } = usePermission();
 
-    const [timeRange, setTimeRange] = useState("28d"); 
+    const [timeRange, setTimeRange] = useState("28d");
     const [startDateObj, setStartDateObj] = useState<Date | null>(null);
     const [endDateObj, setEndDateObj] = useState<Date | null>(null);
     const [isCustomDate, setIsCustomDate] = useState(false);
@@ -90,10 +90,10 @@ export default function AnalyticsPage() {
                     { header: 'Đội Nhóm', key: 'team', width: 20 },
                     { header: 'Lượt Xem', key: 'views', width: 15 },
                     { header: 'Doanh Thu ($)', key: 'revenue', width: 18 },
-                    { header: 'RPM ($)', key: 'rpm', width: 15 },
+                    // { header: 'RPM ($)', key: 'rpm', width: 15 },
                     { header: 'Trạng Thái', key: 'status', width: 20 },
                 ];
-                
+
                 data.channelGrid.forEach((c: any, index: number) => {
                     wsChannels.addRow({
                         stt: index + 1,
@@ -122,7 +122,7 @@ export default function AnalyticsPage() {
                     { header: 'KPI (%)', key: 'kpi', width: 15 },
                     { header: 'Điểm Lượng (Sao)', key: 'avgScore', width: 20 },
                 ];
-                
+
                 data.hrGrid.forEach((u: any, index: number) => {
                     wsHR.addRow({
                         stt: index + 1,
@@ -249,12 +249,12 @@ export default function AnalyticsPage() {
                         </select>
                     </div>
 
-                    <button 
+                    <button
                         onClick={handleExportReport}
                         disabled={isExporting}
                         className="flex justify-center items-center gap-1.5 bg-slate-800 hover:bg-slate-900 text-white px-3 py-1.5 rounded-lg text-[11px] md:text-xs font-black shadow-sm transition-all active:scale-95 sm:w-auto w-full disabled:opacity-70"
                     >
-                        {isExporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />} 
+                        {isExporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
                         Xuất Excel
                     </button>
 
@@ -301,7 +301,7 @@ export default function AnalyticsPage() {
                     icon={<Tv size={14} className="text-purple-500" />}
                 />
             </div>
-            
+
             <div className="grid grid-cols-1 lg:grid-cols-[2fr_1fr] gap-3 md:gap-4">
                 <div className="flex flex-col gap-3 md:gap-4">
                     <div className="bg-white p-3 md:p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col h-[200px] md:h-[220px]">
@@ -310,7 +310,7 @@ export default function AnalyticsPage() {
                             <Line data={revenueChartData} options={lineChartOptions} />
                         </div>
                     </div>
-                    
+
                     <div className="bg-white p-3 md:p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col h-[200px] md:h-[220px]">
                         <h2 className="text-[10px] md:text-xs font-black text-slate-800 uppercase mb-2">Biểu Đồ Lượt Xem (Views)</h2>
                         <div className="flex-1 w-full min-h-0 relative">
@@ -321,15 +321,15 @@ export default function AnalyticsPage() {
 
                 <div className="bg-white p-3 md:p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col h-full justify-center items-center">
                     <h2 className="text-[10px] md:text-xs font-black text-slate-800 uppercase mb-2 w-full text-left">Nuôi Kênh & Bật Kiếm Tiền</h2>
-                    
+
                     <div className="flex-1 flex justify-center items-center w-full">
                         <div className="relative w-full max-w-[180px] md:max-w-[200px] aspect-square">
-                            <Doughnut 
-                                data={monetizationDonutData} 
-                                options={{ 
-                                    maintainAspectRatio: false, 
-                                    cutout: '65%', 
-                                    plugins: { 
+                            <Doughnut
+                                data={monetizationDonutData}
+                                options={{
+                                    maintainAspectRatio: false,
+                                    cutout: '65%',
+                                    plugins: {
                                         tooltip: commonTooltipOptions,
                                         legend: {
                                             position: 'bottom',
@@ -345,8 +345,8 @@ export default function AnalyticsPage() {
                                             formatter: (value: number) => value > 0 ? value : "",
                                             display: (context: any) => context.dataset.data[context.dataIndex] > 0
                                         }
-                                    } 
-                                }} 
+                                    }
+                                }}
                             />
                         </div>
                     </div>
@@ -361,7 +361,7 @@ export default function AnalyticsPage() {
                 <div className="overflow-auto max-h-[350px] text-xs text-slate-600 custom-scrollbar relative">
                     <table className="w-full text-left min-w-[700px]">
                         <thead className="sticky top-0 z-10 bg-slate-100 shadow-[0_1px_2px_rgba(0,0,0,0.05)] text-[9px] md:text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                            <tr><th className="px-3 py-2 border-b">Tên Kênh</th><th className="px-3 py-2 border-b">Đội Nhóm</th><th className="px-3 py-2 border-b text-right">Lượt Xem</th><th className="px-3 py-2 border-b text-right">Doanh Thu ($)</th><th className="px-3 py-2 border-b text-right text-purple-600">RPM</th><th className="px-3 py-2 border-b text-right">Trạng Thái</th></tr>
+                            <tr><th className="px-3 py-2 border-b">Tên Kênh</th><th className="px-3 py-2 border-b">Đội Nhóm</th><th className="px-3 py-2 border-b text-right">Lượt Xem</th><th className="px-3 py-2 border-b text-right">Doanh Thu ($)</th>{/* <th className="px-3 py-2 border-b text-right text-purple-600">RPM</th> */}<th className="px-3 py-2 border-b text-right">Trạng Thái</th></tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
                             {data?.channelGrid?.map((c: any, idx: number) => (
@@ -370,7 +370,7 @@ export default function AnalyticsPage() {
                                     <td className="px-3 py-2 text-[9px] font-black uppercase text-blue-600"><span className="bg-blue-50 border border-blue-100 px-1.5 py-0.5 rounded">{c.team}</span></td>
                                     <td className="px-3 py-2 text-xs text-right font-bold text-blue-600">{c.views > 0 ? c.views.toLocaleString() : "-"}</td>
                                     <td className="px-3 py-2 text-xs text-right font-black text-emerald-600">{c.revenue > 0 ? `$${c.revenue.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : "-"}</td>
-                                    <td className="px-3 py-2 text-xs text-right font-black text-purple-600">{c.rpm > 0 ? `$${c.rpm.toFixed(2)}` : "-"}</td>
+                                    {/* <td className="px-3 py-2 text-xs text-right font-black text-purple-600">{c.rpm > 0 ? `$${c.rpm.toFixed(2)}` : "-"}</td> */}
                                     <td className="px-3 py-2 text-right"><span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded ${c.monetization === 'DA_BAT' ? 'text-emerald-600 bg-emerald-50' : c.monetization === 'TAT_KIEM_TIEN' ? 'text-red-600 bg-red-50' : 'text-slate-500 bg-slate-100'}`}>{c.monetizationLabel}</span></td>
                                 </tr>
                             ))}
